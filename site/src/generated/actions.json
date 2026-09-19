@@ -200,6 +200,59 @@
     },
     {
       "action": {
+        "automaticEligible": false,
+        "description": {
+          "ar": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "de": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "en": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "es": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "fr": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "ja": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "ko": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "pt": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "ru": "Review ownership evidence before moving an app and selected associated files to Trash.",
+          "zh-Hans": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+          "zh-Hant": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+        },
+        "externalInvocation": "unavailable",
+        "id": "open-review",
+        "keywords": [
+          "app",
+          "uninstall",
+          "review"
+        ],
+        "parameters": [],
+        "permissionIDs": [],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "action-grid",
+          "trackpad-gesture",
+          "manual"
+        ],
+        "systemImage": "app.badge.checkmark",
+        "title": {
+          "ar": "App Uninstaller",
+          "de": "App Uninstaller",
+          "en": "App Uninstaller",
+          "es": "App Uninstaller",
+          "fr": "App Uninstaller",
+          "ja": "App Uninstaller",
+          "ko": "App Uninstaller",
+          "pt": "App Uninstaller",
+          "ru": "App Uninstaller",
+          "zh-Hans": "应用卸载",
+          "zh-Hant": "App 解除安裝"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/app-uninstaller?provider=app-uninstaller&action=open-review",
+      "pluginID": "app-uninstaller",
+      "providerID": "app-uninstaller",
+      "route": "/plugins/app-uninstaller/actions/app-uninstaller/open-review/"
+    },
+    {
+      "action": {
         "automaticEligible": true,
         "description": {
           "ar": "تشغيل الوضع الداكن أو إيقافه صراحةً.",

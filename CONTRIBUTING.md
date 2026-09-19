@@ -139,6 +139,10 @@ Centered window guide changes should follow the [Window Layouts interaction and 
 
 Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md). `make script-tests` and `make ci` also check generated website plugin data; regenerate it with `python3 scripts/plugins/generate_website_plugin_data.py` after changing plugin actions or metadata.
 
+## App Uninstaller safety
+
+App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
+
 ## Stable CLI candidates
 
 The optional stable CLI uses the existing host-owned commands and separate signed download. Publication remains disabled until signed acceptance is complete. See [CLI candidate packaging and release gates](docs/plugins/cli-release.md) before changing release metadata or enabling distribution. Run the installer/channel tests, `make script-tests`, and `make ci` for changes across installer and release infrastructure. Never use a successful unsigned test run as evidence of signed stable acceptance.

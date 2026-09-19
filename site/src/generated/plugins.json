@@ -1138,6 +1138,276 @@
       "capabilities": {
         "componentPanel": false,
         "primaryPanel": true,
+        "settings": "workspace"
+      },
+      "category": "storage",
+      "displayName": "应用卸载",
+      "id": "app-uninstaller",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "de": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "en": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "es": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "fr": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "ja": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "ko": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "pt": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "ru": {
+          "displayName": "App Uninstaller",
+          "summary": "Review ownership evidence before moving an app and selected associated files to Trash."
+        },
+        "zh-Hans": {
+          "displayName": "应用卸载",
+          "summary": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。"
+        },
+        "zh-Hant": {
+          "displayName": "App 解除安裝",
+          "summary": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/app-uninstaller",
+      "product": {
+        "actions": {
+          "providers": [
+            {
+              "dynamicTemplates": [],
+              "id": "app-uninstaller",
+              "kind": "static",
+              "staticActions": [
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "de": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "en": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "es": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "fr": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "ja": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "ko": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "pt": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "ru": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                    "zh-Hans": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+                    "zh-Hant": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+                  },
+                  "externalInvocation": "unavailable",
+                  "id": "open-review",
+                  "keywords": [
+                    "app",
+                    "uninstall",
+                    "review"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "app.badge.checkmark",
+                  "title": {
+                    "ar": "App Uninstaller",
+                    "de": "App Uninstaller",
+                    "en": "App Uninstaller",
+                    "es": "App Uninstaller",
+                    "fr": "App Uninstaller",
+                    "ja": "App Uninstaller",
+                    "ko": "App Uninstaller",
+                    "pt": "App Uninstaller",
+                    "ru": "App Uninstaller",
+                    "zh-Hans": "应用卸载",
+                    "zh-Hant": "App 解除安裝"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "storage"
+          ],
+          "keywords": [
+            "app",
+            "uninstall",
+            "ownership",
+            "review",
+            "storage"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "App Uninstaller"
+            ],
+            "de": [
+              "App Uninstaller"
+            ],
+            "en": [
+              "App Uninstaller"
+            ],
+            "es": [
+              "App Uninstaller"
+            ],
+            "fr": [
+              "App Uninstaller"
+            ],
+            "ja": [
+              "App Uninstaller"
+            ],
+            "ko": [
+              "App Uninstaller"
+            ],
+            "pt": [
+              "App Uninstaller"
+            ],
+            "ru": [
+              "App Uninstaller"
+            ],
+            "zh-Hans": [
+              "应用卸载"
+            ],
+            "zh-Hant": [
+              "App 解除安裝"
+            ]
+          },
+          "relatedPluginIDs": [],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "App Uninstaller",
+                "de": "App Uninstaller",
+                "en": "App Uninstaller",
+                "es": "App Uninstaller",
+                "fr": "App Uninstaller",
+                "ja": "App Uninstaller",
+                "ko": "App Uninstaller",
+                "pt": "App Uninstaller",
+                "ru": "App Uninstaller",
+                "zh-Hans": "应用卸载",
+                "zh-Hant": "App 解除安裝"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "de": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "en": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "es": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "fr": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "ja": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "ko": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "pt": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "ru": "Review ownership evidence before moving an app and selected associated files to Trash.",
+                "zh-Hans": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+                "zh-Hant": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "de": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "en": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "es": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "fr": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "ja": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "ko": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "pt": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "ru": "Review ownership evidence before moving an app and selected associated files to Trash.",
+            "zh-Hans": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+            "zh-Hant": "檢查歸屬證據，確認後將 App 與選取的關聯檔案移至垃圾桶。"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "storage-state",
+            "application-state"
+          ],
+          "dataPersisted": [
+            "operation-history"
+          ],
+          "diagnosticExportsContainUserData": true,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [
+            "full-disk-access"
+          ],
+          "requiresRelaunch": false,
+          "setupComplexity": "none"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/app-uninstaller/",
+      "summary": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。",
+      "version": "1.0.0"
+    },
+    {
+      "capabilities": {
+        "componentPanel": false,
+        "primaryPanel": true,
         "settings": "form"
       },
       "category": "audio",

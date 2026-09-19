@@ -1,0 +1,3882 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "error.historyRead": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read operation history: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取操作记录："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取操作紀錄："
+          }
+        }
+      }
+    },
+    "error.quitIncomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app has not quit. Save your work and quit it manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用尚未退出，请保存工作并手动退出。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式尚未結束。請儲存工作並手動結束。"
+          }
+        }
+      }
+    },
+    "note.systemProtected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System applications are protected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统应用受保护。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統應用程式受保護。"
+          }
+        }
+      }
+    },
+    "note.selfProtected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools and its data are protected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools 及其数据受保护。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacTools 及其資料受保護。"
+          }
+        }
+      }
+    },
+    "note.embedded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage this embedded app through its parent app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "嵌入式应用应由所属应用管理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內嵌應用程式應由所屬應用程式管理。"
+          }
+        }
+      }
+    },
+    "note.outsideRoots": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app is outside the usual installation folders."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此应用位于常用安装目录之外。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此應用程式不在一般安裝資料夾中。"
+          }
+        }
+      }
+    },
+    "note.privilegedHelper": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app includes a privileged helper. Use the developer's uninstaller."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含特权辅助工具，请使用开发者提供的卸载方式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含特權輔助工具。請使用開發者提供的解除安裝方式。"
+          }
+        }
+      }
+    },
+    "note.systemComponents": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app includes system components. Use the developer's uninstaller."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含系统组件，请使用开发者提供的卸载方式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含系統元件。請使用開發者提供的解除安裝方式。"
+          }
+        }
+      }
+    },
+    "note.componentCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check system components inside the app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查应用内的系统组件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法檢查應用程式內的系統元件。"
+          }
+        }
+      }
+    },
+    "note.receiptCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check the installation receipt."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查安装收据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法檢查安裝收據。"
+          }
+        }
+      }
+    },
+    "note.embeddedCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The embedded-app check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "嵌入式应用检查不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內嵌應用程式檢查不完整。"
+          }
+        }
+      }
+    },
+    "note.identityCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App identity could not be fully checked here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置未完成应用身份检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法完整檢查此位置的應用程式身分。"
+          }
+        }
+      }
+    },
+    "note.appDirectory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Applications folder could not be fully read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用目录无法完整读取。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法完整讀取應用程式資料夾。"
+          }
+        }
+      }
+    },
+    "note.runningIdentity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A running app's identity could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中的应用身份无法读取。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取執行中應用程式的身分。"
+          }
+        }
+      }
+    },
+    "note.vendorCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app's built-in uninstall tools could not be fully checked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整检查应用自带的卸载工具。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法完整檢查應用程式內附的解除安裝工具。"
+          }
+        }
+      }
+    },
+    "note.vendorFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A possible developer uninstaller was found. Review its instructions first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现可能的厂商卸载工具，请先检查其说明。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到可能的開發者解除安裝工具。請先查看其說明。"
+          }
+        }
+      }
+    },
+    "note.homebrew": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Managed by Homebrew. Uninstall it through the Homebrew plugin."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 Homebrew 管理，请前往 Homebrew 插件卸载。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 Homebrew 管理。請前往 Homebrew 外掛程式解除安裝。"
+          }
+        }
+      }
+    },
+    "note.competing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another installed app uses the same identifier."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一个已安装的应用使用相同标识符。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一個已安裝的應用程式使用相同識別碼。"
+          }
+        }
+      }
+    },
+    "note.inventoryIncomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The installed-app check is incomplete; ownership is still uncertain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装应用检查不完整，归属仍需核实。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安裝應用程式檢查不完整；歸屬仍需確認。"
+          }
+        }
+      }
+    },
+    "note.viewOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View only: exclusive ownership cannot be confirmed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置仅供查看，无法确认独占归属。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅供檢視：無法確認獨占歸屬。"
+          }
+        }
+      }
+    },
+    "note.sizeIncomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The size or path check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小或路径检查不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小或路徑檢查不完整。"
+          }
+        }
+      }
+    },
+    "note.wrongType": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item type does not match this association rule."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目类型与此关联规则不一致。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "項目類型與此關聯規則不符。"
+          }
+        }
+      }
+    },
+    "note.containerMismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Container metadata does not match the selected app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器元数据与所选应用不一致。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器中繼資料與所選應用程式不符。"
+          }
+        }
+      }
+    },
+    "note.containerUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not verify which app owns the container."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证容器的所属应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法確認哪個應用程式擁有此容器。"
+          }
+        }
+      }
+    },
+    "note.groupUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The signed app-group information could not be verified; this check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "签名中的共享组信息无法验证，此位置检查不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法驗證簽章中的共享群組資訊；此位置檢查不完整。"
+          }
+        }
+      }
+    },
+    "note.associatedUnreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The associated location could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联位置无法读取。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取關聯位置。"
+          }
+        }
+      }
+    },
+    "note.managed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device is managed, or its management state is unclear. Contact an administrator."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备已注册管理或管理状态不明确，请联系管理员。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此裝置受管理，或管理狀態不明。請聯絡管理者。"
+          }
+        }
+      }
+    },
+    "note.managedCoverage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device management status blocks removal."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备管理状态阻止移除。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "裝置管理狀態阻止移除。"
+          }
+        }
+      }
+    },
+    "note.managedUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device management status could not be confirmed. File review only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认设备管理状态，仅可检查文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法確認裝置管理狀態。僅能檢查檔案。"
+          }
+        }
+      }
+    },
+    "note.managedCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The management-state check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理状态检查未完成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理狀態檢查未完成。"
+          }
+        }
+      }
+    },
+    "note.homebrewCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Homebrew installation check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 安装记录检查未完成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 安裝紀錄檢查未完成。"
+          }
+        }
+      }
+    },
+    "note.backgroundServiceCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The background-service check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后台服务检查未完成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "背景服務檢查未完成。"
+          }
+        }
+      }
+    },
+    "note.processPathUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some running-process executable paths are unavailable; the app cannot be confirmed stopped."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分运行进程的可执行文件路径不可用，无法确认应用已完全退出。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分執行中程序的執行檔路徑無法取得；無法確認應用程式已完全結束。"
+          }
+        }
+      }
+    },
+    "note.processCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The running-process check is incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行进程检查不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行中程序檢查不完整。"
+          }
+        }
+      }
+    },
+    "note.deviceManagement": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device management"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备管理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "裝置管理"
+          }
+        }
+      }
+    },
+    "note.runningProcesses": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running processes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行进程"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行中程序"
+          }
+        }
+      }
+    },
+    "note.itemStopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operation stopped; the item remains in its original location."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已停止，项目保留原位。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已停止；項目保留在原位置。"
+          }
+        }
+      }
+    },
+    "note.stagingAttention": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If the operation was interrupted, check the original and staging locations."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作中断时，请检查原位置及暂存位置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若操作中斷，請檢查原位置及暫存位置。"
+          }
+        }
+      }
+    },
+    "note.trashedNoSpace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moved to Trash; actual recovered space was not measured."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移入废纸篓；未测量实际回收空间。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移至垃圾桶；未測量實際回收空間。"
+          }
+        }
+      }
+    },
+    "note.relatedService": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A related launch service (%@) is present. Use the developer's uninstaller."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现关联的启动服务：%@。请使用开发者提供的卸载方式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發現關聯的啟動服務：%@。請使用開發者提供的解除安裝方式。"
+          }
+        }
+      }
+    },
+    "note.restoreFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not restore the original location: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能恢复原位置："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法還原原位置："
+          }
+        }
+      }
+    },
+    "history.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No removal history yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无移除记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚無移除紀錄"
+          }
+        }
+      }
+    },
+    "error.historyUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local operation history is unavailable, so removal is disabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法初始化本地操作记录，移除不可用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法初始化本機操作紀錄，因此無法移除。"
+          }
+        }
+      }
+    },
+    "inventory.added": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added manually"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动添加"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手動加入"
+          }
+        }
+      }
+    },
+    "inventory.removeAdded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from selection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从清单中移除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從清單中移除"
+          }
+        }
+      }
+    },
+    "batch.clearApps": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear selection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除选择"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除選取"
+          }
+        }
+      }
+    },
+    "error.invalidApplication": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A valid application identity could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取有效的应用身份。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取有效的應用程式識別資訊。"
+          }
+        }
+      }
+    },
+    "error.unsafePath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The path contains a link, protected location, or unsupported volume."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径包含链接、受保护位置或不支持的卷。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路徑包含連結、受保護位置或不支援的卷宗。"
+          }
+        }
+      }
+    },
+    "error.incomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The check was incomplete. Review scan coverage and scan again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查未完成，请查看扫描范围并重新扫描。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查未完成。請查看掃描範圍並重新掃描。"
+          }
+        }
+      }
+    },
+    "error.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An item changed. Scan again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目已变化，请重新扫描。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "項目已變更。請重新掃描。"
+          }
+        }
+      }
+    },
+    "error.expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The review expired. Scan again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查结果已过期，请重新扫描。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查結果已過期。請重新掃描。"
+          }
+        }
+      }
+    },
+    "error.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app or one of its components is still running. Quit it and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用或其组件仍在运行，请退出后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式或其元件仍在執行。請結束後再試。"
+          }
+        }
+      }
+    },
+    "error.blocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the original installer or ask an administrator to handle this item."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此项目需要使用原安装工具或由管理员处理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此項目需要使用原安裝工具或由管理者處理。"
+          }
+        }
+      }
+    },
+    "error.io": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not access the item (%d)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法访问项目（%d）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法存取項目（%d）。"
+          }
+        }
+      }
+    },
+    "error.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan cancelled; results are incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描已取消，结果不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "掃描已取消，結果不完整。"
+          }
+        }
+      }
+    },
+    "error.batchIncomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app checks did not finish. Review the selected apps again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用检查未完成，请重新检查所选应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式檢查未完成。請重新檢查所選應用程式。"
+          }
+        }
+      }
+    },
+    "error.batchReviewFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review every selected app first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先检查所有选中的应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請先檢查所有選取的應用程式。"
+          }
+        }
+      }
+    },
+    "error.batchStopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch stopped; remaining apps were not processed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量操作已停止；后续应用未处理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次作業已停止；其餘應用程式未處理。"
+          }
+        }
+      }
+    },
+    "error.batchPartial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch stopped; review this app's item-by-item results."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量操作已停止；请查看该应用的逐项结果。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次作業已停止；請查看此應用程式的逐項結果。"
+          }
+        }
+      }
+    },
+    "note.appleDataRetained": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Related data for this Apple app will be kept."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此 Apple 应用的关联数据将保留。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"此 Apple App 的相關資料將保留。"}}}},
+    "candidate.keptUnmeasured": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Kept · size not measured"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"保留 · 未统计大小"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"保留 · 未統計大小"}}}},
+    "xcode.scopeTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"This copy and shared data"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此版本与共享数据"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"此版本與共用資料"}}}},
+    "xcode.thisCopy": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"This Xcode app bundle"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此 Xcode 应用本体"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"此 Xcode App 本體"}}}},
+    "xcode.noExclusiveData": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"No external data is confirmed exclusive to this copy. Its app bundle can be removed only after safety checks pass."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"尚未确认任何独属于此副本的外部数据；应用本体通过检查后才可移除。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"尚未確認任何只屬於此副本的外部資料；App 本體通過檢查後才能移除。"}}}},
+    "xcode.exclusiveTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Data verified exclusive to this copy (%d)"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已验证为此副本独有的数据（%d）"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"已驗證只屬於此副本的資料（%d）"}}}},
+    "xcode.sharedTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Shared or uncertain matches (%d)"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"共享或归属不明的匹配项（%d）"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"共用或歸屬不明的相符項目（%d）"}}}},
+    "xcode.sharedExplanation": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"These same-identifier items stay in place. Existing build data, archives, and simulators are not considered exclusive to this copy either."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"下列同标识符数据会保留；现有构建数据、归档和模拟器也不能认定为此副本独有。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"下列同識別碼資料會保留；現有建置資料、封存和模擬器也無法認定只屬於此副本。"}}}},
+    "xcode.openStorage": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review Xcode storage"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"查看 Xcode 存储"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"查看 Xcode 儲存空間"}}}},
+    "xcode.storageWarningTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Shared Xcode storage"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"共享 Xcode 数据"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"共用 Xcode 資料"}}}},
+    "xcode.storageWarning": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Xcode Cleanup is separate: selected files are permanently deleted and may also be used by regular Xcode."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"Xcode 清理是独立操作；选中的文件会被永久删除，也可能被正式版 Xcode 使用。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"Xcode 清理是獨立操作；所選檔案會被永久刪除，也可能由正式版 Xcode 使用。"}}}},
+    "inventory.includeApp": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Add this app to the removal review"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"将此应用加入移除清单"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"將此 App 加入移除清單"}}}},
+    "app.details": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"App identity and removal limits"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"应用身份与处理限制"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"應用身分與處理限制"}}}},
+    "app.needsOtherTool": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"This app needs another removal method. See the reasons below."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"此应用需要其他方式处理；请查看下方原因。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"此 App 需要其他移除方式；請查看下方原因。"}}}},
+    "batch.confirmScope": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Only listed items will move to Trash. Documents, projects, and other unchecked locations are outside this review. Moving to Trash does not immediately free space."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"仅列出的项目会移入废纸篓。文稿、项目和其他未检查位置不在此清单中；移入废纸篓不会立即释放空间。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"僅列出的項目會移至垃圾桶。文件、專案及其他未檢查位置不在此清單中；移至垃圾桶不會立即釋放空間。"}}}},
+    "batch.confirmSummary": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d items to move · %d kept · estimated size %@"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 项拟移入 · %d 项保留 · 估计占用 %@"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個項目將移入 · %d 個保留 · 預估佔用 %@"}}}},
+    "batch.confirmTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review removal of %d apps"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"确认处理 %d 个应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"確認處理 %d 個 App"}}}},
+    "batch.itemCount": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d items to move"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 项拟移入"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個項目將移入"}}}},
+    "batch.keptCount": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d items kept"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 项保留"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個項目保留"}}}},
+    "batch.partialCoverage": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"One or more app checks are incomplete. Removal is unavailable."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"一个或多个应用的检查不完整；不能继续移除。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"一個或多個 App 的檢查不完整；無法繼續移除。"}}}},
+    "batch.processUnknown": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The running-process check is not complete. Removal is unavailable for now."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"运行进程检查尚未完成，暂不能移除。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"執行中程序的檢查尚未完成，目前無法移除。"}}}},
+    "batch.removing": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Processing app %d of %d…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在处理应用 %d/%d…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"正在處理 App %d/%d…"}}}},
+    "batch.rescan": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review selected apps again"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"重新检查所选应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"重新檢查所選 App"}}}},
+    "batch.result": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Completed %d of %d apps. Review item-by-item results."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已完成 %d/%d 个应用。请查看逐项结果。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"已完成 %d/%d 個 App。請查看逐項結果。"}}}},
+    "batch.reviewHelp": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Each app is checked and recorded separately. Expand an app to choose data to keep."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"每个应用独立检查与记录。展开任一应用以选择要保留的关联数据。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"每個 App 會分別檢查與記錄。展開 App 以選擇要保留的相關資料。"}}}},
+    "batch.reviewRemoval": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review removal…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"检查移除清单…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"檢查移除清單…"}}}},
+    "batch.reviewTitle": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review selected apps"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"所选应用的审阅结果"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"所選 App 的審閱結果"}}}},
+    "batch.running": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"A selected app or component is still running. Save your work and quit it before retrying."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"所选应用或组件仍在运行。请保存工作并退出后重试。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"所選 App 或元件仍在執行。請儲存工作並結束後重試。"}}}},
+    "batch.scanSelected": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Review selected apps…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"检查所选应用…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"檢查所選 App…"}}}},
+    "batch.scanning": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Checking %d of %d apps…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在检查 %d/%d 个应用…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"正在檢查 %d/%d 個 App…"}}}},
+    "batch.selectFirst": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Select apps from the list first"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"先从列表中选择应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"請先從列表選擇 App"}}}},
+    "batch.selectedApps": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d apps selected"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已选择 %d 个应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"已選取 %d 個 App"}}}},
+    "batch.source": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"I checked the installation sources of the apps above and confirmed that they do not require their original uninstallers."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"我已检查上述安装来源未知的应用，并确认无需使用原安装工具。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"我已檢查上述安裝來源不明的 App，並確認不需使用原本的解除安裝工具。"}}}},
+    "batch.viewResults": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"View results and recovery locations"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"查看结果与恢复位置"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"查看結果與還原位置"}}}},
+    "candidate.kept": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Kept"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"保留"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"保留"}}}},
+    "inventory.all": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"All"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"全部"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"全部"}}}},
+    "inventory.apps": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Applications"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"App"}}}},
+    "inventory.componentCount": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d components"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 个组件"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個元件"}}}},
+    "inventory.componentHelp": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Embedded components should be managed through their parent app."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"嵌入式组件应由所属应用管理。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"內嵌元件應透過所屬 App 管理。"}}}},
+    "inventory.components": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Standalone component entries"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"独立列出的组件"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"單獨列出的元件"}}}},
+    "inventory.empty": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"No matching apps"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"没有匹配的应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"沒有符合的 App"}}}},
+    "inventory.filter": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Show"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"显示"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"顯示"}}}},
+    "inventory.intro": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Select one or more apps. Related data is checked only when you review your selection; nothing moves before confirmation."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"选择一个或多个应用。关联数据只在审阅所选应用时检查；确认之前不会移动任何内容。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"選擇一個或多個 App。相關資料只會在檢查所選 App 時讀取；確認前不會移動任何內容。"}}}},
+    "inventory.otherTool": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Other tool needed"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"需其他工具"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"需要其他工具"}}}},
+    "inventory.partial": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Application inventory incomplete"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"应用列表未检查完整"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"App 清單未檢查完整"}}}},
+    "inventory.partialHelp": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"You can still browse available apps. Removal is blocked if the selected app's checks are incomplete."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"部分应用仍可浏览；所选应用的检查不完整时不会允许移除。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"仍可瀏覽已找到的 App；若所選 App 的檢查不完整，將無法移除。"}}}},
+    "inventory.refresh": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Refresh app list"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"刷新应用列表"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"重新整理 App 清單"}}}},
+    "inventory.reviewable": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Reviewable"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"可审阅"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"可檢查"}}}},
+    "inventory.scanning": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Finding applications…"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"正在查找应用…"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"正在搜尋 App…"}}}},
+    "inventory.select": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Select app: "}},"zh-Hans":{"stringUnit":{"state":"translated","value":"选择应用："}},"zh-Hant":{"stringUnit":{"state":"translated","value":"選擇 App："}}}},
+    "inventory.selectDescription": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Search on the left, drag in an app, or choose one in Finder."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"左侧可搜索应用，也可拖入应用或从访达选择。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"可在左側搜尋 App、拖入 App，或在 Finder 中選擇。"}}}},
+    "inventory.selectPrompt": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Select an app to inspect"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"选择应用以查看详情"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"選擇 App 以查看詳細資訊"}}}},
+    "inventory.title": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Installed Applications"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"已安装应用"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"已安裝的 App"}}}},
+    "review.incomplete": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Checks or installation source are not confirmed. Removal is unavailable."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"检查或安装来源尚未确认；移除不可用。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"檢查或安裝來源尚未確認；無法移除。"}}}},
+    "review.appOnly": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"The app can be reviewed, but related data stays in place until the app inventory is complete."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"应用本体可审阅；应用列表未查全，关联数据将保留。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"可檢查 App 本體；App 清單未查全，相關資料將保留。"}}}},
+    "review.partialItems": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Some related locations could not be checked; only verified items can be moved."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"部分关联位置未查全；只能移除已验证的项目。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"部分相關位置未查全；只能移除已驗證的項目。"}}}},
+    "review.scopeShort": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Only listed related locations were checked. Documents, projects, and other locations were not searched."}},"zh-Hans":{"stringUnit":{"state":"translated","value":"只检查列出的关联位置；文稿、项目和其他位置未搜索。"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"只檢查列出的相關位置；文件、專案及其他位置未搜尋。"}}}},
+    "review.selectionSummary": {"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%d items to move · %d kept"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"%d 项拟移入 · %d 项保留"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"%d 個項目將移入 · %d 個保留"}}}},
+    "review.reviewFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review first, then confirm moving to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先检查，再确认移入废纸篓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先检查，再确认移入废纸篓"
+          }
+        }
+      }
+    },
+    "review.drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop one application here, or choose an app to review its associated files."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖入一个应用，或选择应用以检查关联文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖入一个应用，或选择应用以检查关联文件。"
+          }
+        }
+      }
+    },
+    "review.choose": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Application…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择应用…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择应用…"
+          }
+        }
+      }
+    },
+    "review.installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse Installed Applications…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览已安装应用…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览已安装应用…"
+          }
+        }
+      }
+    },
+    "review.rescan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rescan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新扫描"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新扫描"
+          }
+        }
+      }
+    },
+    "review.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Scan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消扫描"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消扫描"
+          }
+        }
+      }
+    },
+    "review.scanning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking application identity and associated locations…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查应用身份与关联位置…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查应用身份与关联位置…"
+          }
+        }
+      }
+    },
+    "review.removing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechecking and moving to Trash…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在复核并移入废纸篓…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在复核并移入废纸篓…"
+          }
+        }
+      }
+    },
+    "review.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
+          }
+        }
+      }
+    },
+    "review.scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the listed user Library locations and available app metadata were checked. Documents, projects, and whole-disk leftovers are outside this review. No matches does not mean that an app has no other data."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅检查列出的用户资料库位置及已读取的应用元数据。未搜索文稿、项目文件或全盘遗留文件；没有发现关联项不代表应用没有其他数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅检查列出的用户资料库位置及已读取的应用元数据。未搜索文稿、项目文件或全盘遗留文件；没有发现关联项不代表应用没有其他数据。"
+          }
+        }
+      }
+    },
+    "review.plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Removal List…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查移除清单…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查移除清单…"
+          }
+        }
+      }
+    },
+    "browser.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "app.stateUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running state unconfirmed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行状态待确认"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行状态待确认"
+          }
+        }
+      }
+    },
+    "app.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在运行"
+          }
+        }
+      }
+    },
+    "app.notRunning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not running"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未在运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未在运行"
+          }
+        }
+      }
+    },
+    "app.homebrew": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage in Homebrew"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Homebrew 中管理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Homebrew 中管理"
+          }
+        }
+      }
+    },
+    "app.vendorTool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal Possible Vendor Uninstaller"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中查看厂商卸载工具"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中查看厂商卸载工具"
+          }
+        }
+      }
+    },
+    "app.team": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signing team: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "签名团队："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "签名团队："
+          }
+        }
+      }
+    },
+    "app.signatureUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverified or unsigned"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未验证或未签名"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未验证或未签名"
+          }
+        }
+      }
+    },
+    "review.reveal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal in Finder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示"
+          }
+        }
+      }
+    },
+    "review.preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Look Application"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速查看应用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速查看应用"
+          }
+        }
+      }
+    },
+    "app.quit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit Application"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出应用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出应用"
+          }
+        }
+      }
+    },
+    "coverage.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coverage and Freshness"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描范围与时效"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描范围与时效"
+          }
+        }
+      }
+    },
+    "coverage.observed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查时间："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查时间："
+          }
+        }
+      }
+    },
+    "coverage.stale": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Results have expired. Rescan to review the current state."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果已过期。请重新扫描以查看当前状态。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果已过期。请重新扫描以查看当前状态。"
+          }
+        }
+      }
+    },
+    "coverage.partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some checks are incomplete. Unreadable locations do not mean that no associated data exists."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分检查未完成。未能读取的位置不代表没有关联文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分检查未完成。未能读取的位置不代表没有关联文件。"
+          }
+        }
+      }
+    },
+    "coverage.complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks of the listed locations are complete. Other locations were not inspected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成列出位置的检查。其他位置未检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成列出位置的检查。其他位置未检查。"
+          }
+        }
+      }
+    },
+    "coverage.details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locations and Limitations"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看检查位置与限制"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看检查位置与限制"
+          }
+        }
+      }
+    },
+    "coverage.checked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked, or the location is absent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查或位置不存在"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查或位置不存在"
+          }
+        }
+      }
+    },
+    "coverage.installation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source detection checks App Store receipts and standard Homebrew locations. Custom package managers, every vendor uninstaller, and every management method are not verified."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装来源仅检查 App Store 收据与常用 Homebrew 安装位置。自定义包管理器、全部厂商卸载程序及所有管理方式尚未验证。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装来源仅检查 App Store 收据与常用 Homebrew 安装位置。自定义包管理器、全部厂商卸载程序及所有管理方式尚未验证。"
+          }
+        }
+      }
+    },
+    "coverage.permission": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Full Disk Access"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查完全磁盘访问权限"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查完全磁盘访问权限"
+          }
+        }
+      }
+    },
+    "candidate.whyFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why This Was Found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现依据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现依据"
+          }
+        }
+      }
+    },
+    "candidate.consequence": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Use and Possible Loss"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据用途与可能损失"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据用途与可能损失"
+          }
+        }
+      }
+    },
+    "review.copyPath": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Path"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拷贝路径"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拷贝路径"
+          }
+        }
+      }
+    },
+    "candidate.select": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select item: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择项目："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择项目："
+          }
+        }
+      }
+    },
+    "candidate.incompleteSize": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete size"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小未完整统计"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小未完整统计"
+          }
+        }
+      }
+    },
+    "browser.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search app name or identifier"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索应用名称或标识符"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索应用名称或标识符"
+          }
+        }
+      }
+    },
+    "browser.partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The application list is incomplete; some locations could not be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用列表不完整，部分位置无法读取。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用列表不完整，部分位置无法读取。"
+          }
+        }
+      }
+    },
+    "plan.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm Moving to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认移入废纸篓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认移入废纸篓"
+          }
+        }
+      }
+    },
+    "plan.warning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Items move to Trash without permanent deletion. Putting an app back does not guarantee restoring all its state. Unselected items and uninspected locations stay in place."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅移入废纸篓，不会永久删除。放回应用不保证恢复所有状态。未选择的项目及未检查的位置会保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅移入废纸篓，不会永久删除。放回应用不保证恢复所有状态。未选择的项目及未检查的位置会保留。"
+          }
+        }
+      }
+    },
+    "plan.source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I have confirmed that a package manager does not manage this app and checked the developer’s uninstall instructions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已确认此应用不是由包管理器管理，并已检查开发者的卸载说明。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已确认此应用不是由包管理器管理，并已检查开发者的卸载说明。"
+          }
+        }
+      }
+    },
+    "app.mustQuit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save your work and quit the application first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先保存工作并退出应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先保存工作并退出应用。"
+          }
+        }
+      }
+    },
+    "app.forceQuit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force Quit…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制退出…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制退出…"
+          }
+        }
+      }
+    },
+    "app.helpers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An associated background process is still running. Quit it through the application or vendor tool, then check again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联的后台进程仍在运行。请通过应用或厂商工具退出这些组件，然后重新检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联的后台进程仍在运行。请通过应用或厂商工具退出这些组件，然后重新检查。"
+          }
+        }
+      }
+    },
+    "app.processUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some running processes cannot be identified. Removal is unavailable until this check can complete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分运行进程无法识别，移除暂不可用。请稍后重新检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分运行进程无法识别，移除暂不可用。请稍后重新检查。"
+          }
+        }
+      }
+    },
+    "app.recheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recheck Running State"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新检查运行状态"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新检查运行状态"
+          }
+        }
+      }
+    },
+    "plan.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "plan.trash": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓"
+          }
+        }
+      }
+    },
+    "app.forceTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force Quit can lose unsaved work"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制退出可能丢失未保存的工作"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制退出可能丢失未保存的工作"
+          }
+        }
+      }
+    },
+    "history.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removal History"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除记录"
+          }
+        }
+      }
+    },
+    "history.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Finished Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已完成记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已完成记录"
+          }
+        }
+      }
+    },
+    "history.estimated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected estimated size: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中项目的估计大小："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中项目的估计大小："
+          }
+        }
+      }
+    },
+    "history.space": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moving to Trash does not mean that space was released. Actual reclaimed space was not measured."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓不代表空间已释放。未测量实际回收空间。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入废纸篓不代表空间已释放。未测量实际回收空间。"
+          }
+        }
+      }
+    },
+    "history.copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Diagnostics (Redact Home Folder)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拷贝诊断信息（隐藏主目录）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拷贝诊断信息（隐藏主目录）"
+          }
+        }
+      }
+    },
+    "history.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected items moved to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选项目已移入废纸篓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选项目已移入废纸篓"
+          }
+        }
+      }
+    },
+    "history.partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete · Review results"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未完成 · 请检查结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未完成 · 请检查结果"
+          }
+        }
+      }
+    },
+    "result.trashed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moved to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移入废纸篓"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移入废纸篓"
+          }
+        }
+      }
+    },
+    "result.retained": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not selected; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未选择，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未选择，已保留"
+          }
+        }
+      }
+    },
+    "result.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changed or expired; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已变化或过期，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已变化或过期，已保留"
+          }
+        }
+      }
+    },
+    "result.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still running; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍在运行，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍在运行，已保留"
+          }
+        }
+      }
+    },
+    "result.blocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks did not pass; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查未通过，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查未通过，已保留"
+          }
+        }
+      }
+    },
+    "result.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move failed; original location restored"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入失败，已恢复原位置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移入失败，已恢复原位置"
+          }
+        }
+      }
+    },
+    "result.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped; item retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止，项目保留原位"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停止，项目保留原位"
+          }
+        }
+      }
+    },
+    "result.attention": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staged location needs attention"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要检查暂存位置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要检查暂存位置"
+          }
+        }
+      }
+    },
+    "confidence.verified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified Identity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证标识"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证标识"
+          }
+        }
+      }
+    },
+    "confidence.strong": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exact Identifier Match"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确标识匹配"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确标识匹配"
+          }
+        }
+      }
+    },
+    "confidence.shared": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享数据"
+          }
+        }
+      }
+    },
+    "confidence.possible": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ownership Uncertain"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归属待核实"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归属待核实"
+          }
+        }
+      }
+    },
+    "confidence.protected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conflicting or Protected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲突或受保护"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲突或受保护"
+          }
+        }
+      }
+    },
+    "kind.application": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application Bundle"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用本体"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用本体"
+          }
+        }
+      }
+    },
+    "kind.cache": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存"
+          }
+        }
+      }
+    },
+    "kind.log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志"
+          }
+        }
+      }
+    },
+    "kind.preference": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferences"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置"
+          }
+        }
+      }
+    },
+    "kind.savedState": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Application State"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的应用状态"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的应用状态"
+          }
+        }
+      }
+    },
+    "kind.support": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application Support"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用支持数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用支持数据"
+          }
+        }
+      }
+    },
+    "kind.container": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application Container"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用容器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用容器"
+          }
+        }
+      }
+    },
+    "kind.groupContainer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared Container"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享容器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享容器"
+          }
+        }
+      }
+    },
+    "kind.launchAgent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Launch Agent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动代理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动代理"
+          }
+        }
+      }
+    },
+    "loss.application": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app’s executable and resources. Associated data may also exist in other locations."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用的可执行文件与资源。关联数据可能保存在其他位置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用的可执行文件与资源。关联数据可能保存在其他位置。"
+          }
+        }
+      }
+    },
+    "loss.cache": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caches may support offline access. Removing them can require downloading or regenerating data."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存可能用于离线访问；移除后可能需要重新下载或生成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存可能用于离线访问；移除后可能需要重新下载或生成。"
+          }
+        }
+      }
+    },
+    "loss.log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historical runtime and diagnostic records. Past records cannot be regenerated after removal."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史运行与诊断记录，移除后无法重新生成过去的记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史运行与诊断记录，移除后无法重新生成过去的记录。"
+          }
+        }
+      }
+    },
+    "loss.preference": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application preferences, potentially including account information or custom configuration."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用偏好设置，可能包含账号或自定义配置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用偏好设置，可能包含账号或自定义配置。"
+          }
+        }
+      }
+    },
+    "loss.savedState": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved windows and restoration state, potentially including work awaiting recovery."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的窗口与恢复状态，可能包含尚未恢复的工作。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的窗口与恢复状态，可能包含尚未恢复的工作。"
+          }
+        }
+      }
+    },
+    "loss.sensitive": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "May contain databases, chat history, models, or other valuable content. Clear ownership does not make it disposable."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能包含数据库、聊天记录、模型或其他重要内容。归属明确不代表可以丢弃。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能包含数据库、聊天记录、模型或其他重要内容。归属明确不代表可以丢弃。"
+          }
+        }
+      }
+    },
+    "loss.shared": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Several applications may share this location. One app’s evidence cannot establish exclusive ownership."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多个应用可能共用此位置，不能仅根据一个应用确认独占归属。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多个应用可能共用此位置，不能仅根据一个应用确认独占归属。"
+          }
+        }
+      }
+    },
+    "loss.service": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "May manage background services. Use the developer’s supported management method."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能管理后台服务；应使用开发者提供的管理方式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能管理后台服务；应使用开发者提供的管理方式。"
+          }
+        }
+      }
+    },
+    "source.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installation source: Unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装来源：未知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装来源：未知"
+          }
+        }
+      }
+    },
+    "source.receipt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Store receipt found (purchase not verified)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 App Store 收据（未验证购买记录）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 App Store 收据（未验证购买记录）"
+          }
+        }
+      }
+    },
+    "source.homebrew": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew installation record found; manage with Homebrew"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 Homebrew 安装记录，请使用 Homebrew 管理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 Homebrew 安装记录，请使用 Homebrew 管理"
+          }
+        }
+      }
+    },
+    "source.system": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System application · Protected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统应用 · 受保护"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统应用 · 受保护"
+          }
+        }
+      }
+    },
+    "source.managed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device management status requires administrator review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备管理状态需要管理员确认"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备管理状态需要管理员确认"
+          }
+        }
+      }
+    },
+    "source.vendor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System components or a possible vendor uninstaller require review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现系统组件或可能的厂商卸载工具，请先查看说明"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现系统组件或可能的厂商卸载工具，请先查看说明"
+          }
+        }
+      }
+    },
+    "evidence.selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the selected valid application bundle."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是所选应用的有效应用包。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是所选应用的有效应用包。"
+          }
+        }
+      }
+    },
+    "evidence.exact": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This location exactly matches the application identifier: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置名称与应用标识符完全一致："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置名称与应用标识符完全一致："
+          }
+        }
+      }
+    },
+    "evidence.preference": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preference domain matches the application identifier: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置域与应用标识符一致："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏好设置域与应用标识符一致："
+          }
+        }
+      }
+    },
+    "evidence.state": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved-state directory uses the application identifier: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存状态目录使用应用标识符："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存状态目录使用应用标识符："
+          }
+        }
+      }
+    },
+    "evidence.container": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The container metadata identifier matches: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器元数据标识符一致："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器元数据标识符一致："
+          }
+        }
+      }
+    },
+    "evidence.group": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The application signature declares this shared group: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用签名声明共享组："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用签名声明共享组："
+          }
+        }
+      }
+    },
+    "evidence.competing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another application uses the same identifier: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他应用使用同一标识符："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他应用使用同一标识符："
+          }
+        }
+      }
+    },
+    "evidence.executable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The service executable is inside the application bundle: "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务程序位于应用包内："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务程序位于应用包内："
+          }
+        }
+      }
+    },
+    "evidence.conflict": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Container metadata conflicts with its directory name."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器元数据与目录名称不一致。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器元数据与目录名称不一致。"
+          }
+        }
+      }
+    },
+    "metadata.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Uninstaller"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用卸载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用卸载"
+          }
+        }
+      }
+    },
+    "metadata.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review ownership evidence before moving an app and selected associated files to Trash."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。"
+          }
+        }
+      }
+    },
+    "review.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查"
+          }
+        }
+      }
+    },
+    "permission.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Disk Access"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全磁盘访问"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全磁盘访问"
+          }
+        }
+      }
+    },
+    "permission.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspect protected associated locations; unavailable locations remain visibly incomplete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查受保护的关联位置；未授权的位置会显示检查不完整。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查受保护的关联位置；未授权的位置会显示检查不完整。"
+          }
+        }
+      }
+    },
+    "permission.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Disk Access has not been confirmed. Scans show actual readable coverage; reopen MacTools after granting access."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未确认完全磁盘访问。扫描会显示实际可读范围；授权后请重新打开 MacTools。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未确认完全磁盘访问。扫描会显示实际可读范围；授权后请重新打开 MacTools。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
