@@ -3936,6 +3936,9 @@ final class PluginHost: ObservableObject {
         synchronizeActionRegistry()
 
         let shortcutDescriptors = shortcutDescriptors()
+        let globalShortcutConflicts = globalShortcutRegistrationSelection(
+            for: shortcutDescriptors
+        ).conflictOwners
         var shortcutMutationMetadataByRowID: [String: ShortcutMutationMetadata] = [:]
         shortcutItems = shortcutDescriptors.flatMap { descriptor -> [ShortcutSettingsItem] in
             // Ordinary global shortcuts backed by canonical Actions are managed only in
@@ -3964,6 +3967,9 @@ final class PluginHost: ObservableObject {
                     usesDefaultValue: customization == .inheritDefault,
                     errorMessage: shortcutErrors[descriptor.itemID]
                         ?? eventShortcutConflictError(for: descriptor)
+                        ?? globalShortcutConflicts[descriptor.itemID].map {
+                            ShortcutValidationError.duplicate(ownerDescription: $0).localizedDescription
+                        }
                         ?? binding.flatMap {
                             MacToolsReservedShortcutBindings.validationError(for: $0)?
                                 .localizedDescription
@@ -6033,6 +6039,18 @@ final class PluginHost: ObservableObject {
                     ownerDescription: conflict.title
                 )
             }
+
+            if let conflict = shortcutAssignmentService.assignments.first(where: {
+                consumedShortcutBindings(candidate, for: descriptor).contains($0.binding)
+            }) {
+                let reference = conflict.reference
+                let title = actionRegistry.catalogEntries.first(where: { $0.reference == reference })?.title
+                    ?? actionRegistry.definition(for: reference.key)?.title
+                    ?? reference.key.actionID
+                throw ShortcutValidationError.duplicate(
+                    ownerDescription: "\(actionOwnerTitle(providerID: reference.key.providerID)) · \(title)"
+                )
+            }
         }
     }
 
@@ -6164,28 +6182,50 @@ final class PluginHost: ObservableObject {
         return (registrations, ownerDescriptions)
     }
 
+    private func globalShortcutRegistrationSelection(
+        for descriptors: [ShortcutDescriptor]
+    ) -> (registrations: [GlobalShortcutManager.Registration], conflictOwners: [String: String]) {
+        let candidates = descriptors.enumerated().compactMap { index, descriptor
+            -> (index: Int, descriptor: ShortcutDescriptor, binding: ShortcutBinding, isCustom: Bool)? in
+            guard descriptor.definition.scope == .global,
+                  actionReference(for: descriptor) == nil,
+                  let binding = resolvedBinding(for: descriptor),
+                  MacToolsReservedShortcutBindings.validationError(for: binding) == nil else {
+                return nil
+            }
+            let isCustom: Bool = if case .custom = shortcutStore.customization(for: descriptor.itemID) {
+                true
+            } else {
+                false
+            }
+            return (index, descriptor, binding, isCustom)
+        }.sorted { lhs, rhs in
+            lhs.isCustom == rhs.isCustom ? lhs.index < rhs.index : lhs.isCustom
+        }
+
+        var claimedBindings: [ShortcutBinding: ShortcutDescriptor] = [:]
+        var registrations: [GlobalShortcutManager.Registration] = []
+        var conflictOwners: [String: String] = [:]
+        for candidate in candidates {
+            if let owner = claimedBindings[candidate.binding],
+               !canShareShortcutBinding(candidate.descriptor, with: owner) {
+                conflictOwners[candidate.descriptor.itemID] =
+                    "\(owner.pluginTitle) · \(owner.definition.title)"
+                continue
+            }
+            claimedBindings[candidate.binding] = candidate.descriptor
+            registrations.append(GlobalShortcutManager.Registration(
+                shortcutID: candidate.descriptor.itemID,
+                binding: candidate.binding
+            ))
+        }
+        return (registrations, conflictOwners)
+    }
+
     private func syncGlobalShortcuts() {
         let previousShortcutBindingRevision = shortcutBindingRevision
         let descriptors = shortcutDescriptors()
-        let registrations = descriptors.compactMap { descriptor -> GlobalShortcutManager.Registration? in
-            guard descriptor.definition.scope == .global,
-                  actionReference(for: descriptor) == nil else {
-                return nil
-            }
-
-            guard let binding = resolvedBinding(for: descriptor) else {
-                return nil
-            }
-
-            guard MacToolsReservedShortcutBindings.validationError(for: binding) == nil else {
-                return nil
-            }
-
-            return GlobalShortcutManager.Registration(
-                shortcutID: descriptor.itemID,
-                binding: binding
-            )
-        }
+        let registrations = globalShortcutRegistrationSelection(for: descriptors).registrations
 
         let ownerDescriptions = Dictionary(
             descriptors.filter { actionReference(for: $0) == nil }.map {

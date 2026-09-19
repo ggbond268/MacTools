@@ -659,6 +659,42 @@ final class AppShortcutTests: XCTestCase {
         )
     }
 
+    func testLaterPluginDefaultCannotDisplaceAnExistingCustomShortcut() throws {
+        let defaults = try makeDefaults()
+        let binding = ShortcutBinding(keyCode: 7, modifiers: [.command, .option])
+        let laterDefault = GlobalConflictTestPlugin(id: "later-default", order: 1, defaultBinding: binding)
+        let existingCustom = GlobalConflictTestPlugin(id: "existing-custom", order: 2, defaultBinding: nil)
+        ShortcutStore(userDefaults: defaults).setCustomization(
+            .custom(binding), for: existingCustom.shortcutItemID
+        )
+        let manager = GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar())
+        let host = makeHost(defaults: defaults, plugins: [laterDefault, existingCustom], manager: manager)
+
+        XCTAssertEqual(manager.debugRegistrationsForTests.filter { $0.binding == binding }.map(\.shortcutID),
+                       [existingCustom.shortcutItemID])
+        XCTAssertNotNil(host.shortcutItems.first { $0.id == laterDefault.shortcutItemID }?.errorMessage)
+        XCTAssertNil(host.shortcutItems.first { $0.id == existingCustom.shortcutItemID }?.errorMessage)
+    }
+
+    func testExplicitlySharedPluginDefaultsStillUseOneHotkey() throws {
+        let defaults = try makeDefaults()
+        let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .option])
+        let first = GlobalConflictTestPlugin(
+            id: "shared-first", order: 1, defaultBinding: binding, sharedBindingGroupID: "shared"
+        )
+        let second = GlobalConflictTestPlugin(
+            id: "shared-second", order: 2, defaultBinding: binding, sharedBindingGroupID: "shared"
+        )
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let manager = GlobalShortcutManager(registrar: registrar)
+        let host = makeHost(defaults: defaults, plugins: [first, second], manager: manager)
+
+        XCTAssertEqual(Set(manager.debugRegistrationsForTests.map(\.shortcutID)),
+                       [first.shortcutItemID, second.shortcutItemID])
+        XCTAssertEqual(registrar.registeredBindings, [binding])
+        XCTAssertTrue(host.shortcutItems.allSatisfy { $0.errorMessage == nil })
+    }
+
     func testStoredAppShortcutConflictWithLocalPluginIsVisibleAndNeitherRegistersGlobally() throws {
         let defaults = try makeDefaults()
         let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .shift])
@@ -894,6 +930,29 @@ private final class AppShortcutTestPlugin: MacToolsPlugin {
                 isRequired: false
             )
         ]
+    }
+}
+
+@MainActor
+private final class GlobalConflictTestPlugin: MacToolsPlugin {
+    let metadata: PluginMetadata
+    let shortcutDefinitions: [PluginShortcutDefinition]
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    var shortcutItemID: String { "\(metadata.id).shortcut.run" }
+
+    init(id: String, order: Int, defaultBinding: ShortcutBinding?, sharedBindingGroupID: String? = nil) {
+        metadata = PluginMetadata(
+            id: id, title: id, iconName: "keyboard", iconTint: .blue,
+            order: order, defaultDescription: "Tests global shortcut conflicts"
+        )
+        shortcutDefinitions = [PluginShortcutDefinition(
+            id: "run", title: "Run", description: "Run the test action", actionID: "run",
+            scope: .global, defaultBinding: defaultBinding, isRequired: false,
+            sharedBindingGroupID: sharedBindingGroupID
+        )]
     }
 }
 

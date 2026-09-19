@@ -101,7 +101,7 @@ final class ClipboardBackupViewTests: XCTestCase {
             settings: ClipboardHistorySettingsStore(storage: UserDefaultsPluginStorage(pluginID: "test", userDefaults: defaults)),
             pasteboard: GeneralClipboardPasteboard(pasteboard: pasteboard), persistence: persistence)
         let region = ClipboardBackupRegion(localization: PluginLocalization(bundle: .main), controller: controller,
-            makeService: { service }, suspend: {}, resume: { _ in })
+            makeService: { service }, suspend: {}, resume: { _ in }, provisionalSavedMetadata: { [:] })
         let host = NSHostingView(rootView: region.pluginSettingsCardBackground(.standard).padding(20)
             .frame(width: 680).background(Color(nsColor: .windowBackgroundColor)))
         host.appearance = NSAppearance(named: .aqua)

@@ -106,6 +106,45 @@ final class ClipboardSavedLibraryTests: XCTestCase {
     }
 
     @MainActor
+    func testQuickPasteSnapshotExpandsAgainstEachNewClipboardValue() async {
+        let board = SavedLibraryTestPasteboard()
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: board, persistence: SlowSavedLibraryTestStore(saveDelay: 0)
+        )
+        await startSavedLibrary(controller)
+        let snapshot = ClipboardSequentialPasteSnapshot(
+            sourceItemID: UUID(), payload: .plainText("Hello {{clipboard}}"),
+            expandsSnippetVariables: true
+        )
+
+        _ = board.writePlainText("Ada")
+        let first = await controller.copyQueuedSnapshotForPaste(snapshot)
+        XCTAssertEqual(first?.expansion.text, "Hello Ada")
+        _ = board.writePlainText("Grace")
+        let second = await controller.copyQueuedSnapshotForPaste(snapshot)
+        XCTAssertEqual(second?.expansion.text, "Hello Grace")
+        XCTAssertEqual(board.asynchronousPlainTextReadCount, 2)
+        controller.stop()
+    }
+
+    @MainActor
+    func testQuickPasteSnapshotCannotWriteAfterAssignmentClears() async {
+        let board = SavedLibraryTestPasteboard()
+        let controller = ClipboardSavedLibraryController(
+            pasteboard: board, persistence: SlowSavedLibraryTestStore(saveDelay: 0)
+        )
+        await startSavedLibrary(controller)
+        let snapshot = ClipboardSequentialPasteSnapshot(
+            sourceItemID: UUID(), payload: .plainText("stale"), expandsSnippetVariables: false
+        )
+        let initialVersion = board.changeCount
+        let result = await controller.copyQueuedSnapshotForPaste(snapshot, canWrite: { false })
+        XCTAssertNil(result)
+        XCTAssertEqual(board.changeCount, initialVersion)
+        controller.stop()
+    }
+
+    @MainActor
     func testSensitiveClipboardIsUnavailableToCopyResolvedTextAndKeywordExpansion() async throws {
         let template = "Hello {{clipboard}}"
         let item = ClipboardSavedItem(
