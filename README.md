@@ -47,6 +47,7 @@
 | Microphone Mute | Mute or restore the default microphone input through CoreAudio without requesting recording permission. |
 | App Volume | On macOS 15 and later, adjust the volume of each app currently playing audio and keep preferences locally per app; first use requires System Audio Recording permission. |
 | Disk Cleanup | Scan system caches, developer artifacts (node_modules, build outputs), and leftover installers; move to Trash by default, with path safety checks, Full Disk Access guidance, sensitive-data protection before deletion, localized rule explanations with low, medium, and high risk levels, and cleanup history showing cancelled runs and recovery details with totals based on successful removals. Explanations and history support all 11 app languages. |
+| Storage Explorer | Explore size on disk with a fast hierarchical treemap, direct drill-down, stable muted size-ranked colors, and drag-to-review Trash removal. Refresh keeps the last complete view visible while the replacement scan runs. |
 | Xcode Cleanup | Scan DerivedData, device support files, archives, simulators, and preview caches by category; deletion is disabled while Xcode is running and only runs inside allowlisted roots. |
 | Eject Disks | Detect visible ejectable mounts when the panel opens, including external drives, disk images, and network volumes; multiple volumes on one device are ejected once. |
 | Empty Trash | Show the number of Trash items and empty Trash through Finder; the action is disabled when Trash is empty. |
