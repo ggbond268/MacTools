@@ -45,6 +45,84 @@ final class CalendarSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(CalendarSettingsStore(storage: storage).weekStartDay, .sunday)
     }
+
+    func testRecentAgendaDefaultsToVisibleAndPersists() {
+        let storage = CalendarSettingsMemoryStorage()
+        let store = CalendarSettingsStore(storage: storage)
+
+        XCTAssertTrue(store.showsRecentAgenda)
+        store.setShowsRecentAgenda(false)
+
+        XCTAssertEqual(storage.object(forKey: "settings.shows-recent-agenda") as? Bool, false)
+        XCTAssertFalse(CalendarSettingsStore(storage: storage).showsRecentAgenda)
+    }
+
+    func testAgendaRangeDefaultsToThreeFutureDaysAndPersists() {
+        let storage = CalendarSettingsMemoryStorage()
+        let store = CalendarSettingsStore(storage: storage)
+        XCTAssertEqual(store.agendaRange, CalendarAgendaRange(dayCount: 3, direction: .future))
+
+        store.setAgendaRange(CalendarAgendaRange(dayCount: 7, direction: .surrounding))
+
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange,
+                       CalendarAgendaRange(dayCount: 7, direction: .surrounding))
+    }
+
+    func testLegacyHiddenDetailsRemainHiddenAndNewPreferenceTakesPrecedence() {
+        let storage = CalendarSettingsMemoryStorage()
+        storage.set(false, forKey: "settings.shows-today-details")
+        let store = CalendarSettingsStore(storage: storage)
+        XCTAssertFalse(store.showsRecentAgenda)
+
+        store.setShowsRecentAgenda(true)
+
+        XCTAssertTrue(CalendarSettingsStore(storage: storage).showsRecentAgenda)
+    }
+
+    func testInvalidRangeSettingsAreBounded() {
+        let storage = CalendarSettingsMemoryStorage()
+        storage.set(99, forKey: "settings.agenda-day-count")
+        storage.set("invalid", forKey: "settings.agenda-direction")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange,
+                       CalendarAgendaRange(dayCount: 7, direction: .future))
+        storage.set(-1, forKey: "settings.agenda-day-count")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange.dayCount, 1)
+    }
+
+    func testAlternateCalendarDefaultsFromLanguageOnceAndPersistsSelection() {
+        for (language, expected) in [("zh-Hans", CalendarAlternateCalendar.chinese), ("zh-Hant", .chinese), ("en", .none)] {
+            let storage = CalendarSettingsMemoryStorage()
+            let store = CalendarSettingsStore(storage: storage, languageIdentifier: language)
+            XCTAssertEqual(store.alternateCalendar, expected)
+            XCTAssertEqual(storage.string(forKey: "settings.alternate-calendar"), expected.rawValue)
+            XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "ja").alternateCalendar, expected)
+            for selection in CalendarAlternateCalendar.allCases {
+                store.setAlternateCalendar(selection)
+                XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "zh-Hans").alternateCalendar, selection)
+            }
+        }
+    }
+
+    func testLegacyLunarChoicesMigrateWithoutOverridingNewSelection() {
+        for (legacy, language, expected) in [
+            ("shown", "en", CalendarAlternateCalendar.chinese), ("hidden", "zh-Hans", .none),
+            ("automatic", "en_CN", .none), ("automatic", "zh-Hans-US", .chinese)
+        ] {
+            let storage = CalendarSettingsMemoryStorage()
+            storage.set(legacy, forKey: "settings.lunar-display")
+            let store = CalendarSettingsStore(storage: storage, languageIdentifier: language)
+            XCTAssertEqual(store.alternateCalendar, expected)
+            store.setAlternateCalendar(.none)
+            storage.set("shown", forKey: "settings.lunar-display")
+            XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "zh-Hans").alternateCalendar, .none)
+        }
+    }
+
+    func testInvalidAlternateCalendarFallsBackToLanguageDefault() {
+        let storage = CalendarSettingsMemoryStorage()
+        storage.set("invalid", forKey: "settings.alternate-calendar")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "en_CN").alternateCalendar, .none)
+    }
 }
 
 @MainActor

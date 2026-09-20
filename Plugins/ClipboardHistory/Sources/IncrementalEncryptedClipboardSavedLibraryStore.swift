@@ -7,27 +7,27 @@ final class IncrementalEncryptedClipboardSavedLibraryStore:
     ClipboardSavedLibraryPersisting,
     @unchecked Sendable
 {
-    private struct StoredMetadata: Codable {
-        let id: UUID
-        let title: String
-        let tags: [String]
-        let keyword: String?
-        let savedKind: ClipboardSavedItemKind
-        let createdAt: Date
-        let updatedAt: Date
+    struct StoredMetadata: Codable, Equatable, Sendable {
+        var id: UUID
+        var title: String
+        var tags: [String]
+        var keyword: String?
+        var savedKind: ClipboardSavedItemKind
+        var createdAt: Date
+        var updatedAt: Date
         var lastUsedAt: Date?
-        let sourceApplication: ClipboardSourceApplication?
-        let contentKind: ClipboardHistoryContentKind
-        let payloadByteCount: Int
-        let fileURLs: [String]
-        let fileReferenceCount: Int
-        let linkURLs: [String]
-        let representationTypeIdentifiers: [String]
-        let payloadDigest: Data
-        let templateSearchText: String?
-        let hasDynamicTemplateContent: Bool?
-        let clipSearchText: String?
-        let imageSearchText: String?
+        var sourceApplication: ClipboardSourceApplication?
+        var contentKind: ClipboardHistoryContentKind
+        var payloadByteCount: Int
+        var fileURLs: [String]
+        var fileReferenceCount: Int
+        var linkURLs: [String]
+        var representationTypeIdentifiers: [String]
+        var payloadDigest: Data
+        var templateSearchText: String?
+        var hasDynamicTemplateContent: Bool?
+        var clipSearchText: String?
+        var imageSearchText: String?
 
         init(item: ClipboardSavedItem) {
             id = item.id

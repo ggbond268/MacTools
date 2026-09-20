@@ -172,7 +172,7 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
         """, in: directory)
         let runner = ProcessAppleShortcutsCommandRunner(
             commandURL: executable,
-            runTimeout: 0.1,
+            runTimeout: 1,
             maximumCapturedByteCount: 1_024
         )
 

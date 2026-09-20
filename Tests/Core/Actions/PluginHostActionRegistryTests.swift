@@ -574,8 +574,8 @@ final class PluginHostActionRegistryTests: XCTestCase {
         XCTAssertEqual(
             requests,
             [
-                .settings(.feature(.dashboardLayout)),
-                .settings(.feature(.featurePanelLayout)),
+                .settings(.feature(.actionsAndShortcuts)),
+                .settings(.feature(.actionsAndShortcuts)),
                 .settings(.general),
                 .settings(.feature(.automation)),
             ]

@@ -1,6 +1,75 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "settings.centeredGuides.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to enable centered window guides. Check Accessibility access and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法启用窗口居中参考线，请检查辅助功能权限后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法啟用視窗置中參考線，請檢查輔助使用權限後再試。"
+          }
+        }
+      }
+    },
+    "settings.centeredGuides.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centered window guides"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "窗口居中参考线"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "視窗置中參考線"
+          }
+        }
+      }
+    },
+    "settings.centeredGuides.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show guides while dragging other apps’ windows; release near the center to snap. Requires Accessibility access."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移其他应用的窗口时显示参考线，靠近中心松开即可居中。需要辅助功能权限。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移其他應用程式的視窗時顯示參考線，靠近中心放開即可置中。需要輔助使用權限。"
+          }
+        }
+      }
+    },
     "metadata.title": {
       "extractionState": "manual",
       "localizations": {

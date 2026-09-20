@@ -14,6 +14,8 @@ struct MouseScrollGlideAccumulator: Equatable, Sendable {
     private(set) var bufferX = 0.0
     private(set) var currentY = 0.0
     private(set) var currentX = 0.0
+    private var emittedY = 0.0
+    private var emittedX = 0.0
 
     var isDrained: Bool {
         abs(bufferY - currentY) < Self.drainEpsilon && abs(bufferX - currentX) < Self.drainEpsilon
@@ -25,6 +27,7 @@ struct MouseScrollGlideAccumulator: Equatable, Sendable {
         if tickY == 0 || tickY * bufferY <= 0 {
             bufferY = tickY
             currentY = 0
+            emittedY = 0
         } else {
             bufferY += tickY
         }
@@ -32,6 +35,7 @@ struct MouseScrollGlideAccumulator: Equatable, Sendable {
         if tickX == 0 || tickX * bufferX <= 0 {
             bufferX = tickX
             currentX = 0
+            emittedX = 0
         } else {
             bufferX += tickX
         }
@@ -42,7 +46,7 @@ struct MouseScrollGlideAccumulator: Equatable, Sendable {
     /// 60 Hz and high-refresh displays without refresh-rate self-correction.
     mutating func advance(framePeriod: TimeInterval, duration: TimeInterval) -> (y: Double, x: Double) {
         let tau = max(duration / 3, 0.05)
-        let alpha = min(max(1 - exp(-min(max(framePeriod, 0), 1) / tau), 0.01), 1)
+        let alpha = -expm1(-min(max(framePeriod, 0), 1) / tau)
 
         let frameY = (bufferY - currentY) * alpha
         let frameX = (bufferX - currentX) * alpha
@@ -51,7 +55,14 @@ struct MouseScrollGlideAccumulator: Equatable, Sendable {
 
         if abs(bufferY - currentY) < Self.drainEpsilon { currentY = bufferY }
         if abs(bufferX - currentX) < Self.drainEpsilon { currentX = bufferX }
-        return (frameY, frameX)
+        // Quantize cumulative positions, not individual frame deltas, so
+        // subpixel movement carries into later frames instead of being lost.
+        let nextY = currentY.rounded()
+        let nextX = currentX.rounded()
+        let output = (nextY - emittedY, nextX - emittedX)
+        emittedY = nextY
+        emittedX = nextX
+        return output
     }
 
     mutating func reset() {
@@ -67,6 +78,7 @@ final class MouseScrollGlideTemplateStore: @unchecked Sendable {
         let event: CGEvent
         let targetProcessID: pid_t
         let isChromiumTarget: Bool
+        let pixelsPerLine: Double
         let generation: UInt64
         let createdAt: TimeInterval
     }
@@ -75,6 +87,7 @@ final class MouseScrollGlideTemplateStore: @unchecked Sendable {
     private var template: CGEvent?
     private var targetProcessID: pid_t = 0
     private var isChromiumTarget = false
+    private var pixelsPerLine = 10.0
     private var generation: UInt64 = 0
     private var createdAt: TimeInterval = 0
     private var chromiumCache: [pid_t: Bool] = [:]
@@ -88,12 +101,14 @@ final class MouseScrollGlideTemplateStore: @unchecked Sendable {
     func capture(event: CGEvent) {
         let pid = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
         let isChromium = chromiumTarget(for: pid)
+        let sourcePixelsPerLine = CGEventSource(event: event)?.pixelsPerLine ?? 10
 
         lock.lock()
         defer { lock.unlock() }
         template = event.copy()
         targetProcessID = pid
         isChromiumTarget = isChromium
+        pixelsPerLine = sourcePixelsPerLine.isFinite && sourcePixelsPerLine > 0 ? sourcePixelsPerLine : 10
         createdAt = CFAbsoluteTimeGetCurrent()
     }
 
@@ -110,6 +125,7 @@ final class MouseScrollGlideTemplateStore: @unchecked Sendable {
             event: clone,
             targetProcessID: targetProcessID,
             isChromiumTarget: isChromiumTarget,
+            pixelsPerLine: pixelsPerLine,
             generation: generation,
             createdAt: now
         )
@@ -296,14 +312,13 @@ final class MouseScrollSmoother: @unchecked Sendable {
 
         var frameSnapshot: MouseScrollGlideTemplateStore.Snapshot?
         var terminalSnapshot: MouseScrollGlideTemplateStore.Snapshot?
-        if let snapshot = templates.makeSnapshot(now: now) {
-            frameSnapshot = snapshot
-            if drained {
-                // Bump first so regular frames from this glide are dropped, then
-                // snapshot again so the terminal event itself survives the check.
-                templates.invalidate()
-                terminalSnapshot = templates.makeSnapshot(now: now)
-            }
+        if deltas.y != 0 || deltas.x != 0 {
+            frameSnapshot = templates.makeSnapshot(now: now)
+        }
+        if drained {
+            // Natural completion keeps queued displacement valid. The serial
+            // posting queue delivers the final pixels before the zero event.
+            terminalSnapshot = templates.makeSnapshot(now: now)
         }
 
         if drained {
@@ -331,18 +346,36 @@ final class MouseScrollSmoother: @unchecked Sendable {
         let targetProcessID = snapshot.targetProcessID
 
         postQueue.async { [templates] in
-            // A newer generation (new glide, config change, or reset) or an expired
+            // A newer generation (config change or reset) or an expired
             // template cancels this frame; posting it would scroll a stale target.
             guard templates.makeSnapshot(now: createdAt)?.generation == generation,
                   CFAbsoluteTimeGetCurrent() - createdAt <= timeToLive else {
                 return
             }
 
-            event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: deltaY)
-            event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: deltaX)
-            event.setDoubleValueField(.scrollWheelEventIsContinuous, value: 1)
-            event.setIntegerValueField(.eventSourceUserData, value: Self.syntheticEventMarker)
+            event.applySmoothScrollDeltas(deltaY: deltaY, deltaX: deltaX, pixelsPerLine: snapshot.pixelsPerLine)
             event.postToPid(targetProcessID)
         }
+    }
+}
+
+extension CGEvent {
+    /// Matches native pixel-unit scroll events while preserving the captured
+    /// event's location, modifiers, and destination. Inputs are whole pixels.
+    func applySmoothScrollDeltas(deltaY: Double, deltaX: Double, pixelsPerLine: Double) {
+        let fixedY = deltaY / pixelsPerLine
+        let fixedX = deltaX / pixelsPerLine
+        // Native events truncate line deltas but keep nonzero pixel motion at
+        // least one line. Set lines first because CoreGraphics derives other fields.
+        let lineY = fixedY == 0 ? 0 : copysign(max(abs(fixedY.rounded(.towardZero)), 1), fixedY)
+        let lineX = fixedX == 0 ? 0 : copysign(max(abs(fixedX.rounded(.towardZero)), 1), fixedX)
+        setDoubleValueField(.scrollWheelEventDeltaAxis1, value: lineY)
+        setDoubleValueField(.scrollWheelEventDeltaAxis2, value: lineX)
+        setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: fixedY)
+        setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: fixedX)
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: deltaY)
+        setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: deltaX)
+        setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        setIntegerValueField(.eventSourceUserData, value: MouseScrollSmoother.syntheticEventMarker)
     }
 }

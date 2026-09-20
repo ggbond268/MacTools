@@ -1,22 +1,57 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
-    "plugin.management.hideFromDashboard": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء من لوحة المعلومات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Dashboard ausblenden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hide from Dashboard" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ocultar del panel" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masquer du tableau de bord" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードから隠す" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드에서 가리기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar do painel" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть с панели управления" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在仪表盘中隐藏" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在儀表板中隱藏" } }
+  "plugin.requirement.macOS": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "需要 macOS %@ 或更高版本。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Requires macOS %@ or later."
+        }
       }
-    },
+    }
+  },
+  "plugin.requirement.application": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "未找到所需应用：%@。"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Required app not found: %@."
+        }
+      }
+    }
+  },
+  "plugin.requirement.recheck": {
+    "extractionState": "manual",
+    "localizations": {
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "重新检查"
+        }
+      },
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Check Again"
+        }
+      }
+    }
+  },
     "plugin.management.hideFromDashboardFormat": {
       "extractionState": "manual",
       "localizations": {
@@ -31,22 +66,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Скрыть %@ с панели управления" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "从仪表盘隐藏%@" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "從儀表板隱藏%@" } }
-      }
-    },
-    "plugin.management.hideFromFeaturePanel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء من لوحة الميزات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Funktionsbereich ausblenden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hide from Feature Panel" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ocultar del panel de funciones" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masquer du panneau de fonctionnalités" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルから隠す" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널에서 가리기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar do painel de recursos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть с панели функций" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在功能面板中隐藏" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在功能面板中隱藏" } }
       }
     },
     "plugin.management.hideFromFeaturePanelFormat": {
@@ -95,38 +114,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Переместить в начало" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "移到顶部" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "移到頂部" } }
-      }
-    },
-    "plugin.management.showInDashboard": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إظهار في لوحة المعلومات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Dashboard anzeigen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Show in Dashboard" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Mostrar en el panel" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Afficher dans le tableau de bord" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードに表示" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드에 표시" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar no painel" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Показать на панели управления" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在仪表盘中显示" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在儀表板中顯示" } }
-      }
-    },
-    "plugin.management.showInFeaturePanel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إظهار في لوحة الميزات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Funktionsbereich anzeigen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Show in Feature Panel" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Mostrar en el panel de funciones" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Afficher dans le panneau de fonctionnalités" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルに表示" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널에 표시" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar no painel de recursos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Показать на панели функций" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在功能面板中显示" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在功能面板中顯示" } }
       }
     },
     "plugin.management.showInFeaturePanelFormat": {
@@ -257,38 +244,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "重新開啟確認" } }
       }
     },
-    "plugin.management.viewMarketplace": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "عرض في المتجر" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Marktplatz anzeigen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "View in Marketplace" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ver en Marketplace" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Voir dans la place de marché" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "マーケットプレイスで表示" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "마켓플레이스에서 보기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ver na Loja" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Показать в магазине" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在市场中查看" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "在市集中檢視" } }
-      }
-    },
-    "plugin.management.active": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "نشط" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Aktiv" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Active" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Activo" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Actif" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "使用中" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "활성" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ativo" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Активен" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用中" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用中" } }
-      }
-    },
     "plugin.capability.both": {
       "extractionState": "manual",
       "localizations": {
@@ -367,22 +322,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Возможности плагина" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "插件功能" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "外掛功能" } }
-      }
-    },
-    "plugin.management.openSettings": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "فتح إعدادات الإضافة" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Plug-in-Einstellungen öffnen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Open Plugin Settings" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Abrir ajustes del complemento" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir les réglages du module" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "プラグイン設定を開く" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "플러그인 설정 열기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Abrir ajustes do plug-in" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Открыть настройки плагина" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开插件设置" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開外掛設定" } }
       }
     },
     "plugin.management.openSettingsForPlugin": {
@@ -8888,13 +8827,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السوق"
+            "value": "سوق الإضافات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Marktplatz"
+            "value": "Plugin-Marktplatz"
           }
         },
         "en": {
@@ -8906,13 +8845,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mercado"
+            "value": "Catálogo de complementos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Place de marché"
+            "value": "Catalogue de plugins"
           }
         },
         "ja": {
@@ -8930,25 +8869,25 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mercado"
+            "value": "Catálogo de plug-ins"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Торговая площадка"
+            "value": "Каталог плагинов"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "市场"
+            "value": "插件市场"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "市場"
+            "value": "外掛市場"
           }
         }
       }
@@ -9233,77 +9172,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "更新中"
-          }
-        }
-      }
-    },
-    "plugin.management.reorderAccessibility": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اسحب لإعادة الترتيب"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zum Neuanordnen ziehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag to reorder"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrastrar para reordenar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser pour réorganiser"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ドラッグして並べ替えます"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "드래그하여 재정렬"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arraste para reordenar"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Перетащите, чтобы изменить порядок"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖拽调整顺序"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖拽調整順序"
           }
         }
       }

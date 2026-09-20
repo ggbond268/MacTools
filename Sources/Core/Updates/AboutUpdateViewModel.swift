@@ -136,7 +136,11 @@ final class AboutUpdateViewModel: ObservableObject {
         }
     }
 
-    func performAvailableUpdateAction(version: String) {
+    func performRequestedUpdateAction(version: String?) async {
+        guard let version else {
+            await probeForUpdates()
+            return
+        }
         lastAvailableVersion = version
         state = .updateAvailable(version: version)
         startInteractiveUpdate()

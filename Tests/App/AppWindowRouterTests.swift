@@ -1,38 +1,114 @@
 import AppKit
 import Carbon
-import MacToolsPluginKit
+@testable import MacToolsPluginKit
 import SwiftUI
 import XCTest
 @testable import MacTools
 
 @MainActor
 final class AppWindowRouterTests: XCTestCase {
-    func testDashboardTargetInvokesOnlyDashboardAction() {
-        var dashboardCallCount = 0
-        var featurePanelCallCount = 0
-        let actions = SettingsPanelPresentationActions(
-            showDashboard: { dashboardCallCount += 1 },
-            showFeaturePanel: { featurePanelCallCount += 1 }
-        )
-
-        actions.present(.dashboard)
-
-        XCTAssertEqual(dashboardCallCount, 1)
-        XCTAssertEqual(featurePanelCallCount, 0)
+    func testCaptureCommandPaletteAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "command-palette")
+        defer { try? capture.finish() }
+        let suite = "PaletteCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults, plugins: [
+            AppWindowRouterSettingsPlugin(id: "Synthetic Notes"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Calendar"),
+            AppWindowRouterSettingsPlugin(id: "Synthetic Clipboard")
+        ])
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        try await capture.exercise(panel) { router.toggleCommandPalette() }
+        if ProcessInfo.processInfo.environment["MACTOOLS_PALETTE_INTERACTIVE_REVIEW"] == "1" {
+            panel.appearance = NSAppearance(named: .aqua)
+            capture.setBackdrop(dark: false)
+            let field = try await focusUnifiedSearchField(in: panel)
+            let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+            editor.selectAll(nil)
+            editor.insertText("", replacementRange: NSRange(location: NSNotFound, length: 0))
+            field.delegate?.controlTextDidChange?(
+                Notification(name: NSControl.textDidChangeNotification, object: field)
+            )
+            try await capture.capture(panel, label: "interactive-review")
+            // Opt-in pause for pointer/keyboard inspection of this synthetic panel.
+            try await Task.sleep(for: .seconds(60))
+        }
     }
 
-    func testFeaturePanelTargetInvokesOnlyFeaturePanelAction() {
-        var dashboardCallCount = 0
-        var featurePanelCallCount = 0
-        let actions = SettingsPanelPresentationActions(
-            showDashboard: { dashboardCallCount += 1 },
-            showFeaturePanel: { featurePanelCallCount += 1 }
+    func testCaptureSettingsCommandPaletteAppearanceForReview() async throws {
+        let capture = try PaletteCaptureSupport(name: "settings-command-palette")
+        defer { try? capture.finish() }
+        let suite = "PaletteCapture.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults)
+        router.showSettings()
+        let window = try XCTUnwrap(router.settingsWindow)
+        defer { window.close() }
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
+        coordinator.presentUnifiedSearch(origin: .keyboard)
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        for (name, label) in [(NSAppearance.Name.aqua, "light"),
+                              (.darkAqua, "dark"),
+                              (.accessibilityHighContrastDarkAqua, "high-contrast-dark")] {
+            window.appearance = NSAppearance(named: name)
+            try await capture.capture(window, label: label)
+        }
+        let field = try await focusUnifiedSearchField(in: window)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("general", replacementRange: NSRange(location: NSNotFound, length: 0))
+        field.delegate?.controlTextDidChange?(
+            Notification(name: NSControl.textDidChangeNotification, object: field)
         )
+        try await capture.capture(window, label: "search")
+    }
 
-        actions.present(.featurePanel)
-
-        XCTAssertEqual(dashboardCallCount, 0)
-        XCTAssertEqual(featurePanelCallCount, 1)
+    func testStandalonePaletteKeepsEditorAndFrameAcrossAppearanceAndContentChanges() async throws {
+        let suite = "PaletteHosting.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = makeRouter(defaults: defaults)
+        router.toggleCommandPalette()
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        let container = try XCTUnwrap(panel.contentView as?
+            CommandPaletteHostingContainer<StandaloneCommandPaletteRootView>)
+        // Let the initial presentation/focus task finish before composing text.
+        await settleWindowLayout(panel)
+        try await Task.sleep(for: .milliseconds(150))
+        let field = try await focusUnifiedSearchField(in: panel)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.setMarkedText("synthetic", selectedRange: NSRange(location: 9, length: 0),
+                             replacementRange: NSRange(location: NSNotFound, length: 0))
+        field.delegate?.controlTextDidChange?(
+            Notification(name: NSControl.textDidChangeNotification, object: field)
+        )
+        let originalFrame = panel.frame
+        for name in [NSAppearance.Name.aqua, .darkAqua, .accessibilityHighContrastDarkAqua] {
+            panel.appearance = NSAppearance(named: name)
+            await settleWindowLayout(panel)
+            XCTAssertEqual(panel.frame, originalFrame)
+            XCTAssertEqual(container.hostingView.frame, container.bounds)
+            XCTAssertTrue(field.currentEditor() === editor, "The live search field must retain its editor")
+            XCTAssertTrue(editor.hasMarkedText())
+            XCTAssertEqual(editor.string, "synthetic")
+        }
+        editor.unmarkText()
+        for query in ["general", "no matching destination", ""] {
+            editor.selectAll(nil)
+            editor.insertText(query, replacementRange: NSRange(location: NSNotFound, length: 0))
+            field.delegate?.controlTextDidChange?(
+                Notification(name: NSControl.textDidChangeNotification, object: field)
+            )
+            await settleWindowLayout(panel)
+            XCTAssertEqual(panel.frame, originalFrame, "Results must not resize the outer panel")
+            XCTAssertTrue(field.currentEditor() === editor, "The live search field must retain its editor")
+            XCTAssertEqual(editor.string, query)
+        }
     }
 
     func testSettingsWindowKeepsItsWidthAcrossDestinations() async throws {
@@ -118,7 +194,7 @@ final class AppWindowRouterTests: XCTestCase {
         router.toggleCommandPalette()
         let paletteHostingView = try XCTUnwrap(
             router.commandPalettePanel?.contentView
-                as? NSHostingView<StandaloneCommandPaletteRootView>
+                as? CommandPaletteHostingContainer<StandaloneCommandPaletteRootView>
         )
 
         XCTAssertTrue(
@@ -126,7 +202,7 @@ final class AppWindowRouterTests: XCTestCase {
                 === router.commandPaletteRecentStore
         )
         XCTAssertTrue(
-            paletteHostingView.rootView.commandPaletteRecentStore
+            paletteHostingView.hostingView.rootView.commandPaletteRecentStore
                 === router.commandPaletteRecentStore
         )
 
@@ -748,31 +824,68 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertEqual(requestedPolicies, [.regular])
     }
 
-    func testSettingsPaletteVisibilityPolicyRejectsMiniaturizedAndInactiveSpaceWindows() {
-        XCTAssertTrue(
-            CommandPaletteTogglePolicy.settingsPaletteIsVisible(
-                isPresented: true,
-                isWindowVisible: true,
-                isWindowMiniaturized: false,
-                isWindowOnActiveSpace: true
-            )
-        )
-        XCTAssertFalse(
-            CommandPaletteTogglePolicy.settingsPaletteIsVisible(
-                isPresented: true,
-                isWindowVisible: true,
-                isWindowMiniaturized: true,
-                isWindowOnActiveSpace: true
-            )
-        )
-        XCTAssertFalse(
-            CommandPaletteTogglePolicy.settingsPaletteIsVisible(
-                isPresented: true,
-                isWindowVisible: true,
-                isWindowMiniaturized: false,
-                isWindowOnActiveSpace: false
-            )
-        )
+    func testGlobalPaletteDoesNotCreateSettingsOrChangeForegroundApplication() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        defer { router.dismissCommandPalette(restoringFocus: false) }
+        let originalPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+
+        router.showCommandPalette()
+
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        XCTAssertNil(router.settingsWindow)
+        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
+        XCTAssertFalse(panel.canBecomeMain)
+        XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, originalPID)
+    }
+
+    func testBackgroundSettingsIgnoreApplicationActivationFromGlobalPanels() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let plugin = RefreshCountingPlugin(id: "panel-refresh-probe")
+        let router = makeRouter(defaults: defaults, plugins: [plugin])
+        router.presentSettings(.pluginConfiguration(plugin.metadata.id))
+        defer {
+            router.dismissCommandPalette(restoringFocus: false)
+            router.settingsWindow?.close()
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        router.showCommandPalette()
+        let baseline = plugin.refreshCount
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+        await Task.yield()
+        XCTAssertEqual(plugin.refreshCount, baseline)
+
+        router.dismissCommandPalette(restoringFocus: false)
+        let settings = try XCTUnwrap(router.settingsWindow)
+        let beforeSettingsRefresh = plugin.refreshCount
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: settings)
+        await Task.yield()
+        XCTAssertGreaterThan(plugin.refreshCount, beforeSettingsRefresh)
+    }
+
+    func testGlobalToggleOpensStandalonePaletteWhenSettingsSearchWasVisible() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        router.showUnifiedSearch()
+        defer {
+            router.dismissCommandPalette(restoringFocus: false)
+            router.settingsWindow?.close()
+        }
+        let settings = try XCTUnwrap(router.settingsWindow)
+        let frame = settings.frame
+        router.toggleCommandPalette()
+        XCTAssertFalse(router.settingsNavigationCoordinator?.isUnifiedSearchPresented == true)
+        XCTAssertTrue(router.commandPalettePanel?.isVisible == true)
+        XCTAssertTrue(router.settingsWindow === settings)
+        XCTAssertEqual(settings.frame, frame)
+        router.toggleCommandPalette()
+        XCTAssertFalse(router.commandPalettePanel?.isVisible == true)
     }
 
     func testStandalonePalettePlacementSelectsPointerScreenAndClampsToVisibleFrame() {
@@ -835,7 +948,7 @@ final class AppWindowRouterTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         var restorationCount = 0
-        let focusRestoration = StandaloneCommandPaletteFocusRestoration(
+        let focusRestoration = PluginPanelFocusRestoration(
             captureRestoration: { { restorationCount += 1 } },
             canRestore: { true }
         )
@@ -848,6 +961,72 @@ final class AppWindowRouterTests: XCTestCase {
         router.dismissCommandPalette()
 
         XCTAssertEqual(restorationCount, 1)
+    }
+
+    func testDismissingPaletteCancelsActiveSnapGuidesWithoutSaving() async throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let router = makeRouter(defaults: defaults)
+        let savedPosition = WindowPosition.custom(normalizedPoint: CGPoint(x: 0.2, y: 0.8))
+        router.windowPositionStore.savePosition(savedPosition, for: .commandPalette)
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+        let coordinator = try XCTUnwrap(router.commandPaletteSnapCoordinator)
+        defer { coordinator.cancelDragging() }
+        coordinator.startDragging()
+        XCTAssertTrue(coordinator.isDragging)
+        let guides = coordinator.overlayController.presentedPanelsForTests
+        XCTAssertEqual(guides.count, 3)
+        XCTAssertTrue(guides.allSatisfy(\.isVisible))
+        let frameBeforeDismissal = panel.frame
+
+        router.dismissCommandPalette(restoringFocus: false)
+
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertFalse(coordinator.isDragging, "Dismissing the palette must cancel its drag lifecycle")
+        XCTAssertTrue(guides.allSatisfy { !$0.isVisible })
+        XCTAssertTrue(coordinator.overlayController.presentedPanelsForTests.isEmpty)
+        coordinator.finishDragging()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(panel.frame, frameBeforeDismissal)
+        XCTAssertEqual(router.windowPositionStore.position(for: .commandPalette), savedPosition,
+                       "A cancelled drag must not overwrite the saved position after mouse release")
+
+        router.toggleCommandPalette()
+        coordinator.startDragging()
+        XCTAssertTrue(coordinator.isDragging)
+        XCTAssertEqual(coordinator.overlayController.presentedPanelsForTests.count, 3)
+        router.dismissCommandPalette(restoringFocus: false)
+        XCTAssertFalse(coordinator.isDragging)
+    }
+
+    func testResetCommandPalettePositionRestoresDefaultAnchorAndFrame() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let positionStore = WindowPositionStore(userDefaults: defaults)
+        positionStore.savePosition(
+            .custom(normalizedPoint: CGPoint(x: 0.2, y: 0.8)),
+            for: .commandPalette
+        )
+
+        let router = makeRouter(defaults: defaults, windowPositionStore: positionStore)
+        router.toggleCommandPalette()
+        let panel = try XCTUnwrap(router.commandPalettePanel)
+
+        router.resetCommandPalettePosition()
+        XCTAssertEqual(positionStore.position(for: .commandPalette), .defaultAnchor)
+
+        let defaultFrame = StandaloneCommandPaletteLayout.frame(
+            pointerLocation: NSEvent.mouseLocation,
+            visibleFrames: [panel.screen?.visibleFrame ?? .zero],
+            position: .defaultAnchor
+        )
+        XCTAssertEqual(panel.frame.origin.x, defaultFrame.origin.x, accuracy: 1.0)
+        XCTAssertEqual(panel.frame.origin.y, defaultFrame.origin.y, accuracy: 1.0)
+
+        router.dismissCommandPalette()
     }
 
     func testSuccessfulStandalonePaletteActionRestoresOnlyWhilePaletteOwnsFocus() {
@@ -879,7 +1058,7 @@ final class AppWindowRouterTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         var restorationCount = 0
-        let focusRestoration = StandaloneCommandPaletteFocusRestoration(
+        let focusRestoration = PluginPanelFocusRestoration(
             captureRestoration: { { restorationCount += 1 } },
             canRestore: { true }
         )
@@ -932,7 +1111,7 @@ final class AppWindowRouterTests: XCTestCase {
         XCTAssertEqual(cancellationCount, 1)
     }
 
-    func testAppDeactivationDismissesStandalonePalette() async throws {
+    func testSwitchingToAnotherApplicationDismissesStandalonePalette() async throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -942,9 +1121,13 @@ final class AppWindowRouterTests: XCTestCase {
         let panel = try XCTUnwrap(router.commandPalettePanel)
         XCTAssertTrue(panel.isVisible)
 
-        NotificationCenter.default.post(
-            name: NSApplication.didResignActiveNotification,
-            object: NSApplication.shared
+        let otherApplication = try XCTUnwrap(NSWorkspace.shared.runningApplications.first {
+            $0 != .current && $0.activationPolicy == .regular
+        })
+        NSWorkspace.shared.notificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: otherApplication]
         )
         await Task.yield()
 
@@ -1149,6 +1332,26 @@ final class AppWindowRouterTests: XCTestCase {
         router.settingsWindow?.close()
     }
 
+    func testAppUpdateWithoutKnownVersionStillRequestsACheck() throws {
+        let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let updater = AppUpdater(startingUpdater: false)
+        let router = makeRouter(defaults: defaults, appUpdater: updater)
+        defer { router.settingsWindow?.close() }
+        router.showSettings()
+        let coordinator = try XCTUnwrap(router.settingsNavigationCoordinator)
+        var requests: [AboutUpdateActionRequest] = []
+        let subscription = coordinator.$aboutUpdateActionRequest.compactMap { $0 }.sink { requests.append($0) }
+        defer { subscription.cancel() }
+
+        router.presentSettings(.appUpdate)
+
+        XCTAssertEqual(coordinator.destination, .about)
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertNil(requests.first?.version)
+    }
+
     func testExplicitGeneralAndAboutRequestsSelectTheirSettingsDestinations() throws {
         let suiteName = "AppWindowRouterTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -1251,7 +1454,8 @@ final class AppWindowRouterTests: XCTestCase {
     private func makeRouter(
         defaults: UserDefaults,
         appUpdater: AppUpdater? = nil,
-        commandPaletteFocusRestoration: StandaloneCommandPaletteFocusRestoration? = nil,
+        commandPaletteFocusRestoration: PluginPanelFocusRestoration? = nil,
+        windowPositionStore: WindowPositionStore? = nil,
         plugins: [any MacToolsPlugin] = [],
         configureHost: (PluginHost) -> Void = { _ in }
     ) -> AppWindowRouter {
@@ -1270,7 +1474,8 @@ final class AppWindowRouterTests: XCTestCase {
             menuBarIconGallery: MenuBarIconGalleryLibrary(),
             launchAtLoginController: LaunchAtLoginController(service: AppWindowRouterFakeLaunchAtLoginService()),
             appearanceUserDefaults: defaults,
-            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init()
+            commandPaletteFocusRestoration: commandPaletteFocusRestoration ?? .init(),
+            windowPositionStore: windowPositionStore ?? WindowPositionStore(userDefaults: defaults)
         )
     }
 
@@ -1335,6 +1540,10 @@ private final class RefreshCountingPlugin: MacToolsPlugin {
             order: 0,
             defaultDescription: id
         )
+    }
+
+    var settingsPage: PluginSettingsPage? {
+        .form(description: metadata.defaultDescription, sections: [])
     }
 
     func refresh() {

@@ -13,9 +13,10 @@ The supported product boundary is:
 - Explicit custom single-window commands
 - Explicit movement between displays
 - Optional modifier-key dragging of the window beneath the pointer
+- Optional centered alignment guides and release-time snapping for external windows
 - Shortcuts, Run Links, Unified Search, Action Grid, Trackpad Gestures, and manually started workflows
 
-Modifier Drag is opt-in and requires an exact modifier-key combination. The plugin leaves ordinary mouse dragging and macOS edge snapping unchanged and does not draw snap-zone overlays. It does not continuously manage window positions or automatically apply layouts in response to app launches, window creation, focus changes, display topology, wake, or unlock.
+Modifier Drag is opt-in and requires an exact modifier-key combination. Centered window guides are a separate opt-in feature for ordinary window dragging. macOS continues to own edge snapping. It does not continuously manage window positions or automatically apply layouts in response to app launches, window creation, focus changes, display topology, wake, or unlock.
 
 Broader window-manager features remain out of scope: automatic tiling, per-app or title-based rules, visual layout editors, directional focus and swapping, stash or pin modes, window lifecycle commands, cloud sync, dedicated layout import/export, and configuration through a CLI.
 
@@ -42,6 +43,18 @@ Successful global-shortcut and Trackpad Gesture commands can optionally show a c
 Modifier Drag is disabled by default and requires Accessibility permission. Once enabled, hold exactly the configured modifiers and move the pointer beyond the small activation dead zone to move the compatible window beneath it. Dragging preserves the window's size and does not click, raise, or focus it. Releasing a required modifier, adding another modifier, pressing a regular key, or pressing a mouse button cancels the gesture. Release all modifiers before starting another gesture.
 
 The separate drag indicator is enabled by default. It appears beside the pointer after a short arming delay, follows the pointer during an active drag, and briefly explains failures. Turning it off suppresses all Modifier Drag indicators without disabling dragging or changing command feedback. Temporary Accessibility write delays in busy apps are retried during the gesture; unavailable or rejected windows still report a failure.
+
+## Centered Window Guides
+
+Centered window guides are disabled by default and require Accessibility permission. Enable them in Window Layouts to see the shared dashed guides while dragging a standard external window. Guides highlight per axis within 20 points, with 4 points of hysteresis. Releasing near both centered axes moves only that window to the centered target and preserves its size. The window gap setting does not alter this target.
+
+The existing listen-only Modifier Drag event tap serves both features. It never intercepts input. A mouse-down snapshot captures just the topmost target; subsequent AX work runs on the Accessibility worker and coalesces at a 16 ms cadence. A pointer history capped at 128 samples and 120 ms keeps guides responsive when input overtakes AX reads. Temporary position lag may recover within 120 ms; release sampling uses only the final pointer and never historical positions to authorize a snap. Feedback requires a drag event and actual position changes that follow the pointer without a size change. Ordinary clicks, text selection, unrelated programmatic movement and resizing do not activate guides. MacTools windows use their dedicated coordinators and are excluded here.
+
+Full-screen, minimized, hidden, invalid, immovable and nonstandard/transient windows are excluded. Effectively maximized means all four frame components match the usable display frame within 3 points, rather than an area-percentage heuristic. Oversized windows are excluded to avoid resizing them. Usable frames respect the menu bar, Dock and the existing Stage Manager option. Display/Space changes, sleep, session deactivation, keyboard cancellation, permission loss and target disappearance dismiss guides. Release rereads the same target and validates its current eligibility and frame immediately before a single position write; no focus fallback or retry is allowed.
+
+The shared snap APIs require host 1.3.1 or later. Window Layouts and Clipboard History declare that minimum so their updated packages cannot load against the older 1.3.0 PluginKit framework.
+
+Manual acceptance must cover native and custom title bars in several apps, mouse and trackpad input, a window already centered, large but nonmaximized windows, all resize edges, text selection, multiple displays with different scaling and vertical arrangements, Spaces, Stage Manager on either side, Dock/menu-bar changes, permission revocation and a target closing before release. Automated tests exercise policy, event arbitration and asynchronous release safeguards; they do not establish physical-input acceptance.
 
 ## Stage Manager
 

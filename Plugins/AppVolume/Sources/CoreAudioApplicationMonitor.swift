@@ -2,91 +2,123 @@ import AppKit
 import CoreAudio
 import Darwin
 import Foundation
+import OSLog
 
 @MainActor
 final class CoreAudioApplicationMonitor: AudioApplicationMonitoring {
     var onUpdate: ((AudioApplicationSnapshot) -> Void)?
 
-    private let scanLoop = AudioApplicationScanLoop()
+    private let worker: any AudioApplicationObservationWorking
     private var lastSnapshot = AudioApplicationSnapshot.empty
     private var isRunning = false
+    private var generation: UInt64 = 0
+
+    init(worker: any AudioApplicationObservationWorking = CoreAudioApplicationObservationWorker()) {
+        self.worker = worker
+    }
 
     func start() {
+        guard !isRunning else { return }
         isRunning = true
-        scanLoop.start { [weak self] snapshot in
+        generation &+= 1
+        let currentGeneration = generation
+        worker.start { [weak self] snapshot in
             Task { @MainActor in
-                self?.publish(snapshot)
+                self?.publish(snapshot, generation: currentGeneration)
             }
         }
     }
 
     func refresh() {
-        scanLoop.refresh { [weak self] snapshot in
-            Task { @MainActor in
-                self?.publish(snapshot)
-            }
-        }
+        guard isRunning else { return }
+        worker.refresh()
     }
 
     func stop() {
         isRunning = false
-        scanLoop.stop()
+        generation &+= 1
+        worker.stop()
         lastSnapshot = .empty
     }
 
-    private func publish(_ snapshot: AudioApplicationSnapshot) {
-        guard isRunning, snapshot != lastSnapshot else {
-            return
-        }
-
+    private func publish(_ snapshot: AudioApplicationSnapshot, generation: UInt64) {
+        guard isRunning, generation == self.generation, snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
         onUpdate?(snapshot)
     }
+
+    deinit { worker.stop() }
 }
 
-private final class AudioApplicationScanLoop: @unchecked Sendable {
-    typealias Delivery = @Sendable (AudioApplicationSnapshot) -> Void
+protocol AudioApplicationObservationWorking: Sendable {
+    func start(delivery: @escaping AudioApplicationObservation.Delivery)
+    func refresh()
+    func stop()
+}
 
-    private let queue = DispatchQueue(
-        label: "cc.ggbond.mactools.app-volume.scan",
-        qos: .utility
-    )
-    private var timer: DispatchSourceTimer?
+final class CoreAudioApplicationObservationWorker: AudioApplicationObservationWorking, @unchecked Sendable {
+    private let queue: DispatchQueue
+    private let observation: AudioApplicationObservation
 
-    func start(delivery: @escaping Delivery) {
-        queue.async { [weak self] in
-            guard let self, timer == nil else {
-                return
+    init() {
+        let queue = DispatchQueue(label: "cc.ggbond.mactools.app-volume.discovery", qos: .utility)
+        self.queue = queue
+        observation = AudioApplicationObservation(dependencies: .init(
+            processObjectIDs: CoreAudioApplicationQuery.processObjectIDs,
+            snapshot: CoreAudioApplicationQuery.snapshot,
+            observe: { property, callback in
+                Self.observe(property, queue: queue, callback: callback)
+            },
+            schedule: { delay, callback in
+                let timer = DispatchSource.makeTimerSource(queue: queue)
+                timer.schedule(deadline: .now() + delay,
+                               leeway: delay >= 1 ? .milliseconds(150) : .milliseconds(10))
+                timer.setEventHandler(handler: callback)
+                timer.resume()
+                return {
+                    timer.setEventHandler {}
+                    timer.cancel()
+                }
             }
-
-            let timer = DispatchSource.makeTimerSource(queue: queue)
-            timer.schedule(deadline: .now(), repeating: 1, leeway: .milliseconds(150))
-            timer.setEventHandler {
-                delivery(CoreAudioApplicationQuery.snapshot())
-            }
-            self.timer = timer
-            timer.resume()
-        }
+        ))
     }
 
-    func refresh(delivery: @escaping Delivery) {
-        queue.async {
-            delivery(CoreAudioApplicationQuery.snapshot())
-        }
+    func start(delivery: @escaping AudioApplicationObservation.Delivery) {
+        queue.async { [observation] in observation.start(delivery: delivery) }
+    }
+
+    func refresh() {
+        queue.async { [observation] in observation.refresh() }
     }
 
     func stop() {
-        queue.sync {
-            timer?.setEventHandler {}
-            timer?.cancel()
-            timer = nil
+        queue.async { [observation] in observation.stop() }
+    }
+
+    deinit { stop() }
+
+    private static func observe(
+        _ property: AudioApplicationProperty,
+        queue: DispatchQueue,
+        callback: @escaping @Sendable () -> Void
+    ) -> AudioApplicationObservation.Cancellation? {
+        var address = property.address
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in callback() }
+        guard AudioObjectAddPropertyListenerBlock(property.objectID, &address, queue, listener) == noErr else {
+            return nil
+        }
+        return {
+            var address = property.address
+            let status = AudioObjectRemovePropertyListenerBlock(property.objectID, &address, queue, listener)
+            if status != noErr && status != kAudioHardwareBadObjectError {
+                logger.error("Could not remove audio property listener: \(status)")
+            }
         }
     }
 
-    deinit {
-        timer?.setEventHandler {}
-        timer?.cancel()
-    }
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools", category: "AppVolumeDiscovery"
+    )
 }
 
 private enum CoreAudioApplicationQuery {
@@ -96,20 +128,31 @@ private enum CoreAudioApplicationQuery {
         var processObjectIDs: [AudioObjectID]
     }
 
-    static func snapshot() -> AudioApplicationSnapshot {
-        let processIDs = objectIDArray(
+    static func processObjectIDs() -> [AudioObjectID]? {
+        objectIDArray(
             objectID: AudioObjectID(kAudioObjectSystemObject),
             selector: kAudioHardwarePropertyProcessObjectList
         )
-        var groups: [String: Group] = [:]
+    }
 
-        for processObjectID in processIDs {
-            guard boolProperty(
+    static func snapshot(processObjectIDs: [AudioObjectID]) -> AudioApplicationQueryResult {
+        var groups: [String: Group] = [:]
+        var isComplete = true
+
+        for processObjectID in processObjectIDs {
+            guard let isRunning = boolProperty(
                 objectID: processObjectID,
                 selector: kAudioProcessPropertyIsRunningOutput
-            ), let pid = pidProperty(objectID: processObjectID), pid != getpid() else {
+            ) else {
+                isComplete = false
                 continue
             }
+            guard isRunning else { continue }
+            guard let pid = pidProperty(objectID: processObjectID) else {
+                isComplete = false
+                continue
+            }
+            guard pid != getpid() else { continue }
 
             let audioBundleIdentifier = stringProperty(
                 objectID: processObjectID,
@@ -149,13 +192,14 @@ private enum CoreAudioApplicationQuery {
             $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
         }
 
-        return AudioApplicationSnapshot(
-            applications: applications,
-            outputDeviceUID: defaultOutputDeviceUID()
+        let output = defaultOutputDeviceUID()
+        return AudioApplicationQueryResult(
+            snapshot: AudioApplicationSnapshot(applications: applications, outputDeviceUID: output.uid),
+            isComplete: isComplete && output.isComplete
         )
     }
 
-    private static func defaultOutputDeviceUID() -> String? {
+    private static func defaultOutputDeviceUID() -> (uid: String?, isComplete: Bool) {
         var deviceID = AudioDeviceID(kAudioObjectUnknown)
         var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = propertyAddress(selector: kAudioHardwarePropertyDefaultOutputDevice)
@@ -168,34 +212,31 @@ private enum CoreAudioApplicationQuery {
             &deviceID
         )
 
-        guard status == noErr, deviceID != kAudioObjectUnknown else {
-            return nil
-        }
-
-        return stringProperty(objectID: deviceID, selector: kAudioDevicePropertyDeviceUID)
+        guard status == noErr else { return (nil, false) }
+        guard deviceID != kAudioObjectUnknown else { return (nil, true) }
+        let uid = stringProperty(objectID: deviceID, selector: kAudioDevicePropertyDeviceUID)
+        return (uid, uid != nil)
     }
 
     private static func objectIDArray(
         objectID: AudioObjectID,
         selector: AudioObjectPropertySelector
-    ) -> [AudioObjectID] {
+    ) -> [AudioObjectID]? {
         var address = propertyAddress(selector: selector)
         var dataSize: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(objectID, &address, 0, nil, &dataSize) == noErr,
-              dataSize >= MemoryLayout<AudioObjectID>.size else {
-            return []
-        }
+        guard AudioObjectGetPropertyDataSize(objectID, &address, 0, nil, &dataSize) == noErr else { return nil }
+        guard dataSize > 0 else { return [] }
+        guard Int(dataSize) % MemoryLayout<AudioObjectID>.size == 0 else { return nil }
 
         let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
         var values = Array(repeating: AudioObjectID(kAudioObjectUnknown), count: count)
         let status = values.withUnsafeMutableBufferPointer { buffer in
             AudioObjectGetPropertyData(objectID, &address, 0, nil, &dataSize, buffer.baseAddress!)
         }
-        guard status == noErr else {
-            return []
-        }
-
-        return values.filter { $0 != kAudioObjectUnknown }
+        guard status == noErr, Int(dataSize) % MemoryLayout<AudioObjectID>.size == 0 else { return nil }
+        let returnedCount = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        guard returnedCount <= values.count else { return nil }
+        return values.prefix(returnedCount).filter { $0 != kAudioObjectUnknown }
     }
 
     private static func pidProperty(objectID: AudioObjectID) -> pid_t? {
@@ -216,7 +257,7 @@ private enum CoreAudioApplicationQuery {
     private static func boolProperty(
         objectID: AudioObjectID,
         selector: AudioObjectPropertySelector
-    ) -> Bool {
+    ) -> Bool? {
         var value = UInt32(0)
         var dataSize = UInt32(MemoryLayout<UInt32>.size)
         var address = propertyAddress(selector: selector)
@@ -228,7 +269,7 @@ private enum CoreAudioApplicationQuery {
             &dataSize,
             &value
         )
-        return status == noErr && value != 0
+        return status == noErr ? value != 0 : nil
     }
 
     private static func stringProperty(

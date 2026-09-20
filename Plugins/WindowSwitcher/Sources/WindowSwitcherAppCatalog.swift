@@ -1,1425 +1,835 @@
 import AppKit
 import ApplicationServices
-import CoreGraphics
 import Foundation
 
-struct WindowSwitcherWindowRecord: Equatable, Sendable {
-    static let minimumWindowSize = CGSize(width: 80, height: 60)
-
-    let windowNumber: CGWindowID
-    let processIdentifier: pid_t
-    let title: String
-    let isOnScreen: Bool?
-    let bounds: CGRect
-
-    static func parse(_ windowInfo: [[String: Any]]) -> [Self] {
-        var seenWindowNumbers = Set<CGWindowID>()
-        var records: [WindowSwitcherWindowRecord] = []
-
-        for item in windowInfo {
-            guard let windowNumber = number(in: item, forKey: kCGWindowNumber),
-                  windowNumber > 0,
-                  let processIdentifier = processIdentifier(in: item),
-                  processIdentifier > 0,
-                  number(in: item, forKey: kCGWindowLayer) == 0,
-                  let alpha = numericValue(in: item, forKey: kCGWindowAlpha),
-                  alpha > 0,
-                  alpha <= 1,
-                  let bounds = rect(in: item[kCGWindowBounds as String]),
-                  bounds.width >= minimumWindowSize.width,
-                  bounds.height >= minimumWindowSize.height
-            else {
-                continue
-            }
-
-            guard seenWindowNumbers.insert(windowNumber).inserted else {
-                continue
-            }
-
-            records.append(
-                WindowSwitcherWindowRecord(
-                    windowNumber: windowNumber,
-                    processIdentifier: processIdentifier,
-                    title: item[kCGWindowName as String] as? String ?? "",
-                    isOnScreen: boolean(in: item, forKey: kCGWindowIsOnscreen),
-                    bounds: bounds
-                )
-            )
-        }
-
-        return records
-    }
-
-    private static func number(in item: [String: Any], forKey key: CFString) -> UInt32? {
-        guard let rawValue = numericValue(in: item, forKey: key),
-              rawValue.rounded() == rawValue,
-              rawValue >= 0,
-              rawValue <= Double(UInt32.max)
-        else {
-            return nil
-        }
-
-        return UInt32(rawValue)
-    }
-
-    private static func boolean(in item: [String: Any], forKey key: CFString) -> Bool? {
-        guard let value = item[key as String] as? NSNumber else {
-            return nil
-        }
-
-        let cfValue = value as CFTypeRef
-        guard CFGetTypeID(cfValue) == CFBooleanGetTypeID() else {
-            return nil
-        }
-
-        return value.boolValue
-    }
-
-    private static func numericValue(in item: [String: Any], forKey key: CFString) -> Double? {
-        guard let value = item[key as String] as? NSNumber else {
-            return nil
-        }
-
-        let cfValue = value as CFTypeRef
-        guard CFGetTypeID(cfValue) != CFBooleanGetTypeID() else {
-            return nil
-        }
-
-        let rawValue = value.doubleValue
-        guard rawValue.isFinite else {
-            return nil
-        }
-
-        return rawValue
-    }
-
-    private static func processIdentifier(in item: [String: Any]) -> pid_t? {
-        guard let rawValue = numericValue(in: item, forKey: kCGWindowOwnerPID),
-              rawValue.rounded() == rawValue,
-              rawValue > 0,
-              rawValue <= Double(pid_t.max)
-        else {
-            return nil
-        }
-
-        return pid_t(rawValue)
-    }
-
-    private static func rect(in value: Any?) -> CGRect? {
-        guard let dictionary = value as? NSDictionary,
-              let rect = CGRect(dictionaryRepresentation: dictionary),
-              rect.origin.x.isFinite,
-              rect.origin.y.isFinite,
-              rect.width.isFinite,
-              rect.height.isFinite
-        else {
-            return nil
-        }
-
-        return rect
-    }
-}
-
-struct WindowSwitcherWindowSnapshot {
-    let element: AXUIElement?
-    let windowNumber: CGWindowID?
-    let title: String
-    let isMinimized: Bool
-    let position: CGPoint
-    let size: CGSize
-}
-
-private struct WindowSwitcherWindowRecordSnapshot {
-    let records: [WindowSwitcherWindowRecord]
-    let isFresh: Bool
-}
-
 @MainActor
-protocol WindowSwitcherApplicationControlling: AnyObject {
-    var processIdentifier: pid_t { get }
-    var bundleIdentifier: String? { get }
-    var launchDate: Date? { get }
-    var isTerminated: Bool { get }
-
-    @discardableResult
-    func unhide() -> Bool
-    @discardableResult
-    func activate(options: NSApplication.ActivationOptions) -> Bool
-    @discardableResult
-    func terminate() -> Bool
+protocol WindowSwitcherCatalog: AnyObject {
+    var onChange: (() -> Void)? { get set }
+    var focusedWindowID: String? { get }
+    var isInitialDiscoveryComplete: Bool { get }
+    var isInvocationReady: Bool { get }
+    var listingPolicy: WindowSwitcherListingPolicy { get set }
+    func start()
+    func stop()
+    func refresh()
+    func prepareForInvocation()
+    func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry]
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult
+    func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult
+    func quitApplication(_ entry: WindowSwitcherAppEntry) -> WindowSwitcherActionResult
 }
 
-extension NSRunningApplication: WindowSwitcherApplicationControlling {}
+extension WindowSwitcherCatalog {
+    var isInvocationReady: Bool { isInitialDiscoveryComplete }
+    func prepareForInvocation() { refresh() }
 
-private struct WindowSwitcherWindowMatchKey: Hashable {
-    let title: String
-    let positionX: Double
-    let positionY: Double
-    let sizeWidth: Double
-    let sizeHeight: Double
-
-    init(title: String, bounds: CGRect) {
-        self.title = title
-        positionX = Double(bounds.origin.x)
-        positionY = Double(bounds.origin.y)
-        sizeWidth = Double(bounds.size.width)
-        sizeHeight = Double(bounds.size.height)
-    }
-}
-
-private struct WindowSwitcherWindowBoundsKey: Hashable {
-    let positionX: Double
-    let positionY: Double
-    let sizeWidth: Double
-    let sizeHeight: Double
-
-    init(bounds: CGRect) {
-        positionX = Double(bounds.origin.x)
-        positionY = Double(bounds.origin.y)
-        sizeWidth = Double(bounds.size.width)
-        sizeHeight = Double(bounds.size.height)
+    var listingPolicy: WindowSwitcherListingPolicy {
+        get { .default }
+        set { _ = newValue }
     }
 }
 
 @MainActor
-final class WindowSwitcherAppCatalog {
+final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
+    struct Application {
+        struct Presentation {
+            var localizedName: String?
+            var icon: NSImage?
+            var isHidden: Bool
+            var isActive: Bool
+        }
+
+        var processIdentifier: pid_t
+        var bundleIdentifier: String?
+        var bundlePath: String?
+        var localizedName: String?
+        var icon: NSImage? = nil
+        var launchDate: Date? = nil
+        var lifetime: UUID? = nil
+        var isRegular = true
+        var isHidden = false
+        var isActive = false
+        var loadPresentation: (() -> Presentation)? = nil
+
+        func withPresentation() -> Application {
+            guard let loadPresentation else { return self }
+            let presentation = loadPresentation()
+            var result = self
+            result.localizedName = presentation.localizedName
+            result.icon = presentation.icon
+            result.isHidden = presentation.isHidden
+            result.isActive = presentation.isActive
+            result.loadPresentation = nil
+            return result
+        }
+    }
+
+    struct DiscoveryEnvironment {
+        var applications: (() -> [Application])? = nil
+        var isAccessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
+        var isDragging: () -> Bool = { CGEventSource.buttonState(.combinedSessionState, button: .left) }
+    }
+
     var onChange: (() -> Void)?
-
-    private static let axTimeout: Float = 0.2
-    private static let axScanBudget: TimeInterval = 0.75
-    private static let defaultWindowRecordRefreshTimeout: TimeInterval = 0.75
-    private static let maxWindowRecordRefreshesInFlight = 2
-
+    private(set) var isInitialDiscoveryComplete = false
+    private(set) var isInvocationReady = false
+    private(set) var unavailableApplicationCount = 0
+    var focusedWindowID: String? { publication.recency.focusedID }
+    var listingPolicy = WindowSwitcherListingPolicy.default {
+        didSet {
+            guard listingPolicy != oldValue else { return }
+            rebuildPublication()
+            onChange?()
+        }
+    }
+    private var processMapping = WindowSwitcherProcessMapping.Snapshot()
+    private var helperPIDsByHost: [pid_t: Set<pid_t>] = [:]
+    private var expectedHostPIDs: Set<pid_t> = []
     private let notificationCenter: NotificationCenter
-    private let windowRecordProvider: @Sendable () -> [WindowSwitcherWindowRecord]
-    private let windowRecordRefreshTimeout: TimeInterval
-    private let applicationProvider: (pid_t) -> WindowSwitcherApplicationControlling?
-    private let activationWindowSnapshotProvider: ((pid_t, WindowSwitcherAppEntry) -> WindowSwitcherWindowSnapshot?)?
-    private let focusWindowHandler: ((AXUIElement, Bool) -> Void)?
-    private var mruIDs: [String] = []
+    private let accessFactory: @Sendable (pid_t) -> any WindowSwitcherAXAccess
     private var observers: [NSObjectProtocol] = []
-    private var windowRecords: [WindowSwitcherWindowRecord] = []
-    private var windowRecordRefreshTask: Task<[WindowSwitcherWindowRecord], Never>?
-    private var windowRecordRefreshGeneration: UInt64 = 0
-    private var windowRecordRefreshLastCompletedGeneration: UInt64?
-    private var windowRecordRefreshInFlightCount = 0
+    private var workers: [pid_t: WindowSwitcherProcessWorker] = [:]
+    private var snapshots: [pid_t: [WindowSwitcherAppEntry]] = [:]
+    private var inFlight: Set<pid_t> = []
+    // Kept across stop/start until the actual worker returns.
+    private var activeScanCount = 0
+    private var dirtyHosts: Set<pid_t> = []
+    private var pendingInvalidations: Set<pid_t> = []
+    private var pendingRecordsInvalidation = false
+    private var applicationsByPID: [pid_t: Application] = [:]
+    private var mappingCandidates: [WindowSwitcherProcessMapping.Candidate] = []
+    private let applicationInventory: WindowSwitcherApplicationInventory?
+    private static let maximumConcurrentScans = 4
+    private var unavailable: Set<pid_t> = []
+    private var timer: Timer?
+    private var running = false
+    private var invalidationTask: Task<Void, Never>?
+    private var publicationTask: Task<Void, Never>?
+    private var publicationDirty = false
+    private var removedProcesses: Set<pid_t> = []
+    private var pendingFocus: [pid_t: (id: String?, unavailable: Bool)] = [:]
+    private var windowRecordsPending = false
+    private var sleeping = false
+    private var sessionInactive = false
+    private var suspended: Bool { sleeping || sessionInactive }
+    private var invocationGeneration = UUID()
+    private var invocationRequiredHosts: Set<pid_t> = []
+    private var invocationRequiresRecords = false
+    private let allSpacesCatalog: WindowSwitcherWindowRecords
+    private let discovery: DiscoveryEnvironment
+    private var publication = WindowSwitcherPublishedWindows()
+    private let hostWindows = WindowSwitcherHostWindows()
+    private var allSpacesRecordsAreFresh = false
+    private var allSpacesRecords: [WindowSwitcherWindowRecord] = []
+    private var allSpacesRefreshTask: Task<Void, Never>?
+    private var allSpacesGeneration = UUID()
+    private var didReadAllSpaces = false
 
-    init(
-        notificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
-        windowRecordProvider: @escaping @Sendable () -> [WindowSwitcherWindowRecord] = {
-            WindowSwitcherWindowRecord.parse(
-                CGWindowListCopyWindowInfo(
-                    [.optionAll, .excludeDesktopElements],
-                    kCGNullWindowID
-                ) as? [[String: Any]] ?? []
-            )
-        },
-        windowRecordRefreshTimeout: TimeInterval = WindowSwitcherAppCatalog.defaultWindowRecordRefreshTimeout,
-        applicationProvider: @escaping (pid_t) -> WindowSwitcherApplicationControlling? = {
-            NSRunningApplication(processIdentifier: $0)
-        },
-        activationWindowSnapshotProvider: ((pid_t, WindowSwitcherAppEntry) -> WindowSwitcherWindowSnapshot?)? = nil,
-        focusWindowHandler: ((AXUIElement, Bool) -> Void)? = nil
-    ) {
+    init(notificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         accessFactory: @escaping @Sendable (pid_t) -> any WindowSwitcherAXAccess = { _ in SystemWindowSwitcherAXAccess() },
+         allSpacesCatalog: WindowSwitcherWindowRecords = WindowSwitcherWindowRecords(),
+         discovery: DiscoveryEnvironment = DiscoveryEnvironment()) {
         self.notificationCenter = notificationCenter
-        self.windowRecordProvider = windowRecordProvider
-        self.windowRecordRefreshTimeout = windowRecordRefreshTimeout.isFinite
-            ? max(0, windowRecordRefreshTimeout)
-            : Self.defaultWindowRecordRefreshTimeout
-        self.applicationProvider = applicationProvider
-        self.activationWindowSnapshotProvider = activationWindowSnapshotProvider
-        self.focusWindowHandler = focusWindowHandler
+        self.accessFactory = accessFactory
+        self.allSpacesCatalog = allSpacesCatalog
+        self.discovery = discovery
+        applicationInventory = discovery.applications == nil ? WindowSwitcherApplicationInventory() : nil
     }
 
     func start() {
-        guard observers.isEmpty else {
-            refreshFrontmostApplication()
-            refreshWindowRecords()
-            return
+        guard !running else { return }
+        running = true
+        let lifecycle = allSpacesGeneration
+        applicationInventory?.onChange = { [weak self] pids in
+            guard let self, running else { return }
+            reloadApplications()
+            invalidate(processIdentifiers: pids, windowRecords: true)
         }
-
-        refreshFrontmostApplication()
-        refreshWindowRecords()
-        let activated = notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let appID: String?
-            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-               Self.isUserFacingApplication(app) {
-                appID = Self.identifier(for: app)
-            } else {
-                appID = nil
-            }
-
-            Task { @MainActor [weak self, appID] in
-                if let appID {
-                    self?.recordActivationID(appID)
+        applicationInventory?.start()
+        for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.didLaunchApplicationNotification,
+                     NSWorkspace.didTerminateApplicationNotification, NSWorkspace.didHideApplicationNotification,
+                     NSWorkspace.didUnhideApplicationNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    applicationInventory?.reconcile(notify: false)
+                    if let pid { applicationInventory?.reload(processIdentifier: pid) }
+                    reloadApplications()
+                    if let pid { invalidate(processIdentifiers: [pid], windowRecords: true) }
+                    else { refresh() }
                 }
-                self?.onChange?()
-            }
+            })
         }
-
-        let launched = notificationCenter.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didWakeNotification,
+                     NSWorkspace.sessionDidBecomeActiveNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    if name == NSWorkspace.didWakeNotification { sleeping = false }
+                    if name == NSWorkspace.sessionDidBecomeActiveNotification { sessionInactive = false }
+                    refresh()
+                }
+            })
+        }
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    if name == NSWorkspace.willSleepNotification { sleeping = true }
+                    if name == NSWorkspace.sessionDidResignActiveNotification { sessionInactive = true }
+                }
+            })
+        }
+        // Recover omitted/unsupported AX events without continuously scanning
+        // every application. Invocation always requests its own reconciliation.
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.onChange?()
+                guard let self, allSpacesGeneration == lifecycle else { return }
+                refresh()
             }
         }
-
-        let terminated = notificationCenter.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let appID = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)
-                .map(Self.identifier(for:))
-
-            Task { @MainActor [weak self, appID] in
-                if let appID {
-                    self?.removeApplicationID(appID)
-                }
-                self?.onChange?()
-            }
-        }
-
-        observers = [activated, launched, terminated]
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        refresh()
     }
 
     func stop() {
-        for observer in observers {
-            notificationCenter.removeObserver(observer)
-        }
-        observers.removeAll()
-        windowRecordRefreshGeneration &+= 1
-        windowRecordRefreshTask?.cancel()
-        windowRecordRefreshTask = nil
-        windowRecordRefreshLastCompletedGeneration = nil
-        windowRecords.removeAll()
+        running = false
+        sleeping = false
+        sessionInactive = false
+        invalidationTask?.cancel(); invalidationTask = nil
+        publicationTask?.cancel(); publicationTask = nil
+        publicationDirty = false
+        removedProcesses.removeAll()
+        pendingFocus.removeAll()
+        applicationInventory?.stop()
+        allSpacesGeneration = UUID()
+        invocationGeneration = UUID()
+        invocationRequiredHosts.removeAll()
+        invocationRequiresRecords = false
+        isInvocationReady = false
+        windowRecordsPending = false
+        allSpacesRefreshTask?.cancel(); allSpacesRefreshTask = nil
+        allSpacesCatalog.stop()
+        allSpacesRecords.removeAll()
+        publication = WindowSwitcherPublishedWindows()
+        hostWindows.reset()
+        allSpacesRecordsAreFresh = false
+        didReadAllSpaces = false
+        isInitialDiscoveryComplete = false
+        expectedHostPIDs = []
+        processMapping = WindowSwitcherProcessMapping.Snapshot()
+        mappingCandidates.removeAll()
+        applicationsByPID.removeAll()
+        helperPIDsByHost.removeAll()
+        dirtyHosts.removeAll()
+        pendingInvalidations.removeAll()
+        pendingRecordsInvalidation = false
+        timer?.invalidate(); timer = nil
+        observers.forEach(notificationCenter.removeObserver); observers.removeAll()
+        workers.values.forEach { $0.stop() }; workers.removeAll()
+        snapshots.removeAll(); inFlight.removeAll(); unavailable.removeAll()
+        unavailableApplicationCount = 0
     }
 
-    func entries(sortMode: WindowSwitcherSortMode) async -> [WindowSwitcherAppEntry] {
-        refreshFrontmostApplication()
-        let ranks = Dictionary(uniqueKeysWithValues: mruIDs.enumerated().map { ($0.element, $0.offset) })
-        let windowRecords = await freshWindowRecords()
-        let recordsByProcessIdentifier = Dictionary(grouping: windowRecords, by: \.processIdentifier)
-        let axDeadline = Date().addingTimeInterval(Self.axScanBudget)
-        let apps = NSWorkspace.shared.runningApplications.filter(Self.isUserFacingApplication)
+    /// Coalesces events by owner. A dirty host remains queued when a scan is in
+    /// flight, so changes arriving during that scan get one follow-up read.
+    func invalidate(processIdentifiers: Set<pid_t>, windowRecords: Bool) {
+        guard running else { return }
+        pendingInvalidations.formUnion(processIdentifiers.map { processMapping.host(for: $0) }.filter { expectedHostPIDs.contains($0) })
+        pendingRecordsInvalidation = pendingRecordsInvalidation || windowRecords
+        if processIdentifiers.contains(ProcessInfo.processInfo.processIdentifier) { markPublicationDirty() }
+        scheduleRefresh()
+    }
 
-        let sortedApps = apps
-            .sorted { lhs, rhs in
-                switch sortMode {
-                case .recentUse:
-                    let lhsID = Self.identifier(for: lhs)
-                    let rhsID = Self.identifier(for: rhs)
-                    let lhsRank = ranks[lhsID] ?? Int.max
-                    let rhsRank = ranks[rhsID] ?? Int.max
+    private func scheduleRefresh() {
+        guard running, !suspended, invalidationTask == nil else { return }
+        invalidationTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+            guard !Task.isCancelled, let self else { return }
+            invalidationTask = nil
+            applyInvalidations()
+            drainRefreshes()
+        }
+    }
 
-                    if lhsRank != rhsRank {
-                        return lhsRank < rhsRank
+    private func applyInvalidations() {
+        dirtyHosts.formUnion(pendingInvalidations.intersection(expectedHostPIDs))
+        pendingInvalidations.removeAll()
+        windowRecordsPending = windowRecordsPending || pendingRecordsInvalidation
+        pendingRecordsInvalidation = false
+    }
+
+    func refresh() {
+        guard running, !suspended else { return }
+        applicationInventory?.reconcile(notify: false)
+        reloadApplications()
+        applyInvalidations()
+        dirtyHosts.formUnion(expectedHostPIDs)
+        windowRecordsPending = true
+        markPublicationDirty()
+        drainRefreshes()
+    }
+
+    func prepareForInvocation() {
+        guard running else { return }
+        invocationGeneration = UUID()
+        isInvocationReady = false
+        applicationInventory?.reconcile(notify: false)
+        reloadApplications()
+        applyInvalidations()
+        invocationRequiredHosts = expectedHostPIDs
+        invocationRequiresRecords = true
+        dirtyHosts.formUnion(expectedHostPIDs)
+        windowRecordsPending = true
+        markPublicationDirty()
+        drainRefreshes()
+    }
+
+    private func reloadApplications() {
+        let oldMapping = processMapping
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let runningApps = discovery.applications?() ?? applicationInventory?.applications ?? []
+        applicationsByPID = Dictionary(runningApps.map { ($0.processIdentifier, $0) },
+                                       uniquingKeysWith: { first, _ in first })
+        let candidates = runningApps.map {
+            WindowSwitcherProcessMapping.Candidate(processIdentifier: $0.processIdentifier,
+                bundleIdentifier: $0.bundleIdentifier, bundlePath: $0.bundlePath, isRegular: $0.isRegular)
+        }.sorted { $0.processIdentifier < $1.processIdentifier }
+        if candidates != mappingCandidates {
+            mappingCandidates = candidates
+            processMapping = WindowSwitcherProcessMapping.snapshot(candidates: candidates, ownPID: ownPID)
+            helperPIDsByHost = processMapping.helpersByHost(owningWindowsIn: allSpacesRecords)
+        }
+        expectedHostPIDs = Set(runningApps.filter {
+            $0.isRegular && $0.processIdentifier != ownPID && $0.processIdentifier > 0
+                && processMapping.host(for: $0.processIdentifier) == $0.processIdentifier
+        }.map(\.processIdentifier))
+        let liveWorkerPIDs = expectedHostPIDs.union(helperPIDsByHost.values.flatMap { $0 })
+        for pid in Array(workers.keys) {
+            guard liveWorkerPIDs.contains(pid), let app = applicationsByPID[pid],
+                  workers[pid]?.launchDate == app.launchDate,
+                  workers[pid]?.applicationLifetime == app.lifetime else {
+                workers.removeValue(forKey: pid)?.stop()
+                inFlight.remove(pid)
+                unavailable.remove(pid)
+                snapshots.removeValue(forKey: pid)
+                pendingFocus.removeValue(forKey: pid)
+                removedProcesses.insert(pid)
+                dirtyHosts.insert(oldMapping.host(for: pid))
+                markPublicationDirty()
+                continue
+            }
+        }
+        for pid in Array(snapshots.keys) where !expectedHostPIDs.contains(pid) {
+            snapshots.removeValue(forKey: pid)
+            removedProcesses.insert(pid)
+            markPublicationDirty()
+        }
+        dirtyHosts.formIntersection(expectedHostPIDs)
+        invocationRequiredHosts.formIntersection(expectedHostPIDs)
+        dirtyHosts.formUnion(expectedHostPIDs.filter { snapshots[$0] == nil })
+    }
+
+    private func drainRefreshes() {
+        guard running, !suspended else { return }
+        guard discovery.isAccessibilityTrusted() else {
+            onChange?()
+            return
+        }
+        // Preserve pending work during tracking; the short retry exists only
+        // while a user drag prevents a requested refresh from proceeding.
+        guard !discovery.isDragging() else { scheduleRefresh(); return }
+        if windowRecordsPending { refreshAllSpaces() }
+        let pids = dirtyHosts.sorted {
+            let lhsActive = applicationsByPID[$0]?.isActive == true
+            let rhsActive = applicationsByPID[$1]?.isActive == true
+            return lhsActive == rhsActive ? $0 < $1 : lhsActive
+        }
+        for pid in pids {
+            guard activeScanCount < Self.maximumConcurrentScans else { break }
+            guard !inFlight.contains(pid), let application = applicationsByPID[pid] else { continue }
+            let worker = ensureWorker(pid: pid, launchDate: application.launchDate, applicationLifetime: application.lifetime)
+            dirtyHosts.remove(pid)
+            inFlight.insert(pid)
+            activeScanCount += 1
+            let app = application.withPresentation()
+            let invocation = invocationGeneration
+            Task { [weak self] in
+                defer {
+                    if let self {
+                        activeScanCount -= 1
+                        drainRefreshes()
                     }
-
-                    let lhsLaunchDate = lhs.launchDate ?? .distantPast
-                    let rhsLaunchDate = rhs.launchDate ?? .distantPast
-                    if lhsLaunchDate != rhsLaunchDate {
-                        return lhsLaunchDate > rhsLaunchDate
-                    }
-                case .fixed:
-                    break
                 }
-
-                let lhsName = lhs.localizedName ?? lhs.bundleIdentifier ?? ""
-                let rhsName = rhs.localizedName ?? rhs.bundleIdentifier ?? ""
-                let nameOrder = lhsName.localizedCaseInsensitiveCompare(rhsName)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
+                let result = await worker.scan()
+                guard let self, running, workers[pid] === worker else { return }
+                var entries = windowEntries(from: result, app: app, ownerPID: pid)
+                var helperUnavailable = false
+                for helperPID in helperPIDsByHost[pid] ?? [] {
+                    guard let helperApp = applicationsByPID[helperPID] else { continue }
+                    let helperWorker = ensureWorker(pid: helperPID, launchDate: helperApp.launchDate,
+                                                    applicationLifetime: helperApp.lifetime)
+                    let helperScan = await helperWorker.scan()
+                    guard running, workers[pid] === worker else { return }
+                    guard workers[helperPID] === helperWorker else { continue }
+                    if helperScan.unavailable { helperUnavailable = true }
+                    entries = WindowSwitcherListing.preferringUniqueWindowNumbers(
+                        entries + windowEntries(from: helperScan, app: app, ownerPID: helperPID))
                 }
-
-                let lhsBundleID = lhs.bundleIdentifier ?? ""
-                let rhsBundleID = rhs.bundleIdentifier ?? ""
-                if lhsBundleID != rhsBundleID {
-                    return lhsBundleID < rhsBundleID
+                inFlight.remove(pid)
+                let unavailableScan = result.unavailable || helperUnavailable
+                if unavailableScan { unavailable.insert(pid) } else { unavailable.remove(pid) }
+                unavailableApplicationCount = unavailable.count
+                let previous = snapshots[pid]
+                // A failed read is never evidence of a windowless application.
+                if entries.isEmpty && !unavailableScan {
+                    entries = [WindowSwitcherAppEntry(id: "app:\(worker.lifetime)", processIdentifier: pid,
+                        bundleIdentifier: app.bundleIdentifier, appName: app.localizedName ?? "App",
+                        windowTitle: nil, icon: app.icon, windowElement: nil, isMinimized: false,
+                        applicationLaunchDate: app.launchDate, shortcutToken: nil, isHidden: app.isHidden)]
                 }
-
-                return lhs.processIdentifier < rhs.processIdentifier
-            }
-
-        var entries: [WindowSwitcherAppEntry] = []
-        for (appIndex, app) in sortedApps.enumerated() {
-            guard !Task.isCancelled else {
-                break
-            }
-
-            entries.append(contentsOf: self.entries(
-                for: app,
-                recordsForApplication: recordsByProcessIdentifier[app.processIdentifier] ?? [],
-                axDeadline: Self.axDeadline(
-                    sessionDeadline: axDeadline,
-                    appIndex: appIndex,
-                    appCount: sortedApps.count
-                )
-            ))
-        }
-        return entries
-    }
-
-    func frontmostApplicationID() -> String? {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-              Self.isUserFacingApplication(app)
-        else {
-            return nil
-        }
-
-        return Self.identifier(for: app)
-    }
-
-    func windowRecordsSnapshot() async -> [WindowSwitcherWindowRecord] {
-        await freshWindowRecords()
-    }
-
-    func activate(_ entry: WindowSwitcherAppEntry) async {
-        guard !Task.isCancelled else {
-            return
-        }
-
-        let currentRecords: [WindowSwitcherWindowRecord]
-        if entry.windowNumber != nil && entry.windowElement == nil {
-            let snapshot = await freshWindowRecordSnapshot()
-            guard snapshot.isFresh,
-                  !Task.isCancelled
-            else {
-                return
-            }
-            currentRecords = snapshot.records
-        } else {
-            currentRecords = []
-        }
-
-        guard !Task.isCancelled,
-              let app = applicationProvider(entry.processIdentifier),
-              Self.isCurrentApplication(app, for: entry),
-              entry.windowNumber == nil
-                  || entry.windowElement != nil
-                  || currentWindowRecord(for: entry, in: currentRecords) != nil
-        else {
-            return
-        }
-
-        guard !Task.isCancelled else {
-            return
-        }
-        app.unhide()
-
-        guard !Task.isCancelled else {
-            return
-        }
-        app.activate(options: entry.windowNumber != nil && entry.windowElement == nil
-            ? [.activateAllWindows]
-            : [])
-        let axDeadline = Date().addingTimeInterval(Self.axScanBudget)
-
-        if let windowElement = entry.windowElement {
-            focusWindow(
-                windowElement,
-                isMinimized: entry.isMinimized,
-                deadline: axDeadline
-            )
-        } else if entry.windowNumber != nil,
-                  let snapshot = windowSnapshot(
-                      for: app,
-                      matching: entry,
-                      deadline: axDeadline
-                  ),
-                  let windowElement = snapshot.element {
-            focusWindow(
-                windowElement,
-                isMinimized: snapshot.isMinimized,
-                deadline: axDeadline
-            )
-        }
-
-        guard !Task.isCancelled else {
-            return
-        }
-        recordActivationID(Self.identifier(for: entry))
-        onChange?()
-    }
-
-    func quitApplication(_ entry: WindowSwitcherAppEntry) {
-        guard let app = applicationProvider(entry.processIdentifier),
-              Self.isCurrentApplication(app, for: entry),
-              !app.isTerminated,
-              app.terminate()
-        else {
-            return
-        }
-
-        removeApplicationID(Self.identifier(for: entry))
-        onChange?()
-    }
-
-    private func currentWindowRecord(
-        for entry: WindowSwitcherAppEntry,
-        in records: [WindowSwitcherWindowRecord]
-    ) -> WindowSwitcherWindowRecord? {
-        guard let windowNumber = entry.windowNumber,
-              let expectedBounds = entry.windowBounds,
-              let record = records.first(where: {
-                  $0.windowNumber == windowNumber
-                      && $0.processIdentifier == entry.processIdentifier
-              }),
-              record.bounds == expectedBounds
-        else {
-            return nil
-        }
-
-        if !record.title.isEmpty,
-           let expectedTitle = entry.windowTitle,
-           !expectedTitle.isEmpty,
-           record.title != expectedTitle {
-            return nil
-        }
-
-        return record
-    }
-
-    private func refreshFrontmostApplication() {
-        guard let app = NSWorkspace.shared.frontmostApplication else {
-            return
-        }
-
-        recordActivation(app)
-    }
-
-    private func recordActivation(_ app: NSRunningApplication) {
-        guard Self.isUserFacingApplication(app) else {
-            return
-        }
-
-        recordActivationID(Self.identifier(for: app))
-    }
-
-    private func recordActivationID(_ id: String) {
-        mruIDs.removeAll { $0 == id }
-        mruIDs.insert(id, at: 0)
-        mruIDs = Array(mruIDs.prefix(80))
-    }
-
-    private func removeApplicationID(_ id: String) {
-        mruIDs.removeAll { $0 == id }
-    }
-
-    private func refreshWindowRecords() {
-        guard windowRecordRefreshTask == nil,
-              windowRecordRefreshInFlightCount < Self.maxWindowRecordRefreshesInFlight
-        else {
-            return
-        }
-
-        windowRecordRefreshGeneration &+= 1
-        let generation = windowRecordRefreshGeneration
-        let provider = windowRecordProvider
-        windowRecordRefreshInFlightCount += 1
-        let task = Task.detached(priority: .userInitiated) {
-            provider()
-        }
-        windowRecordRefreshTask = task
-
-        Task { @MainActor [weak self] in
-            let records = await task.value
-            guard let self,
-                  self.windowRecordRefreshInFlightCount > 0
-            else {
-                return
-            }
-            self.windowRecordRefreshInFlightCount -= 1
-
-            guard self.windowRecordRefreshGeneration == generation else {
-                return
-            }
-
-            guard self.windowRecordRefreshTask != nil else {
-                return
-            }
-
-            self.windowRecordRefreshTask = nil
-            self.windowRecordRefreshLastCompletedGeneration = generation
-            let didChange = self.windowRecords != records
-            self.windowRecords = records
-            if didChange {
-                self.onChange?()
-            }
-        }
-    }
-
-    private func freshWindowRecords() async -> [WindowSwitcherWindowRecord] {
-        await freshWindowRecordSnapshot().records
-    }
-
-    private func freshWindowRecordSnapshot() async -> WindowSwitcherWindowRecordSnapshot {
-        refreshWindowRecords()
-        guard windowRecordRefreshTask != nil else {
-            return WindowSwitcherWindowRecordSnapshot(records: windowRecords, isFresh: false)
-        }
-        let generation = windowRecordRefreshGeneration
-        let refreshDeadline = Date().addingTimeInterval(windowRecordRefreshTimeout)
-
-        while windowRecordRefreshTask != nil,
-              windowRecordRefreshGeneration == generation {
-            guard !Task.isCancelled,
-                  Date() < refreshDeadline
-            else {
-                abandonWindowRecordRefresh(generation: generation)
-                return WindowSwitcherWindowRecordSnapshot(records: windowRecords, isFresh: false)
-            }
-
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-
-        return WindowSwitcherWindowRecordSnapshot(
-            records: windowRecords,
-            isFresh: windowRecordRefreshLastCompletedGeneration == generation
-        )
-    }
-
-    private func abandonWindowRecordRefresh(generation: UInt64) {
-        guard windowRecordRefreshGeneration == generation else {
-            return
-        }
-
-        windowRecordRefreshTask?.cancel()
-        windowRecordRefreshTask = nil
-        windowRecordRefreshGeneration &+= 1
-    }
-
-    static func axDeadline(
-        sessionDeadline: Date,
-        appIndex: Int,
-        appCount: Int,
-        now: Date = Date()
-    ) -> Date {
-        guard appIndex < appCount else {
-            return now
-        }
-
-        let remaining = sessionDeadline.timeIntervalSince(now)
-        guard remaining > 0 else {
-            return now
-        }
-
-        let remainingApplicationCount = max(1, appCount - appIndex)
-        let fairShare = remaining / Double(remainingApplicationCount)
-        return now.addingTimeInterval(fairShare)
-    }
-
-    private func entries(
-        for app: NSRunningApplication,
-        recordsForApplication: [WindowSwitcherWindowRecord],
-        axDeadline: Date
-    ) -> [WindowSwitcherAppEntry] {
-        let appID = Self.identifier(for: app)
-        let windows = windows(
-            for: app,
-            recordsForApplication: recordsForApplication,
-            axDeadline: axDeadline
-        )
-        guard !windows.isEmpty else {
-            return [Self.appEntry(for: app, id: appID)]
-        }
-
-        return Self.windowEntries(
-            processIdentifier: app.processIdentifier,
-            bundleIdentifier: app.bundleIdentifier,
-            appName: app.localizedName ?? "App",
-            icon: app.icon,
-            applicationLaunchDate: app.launchDate,
-            windows: windows
-        )
-    }
-
-    static func windowEntries(
-        processIdentifier: pid_t,
-        bundleIdentifier: String?,
-        appName: String,
-        icon: NSImage?,
-        applicationLaunchDate: Date? = nil,
-        windows: [WindowSwitcherWindowSnapshot]
-    ) -> [WindowSwitcherAppEntry] {
-        windows.enumerated().map { index, window in
-            WindowSwitcherAppEntry(
-                id: window.windowNumber.map {
-                    "window:\(processIdentifier):cg:\($0)"
-                } ?? "window:\(processIdentifier):ax:\(index)",
-                processIdentifier: processIdentifier,
-                bundleIdentifier: bundleIdentifier,
-                appName: appName,
-                windowTitle: window.title.isEmpty ? nil : window.title,
-                icon: icon,
-                windowElement: window.element,
-                isMinimized: window.isMinimized,
-                windowNumber: window.windowNumber,
-                windowBounds: CGRect(origin: window.position, size: window.size),
-                applicationLaunchDate: applicationLaunchDate,
-                shortcutToken: nil
-            )
-        }
-    }
-
-    private static func appEntry(for app: NSRunningApplication, id: String) -> WindowSwitcherAppEntry {
-        applicationEntry(
-            id: id,
-            processIdentifier: app.processIdentifier,
-            bundleIdentifier: app.bundleIdentifier,
-            appName: app.localizedName ?? "App",
-            icon: app.icon,
-            applicationLaunchDate: app.launchDate
-        )
-    }
-
-    static func applicationEntry(
-        id: String,
-        processIdentifier: pid_t,
-        bundleIdentifier: String?,
-        appName: String,
-        icon: NSImage?,
-        applicationLaunchDate: Date? = nil
-    ) -> WindowSwitcherAppEntry {
-        WindowSwitcherAppEntry(
-            id: id,
-            processIdentifier: processIdentifier,
-            bundleIdentifier: bundleIdentifier,
-            appName: appName,
-            windowTitle: nil,
-            icon: icon,
-            windowElement: nil,
-            isMinimized: false,
-            windowNumber: nil,
-            windowBounds: nil,
-            applicationLaunchDate: applicationLaunchDate,
-            shortcutToken: nil
-        )
-    }
-
-    private func windows(
-        for app: NSRunningApplication,
-        recordsForApplication: [WindowSwitcherWindowRecord],
-        axDeadline: Date
-    ) -> [WindowSwitcherWindowSnapshot] {
-        let recordsForApp = recordsForApplication
-        guard !Task.isCancelled else {
-            return []
-        }
-        guard Date() < axDeadline else {
-            return Self.coreGraphicsSnapshots(for: recordsForApp)
-        }
-
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        let axWindows = Self.copyCandidateWindows(from: appElement, deadline: axDeadline)
-
-        var axSnapshots: [WindowSwitcherWindowSnapshot] = []
-        for window in axWindows {
-            guard !Task.isCancelled,
-                  Date() < axDeadline
-            else {
-                break
-            }
-            if let snapshot = Self.windowSnapshot(for: window, deadline: axDeadline) {
-                axSnapshots.append(snapshot)
-            }
-        }
-        guard !Task.isCancelled else {
-            return []
-        }
-
-        return Self.mergeWindowSnapshots(axSnapshots: axSnapshots, records: recordsForApp)
-            .sorted { lhs, rhs in
-                if lhs.isMinimized != rhs.isMinimized {
-                    return !lhs.isMinimized
+                if !result.windowListReadSucceeded, entries.isEmpty, let previous {
+                    entries = previous.map { var entry = $0; entry.metadataUnavailable = true; return entry }
                 }
-                if lhs.position.y != rhs.position.y {
-                    return lhs.position.y < rhs.position.y
+                snapshots[pid] = entries
+                if previous != entries { markPublicationDirty() }
+                if applicationsByPID[pid]?.isActive == true {
+                    pendingFocus[pid] = (result.focusedID, unavailableScan)
+                    markPublicationDirty()
                 }
-                if lhs.position.x != rhs.position.x {
-                    return lhs.position.x < rhs.position.x
+                if invocation == invocationGeneration {
+                    invocationRequiredHosts.remove(pid)
                 }
-
-                let titleOrder = lhs.title.localizedCaseInsensitiveCompare(rhs.title)
-                if titleOrder != .orderedSame {
-                    return titleOrder == .orderedAscending
-                }
-
-                return (lhs.windowNumber ?? 0) < (rhs.windowNumber ?? 0)
+                schedulePublication()
             }
+        }
+        schedulePublication()
     }
 
-    private static func coreGraphicsSnapshots(
-        for records: [WindowSwitcherWindowRecord]
-    ) -> [WindowSwitcherWindowSnapshot] {
-        records.map {
-            WindowSwitcherWindowSnapshot(
-                element: nil,
-                windowNumber: $0.windowNumber,
-                title: $0.title,
-                isMinimized: false,
-                position: $0.bounds.origin,
-                size: $0.bounds.size
-            )
+    func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry] {
+        let entries = WindowSwitcherListing.apply(publication.entries, policy: listingPolicy)
+        switch sortMode {
+        case .recentUse: return publication.recency.sort(entries)
+        case .fixed: return entries.sorted {
+            let appOrder = $0.appName.localizedCaseInsensitiveCompare($1.appName)
+            let order = appOrder == .orderedSame
+                ? $0.displayName.localizedCaseInsensitiveCompare($1.displayName) : appOrder
+            return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+        }
         }
     }
 
-    static func mergeWindowSnapshots(
-        axSnapshots: [WindowSwitcherWindowSnapshot],
-        records: [WindowSwitcherWindowRecord]
-    ) -> [WindowSwitcherWindowSnapshot] {
-        var axSnapshotIndicesByKey: [WindowSwitcherWindowMatchKey: Set<Int>] = [:]
-        var axSnapshotIndicesByBounds: [WindowSwitcherWindowBoundsKey: Set<Int>] = [:]
-        for (index, snapshot) in axSnapshots.enumerated() {
-            let bounds = CGRect(origin: snapshot.position, size: snapshot.size)
-            let key = WindowSwitcherWindowMatchKey(
-                title: snapshot.title,
-                bounds: bounds
-            )
-            axSnapshotIndicesByKey[key, default: []].insert(index)
-            axSnapshotIndicesByBounds[WindowSwitcherWindowBoundsKey(bounds: bounds), default: []].insert(index)
+    private func ensureWorker(pid: pid_t, launchDate: Date?, applicationLifetime: UUID? = nil) -> WindowSwitcherProcessWorker {
+        if let existing = workers[pid], existing.launchDate == launchDate,
+           existing.applicationLifetime == applicationLifetime { return existing }
+        workers.removeValue(forKey: pid)?.stop()
+        if processMapping.host(for: pid) == pid {
+            snapshots.removeValue(forKey: pid)
+            removedProcesses.insert(pid)
+            markPublicationDirty()
         }
-
-        var unmatchedRecordIndicesByKey: [WindowSwitcherWindowMatchKey: Set<Int>] = [:]
-        var unmatchedRecordIndicesByBounds: [WindowSwitcherWindowBoundsKey: Set<Int>] = [:]
-        var unmatchedOnScreenRecordCountByKey: [WindowSwitcherWindowMatchKey: Int] = [:]
-        var unmatchedOnScreenRecordCountByBounds: [WindowSwitcherWindowBoundsKey: Int] = [:]
-        for (index, record) in records.enumerated() {
-            let key = WindowSwitcherWindowMatchKey(title: record.title, bounds: record.bounds)
-            let boundsKey = WindowSwitcherWindowBoundsKey(bounds: record.bounds)
-            unmatchedRecordIndicesByKey[key, default: []].insert(index)
-            unmatchedRecordIndicesByBounds[boundsKey, default: []].insert(index)
-            if record.isOnScreen == true {
-                unmatchedOnScreenRecordCountByKey[key, default: 0] += 1
-                unmatchedOnScreenRecordCountByBounds[boundsKey, default: 0] += 1
+        inFlight.remove(pid)
+        let created = WindowSwitcherProcessWorker(pid: pid, launchDate: launchDate,
+            applicationLifetime: applicationLifetime, access: accessFactory(pid)) { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self, workers[event.processIdentifier]?.lifetime == event.lifetime else { return }
+                invalidate(processIdentifiers: [event.processIdentifier], windowRecords: event.kind.requiresWindowRecords)
             }
         }
-
-        var matchedAXSnapshotIndices = Array<Int?>(repeating: nil, count: records.count)
-        var remainingAXSnapshotIndicesByKey = axSnapshotIndicesByKey
-        var remainingAXSnapshotIndicesByBounds = axSnapshotIndicesByBounds
-
-        for recordIndex in records.indices {
-            let key = WindowSwitcherWindowMatchKey(
-                title: records[recordIndex].title,
-                bounds: records[recordIndex].bounds
-            )
-            guard let index = uniqueAXSnapshotIndex(
-                in: remainingAXSnapshotIndicesByKey[key],
-                forRecordAt: recordIndex,
-                recordIndices: unmatchedRecordIndicesByKey[key],
-                onScreenRecordCount: unmatchedOnScreenRecordCountByKey[key] ?? 0,
-                records: records
-            ) else {
-                continue
-            }
-
-            matchedAXSnapshotIndices[recordIndex] = index
-            let boundsKey = WindowSwitcherWindowBoundsKey(bounds: records[recordIndex].bounds)
-            remainingAXSnapshotIndicesByKey[key]?.remove(index)
-            remainingAXSnapshotIndicesByBounds[boundsKey]?.remove(index)
-            unmatchedRecordIndicesByKey[key]?.remove(recordIndex)
-            unmatchedRecordIndicesByBounds[boundsKey]?.remove(recordIndex)
-            if records[recordIndex].isOnScreen == true {
-                unmatchedOnScreenRecordCountByKey[key, default: 0] -= 1
-                unmatchedOnScreenRecordCountByBounds[boundsKey, default: 0] -= 1
-            }
-        }
-
-        for recordIndex in records.indices where matchedAXSnapshotIndices[recordIndex] == nil {
-            let record = records[recordIndex]
-            let boundsKey = WindowSwitcherWindowBoundsKey(bounds: record.bounds)
-            guard let candidateIndex = uniqueAXSnapshotIndex(
-                in: remainingAXSnapshotIndicesByBounds[boundsKey],
-                forRecordAt: recordIndex,
-                recordIndices: unmatchedRecordIndicesByBounds[boundsKey],
-                onScreenRecordCount: unmatchedOnScreenRecordCountByBounds[boundsKey] ?? 0,
-                records: records
-            ),
-            record.title.isEmpty || axSnapshots[candidateIndex].title.isEmpty
-            else {
-                continue
-            }
-
-            matchedAXSnapshotIndices[recordIndex] = candidateIndex
-            remainingAXSnapshotIndicesByBounds[boundsKey]?.remove(candidateIndex)
-            unmatchedRecordIndicesByBounds[boundsKey]?.remove(recordIndex)
-            if record.isOnScreen == true {
-                unmatchedOnScreenRecordCountByBounds[boundsKey, default: 0] -= 1
-            }
-        }
-
-        var merged: [WindowSwitcherWindowSnapshot] = []
-        for (recordIndex, record) in records.enumerated() {
-            if let index = matchedAXSnapshotIndices[recordIndex] {
-                let snapshot = axSnapshots[index]
-                merged.append(
-                    WindowSwitcherWindowSnapshot(
-                        element: snapshot.element,
-                        windowNumber: record.windowNumber,
-                        title: snapshot.title,
-                        isMinimized: snapshot.isMinimized,
-                        position: snapshot.position,
-                        size: snapshot.size
-                    )
-                )
-                continue
-            }
-
-            merged.append(
-                WindowSwitcherWindowSnapshot(
-                    element: nil,
-                    windowNumber: record.windowNumber,
-                    title: record.title,
-                    isMinimized: false,
-                    position: record.bounds.origin,
-                    size: record.bounds.size
-                )
-            )
-        }
-
-        for boundsKey in remainingAXSnapshotIndicesByBounds.keys {
-            guard let candidateIndices = remainingAXSnapshotIndicesByBounds[boundsKey],
-                  !candidateIndices.isEmpty
-            else {
-                continue
-            }
-
-            let recordIndices = unmatchedRecordIndicesByBounds[boundsKey] ?? []
-            let axOnlyIndices = Self.axOnlySnapshotIndices(
-                candidateIndices: candidateIndices,
-                recordIndices: recordIndices,
-                axSnapshots: axSnapshots,
-                records: records
-            )
-            for index in axOnlyIndices {
-                merged.append(axSnapshots[index])
-            }
-        }
-
-        return merged
+        workers[pid] = created
+        return created
     }
 
-    private static func axOnlySnapshotIndices(
-        candidateIndices: Set<Int>,
-        recordIndices: Set<Int>,
-        axSnapshots: [WindowSwitcherWindowSnapshot],
-        records: [WindowSwitcherWindowRecord]
-    ) -> [Int] {
-        let sortedCandidateIndices = candidateIndices.sorted()
-        guard !recordIndices.isEmpty else {
-            return sortedCandidateIndices
+    private func windowEntries(from scan: WindowSwitcherScan, app: Application, ownerPID: pid_t) -> [WindowSwitcherAppEntry] {
+        scan.windows.map { window in
+            var entry = WindowSwitcherAppEntry(id: window.id, processIdentifier: app.processIdentifier,
+                bundleIdentifier: app.bundleIdentifier, appName: app.localizedName ?? "App",
+                windowTitle: window.title, icon: app.icon, windowElement: window.element,
+                isMinimized: window.minimized, windowNumber: window.windowNumber, applicationLaunchDate: app.launchDate, shortcutToken: nil)
+            entry.bounds = window.bounds
+            entry.isHidden = app.isHidden
+            entry.metadataUnavailable = window.unavailable
+            entry.windowOwnerPID = ownerPID
+            entry.axWorkerPID = ownerPID
+            entry.isOnFullscreenSpace = window.isFullscreen
+            entry.workerWindowID = window.id
+            let display = displayContext(for: window.bounds)
+            entry.displayNameContext = display?.name
+            entry.displayID = display?.id
+            return entry
         }
+    }
 
-        var axTitleCounts: [String: Int] = [:]
-        var titlelessAXCount = 0
-        for index in candidateIndices {
-            let title = axSnapshots[index].title
-            if title.isEmpty {
-                titlelessAXCount += 1
+    private func processWorker(for entry: WindowSwitcherAppEntry) -> WindowSwitcherProcessWorker? {
+        // A compositor owner can differ from the process exposing this AX record.
+        // Never redirect a recorded AX identity to another worker.
+        if let axWorkerPID = entry.axWorkerPID { return workers[axWorkerPID] }
+        if entry.windowElement != nil { return workers[entry.processIdentifier] }
+        return workers[entry.owningProcessIdentifier] ?? workers[entry.processIdentifier]
+    }
+
+    private func rebuildPublication() {
+        publication.update(snapshots: snapshots, records: allSpacesRecords, recordsAreFresh: allSpacesRecordsAreFresh, localEntries: hostWindows.entries(),
+                           helperProcessIdentifiers: helperPIDsByHost,
+                           displayContext: { self.displayContext(for: $0) })
+        if NSApp.isActive, let focusedID = hostWindows.focusedID {
+            publication.recency.observeForeground(entries: publication.entries.filter {
+                $0.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            }, focusedWindowID: focusedID, unavailable: false)
+        }
+    }
+
+    private func markPublicationDirty() {
+        publicationDirty = true
+        schedulePublication()
+    }
+
+    private func schedulePublication() {
+        guard running, publicationTask == nil else { return }
+        publicationTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+            guard !Task.isCancelled, let self, running else { return }
+            publicationTask = nil
+            let oldEntries = publication.entries
+            let oldFocus = publication.recency.focusedID
+            let wasComplete = isInitialDiscoveryComplete
+            let wasReady = isInvocationReady
+            if publicationDirty {
+                publicationDirty = false
+                for pid in removedProcesses { publication.removeProcess(pid) }
+                removedProcesses.removeAll()
+                rebuildPublication()
+            }
+            for (pid, focus) in pendingFocus where applicationsByPID[pid]?.isActive == true {
+                let entries = publication.entries.filter { $0.processIdentifier == pid }
+                let id = entries.first { ($0.workerWindowID ?? $0.id) == focus.id }?.id
+                publication.recency.observeForeground(entries: entries, focusedWindowID: id, unavailable: focus.unavailable)
+            }
+            pendingFocus.removeAll()
+            isInitialDiscoveryComplete = didReadAllSpaces && expectedHostPIDs.allSatisfy { snapshots[$0] != nil }
+            isInvocationReady = isInitialDiscoveryComplete && !invocationRequiresRecords && invocationRequiredHosts.isEmpty
+            if oldEntries != publication.entries || oldFocus != publication.recency.focusedID
+                || wasComplete != isInitialDiscoveryComplete || wasReady != isInvocationReady {
+                onChange?()
+            }
+        }
+    }
+
+    private func refreshAllSpaces() {
+        guard allSpacesRefreshTask == nil else { return }
+        windowRecordsPending = false
+        let generation = allSpacesGeneration
+        let invocation = invocationGeneration
+        allSpacesRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            let result = await allSpacesCatalog.freshWindowRecordSnapshot()
+            guard !Task.isCancelled, running, allSpacesGeneration == generation else { return }
+            allSpacesRefreshTask = nil
+            let oldRecords = Dictionary(grouping: allSpacesRecords, by: \.processIdentifier)
+            let newRecords = Dictionary(grouping: result.records, by: \.processIdentifier)
+            let changedOwners = Set(oldRecords.keys).union(newRecords.keys).filter {
+                oldRecords[$0]?.sorted { $0.windowNumber < $1.windowNumber }
+                    != newRecords[$0]?.sorted { $0.windowNumber < $1.windowNumber }
+            }
+            let oldHelpers = helperPIDsByHost
+            if allSpacesRecords != result.records || allSpacesRecordsAreFresh != result.isFresh { markPublicationDirty() }
+            allSpacesRecords = result.records
+            helperPIDsByHost = processMapping.helpersByHost(owningWindowsIn: allSpacesRecords)
+            allSpacesRecordsAreFresh = result.isFresh
+            if oldHelpers != helperPIDsByHost { reloadApplications() }
+            // New helper ownership and missing AX events must schedule a scoped
+            // scan, including when another read of that host is already active.
+            for pid in expectedHostPIDs {
+                let changed = changedOwners.contains { processMapping.host(for: $0) == pid }
+                if oldHelpers[pid] != helperPIDsByHost[pid] || (changed && snapshots[pid] != nil) {
+                    dirtyHosts.insert(pid)
+                }
+            }
+            didReadAllSpaces = true
+            if invocation == invocationGeneration { invocationRequiresRecords = false }
+            if !isInvocationReady { invocationRequiredHosts.formUnion(dirtyHosts) }
+            schedulePublication()
+            drainRefreshes()
+        }
+    }
+
+    /// Only confirmed system IDs link AX and CG identities. Geometry/title
+    /// guesses remain preview-only and must never rename a row or route actions.
+    static func mergeAllSpacesEntries(_ entries: [WindowSwitcherAppEntry], records: [WindowSwitcherWindowRecord],
+                                      knownWindowIDs: [CGWindowID: String] = [:],
+                                      confirmedAXWindowNumbers: Set<CGWindowID> = [],
+                                      hasConfirmedEmptyAXSnapshot: Bool = false,
+                                      helperProcessIdentifiers: Set<pid_t> = []) -> [WindowSwitcherAppEntry] {
+        guard let application = entries.first else { return entries }
+        let hostPID = application.processIdentifier
+        let records = records.filter { $0.processIdentifier == hostPID || helperProcessIdentifiers.contains($0.processIdentifier) }
+        let recordsByNumber = Dictionary(records.map { ($0.windowNumber, $0) }, uniquingKeysWith: { first, _ in first })
+        var claimed = Set<CGWindowID>()
+        let windows = entries.filter { $0.windowElement != nil }.compactMap { entry -> WindowSwitcherAppEntry? in
+            var window = entry
+            window.workerWindowID = entry.workerWindowID ?? entry.id
+            if let number = entry.windowNumber {
+                // Multiple AX aliases for one system window are one row.
+                guard claimed.insert(number).inserted else { return nil }
+                if let knownID = knownWindowIDs[number] { window.id = knownID }
+                if let record = recordsByNumber[number] {
+                    window.windowOwnerPID = record.processIdentifier
+                    window.isOnOtherDesktop = record.isOnActiveSpace == false
+                    window.isOnFullscreenSpace = window.isOnFullscreenSpace || record.isOnFullscreenSpace == true
+                }
+            }
+            return window
+        }
+        let fallback = records.compactMap { record -> WindowSwitcherAppEntry? in
+            guard !claimed.contains(record.windowNumber) else { return nil }
+            // A complete empty AX scan rules out current-Space window rows.
+            // WindowServer may still retain named surfaces after the last window
+            // closes. Other-Space windows remain discoverable independently.
+            guard !hasConfirmedEmptyAXSnapshot || (record.isOnScreen == false || (record.isOnScreen == nil && record.hasSpace == true)) else { return nil }
+            // Unknown Space membership is not proof that a newly discovered
+            // off-screen surface is a window. Previously AX-confirmed windows
+            // may survive a missing Space query, but not a confirmed removal.
+            guard record.isOnScreen == true || record.hasSpace == true
+                || (record.hasSpace == nil && confirmedAXWindowNumbers.contains(record.windowNumber)) else { return nil }
+            // Do not replace usable AX windows with ambiguous CG duplicates.
+            guard !windows.contains(where: { $0.windowNumber == nil && sameBounds($0.bounds, record.bounds) }) else { return nil }
+            // Missing title metadata (for example without Screen Recording)
+            // must not hide otherwise valid off-Space candidates. Explicitly
+            // empty titles still require AX confirmation to exclude helper surfaces.
+            let unavailableOffSpaceTitle = !record.titleIsAvailable
+                && record.isOnScreen != true && record.hasSpace == true
+            guard confirmedAXWindowNumbers.contains(record.windowNumber)
+                || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || unavailableOffSpaceTitle else { return nil }
+            var fallbackEntry = WindowSwitcherAppEntry(id: knownWindowIDs[record.windowNumber] ?? "window:cg:\(application.processIdentifier):\(application.applicationLaunchDate.map { String($0.timeIntervalSince1970) } ?? application.id):\(record.windowNumber)",
+                processIdentifier: application.processIdentifier, bundleIdentifier: application.bundleIdentifier,
+                appName: application.appName, windowTitle: record.titleIsAvailable ? record.title : nil, icon: application.icon,
+                windowElement: nil, isMinimized: false, windowNumber: record.windowNumber,
+                windowBounds: record.bounds, applicationLaunchDate: application.applicationLaunchDate,
+                shortcutToken: nil, bounds: record.bounds, isHidden: application.isHidden)
+            fallbackEntry.windowOwnerPID = record.processIdentifier
+            fallbackEntry.isOnOtherDesktop = record.isOnActiveSpace == false
+            fallbackEntry.isOnFullscreenSpace = record.isOnFullscreenSpace == true
+            return fallbackEntry
+        }
+        return windows.isEmpty && fallback.isEmpty ? entries : windows + fallback
+    }
+
+    static func sameBounds(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        abs(lhs.minX - rhs.minX) < 2 && abs(lhs.minY - rhs.minY) < 2 &&
+            abs(lhs.width - rhs.width) < 2 && abs(lhs.height - rhs.height) < 2
+    }
+
+    static func matchingFallbackWindowID(_ entry: WindowSwitcherAppEntry, windows: [WindowSwitcherWindowSnapshot],
+                                         records: [WindowSwitcherWindowRecord] = []) -> String? {
+        let available = windows.filter { !$0.unavailable }
+        if let number = entry.windowNumber {
+            let candidates = available.map {
+                WindowSwitcherAppEntry(id: $0.id, processIdentifier: entry.processIdentifier,
+                    bundleIdentifier: entry.bundleIdentifier, appName: entry.appName, windowTitle: $0.title,
+                    icon: nil, windowElement: $0.element, isMinimized: $0.minimized,
+                    windowNumber: $0.windowNumber, shortcutToken: nil, bounds: $0.bounds)
+            }
+            let exact = mergeAllSpacesEntries(candidates, records: records).filter {
+                $0.windowElement != nil && $0.windowNumber == number
+            }
+            return exact.count == 1 ? exact[0].id : nil
+        }
+        let geometry = available.filter { sameBounds($0.bounds, entry.bounds) }
+        if geometry.count == 1 { return geometry[0].id }
+        let titled = geometry.filter { entry.windowTitle?.isEmpty == false && $0.title == entry.windowTitle }
+        return titled.count == 1 ? titled[0].id : nil
+    }
+
+    /// Wait for Space transitions by observing fresh state, never replaying the
+    /// app activation or choosing an arbitrary same-title window.
+    static func waitForFallbackWindow(_ entry: WindowSwitcherAppEntry,
+                                      timeout: Duration = .seconds(1.2),
+                                      scan: () async -> WindowSwitcherScan,
+                                      records: () async -> [WindowSwitcherWindowRecord]) async -> String? {
+        let deadline = ContinuousClock.now + timeout
+        repeat {
+            guard !Task.isCancelled else { return nil }
+            let snapshot = await scan()
+            guard !Task.isCancelled, ContinuousClock.now < deadline else { return nil }
+            let currentRecords = await records()
+            guard !Task.isCancelled, ContinuousClock.now < deadline else { return nil }
+            if snapshot.windowListReadSucceeded,
+               let id = matchingFallbackWindowID(entry, windows: snapshot.windows, records: currentRecords) { return id }
+            guard ContinuousClock.now < deadline else { return nil }
+            try? await Task.sleep(for: .milliseconds(60))
+        } while true
+    }
+
+    private func containsCurrentEntry(_ entry: WindowSwitcherAppEntry) -> Bool {
+        entries(sortMode: .fixed).contains { $0.id == entry.id }
+    }
+
+    func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult {
+        guard intent.shouldContinue() else { return .cancelled }
+        if entry.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            let result = await hostWindows.activate(entry, intent: intent)
+            if result == .succeeded { publication.recency.record(entry.id) }
+            refresh()
+            return result
+        }
+        guard containsCurrentEntry(entry),
+              let worker = processWorker(for: entry),
+              let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
+        var isFallback = entry.windowElement == nil && entry.windowNumber != nil
+        guard entry.applicationLaunchDate == nil || app.launchDate == nil || entry.applicationLaunchDate == app.launchDate else { return .unavailable }
+        let isValid: Bool
+        if isFallback {
+            isValid = await allSpacesCatalog.isCurrentFallback(entry)
+        } else if entry.isWindowEntry {
+            let live = await worker.validate(entry.workerWindowID ?? entry.id)
+            // Some apps omit other-Space windows from AXWindows. A fresh exact
+            // WindowServer record can authorize reveal, followed by AX reacquisition.
+            if !live, entry.windowNumber != nil {
+                isFallback = true
+                isValid = await allSpacesCatalog.isCurrentFallback(entry)
             } else {
-                axTitleCounts[title, default: 0] += 1
+                isValid = live
             }
-        }
-
-        var recordTitleCounts: [String: Int] = [:]
-        var titlelessRecordCount = 0
-        for index in recordIndices {
-            let title = records[index].title
-            if title.isEmpty {
-                titlelessRecordCount += 1
-            } else {
-                recordTitleCounts[title, default: 0] += 1
-            }
-        }
-
-        let exactMatchCount = axTitleCounts.reduce(into: 0) { count, pair in
-            count += min(pair.value, recordTitleCounts[pair.key] ?? 0)
-        }
-        let remainingAXCount = candidateIndices.count - exactMatchCount
-        let remainingRecordCount = recordIndices.count - exactMatchCount
-        let wildcardMatchCount: Int
-        if titlelessAXCount > 0 && titlelessRecordCount > 0 {
-            wildcardMatchCount = min(remainingAXCount, remainingRecordCount)
-        } else if titlelessAXCount > 0 {
-            wildcardMatchCount = min(titlelessAXCount, remainingRecordCount)
-        } else if titlelessRecordCount > 0 {
-            wildcardMatchCount = min(remainingAXCount, titlelessRecordCount)
         } else {
-            wildcardMatchCount = 0
+            isValid = true
         }
-        let maximumCompatibleCount = exactMatchCount + wildcardMatchCount
-        let maximumAXOnlyCount = max(0, candidateIndices.count - maximumCompatibleCount)
-        guard maximumAXOnlyCount > 0 else {
-            return []
+        guard intent.shouldContinue() else { return .cancelled }
+        guard isValid, processWorker(for: entry) === worker else { return .unavailable }
+        let ownerPID = entry.owningProcessIdentifier
+        let needsExactReveal = isFallback || allSpacesRecords.contains {
+            $0.windowNumber == entry.windowNumber
+                && ($0.processIdentifier == entry.processIdentifier || $0.processIdentifier == ownerPID)
+                && $0.isOnScreen != true && $0.hasSpace == true
         }
-
-        var residualRecordTitleCounts = recordTitleCounts
-        for (title, candidateCount) in axTitleCounts {
-            residualRecordTitleCounts[title] = max(
-                0,
-                (residualRecordTitleCounts[title] ?? 0) - candidateCount
-            )
-        }
-
-        var forcedAXOnlyIndices: [Int] = []
-        var compatibleIndices: [Int] = []
-        for index in sortedCandidateIndices {
-            let title = axSnapshots[index].title
-            let canMatchResidualRecord = title.isEmpty
-                || titlelessRecordCount > 0
-                || (residualRecordTitleCounts[title] ?? 0) > 0
-            if canMatchResidualRecord {
-                compatibleIndices.append(index)
-            } else {
-                forcedAXOnlyIndices.append(index)
-            }
-        }
-
-        return Array((forcedAXOnlyIndices + compatibleIndices).prefix(maximumAXOnlyCount))
-    }
-
-    private static func uniqueAXSnapshotIndex(
-        in candidateIndices: Set<Int>?,
-        forRecordAt recordIndex: Int,
-        recordIndices: Set<Int>?,
-        onScreenRecordCount: Int,
-        records: [WindowSwitcherWindowRecord]
-    ) -> Int? {
-        guard let candidateIndices,
-              candidateIndices.count == 1,
-              let candidateIndex = candidateIndices.first,
-              let recordIndices,
-              recordIndices.contains(recordIndex)
-        else {
-            return nil
-        }
-
-        guard recordIndices.count > 1 else {
-            return candidateIndex
-        }
-
-        guard onScreenRecordCount == 1,
-              records[recordIndex].isOnScreen == true
-        else {
-            return nil
-        }
-
-        return candidateIndex
-    }
-
-    private static func matches(
-        _ snapshot: WindowSwitcherWindowSnapshot,
-        title: String?,
-        bounds: CGRect
-    ) -> Bool {
-        guard snapshot.position == bounds.origin,
-              snapshot.size == bounds.size
-        else {
-            return false
-        }
-
-        guard let title, !title.isEmpty else {
-            return true
-        }
-
-        return snapshot.title == title
-    }
-
-    static func axTimeout(forRemaining remaining: TimeInterval) -> Float? {
-        guard remaining > 0 else {
-            return nil
-        }
-
-        return min(axTimeout, Float(remaining))
-    }
-
-    private static func setAXMessagingTimeout(
-        on element: AXUIElement,
-        deadline: Date?
-    ) -> Bool {
-        guard let deadline else {
-            return AXUIElementSetMessagingTimeout(element, axTimeout) == .success
-        }
-
-        guard let timeout = axTimeout(forRemaining: deadline.timeIntervalSinceNow) else {
-            return false
-        }
-
-        return AXUIElementSetMessagingTimeout(element, timeout) == .success
-    }
-
-    private static func copyWindows(
-        from appElement: AXUIElement,
-        deadline: Date? = nil
-    ) -> [AXUIElement] {
-        guard setAXMessagingTimeout(on: appElement, deadline: deadline) else {
-            return []
-        }
-
-        var value: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &value)
-        guard result == .success,
-              let windows = value as? [AXUIElement]
-        else {
-            return []
-        }
-
-        return windows
-    }
-
-    private static func copyCandidateWindows(
-        from appElement: AXUIElement,
-        deadline: Date? = nil
-    ) -> [AXUIElement] {
-        var windows = copyWindows(from: appElement, deadline: deadline)
-        for attribute in [kAXMainWindowAttribute, kAXFocusedWindowAttribute] {
-            guard deadline.map({ Date() < $0 }) ?? true else {
-                break
-            }
-
-            if let window = copyWindowAttribute(
-                appElement,
-                attribute as String,
-                deadline: deadline
-            ) {
-                appendUnique(window, to: &windows)
-            }
-        }
-        return windows
-    }
-
-    private static func windowSnapshot(
-        for window: AXUIElement,
-        deadline: Date? = nil
-    ) -> WindowSwitcherWindowSnapshot? {
-        guard setAXMessagingTimeout(on: window, deadline: deadline) else {
-            return nil
-        }
-
-        let attributes = [
-            kAXRoleAttribute,
-            kAXSubroleAttribute,
-            kAXTitleAttribute,
-            kAXMinimizedAttribute,
-            kAXPositionAttribute,
-            kAXSizeAttribute,
-        ] as CFArray
-        var rawValues: CFArray?
-        let result = AXUIElementCopyMultipleAttributeValues(
-            window,
-            attributes,
-            AXCopyMultipleAttributeOptions(rawValue: 0),
-            &rawValues
-        )
-        guard result == .success,
-              let values = rawValues as? [Any],
-              values.count == 6,
-              isUserFacingWindow(role: values[0] as? String, subrole: values[1] as? String)
-        else {
-            return nil
-        }
-
-        let isMinimized = (values[3] as? Bool) ?? false
-        let size = decodeSize(values[5])
-        guard isMinimized || isSwitchableWindowSize(size) else {
-            return nil
-        }
-
-        return WindowSwitcherWindowSnapshot(
-            element: window,
-            windowNumber: nil,
-            title: values[2] as? String ?? "",
-            isMinimized: isMinimized,
-            position: decodePoint(values[4]),
-            size: size
-        )
-    }
-
-    private static func isUserFacingWindow(role: String?, subrole: String?) -> Bool {
-        guard role == (kAXWindowRole as String) else {
-            return false
-        }
-
-        guard let subrole else {
-            return true
-        }
-
-        return subrole == (kAXStandardWindowSubrole as String)
-            || subrole == (kAXDialogSubrole as String)
-            || subrole == "AXFullScreenWindow"
-    }
-
-    private static func isSwitchableWindowSize(_ size: CGSize) -> Bool {
-        size.width >= WindowSwitcherWindowRecord.minimumWindowSize.width
-            && size.height >= WindowSwitcherWindowRecord.minimumWindowSize.height
-    }
-
-    private static func decodePoint(_ value: Any) -> CGPoint {
-        let cfValue = value as CFTypeRef
-        guard CFGetTypeID(cfValue) == AXValueGetTypeID() else {
-            return .zero
-        }
-
-        var point = CGPoint.zero
-        AXValueGetValue(cfValue as! AXValue, .cgPoint, &point)
-        return point
-    }
-
-    private static func decodeSize(_ value: Any) -> CGSize {
-        let cfValue = value as CFTypeRef
-        guard CFGetTypeID(cfValue) == AXValueGetTypeID() else {
-            return .zero
-        }
-
-        var size = CGSize.zero
-        AXValueGetValue(cfValue as! AXValue, .cgSize, &size)
-        return size
-    }
-
-    private static func copyWindowAttribute(
-        _ appElement: AXUIElement,
-        _ attribute: String,
-        deadline: Date? = nil
-    ) -> AXUIElement? {
-        guard setAXMessagingTimeout(on: appElement, deadline: deadline) else {
-            return nil
-        }
-
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, attribute as CFString, &value) == .success,
-              let value,
-              CFGetTypeID(value) == AXUIElementGetTypeID()
-        else {
-            return nil
-        }
-
-        return (value as! AXUIElement)
-    }
-
-    private func windowSnapshot(
-        for app: WindowSwitcherApplicationControlling,
-        matching entry: WindowSwitcherAppEntry,
-        deadline: Date
-    ) -> WindowSwitcherWindowSnapshot? {
-        guard let bounds = entry.windowBounds else {
-            return nil
-        }
-
-        if let activationWindowSnapshotProvider {
-            return activationWindowSnapshotProvider(app.processIdentifier, entry)
-        }
-
-        guard let app = app as? NSRunningApplication else {
-            return nil
-        }
-
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        let windows = Self.copyCandidateWindows(from: appElement, deadline: deadline)
-
-        return Self.firstMatchingWindow(
-            in: windows,
-            title: entry.windowTitle,
-            bounds: bounds,
-            deadline: deadline,
-            now: { Date() },
-            snapshotProvider: { window in
-                Self.windowSnapshot(for: window, deadline: deadline)
-            }
-        )
-    }
-
-    static func firstMatchingWindow(
-        in windows: [AXUIElement],
-        title: String?,
-        bounds: CGRect,
-        deadline: Date,
-        now: () -> Date,
-        snapshotProvider: (AXUIElement) -> WindowSwitcherWindowSnapshot?
-    ) -> WindowSwitcherWindowSnapshot? {
-        var matchingSnapshot: WindowSwitcherWindowSnapshot?
-        for window in windows {
-            guard !Task.isCancelled,
-                  now() < deadline
-            else {
-                return nil
-            }
-
-            guard let snapshot = snapshotProvider(window),
-                  Self.matches(snapshot, title: title, bounds: bounds)
-            else {
-                continue
-            }
-
-            guard matchingSnapshot == nil else {
-                return nil
-            }
-
-            matchingSnapshot = snapshot
-        }
-
-        return matchingSnapshot
-    }
-
-    private func focusWindow(
-        _ window: AXUIElement,
-        isMinimized: Bool,
-        deadline: Date
-    ) {
-        if let focusWindowHandler {
-            focusWindowHandler(window, isMinimized)
-        } else {
-            Self.focusWindow(window, isMinimized: isMinimized, deadline: deadline)
-        }
-    }
-
-    private static func focusWindow(
-        _ window: AXUIElement,
-        isMinimized: Bool,
-        deadline: Date
-    ) {
-        focusWindow(
-            window,
-            isMinimized: isMinimized,
-            deadline: deadline,
-            writeAttribute: setAXAttributeValue,
-            performRaise: { element, deadline in
-                guard !Task.isCancelled,
-                      setAXMessagingTimeout(on: element, deadline: deadline)
-                else {
-                    return false
+        let resolved: WindowSwitcherResolvedWindow?
+        if needsExactReveal, WindowSwitcherWindowServer.supportsExactActivation, let number = entry.windowNumber {
+            resolved = await worker.resolveOffSpaceWindow(number, ownerPID: ownerPID, cancellation: intent.cancellation)
+        } else { resolved = nil }
+        guard intent.shouldContinue(), processWorker(for: entry) === worker, !app.isTerminated else { return .cancelled }
+        if let resolved {
+            if app.isHidden {
+                _ = app.unhide()
+                let deadline = ContinuousClock.now + .seconds(1)
+                while app.isHidden && ContinuousClock.now < deadline {
+                    guard intent.shouldContinue(), !app.isTerminated else { return .cancelled }
+                    try? await Task.sleep(for: .milliseconds(20))
                 }
-
-                return AXUIElementPerformAction(element, kAXRaiseAction as CFString) == .success
             }
-        )
-    }
-
-    static func focusWindow(
-        _ window: AXUIElement,
-        isMinimized: Bool,
-        deadline: Date,
-        writeAttribute: (AXUIElement, CFString, CFTypeRef, Date) -> Bool,
-        performRaise: (AXUIElement, Date) -> Bool
-    ) {
-        if isMinimized {
-            guard writeAttribute(
-                window,
-                kAXMinimizedAttribute as CFString,
-                kCFBooleanFalse,
-                deadline
-            ) else {
-                return
+            guard intent.shouldContinue(), !app.isTerminated, !app.isHidden else { return .cancelled }
+            let result = await worker.focusOffSpaceWindow(resolved, cancellation: intent.cancellation)
+            guard intent.shouldContinue() else { return .cancelled }
+            let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier
+            if result == .succeeded && isFrontmost { publication.recency.record(entry.id) }
+            refresh()
+            return result == .succeeded && !isFrontmost ? .failed : result
+        }
+        let prepared = await WindowSwitcherApplicationActivation.prepare(state: {
+            .init(isHidden: app.isHidden,
+                  isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier,
+                  isTerminated: app.isTerminated || self.processWorker(for: entry) !== worker)
+        }, request: { request in
+            guard intent.shouldContinue() else { return }
+            switch request {
+            case .unhide: _ = app.unhide()
+            case .activate:
+                if needsExactReveal, let number = entry.windowNumber,
+                   WindowSwitcherWindowServer.activate(number, pid: ownerPID, cancellation: intent.cancellation) { return }
+                NSApp.yieldActivation(to: app)
+                if isFallback {
+                    // Public fallback when the optional exact-window bridge is unavailable.
+                    _ = app.activate(options: [.activateAllWindows])
+                    return
+                }
+                // Native activation is a request, not a guarantee. Its observed
+                // outcome controls the one-shot alternate path below.
+                _ = app.activate(options: [])
             }
+        }, activateAllSpaces: needsExactReveal, fallbackRequest: {
+            guard intent.shouldContinue() else { return }
+            _ = await worker.requestApplicationActivation(cancellation: intent.cancellation)
+        }, shouldContinue: {
+            intent.shouldContinue()
+        })
+        guard prepared == .succeeded else { return prepared }
+        if !entry.isWindowEntry {
+            publication.recency.record(entry.id)
+            refresh()
+            return .succeeded
         }
-
-        _ = writeAttribute(
-            window,
-            kAXMainAttribute as CFString,
-            kCFBooleanTrue,
-            deadline
-        )
-        guard !Task.isCancelled, Date() < deadline else {
-            return
+        let cancellation = intent.cancellation
+        let targetPID = entry.processIdentifier
+        let targetID: String
+        if isFallback {
+            // Re-read after the owning app switches Spaces. Never choose one of
+            // several same-title/geometry candidates or replay activation.
+            guard let matchedID = await Self.waitForFallbackWindow(entry, scan: { await worker.scan() },
+                records: { await self.allSpacesCatalog.freshRecordsForActivation() }) else {
+                return intent.shouldContinue() ? .unavailable : .cancelled
+            }
+            guard self.processWorker(for: entry) === worker, !Task.isCancelled else { return .cancelled }
+            targetID = matchedID
+        } else {
+            targetID = entry.workerWindowID ?? entry.id
         }
-
-        _ = writeAttribute(
-            window,
-            kAXFocusedAttribute as CFString,
-            kCFBooleanTrue,
-            deadline
-        )
-        guard !Task.isCancelled, Date() < deadline else {
-            return
-        }
-
-        _ = performRaise(window, deadline)
+        guard intent.shouldContinue(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else { return .cancelled }
+        let result = await worker.perform(targetID, close: false, cancellation: cancellation)
+        let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier
+        if result == .succeeded && isFrontmost { publication.recency.record(entry.id) }
+        refresh()
+        return result == .succeeded && !isFrontmost ? .failed : result
     }
 
-    private static func setAXAttributeValue(
-        _ element: AXUIElement,
-        _ attribute: CFString,
-        value: CFTypeRef,
-        deadline: Date
-    ) -> Bool {
-        guard !Task.isCancelled,
-              setAXMessagingTimeout(on: element, deadline: deadline)
-        else {
-            return false
+    func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {
+        if entry.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            let result = hostWindows.close(entry)
+            refresh()
+            return result
         }
-
-        return AXUIElementSetAttributeValue(element, attribute, value) == .success
+        guard entry.isWindowEntry, containsCurrentEntry(entry), let worker = processWorker(for: entry) else { return .unavailable }
+        var targetID = entry.workerWindowID ?? entry.id
+        if entry.windowElement == nil {
+            guard await allSpacesCatalog.isCurrentFallback(entry) else { return .unavailable }
+            let scan = await worker.scan()
+            guard scan.windowListReadSucceeded,
+                  let matchedID = Self.matchingFallbackWindowID(entry, windows: scan.windows, records: allSpacesRecords) else { return .unavailable }
+            targetID = matchedID
+        }
+        guard processWorker(for: entry) === worker else { return .unavailable }
+        let result = await worker.perform(targetID, close: true)
+        refresh()
+        return result
     }
 
-    private static func appendUnique(_ window: AXUIElement, to windows: inout [AXUIElement]) {
-        guard !windows.contains(where: { CFEqual($0, window) }) else {
-            return
-        }
-
-        windows.append(window)
+    func quitApplication(_ entry: WindowSwitcherAppEntry) -> WindowSwitcherActionResult {
+        guard containsCurrentEntry(entry),
+              let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
+        guard entry.applicationLaunchDate == nil || app.launchDate == nil || entry.applicationLaunchDate == app.launchDate else { return .unavailable }
+        let requested = app.terminate()
+        refresh()
+        return requested ? .requested : .failed
     }
 
-    private static func isCurrentApplication(
-        _ app: WindowSwitcherApplicationControlling,
-        for entry: WindowSwitcherAppEntry
-    ) -> Bool {
-        guard app.processIdentifier == entry.processIdentifier,
-              !app.isTerminated
-        else {
-            return false
+    private func displayContext(for bounds: CGRect) -> (id: UInt32, name: String)? {
+        // AX uses a top-left origin. Convert screens without treating an offscreen
+        // window as belonging to another Space; public AX exposes no Space ID.
+        let top = NSScreen.screens.first?.frame.maxY ?? 0
+        return NSScreen.screens.max { lhs, rhs in
+            func area(_ screen: NSScreen) -> CGFloat {
+                let r = CGRect(x: screen.frame.minX, y: top - screen.frame.maxY,
+                               width: screen.frame.width, height: screen.frame.height).intersection(bounds)
+                return r.isNull ? 0 : r.width * r.height
+            }
+            return area(lhs) < area(rhs)
+        }.flatMap { screen in
+            let rect = CGRect(x: screen.frame.minX, y: top - screen.frame.maxY, width: screen.frame.width, height: screen.frame.height)
+            guard rect.intersects(bounds),
+                  let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+            return (number.uint32Value, screen.localizedName)
         }
-
-        if let currentLaunchDate = app.launchDate,
-           let expectedLaunchDate = entry.applicationLaunchDate,
-           currentLaunchDate != expectedLaunchDate {
-            return false
-        }
-
-        guard let expectedBundleIdentifier = entry.bundleIdentifier,
-              !expectedBundleIdentifier.isEmpty
-        else {
-            return true
-        }
-
-        return app.bundleIdentifier == expectedBundleIdentifier
-    }
-
-    nonisolated private static func identifier(for app: NSRunningApplication) -> String {
-        if let bundleIdentifier = app.bundleIdentifier, !bundleIdentifier.isEmpty {
-            return "bundle:\(bundleIdentifier)"
-        }
-
-        return "pid:\(app.processIdentifier)"
-    }
-
-    nonisolated private static func identifier(for entry: WindowSwitcherAppEntry) -> String {
-        if let bundleIdentifier = entry.bundleIdentifier, !bundleIdentifier.isEmpty {
-            return "bundle:\(bundleIdentifier)"
-        }
-
-        return "pid:\(entry.processIdentifier)"
-    }
-
-    nonisolated private static func isUserFacingApplication(_ app: NSRunningApplication) -> Bool {
-        guard app.activationPolicy == .regular,
-              !app.isTerminated,
-              app.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        else {
-            return false
-        }
-
-        if let hostBundleID = Bundle.main.bundleIdentifier,
-           app.bundleIdentifier == hostBundleID {
-            return false
-        }
-
-        return true
     }
 }

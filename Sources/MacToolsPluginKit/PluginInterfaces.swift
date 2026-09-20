@@ -72,6 +72,14 @@ public protocol PluginShortcutBindingValidating: AnyObject {
     ) -> String?
 }
 
+/// Lets dynamic shortcut owners reset several definitions in one host update.
+/// IDs are local shortcut definition IDs belonging to the requesting plugin.
+/// The host completes binding validation and registration before returning.
+@MainActor
+public protocol PluginShortcutResetRequesting: AnyObject {
+    var resetShortcutCustomizations: (([String]) -> Void)? { get set }
+}
+
 public extension MacToolsPlugin {
     var primaryPanel: (any PluginPrimaryPanel)? {
         nil

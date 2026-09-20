@@ -415,36 +415,46 @@ final class WindowLayoutService: WindowLayoutExecuting {
         }
         try Task.checkCancellation()
         let currentFrame = try await frameReader.frame(of: currentWindow)
-        try await frameWriter.setFrame(
-            placement.targetFrame,
-            of: currentWindow,
-            resize: placement.shouldResize
-        )
-        var observedFrame = try await frameReader.frame(of: currentWindow)
-        var didRetryWrite = false
-        let settlementDelays: [Duration] = [
-            .milliseconds(16),
-            .milliseconds(34),
-            .milliseconds(75),
-            .milliseconds(125),
-        ]
-        for delay in settlementDelays where !approximatelyEqual(
-            observedFrame,
-            placement.targetFrame
-        ) {
-            try await waitForFrameSettlement(delay)
-            let settledWindow = try await revalidatedWindow(matching: currentWindow.identity)
-            observedFrame = try await frameReader.frame(of: settledWindow)
-            if !approximatelyEqual(observedFrame, placement.targetFrame), !didRetryWrite {
-                try Task.checkCancellation()
-                try await frameWriter.setFrame(
-                    placement.targetFrame,
-                    of: settledWindow,
-                    resize: placement.shouldResize
-                )
-                didRetryWrite = true
+        var observedFrame: CGRect
+        do {
+            try await frameWriter.setFrame(
+                placement.targetFrame,
+                of: currentWindow,
+                resize: placement.shouldResize
+            )
+            observedFrame = try await frameReader.frame(of: currentWindow)
+            var didRetryWrite = false
+            let settlementDelays: [Duration] = [
+                .milliseconds(16),
+                .milliseconds(34),
+                .milliseconds(75),
+                .milliseconds(125),
+            ]
+            for delay in settlementDelays where !approximatelyEqual(
+                observedFrame,
+                placement.targetFrame
+            ) {
+                try await waitForFrameSettlement(delay)
+                let settledWindow = try await revalidatedWindow(matching: currentWindow.identity)
                 observedFrame = try await frameReader.frame(of: settledWindow)
+                if !approximatelyEqual(observedFrame, placement.targetFrame), !didRetryWrite {
+                    try Task.checkCancellation()
+                    try await frameWriter.setFrame(
+                        placement.targetFrame,
+                        of: settledWindow,
+                        resize: placement.shouldResize
+                    )
+                    didRetryWrite = true
+                    observedFrame = try await frameReader.frame(of: settledWindow)
+                }
             }
+        } catch WindowEnhancedUIFrameGuard.Failure.restorationFailedAfterWrite {
+            // Cleanup failed after the AX frame transaction committed, including
+            // on a settlement retry. Keep the invocation's original frame so the
+            // user can undo the visible change even though this command failed.
+            history.record(currentFrame, for: currentWindow)
+            halfCycleStates.removeValue(forKey: currentWindow.identity)
+            throw WindowLayoutError.frameWriteFailed
         }
         history.record(currentFrame, for: currentWindow)
         if let plan = placement.halfCyclePlan {

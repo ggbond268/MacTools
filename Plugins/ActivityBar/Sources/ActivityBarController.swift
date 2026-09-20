@@ -27,6 +27,7 @@ final class ActivityBarController: ObservableObject {
     let codingStats: ActivityBarCodingSessionStore
 
     var onStateChange: (() -> Void)?
+    var onStatisticsChange: (() -> Void)?
 
     private let storage: PluginStorage
     private let inputMonitor: any ActivityBarInputMonitoring
@@ -426,7 +427,7 @@ final class ActivityBarController: ObservableObject {
 
             inputEventNotificationTask = nil
             objectWillChange.send()
-            onStateChange?()
+            onStatisticsChange?()
         }
     }
 

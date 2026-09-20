@@ -168,7 +168,7 @@ final class ActionShortcutAssignmentStore {
         _ candidates: [(reference: ActionReference, binding: ShortcutBinding)],
         didPersist: () -> Void
     ) -> ActionShortcutLegacyMigrationResult {
-        guard !defaults.bool(forKey: DefaultsKey.legacyAppMigration) else {
+        guard !hasMigratedLegacyAppAssignments else {
             return .alreadyMigrated
         }
 
@@ -198,7 +198,7 @@ final class ActionShortcutAssignmentStore {
         didPersist: () -> Void
     ) -> ActionShortcutLegacyMigrationResult {
         let migrationKey = DefaultsKey.legacyPluginMigrationPrefix + pluginID
-        guard !defaults.bool(forKey: migrationKey) else {
+        guard !hasMigratedLegacyPluginAssignments(pluginID: pluginID) else {
             return .alreadyMigrated
         }
 
@@ -215,6 +215,14 @@ final class ActionShortcutAssignmentStore {
             )
         }
         return migrate(records: records, markerKey: migrationKey, didPersist: didPersist)
+    }
+
+    var hasMigratedLegacyAppAssignments: Bool {
+        defaults.bool(forKey: DefaultsKey.legacyAppMigration)
+    }
+
+    func hasMigratedLegacyPluginAssignments(pluginID: String) -> Bool {
+        defaults.bool(forKey: DefaultsKey.legacyPluginMigrationPrefix + pluginID)
     }
 
     private func migrate(

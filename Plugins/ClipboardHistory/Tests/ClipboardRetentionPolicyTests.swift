@@ -294,6 +294,30 @@ final class ClipboardRetentionPolicyTests: XCTestCase {
         XCTAssertFalse(result.isCaptureBlockedByProtectedItems)
     }
 
+    func testTimedShortcutRetainsHistoryWithoutBlockingNewCaptures() {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        var settings = ClipboardHistorySettings.defaults
+        settings.maximumItemCount = 1
+        settings.maximumTotalPayloadByteCount = 1
+        settings.expiration = .oneDay
+        let oldShortcutItem = logicalItem(
+            text: "shortcut", date: now.addingTimeInterval(-2 * 24 * 60 * 60),
+            payloadByteCount: 10_000
+        )
+        let recent = logicalItem(text: "recent", date: now, payloadByteCount: 1)
+
+        let retained = ClipboardRetentionPolicy.evaluate(
+            [recent, oldShortcutItem], settings: settings, now: now,
+            shortcutRetainedItemIDs: [oldShortcutItem.id]
+        )
+        XCTAssertEqual(Set(retained.items.map(\.id)), [recent.id, oldShortcutItem.id])
+        XCTAssertFalse(retained.isCaptureBlockedByProtectedItems)
+        XCTAssertEqual(retained.items.first { $0.id == oldShortcutItem.id }?.isInHistory, true)
+
+        let afterShortcutExpires = ClipboardRetentionPolicy.prune(retained.items, settings: settings, now: now)
+        XCTAssertEqual(afterShortcutExpires.map(\.id), [recent.id])
+    }
+
     func testTenThousandCachedItemsCanBeFullyScannedWithinInteractiveBudget() {
         let items = (0..<ClipboardHistorySettings.maximumSupportedItemCount).map { offset in
             item(text: "clipboard entry \(offset)", date: Date(), pinned: false)

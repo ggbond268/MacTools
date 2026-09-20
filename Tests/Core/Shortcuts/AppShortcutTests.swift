@@ -78,6 +78,111 @@ final class AppShortcutTests: XCTestCase {
         )
     }
 
+    func testPanelShortcutsFollowTabOrderAndPreserveBindingsAcrossRelaunch() async throws {
+        let defaults = try makeDefaults()
+        let legacyStore = ShortcutStore(userDefaults: defaults)
+        let dashboardBinding = ShortcutBinding(keyCode: 2, modifiers: [.command, .option])
+        let featureBinding = ShortcutBinding(keyCode: 3, modifiers: [.command, .option])
+        legacyStore.setCustomization(.custom(dashboardBinding), for: AppShortcutAction.toggleDashboard.rawValue)
+        legacyStore.setCustomization(.custom(featureBinding), for: AppShortcutAction.toggleFeaturePanel.rawValue)
+        let initialHost = makeHost(defaults: defaults, manager: GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar()))
+        let customID = try XCTUnwrap(initialHost.addMenuBarPanel())
+        let anotherID = try XCTUnwrap(initialHost.addMenuBarPanel())
+        _ = try XCTUnwrap(initialHost.addMenuBarPanel())
+        let customReference = initialHost.panelActionReference(id: customID)
+        let customBinding = ShortcutBinding(keyCode: 4, modifiers: [.command, .option])
+        let alternateBinding = ShortcutBinding(keyCode: 5, modifiers: [.command, .option])
+        XCTAssertNil(initialHost.setActionShortcutBindingAndReturnError(customBinding, for: customReference))
+        let alternateAssignment = ActionShortcutAssignmentRecord(reference: customReference, binding: alternateBinding)
+        XCTAssertEqual(ActionShortcutAssignmentStore(userDefaults: defaults).replaceAll(
+            initialHost.shortcutAssignmentService.assignments + [alternateAssignment]
+        ), .committed)
+        let host = makeHost(defaults: defaults, manager: GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar()))
+        let assignments = host.makePreferencesBackup().actionShortcutAssignments
+        XCTAssertEqual(assignments.count, 4)
+
+        host.moveMenuBarPanel(id: customID, toOffset: 0)
+        host.moveMenuBarPanel(id: MenuBarPanelDefinition.featuresID, toOffset: 1)
+        var changed = try XCTUnwrap(host.menuBarPanels.first { $0.id == customID })
+        changed.name = "Previously named panel"
+        changed.systemImage = "heart"
+        host.updateMenuBarPanel(changed)
+        _ = host.deleteMenuBarPanel(id: anotherID)
+
+        for currentHost in [host, makeHost(defaults: defaults, manager: GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar()))] {
+            let panels = currentHost.menuBarPanels
+            let rows = currentHost.actionShortcutCatalogItems.filter { $0.reference.key.providerID == "mactools" }
+            let panelRows = Array(rows.dropFirst(2))
+            XCTAssertEqual(panels.map(\.title), (1...4).map { FeatureL10n.format("面板 %lld", $0) })
+            XCTAssertEqual(Array(rows.prefix(2)).map { $0.reference.key.actionID }, [
+                AppShortcutAction.openSettings.rawValue, AppShortcutAction.openCommandPalette.rawValue,
+            ])
+            XCTAssertEqual(panelRows.map(\.reference), [customReference] + panels.map {
+                currentHost.panelActionReference(id: $0.id)
+            })
+            XCTAssertEqual(panelRows.map(\.title), [panels[0].title] + panels.map(\.title))
+            XCTAssertEqual(panelRows.prefix(2).map(\.systemImage), ["heart", "heart"])
+            XCTAssertEqual(currentHost.makePreferencesBackup().actionShortcutAssignments, assignments)
+            XCTAssertEqual(try item(.toggleDashboard, in: currentHost).bindingText,
+                           ShortcutFormatter.displayString(for: dashboardBinding))
+            XCTAssertEqual(try item(.toggleFeaturePanel, in: currentHost).bindingText,
+                           ShortcutFormatter.displayString(for: featureBinding))
+            XCTAssertEqual(Set(panelRows.prefix(2).map(\.bindingText)), Set([
+                ShortcutFormatter.displayString(for: customBinding),
+                ShortcutFormatter.displayString(for: alternateBinding),
+            ]))
+        }
+
+        var requests: [AppPresentationRequest] = []
+        var requestedPanels: [String] = []
+        host.appPresentationHandler = { requests.append($0) }
+        host.menuBarPanelPresentationHandler = { id, toggle in
+            XCTAssertTrue(toggle)
+            requestedPanels.append(id)
+        }
+        for panel in host.menuBarPanels {
+            let outcome = await host.actionExecutor.execute(ActionInvocation(
+                reference: host.panelActionReference(id: panel.id), source: .test, mode: .foreground
+            ))
+            XCTAssertEqual(outcome, .completed(.succeeded()))
+        }
+        XCTAssertEqual(requests, [.toggleFeaturePanel, .toggleDashboard])
+        XCTAssertEqual(requestedPanels, host.menuBarPanels.filter { !$0.isDefault }.map(\.id))
+    }
+
+    func testLegacyBackupClickOrderMigratesWithoutChangingPanelShortcuts() throws {
+        let host = makeHost(defaults: try makeDefaults())
+        let binding = ShortcutBinding(keyCode: 2, modifiers: [.command, .option])
+        let backup = PreferencesBackup(
+            application: PreferencesBackup.ApplicationPreferences(
+                appearancePreference: AppAppearancePreference.system.rawValue,
+                languagePreference: AppLanguagePreference.system.rawValue,
+                menuBarClickBehavior: "swapped"
+            ),
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [AppShortcutAction.toggleDashboard.rawValue: .custom(binding)]
+        )
+        var legacyJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: backup.encodedJSON()) as? [String: Any])
+        legacyJSON["formatVersion"] = 5
+        legacyJSON.removeValue(forKey: "actionShortcutAssignments")
+        let legacyBackup = try PreferencesBackup.decodeJSON(JSONSerialization.data(withJSONObject: legacyJSON))
+        XCTAssertFalse(legacyBackup.actionShortcutAssignmentsWereEncoded)
+        let result = try host.importPreferences(legacyBackup)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        XCTAssertEqual(host.menuBarPanels.map(\.id), ["features", "components"])
+        XCTAssertEqual(try item(.toggleDashboard, in: host).bindingText,
+                       ShortcutFormatter.displayString(for: binding))
+        let exported = host.makePreferencesBackup()
+        XCTAssertNil(exported.application.menuBarClickBehavior)
+        let application = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(exported.application)) as? [String: Any])
+        XCTAssertNil(application["menuBarClickBehavior"])
+        _ = try host.importPreferences(exported)
+        XCTAssertEqual(host.menuBarPanels.map(\.id), ["features", "components"])
+        XCTAssertEqual(try item(.toggleDashboard, in: host).bindingText,
+                       ShortcutFormatter.displayString(for: binding))
+    }
+
     func testAppShortcutPersistsAcrossHostInstances() throws {
         let defaults = try makeDefaults()
         let binding = ShortcutBinding(keyCode: 3, modifiers: [.command, .shift])
@@ -554,6 +659,42 @@ final class AppShortcutTests: XCTestCase {
         )
     }
 
+    func testLaterPluginDefaultCannotDisplaceAnExistingCustomShortcut() throws {
+        let defaults = try makeDefaults()
+        let binding = ShortcutBinding(keyCode: 7, modifiers: [.command, .option])
+        let laterDefault = GlobalConflictTestPlugin(id: "later-default", order: 1, defaultBinding: binding)
+        let existingCustom = GlobalConflictTestPlugin(id: "existing-custom", order: 2, defaultBinding: nil)
+        ShortcutStore(userDefaults: defaults).setCustomization(
+            .custom(binding), for: existingCustom.shortcutItemID
+        )
+        let manager = GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar())
+        let host = makeHost(defaults: defaults, plugins: [laterDefault, existingCustom], manager: manager)
+
+        XCTAssertEqual(manager.debugRegistrationsForTests.filter { $0.binding == binding }.map(\.shortcutID),
+                       [existingCustom.shortcutItemID])
+        XCTAssertNotNil(host.shortcutItems.first { $0.id == laterDefault.shortcutItemID }?.errorMessage)
+        XCTAssertNil(host.shortcutItems.first { $0.id == existingCustom.shortcutItemID }?.errorMessage)
+    }
+
+    func testExplicitlySharedPluginDefaultsStillUseOneHotkey() throws {
+        let defaults = try makeDefaults()
+        let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .option])
+        let first = GlobalConflictTestPlugin(
+            id: "shared-first", order: 1, defaultBinding: binding, sharedBindingGroupID: "shared"
+        )
+        let second = GlobalConflictTestPlugin(
+            id: "shared-second", order: 2, defaultBinding: binding, sharedBindingGroupID: "shared"
+        )
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let manager = GlobalShortcutManager(registrar: registrar)
+        let host = makeHost(defaults: defaults, plugins: [first, second], manager: manager)
+
+        XCTAssertEqual(Set(manager.debugRegistrationsForTests.map(\.shortcutID)),
+                       [first.shortcutItemID, second.shortcutItemID])
+        XCTAssertEqual(registrar.registeredBindings, [binding])
+        XCTAssertTrue(host.shortcutItems.allSatisfy { $0.errorMessage == nil })
+    }
+
     func testStoredAppShortcutConflictWithLocalPluginIsVisibleAndNeitherRegistersGlobally() throws {
         let defaults = try makeDefaults()
         let binding = ShortcutBinding(keyCode: 8, modifiers: [.command, .shift])
@@ -725,7 +866,7 @@ final class AppShortcutTests: XCTestCase {
         PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+            menuBarClickBehavior: "standard"
         )
     }
 
@@ -789,6 +930,29 @@ private final class AppShortcutTestPlugin: MacToolsPlugin {
                 isRequired: false
             )
         ]
+    }
+}
+
+@MainActor
+private final class GlobalConflictTestPlugin: MacToolsPlugin {
+    let metadata: PluginMetadata
+    let shortcutDefinitions: [PluginShortcutDefinition]
+    var onStateChange: (() -> Void)?
+    var requestPermissionGuidance: ((String) -> Void)?
+    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+
+    var shortcutItemID: String { "\(metadata.id).shortcut.run" }
+
+    init(id: String, order: Int, defaultBinding: ShortcutBinding?, sharedBindingGroupID: String? = nil) {
+        metadata = PluginMetadata(
+            id: id, title: id, iconName: "keyboard", iconTint: .blue,
+            order: order, defaultDescription: "Tests global shortcut conflicts"
+        )
+        shortcutDefinitions = [PluginShortcutDefinition(
+            id: "run", title: "Run", description: "Run the test action", actionID: "run",
+            scope: .global, defaultBinding: defaultBinding, isRequired: false,
+            sharedBindingGroupID: sharedBindingGroupID
+        )]
     }
 }
 

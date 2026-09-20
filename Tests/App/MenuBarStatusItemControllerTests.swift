@@ -46,8 +46,6 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         )
     }
 
-    // MARK: - Swapped click behavior
-
     private func mouseEvent(_ type: NSEvent.EventType, modifiers: NSEvent.ModifierFlags = []) -> NSEvent? {
         NSEvent.mouseEvent(
             with: type,
@@ -62,48 +60,7 @@ final class MenuBarStatusItemControllerTests: XCTestCase {
         )
     }
 
-    func testSwappedLeftClickOpensFeaturePanel() {
-        XCTAssertEqual(
-            MenuBarStatusItemInvocation.invocation(for: mouseEvent(.leftMouseDown), swapped: true),
-            .featurePanel
-        )
-    }
-
-    func testSwappedRightClickOpensComponentPanel() {
-        XCTAssertEqual(
-            MenuBarStatusItemInvocation.invocation(for: mouseEvent(.rightMouseDown), swapped: true),
-            .componentPanel
-        )
-    }
-
-    func testClickBehaviorPreferenceDefaultsToStandard() {
-        let suite = "MenuBarClickBehaviorPreferenceTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        XCTAssertEqual(MenuBarClickBehaviorPreference.current(defaults), .standard)
-        XCTAssertFalse(MenuBarClickBehaviorPreference.current(defaults).isSwapped)
-
-        defaults.set(MenuBarClickBehaviorPreference.swapped.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
-        XCTAssertEqual(MenuBarClickBehaviorPreference.current(defaults), .swapped)
-        XCTAssertTrue(MenuBarClickBehaviorPreference.current(defaults).isSwapped)
-    }
-
-    func testTypedPanelRequestsIgnoreSwappedClickPreference() {
-        let suite = "MenuBarTypedPresentationPreferenceTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(
-            MenuBarClickBehaviorPreference.swapped.rawValue,
-            forKey: MenuBarClickBehaviorPreference.userDefaultsKey
-        )
-
-        let isSwapped = MenuBarClickBehaviorPreference.current(defaults).isSwapped
-        XCTAssertTrue(isSwapped)
-        XCTAssertEqual(
-            MenuBarStatusItemInvocation.invocation(for: nil, swapped: isSwapped),
-            .featurePanel
-        )
+    func testTypedPanelRequestsKeepTheirExplicitTargets() {
         XCTAssertEqual(
             MenuBarStatusItemPresentationAction(request: .toggleDashboard),
             .toggleComponentPanel

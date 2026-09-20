@@ -99,3 +99,27 @@ final class DiskCleanCleanupHistoryTests: XCTestCase {
         )
     }
 }
+
+
+extension DiskCleanCleanupHistoryTests {
+    func testCancelledAndInterruptedRunsNeverAppearSuccessful() {
+        for status in ["cancelled", "interrupted", "completedWithErrors", "futureStatus"] {
+            for count in [0, 1] {
+                let run = DiskCleanRunHistoryEntry(id: "run", timestamp: timestamp, isTrash: false,
+                    status: status, categoriesCleaned: [], itemsRemoved: count, bytesRemoved: Int64(count))
+                XCTAssertFalse(run.isSuccessful)
+                XCTAssertNotEqual(run.symbolName, "checkmark.circle.fill")
+            }
+        }
+        let successful = DiskCleanRunHistoryEntry(id: "ok", timestamp: timestamp, isTrash: false,
+            status: "ok", categoriesCleaned: [], itemsRemoved: 1, bytesRemoved: 42)
+        XCTAssertTrue(successful.isSuccessful)
+        XCTAssertEqual(successful.symbolName, "checkmark.circle.fill")
+    }
+
+    func testIrreversibleRecoveryResidueNeedsAttention() {
+        let status = DiskCleanCleanupHistoryStatus(rawValue: "irreversibleStagedRetained")
+        XCTAssertTrue(status.needsAttention)
+        XCTAssertEqual(status, .partiallyDeleted)
+    }
+}

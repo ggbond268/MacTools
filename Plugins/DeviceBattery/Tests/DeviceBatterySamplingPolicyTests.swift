@@ -120,6 +120,76 @@ final class DeviceBatterySamplingPolicyTests: XCTestCase {
             gattTargetIDs: ["mouse"],
             registeredGATTTargetIDs: ["mouse"]
         ), .allAdvertisements)
+        XCTAssertEqual(DeviceBatteryBluetoothScanPolicy.discoveryMode(
+            advertisementTargetIDs: [],
+            gattTargetIDs: ["jbl", "mouse"],
+            registeredGATTTargetIDs: ["mouse"],
+            jblTargetIDs: ["jbl"]
+        ), .allAdvertisements)
+        XCTAssertEqual(DeviceBatteryBluetoothScanPolicy.discoveryMode(
+            advertisementTargetIDs: [],
+            gattTargetIDs: ["jbl", "mouse"],
+            registeredGATTTargetIDs: ["jbl"],
+            jblTargetIDs: ["jbl"]
+        ), .batteryService)
+        XCTAssertEqual(DeviceBatteryBluetoothScanPolicy.discoveryMode(
+            advertisementTargetIDs: [],
+            gattTargetIDs: ["jbl"],
+            registeredGATTTargetIDs: ["jbl"],
+            jblTargetIDs: ["jbl"]
+        ), .none)
+    }
+
+    func testConnectionRefreshScansOnlyNewlyConnectedDevices() {
+        let existing = makeBluetoothTarget(id: "existing", kind: .bluetooth, isConnected: true)
+        let disconnected = makeBluetoothTarget(id: "disconnected", kind: .bluetooth, isConnected: false)
+        let added = makeBluetoothTarget(id: "added", kind: .bluetooth, isConnected: true)
+        let targets = [existing, disconnected, added]
+
+        XCTAssertEqual(DeviceBatteryBluetoothScanScope.newlyConnected.targets(
+            from: targets, previouslyConnected: [existing.deviceIdentity, disconnected.deviceIdentity]
+        ).map(\.id), [added.id])
+        XCTAssertTrue(DeviceBatteryBluetoothScanScope.newlyConnected.targets(
+            from: targets, previouslyConnected: [existing.deviceIdentity, added.deviceIdentity]
+        ).isEmpty)
+        XCTAssertEqual(DeviceBatteryBluetoothScanScope.allConnected.targets(
+            from: targets, previouslyConnected: [existing.deviceIdentity, added.deviceIdentity]
+        ).map(\.id), [existing.id, added.id])
+        XCTAssertTrue(DeviceBatteryBluetoothScanScope.none.targets(
+            from: targets, previouslyConnected: []
+        ).isEmpty)
+    }
+
+    func testGattMatchingRequiresAnUnambiguousNameOrJBLLESuffix() {
+        func target(_ id: String, name: String) -> BluetoothBatteryTarget {
+            BluetoothBatteryTarget(
+                id: id, name: name, address: nil, vendorID: nil, productID: nil,
+                model: nil, kind: .bluetooth, detail: nil, isConnected: true
+            )
+        }
+        let mouse = target("mouse", name: "Mouse")
+        let jbl = target("jbl", name: "JBL Sense Lite")
+        let targets = [mouse, jbl]
+        let eligibleIDs = Set(targets.map(\.id))
+
+        XCTAssertEqual(DeviceBatteryBluetoothScanPolicy.gattTarget(
+            named: " mouse ", targets: targets, eligibleTargetIDs: eligibleIDs
+        )?.id, mouse.id)
+        XCTAssertEqual(DeviceBatteryBluetoothScanPolicy.gattTarget(
+            named: "jbl sense lite-LE", targets: targets, eligibleTargetIDs: eligibleIDs
+        )?.id, jbl.id)
+        for name in ["JBL Sense Lite 2", "JBL Sense", "Mouse-LE", "Unknown"] {
+            XCTAssertNil(DeviceBatteryBluetoothScanPolicy.gattTarget(
+                named: name, targets: targets, eligibleTargetIDs: eligibleIDs
+            ))
+        }
+        let duplicate = target("second-jbl", name: jbl.name)
+        for name in [jbl.name, "JBL Sense Lite-LE"] {
+            XCTAssertNil(DeviceBatteryBluetoothScanPolicy.gattTarget(
+                named: name, targets: targets + [duplicate],
+                eligibleTargetIDs: eligibleIDs.union([duplicate.id])
+            ))
+        }
     }
 
     func testGattReaderDoesNotCollapseMultipleBatteryServices() {
@@ -1231,7 +1301,303 @@ final class DeviceBatterySamplingPolicyTests: XCTestCase {
             model: "AirPods 4",
             kind: kind,
             detail: "Headphones",
-            isConnected: isConnected
+            isConnected: isConnected,
+            deviceIdentity: .source("test:\(id)")
         )
+    }
+
+    // MARK: - JBL ExcelPoint Regression Tests
+
+    func testJBLSenseLiteIsDetectedByParser() {
+        XCTAssertTrue(JBLSenseLiteBLEBatteryParser.isJBLEarbuds("JBL Sense Lite"))
+        XCTAssertTrue(JBLSenseLiteBLEBatteryParser.isJBLEarbuds("JBL Sense Lite-LE"))
+        XCTAssertTrue(JBLSenseLiteBLEBatteryParser.isJBLEarbuds("jbl tour pro 2"))
+        XCTAssertFalse(JBLSenseLiteBLEBatteryParser.isJBLEarbuds("AirPods Pro"))
+        XCTAssertFalse(JBLSenseLiteBLEBatteryParser.isJBLEarbuds("Sony WH-1000XM5"))
+    }
+
+    func testJBLSenseLiteScanPlanIncludesConnectedTarget() {
+        let kind = DeviceBatterySampler.inferredBluetoothKind(
+            name: "JBL Sense Lite", minorType: "Headset", vendorID: nil, field: "single"
+        )
+        let jblTarget = BluetoothBatteryTarget(
+            id: "bluetooth:jbl",
+            name: "JBL Sense Lite",
+            address: "38:D5:18:8C:59:19",
+            vendorID: nil,
+            productID: nil,
+            model: nil,
+            kind: kind,
+            detail: "Headset",
+            isConnected: true
+        )
+
+        let plan = DeviceBatteryBluetoothScanPlan(targets: [jblTarget])
+
+        XCTAssertEqual(plan.eligibleTargets.map(\.id), ["bluetooth:jbl"])
+        XCTAssertEqual(plan.gattTargetIDs, ["bluetooth:jbl"])
+        XCTAssertEqual(plan.jblTargetIDs, ["bluetooth:jbl"])
+    }
+
+    func testJBLDisconnectedTargetIsNotEligible() {
+        let jblTarget = BluetoothBatteryTarget(
+            id: "bluetooth:jbl",
+            name: "JBL Sense Lite",
+            address: "38:D5:18:8C:59:19",
+            vendorID: nil,
+            productID: nil,
+            model: nil,
+            kind: .bluetooth,
+            detail: "Headset",
+            isConnected: false
+        )
+
+        let plan = DeviceBatteryBluetoothScanPlan(targets: [jblTarget])
+
+        XCTAssertTrue(plan.eligibleTargets.isEmpty)
+        XCTAssertTrue(plan.gattTargetIDs.isEmpty)
+    }
+
+    func testEmptyScanPlanHasNoEligibleTargets() {
+        let plan = DeviceBatteryBluetoothScanPlan(targets: [])
+
+        XCTAssertTrue(plan.eligibleTargets.isEmpty)
+        XCTAssertTrue(plan.advertisementTargetIDs.isEmpty)
+        XCTAssertTrue(plan.gattTargetIDs.isEmpty)
+    }
+
+    func testJBLSensorParserParsesValidPacket() {
+        // Real notification packet from JBL Sense Lite
+        let bytes: [UInt8] = [
+            0x00, 0xDD, 0x03, 0x00, 0x01, 0x00, // header
+            0x2F, 0x00, 0x00, 0x00,               // length
+            0x0C, 0x00, 0x03, 0x00, 0x1A, 0x04, 0x0A, 0x00,
+            0x10, 0x01, 0x00, 0x80, 0x12, 0x00, 0x02, 0x00,
+            0x08, 0x87,
+            0x0D, 0x00, 0x01, 0x00, 0x64, // left: 100%
+            0x0E, 0x00, 0x01, 0x00, 0x64, // right: 100%
+            0x03, 0x1F, 0x01, 0x00, 0x34, // case: 52%
+            0x34, 0x00, 0x01, 0x00, 0xFF,
+            0x01, 0x1F, 0x03, 0x00, 0x19, 0x0A, 0x0A
+        ]
+        let data = Data(bytes)
+
+        let reading = JBLSenseLiteBLEBatteryParser.parseBatteryNotification(data)
+
+        XCTAssertNotNil(reading)
+        XCTAssertEqual(reading?.leftBattery, 100)
+        XCTAssertEqual(reading?.rightBattery, 100)
+        XCTAssertEqual(reading?.caseBattery, 52)
+    }
+
+    func testJBLSensorParserRejectsInvalidHeader() {
+        var bytes: [UInt8] = Array(repeating: 0, count: 20)
+        bytes[0] = 0xFF // wrong header
+        let data = Data(bytes)
+
+        let reading = JBLSenseLiteBLEBatteryParser.parseBatteryNotification(data)
+
+        XCTAssertNil(reading)
+    }
+
+    func testJBLSensorParserClampsOutOfRangeValues() {
+        // Packet with left=228 (out of range), right=100, case=52
+        let bytes: [UInt8] = [
+            0x00, 0xDD, 0x03, 0x00, 0x01, 0x00,
+            0x2F, 0x00, 0x00, 0x00,
+            0x0C, 0x00, 0x03, 0x00, 0x1A, 0x04, 0x0A, 0x00,
+            0x10, 0x01, 0x00, 0x80, 0x12, 0x00, 0x02, 0x00,
+            0x08, 0x87,
+            0x0D, 0x00, 0x01, 0x00, 0xE4, // left: 228 (invalid)
+            0x0E, 0x00, 0x01, 0x00, 0x64, // right: 100
+            0x03, 0x1F, 0x01, 0x00, 0x34, // case: 52
+            0x34, 0x00, 0x01, 0x00, 0xFF,
+            0x01, 0x1F, 0x03, 0x00, 0x19, 0x0A, 0x0A
+        ]
+        let data = Data(bytes)
+
+        let reading = JBLSenseLiteBLEBatteryParser.parseBatteryNotification(data)
+
+        XCTAssertNotNil(reading)
+        XCTAssertNil(reading?.leftBattery) // clamped: 228 not in 0...100
+        XCTAssertEqual(reading?.rightBattery, 100)
+        XCTAssertEqual(reading?.caseBattery, 52)
+    }
+
+    func testDeduplicationPrefersComponentReadingsOverAggregate() {
+        let referenceDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let identity = DeviceBatteryDeviceIdentity.bluetooth("38:D5:18:8C:59:19")
+
+        // Aggregate from system_profiler
+        let aggregate = DeviceBatteryItem(
+            id: "system_profiler-jbl",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: nil,
+            source: "system_profiler",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: "Headset",
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .aggregate
+            )
+        )
+
+        // Left ear from ExcelPoint
+        let left = DeviceBatteryItem(
+            id: "jbl-uuid-left",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite-LE 左耳",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: "JBL Sense Lite-LE",
+            source: "JBLExcelPoint",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: nil,
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .left
+            )
+        )
+
+        // Right ear from ExcelPoint
+        let right = DeviceBatteryItem(
+            id: "jbl-uuid-right",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite-LE 右耳",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: "JBL Sense Lite-LE",
+            source: "JBLExcelPoint",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: nil,
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .right
+            )
+        )
+
+        // Case from ExcelPoint
+        let caseItem = DeviceBatteryItem(
+            id: "jbl-uuid-case",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite-LE 充电盒",
+            model: nil,
+            kind: .bluetooth,
+            level: 52,
+            chargeState: .unknown,
+            parentName: "JBL Sense Lite-LE",
+            source: "JBLExcelPoint",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: nil,
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .chargingCase
+            )
+        )
+
+        let deduplicated = DeviceBatterySampler.deduplicated([aggregate, left, right, caseItem])
+
+        // Aggregate should be dropped when component readings exist
+        let roles = deduplicated.compactMap { $0.componentIdentity?.role }
+        XCTAssertFalse(roles.contains(.aggregate), "Aggregate should be dropped when components exist")
+        XCTAssertTrue(roles.contains(.left))
+        XCTAssertTrue(roles.contains(.right))
+        XCTAssertTrue(roles.contains(.chargingCase))
+    }
+
+    func testFallbackReadingPreservedWhenNoExcelPointData() {
+        let referenceDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let identity = DeviceBatteryDeviceIdentity.bluetooth("38:D5:18:8C:59:19")
+
+        // Only aggregate from system_profiler, no ExcelPoint readings
+        let aggregate = DeviceBatteryItem(
+            id: "system_profiler-jbl",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: nil,
+            source: "system_profiler",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: "Headset",
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .aggregate
+            )
+        )
+
+        let deduplicated = DeviceBatterySampler.deduplicated([aggregate])
+
+        // Aggregate should be preserved as fallback
+        XCTAssertEqual(deduplicated.count, 1)
+        XCTAssertEqual(deduplicated.first?.level, 100)
+        XCTAssertEqual(deduplicated.first?.source, "system_profiler")
+    }
+
+    func testUnmatchedJBLDevicePreservesSystemReading() {
+        let referenceDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let identity = DeviceBatteryDeviceIdentity.bluetooth("38:D5:18:8C:59:19")
+
+        // system_profiler reading
+        let systemReading = DeviceBatteryItem(
+            id: "system_profiler-jbl",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: nil,
+            source: "system_profiler",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: "Headset",
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .aggregate
+            )
+        )
+
+        // IOBluetooth reading
+        let ioBluetoothReading = DeviceBatteryItem(
+            id: "iobluetooth-jbl",
+            deviceIdentity: identity,
+            name: "JBL Sense Lite",
+            model: nil,
+            kind: .bluetooth,
+            level: 100,
+            chargeState: .unknown,
+            parentName: nil,
+            source: "IOBluetooth",
+            lastUpdated: referenceDate,
+            isConnected: true,
+            detail: "Headset",
+            componentIdentity: DeviceBatteryComponentIdentity(
+                groupID: identity.key,
+                role: .aggregate
+            )
+        )
+
+        let deduplicated = DeviceBatterySampler.deduplicated([systemReading, ioBluetoothReading])
+
+        // Should keep exactly one reading (IOBluetooth preferred over system_profiler)
+        XCTAssertEqual(deduplicated.count, 1)
+        XCTAssertEqual(deduplicated.first?.level, 100)
     }
 }

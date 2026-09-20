@@ -4,6 +4,12 @@ import MacToolsPluginKit
 
 @MainActor
 final class SettingsNavigationCoordinatorTests: XCTestCase {
+    func testPluginConfigurationDestinationOpensMarketplace() {
+        let coordinator = SettingsNavigationCoordinator()
+        coordinator.selectSettingsDestination(.pluginConfiguration)
+        XCTAssertEqual(coordinator.destination, .plugins(.marketplace))
+    }
+
     func testDirectPluginSettingsNavigationEndsPreviousVisibilityBeforeStartingNext() {
         XCTAssertEqual(
             PluginSettingsPageVisibilityTransition.changes(
@@ -27,11 +33,9 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
                 configurationIDs: ["calendar", "fan-control"]
             ),
             [
+                .marketplace,
                 .actionsAndShortcuts,
                 .automation,
-                .dashboardLayout,
-                .featurePanelLayout,
-                .marketplace,
                 .configuration("calendar"),
                 .configuration("fan-control")
             ]
@@ -47,11 +51,9 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
                 .general,
                 .permissions,
                 .about,
+                .plugins(.marketplace),
                 .plugins(.actionsAndShortcuts),
                 .plugins(.automation),
-                .plugins(.dashboardLayout),
-                .plugins(.featurePanelLayout),
-                .plugins(.marketplace),
                 .plugins(.configuration("calendar")),
                 .plugins(.configuration("fan-control"))
             ]
@@ -286,8 +288,8 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
             isPluginConfigurationAvailable: { $0 == "fan-control" }
         )
 
-        coordinator.navigate(to: .plugins(.dashboardLayout))
-        coordinator.navigate(to: .plugins(.featurePanelLayout))
+        coordinator.navigate(to: .plugins(.actionsAndShortcuts))
+        coordinator.navigate(to: .plugins(.automation))
         coordinator.navigate(to: .plugins(.marketplace))
         coordinator.navigate(to: .plugins(.configuration("fan-control")))
         coordinator.navigate(to: .about)
@@ -296,8 +298,8 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
             coordinator.history,
             [
                 .general,
-                .plugins(.dashboardLayout),
-                .plugins(.featurePanelLayout),
+                .plugins(.actionsAndShortcuts),
+                .plugins(.automation),
                 .plugins(.marketplace),
                 .plugins(.configuration("fan-control")),
                 .about
@@ -364,13 +366,13 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         coordinator.navigate(to: .about)
         coordinator.navigate(to: .plugins(.marketplace))
         coordinator.goBack()
-        coordinator.navigate(to: .plugins(.dashboardLayout))
+        coordinator.navigate(to: .plugins(.actionsAndShortcuts))
 
         XCTAssertEqual(
             coordinator.history,
-            [.general, .about, .plugins(.dashboardLayout)]
+            [.general, .about, .plugins(.actionsAndShortcuts)]
         )
-        XCTAssertEqual(coordinator.destination, .plugins(.dashboardLayout))
+        XCTAssertEqual(coordinator.destination, .plugins(.actionsAndShortcuts))
         XCTAssertFalse(coordinator.canGoForward)
     }
 
@@ -482,6 +484,11 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.consumeAboutUpdateActionRequest(request))
         XCTAssertNil(coordinator.aboutUpdateActionRequest)
         XCTAssertFalse(coordinator.consumeAboutUpdateActionRequest(request))
+        coordinator.requestAboutUpdateAction(version: nil)
+        let checkRequest = try XCTUnwrap(coordinator.aboutUpdateActionRequest)
+        XCTAssertNil(checkRequest.version)
+        XCTAssertNotEqual(checkRequest.id, request.id)
+        XCTAssertTrue(coordinator.consumeAboutUpdateActionRequest(checkRequest))
     }
 
     func testRegularAboutNavigationDoesNotRequestAutomaticUpdateAction() {
@@ -577,12 +584,9 @@ final class SettingsNavigationCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(
             coordinator.navigateFromSearch(
-                to: .plugins(.featurePanelLayout),
-                target: .surface(
-                    SurfaceSettingsSearchTarget(
-                        surface: .dashboard,
-                        pluginID: "display"
-                    )
+                to: .plugins(.configuration("other-plugin")),
+                target: .plugin(
+                    PluginSettingsSearchTarget(pluginID: "display", entryID: "control.brightness")
                 )
             )
         )

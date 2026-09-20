@@ -121,10 +121,11 @@ struct ClipboardSnippetKeywordInputState: Sendable {
         keyCode: UInt16,
         modifiers: NSEvent.ModifierFlags,
         processIdentifier: pid_t,
+        isHostPanelKey: Bool = false,
         isSecureEventInputEnabled: () -> Bool = { false },
         classifyEditor: (pid_t) -> ClipboardSnippetSecureTextClassification
     ) -> ClipboardSnippetKeywordMatch? {
-        guard !isSecureEventInputEnabled() else {
+        guard !isHostPanelKey, !isSecureEventInputEnabled() else {
             reset()
             return nil
         }
@@ -298,6 +299,10 @@ struct ClipboardSnippetKeywordMatcher: Sendable {
 @MainActor
 final class ClipboardSnippetKeywordExpander {
     nonisolated static let eventTapOptionsForTesting: CGEventTapOptions = .listenOnly
+    static var isHostPanelKey: Bool {
+        guard let window = NSApp?.keyWindow else { return false }
+        return window.isKeyWindow && window.isVisible && window.styleMask.contains(.nonactivatingPanel)
+    }
     var onDiagnostic: ((ClipboardSnippetExpansionDiagnostic) -> Void)?
     private let savedLibraryController: ClipboardSavedLibraryController
     private let onPasteboardWrite: () -> Void
@@ -431,6 +436,9 @@ final class ClipboardSnippetKeywordExpander {
             keyCode: keyCode,
             modifiers: NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)),
             processIdentifier: processIdentifier,
+            // A nonactivating panel owns typing while Workspace still reports
+            // the external application. Never expand against that stale editor.
+            isHostPanelKey: Self.isHostPanelKey,
             isSecureEventInputEnabled: { IsSecureEventInputEnabled() },
             classifyEditor: focusedEditorClassification
         ) else {
@@ -451,7 +459,8 @@ final class ClipboardSnippetKeywordExpander {
         var focusFailure = ClipboardSnippetFocusFailure.unavailable
         expansionScheduler.schedule { [weak self] in
             guard let self else { return .consumedAfterMutation }
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier else {
+            guard !Self.isHostPanelKey,
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier else {
                 onDiagnostic?(.contextChanged)
                 return .consumedAfterMutation
             }
@@ -570,7 +579,8 @@ final class ClipboardSnippetKeywordExpander {
         replacementContext: ClipboardSnippetReplacementContext
     ) async {
         let keywordRange = CFRange(location: replacementContext.keywordLocation, length: replacementContext.keywordLength)
-        guard let focusedElement = Self.focusedElement(),
+        guard !Self.isHostPanelKey,
+              let focusedElement = Self.focusedElement(),
               Self.isSameElement(focusedElement, expectedElement),
               Self.secureTextClassification(focusedElement) == .nonSecure,
               let selectedRange = Self.selectedTextRange(focusedElement),

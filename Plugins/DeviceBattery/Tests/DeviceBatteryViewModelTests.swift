@@ -92,6 +92,35 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.snapshot.items.count, 2)
         XCTAssertEqual(Set(viewModel.snapshot.items.map(\.level)), Set([60, 80]))
         XCTAssertEqual(viewModel.snapshot.lastUpdated, Date(timeIntervalSince1970: 200))
+
+        let previousSnapshot = viewModel.snapshot
+        viewModel.setComponentPanelVisible(false)
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+        vendorHIDMonitor.deviceSnapshots = []
+        vendorHIDMonitor.snapshot = VendorHIDMouseBatterySnapshot(
+            accessState: .scanning, device: nil, reading: nil, lastUpdated: nil
+        )
+        viewModel.setComponentPanelVisible(true)
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+
+        var waiting = first
+        waiting.accessState = .waitingForReport
+        waiting.reading = nil
+        waiting.lastUpdated = nil
+        vendorHIDMonitor.snapshot = waiting
+        vendorHIDMonitor.deviceSnapshots = [waiting]
+        vendorHIDMonitor.onSnapshotChange?(waiting)
+        XCTAssertEqual(viewModel.snapshot.items.count, 1)
+        XCTAssertEqual(viewModel.snapshot.items.first?.level, 80)
+        XCTAssertEqual(viewModel.snapshot.lastUpdated, first.lastUpdated)
+
+        vendorHIDMonitor.snapshot = VendorHIDMouseBatterySnapshot(
+            accessState: .noDevice, device: nil, reading: nil, lastUpdated: nil
+        )
+        vendorHIDMonitor.deviceSnapshots = []
+        vendorHIDMonitor.onSnapshotChange?(vendorHIDMonitor.snapshot)
+        XCTAssertTrue(viewModel.snapshot.items.isEmpty)
+        XCTAssertEqual(viewModel.snapshot.accessState, .noDevices)
         viewModel.stop()
     }
 
@@ -112,6 +141,79 @@ final class DeviceBatteryViewModelTests: XCTestCase {
 
         let counts = await sampler.counts()
         XCTAssertEqual(counts, .oneEach)
+        viewModel.stop()
+    }
+
+    func testReopeningKeepsDevicesUntilTheRefreshCompletes() async {
+        let item = DeviceBatteryItem(
+            id: "mouse", deviceIdentity: .bluetooth("11:22:33:44:55:66"),
+            name: "Test Mouse", model: nil, kind: .bluetooth, level: 80,
+            chargeState: .unknown, parentName: nil, source: "CoreBluetooth",
+            lastUpdated: Date(timeIntervalSince1970: 100), isConnected: true, detail: nil
+        )
+        let sampler = RecordingDeviceBatterySampler(bluetoothItems: [item])
+        let powerObserver = RecordingPowerSourceObserver()
+        let bluetoothObserver = RecordingBluetoothConnectionObserver()
+        let viewModel = makeViewModel(
+            sampler: sampler, powerObserver: powerObserver, bluetoothObserver: bluetoothObserver
+        )
+        viewModel.start(
+            includeInternalBattery: false, includeBluetoothDevices: true,
+            includeAppleMobileDevices: false, includeVendorHIDDevices: false
+        )
+        viewModel.setComponentPanelVisible(true)
+        await waitForState(.ready, viewModel: viewModel)
+        let previousSnapshot = viewModel.snapshot
+
+        viewModel.setComponentPanelVisible(false)
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+        XCTAssertFalse(powerObserver.isStarted)
+        XCTAssertFalse(bluetoothObserver.isStarted)
+        await sampler.suspendNextBluetoothRead()
+        viewModel.setComponentPanelVisible(true)
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+        await waitForCounts(
+            DeviceBatterySamplingCounts(internalBattery: 0, bluetooth: 2, appleMobile: 0),
+            sampler: sampler
+        )
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+
+        await sampler.resumeBluetoothRead(returning: [])
+        await waitForState(.noDevices, viewModel: viewModel)
+        XCTAssertTrue(viewModel.snapshot.items.isEmpty)
+        viewModel.stop()
+        XCTAssertNil(viewModel.snapshot.lastUpdated)
+    }
+
+    func testOnlyTheInitialReadShowsLoadingBeforeAnEmptyResult() async {
+        let sampler = RecordingDeviceBatterySampler()
+        let viewModel = makeViewModel(sampler: sampler)
+        viewModel.start(
+            includeInternalBattery: false, includeBluetoothDevices: true,
+            includeAppleMobileDevices: false, includeVendorHIDDevices: false
+        )
+        XCTAssertEqual(viewModel.snapshot.accessState, .idle)
+        await sampler.suspendNextBluetoothRead()
+        viewModel.setComponentPanelVisible(true)
+        XCTAssertEqual(viewModel.snapshot.accessState, .scanning)
+        await waitForCounts(
+            DeviceBatterySamplingCounts(internalBattery: 0, bluetooth: 1, appleMobile: 0),
+            sampler: sampler
+        )
+        XCTAssertEqual(viewModel.snapshot.accessState, .scanning)
+        await sampler.resumeBluetoothRead(returning: [])
+        await waitForState(.noDevices, viewModel: viewModel)
+
+        viewModel.setComponentPanelVisible(false)
+        await sampler.suspendNextBluetoothRead()
+        viewModel.setComponentPanelVisible(true)
+        XCTAssertEqual(viewModel.snapshot.accessState, .noDevices)
+        await waitForCounts(
+            DeviceBatterySamplingCounts(internalBattery: 0, bluetooth: 2, appleMobile: 0),
+            sampler: sampler
+        )
+        XCTAssertEqual(viewModel.snapshot.accessState, .noDevices)
+        await sampler.resumeBluetoothRead(returning: [])
         viewModel.stop()
     }
 
@@ -205,9 +307,57 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         let options = await sampler.options()
         XCTAssertEqual(options.count, 2)
         XCTAssertFalse(options[0].revalidateSupplementalState)
-        XCTAssertTrue(options[0].performActiveScan)
+        XCTAssertEqual(options[0].scanScope, .allConnected)
         XCTAssertTrue(options[1].revalidateSupplementalState)
-        XCTAssertFalse(options[1].performActiveScan)
+        XCTAssertEqual(options[1].scanScope, .none)
+        viewModel.stop()
+    }
+
+    func testConnectionEventsDuringCollectionQueueOneRefreshWithoutRestartingTheRead() async {
+        let sampler = SuspendedBluetoothSampler()
+        let bluetoothObserver = RecordingBluetoothConnectionObserver()
+        let viewModel = DeviceBatteryViewModel(
+            sampler: sampler,
+            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
+            bluetoothConnectionObserver: bluetoothObserver,
+            schedule: DeviceBatterySamplingSchedule(
+                internalBatteryFallback: 30,
+                bluetoothBackground: 30,
+                bluetoothComponentVisible: 30,
+                appleMobileBackground: 30,
+                appleMobileComponentVisible: 30,
+                bluetoothConnectionDebounce: 0.01,
+                activityResumeDelay: 0.01
+            )
+        )
+        viewModel.setLowBatteryMonitoringEnabled(true)
+        viewModel.start(
+            includeInternalBattery: false,
+            includeBluetoothDevices: true,
+            includeAppleMobileDevices: false,
+            includeVendorHIDDevices: false
+        )
+        for _ in 0..<100 {
+            if await sampler.hasStartedFirstCollection() { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        bluetoothObserver.sendConnectionChange()
+        bluetoothObserver.sendConnectionChange()
+        try? await Task.sleep(for: .milliseconds(50))
+        let optionsDuringRead = await sampler.options()
+        XCTAssertEqual(optionsDuringRead.count, 1)
+        await sampler.resumeFirstCollection()
+
+        for _ in 0..<100 {
+            if (await sampler.options()).count >= 2 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let options = await sampler.options()
+        XCTAssertEqual(options.count, 2)
+        XCTAssertEqual(options.first?.scanScope, .allConnected)
+        XCTAssertEqual(options.last?.scanScope, .newlyConnected)
+        XCTAssertEqual(options.last?.forceProfileRefresh, true)
         viewModel.stop()
     }
 
@@ -398,6 +548,9 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             DeviceBatterySamplingCounts(internalBattery: 2, bluetooth: 2, appleMobile: 1),
             sampler: sampler
         )
+        let options = await sampler.bluetoothOptions()
+        XCTAssertEqual(options.last?.scanScope, .newlyConnected)
+        XCTAssertEqual(options.last?.forceProfileRefresh, true)
         viewModel.stop()
     }
 
@@ -505,7 +658,7 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         viewModel.stop()
     }
 
-    func testRemovingLastConsumerClearsCollectedSnapshot() async {
+    func testRemovingLastConsumerPreservesSnapshotUntilStopped() async {
         let sampler = RecordingDeviceBatterySampler()
         let viewModel = makeViewModel(sampler: sampler)
         viewModel.start(
@@ -521,12 +674,14 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         )
         try? await Task.sleep(for: .milliseconds(20))
         XCTAssertNotNil(viewModel.snapshot.lastUpdated)
+        let previousSnapshot = viewModel.snapshot
 
         viewModel.setComponentPanelVisible(false)
 
+        XCTAssertEqual(viewModel.snapshot, previousSnapshot)
+        viewModel.stop()
         XCTAssertNil(viewModel.snapshot.lastUpdated)
         XCTAssertTrue(viewModel.snapshot.items.isEmpty)
-        viewModel.stop()
     }
 
     func testSnapshotMergesBatteryCenterPhoneWithSharedMobileDeviceIdentity() async throws {
@@ -628,6 +783,17 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         )
     }
 
+    private func waitForState(
+        _ expected: DeviceBatteryAccessState,
+        viewModel: DeviceBatteryViewModel
+    ) async {
+        for _ in 0..<100 {
+            if viewModel.snapshot.accessState == expected { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for \(expected); got \(viewModel.snapshot.accessState)")
+    }
+
     private func waitForCounts(
         _ expected: DeviceBatterySamplingCounts,
         sampler: RecordingDeviceBatterySampler
@@ -664,6 +830,24 @@ private actor RecordingDeviceBatterySampler: DeviceBatterySampling {
     private var samplingCounts = DeviceBatterySamplingCounts.zero
     private var recordedBluetoothOptions: [DeviceBatteryBluetoothSamplingOptions] = []
     private var recordedAppleMobileRefreshIntervals: [TimeInterval] = []
+    private var bluetoothItems: [DeviceBatteryItem]
+    private var shouldSuspendBluetoothRead = false
+    private var bluetoothContinuation: CheckedContinuation<[DeviceBatteryItem], Never>?
+
+    init(bluetoothItems: [DeviceBatteryItem] = []) {
+        self.bluetoothItems = bluetoothItems
+    }
+
+    func suspendNextBluetoothRead() {
+        shouldSuspendBluetoothRead = true
+    }
+
+    func resumeBluetoothRead(returning items: [DeviceBatteryItem]) {
+        bluetoothItems = items
+        bluetoothContinuation?.resume(returning: items)
+        bluetoothContinuation = nil
+    }
+
 
     func collectInternalBattery(referenceDate: Date) async -> [DeviceBatteryItem] {
         samplingCounts = DeviceBatterySamplingCounts(
@@ -684,7 +868,11 @@ private actor RecordingDeviceBatterySampler: DeviceBatterySampling {
             appleMobile: samplingCounts.appleMobile
         )
         recordedBluetoothOptions.append(options)
-        return []
+        if shouldSuspendBluetoothRead {
+            shouldSuspendBluetoothRead = false
+            return await withCheckedContinuation { bluetoothContinuation = $0 }
+        }
+        return bluetoothItems
     }
 
     func collectAppleMobileDevices(

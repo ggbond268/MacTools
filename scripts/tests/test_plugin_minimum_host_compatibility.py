@@ -20,6 +20,36 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    "PluginPanelPresentation": "1.3.1",
+    "PluginPanelFocusRestoration": "1.3.1",
+    "PluginPanelDismissalMonitor": "1.3.1",
+    "PluginObservedContent": "1.3.1",
+    "pluginPresentationIsVisible": "1.3.1",
+    "PluginShortcutResetRequesting": "1.3.1",
+    # Plugin-scoped, exclusive primary menu-bar icon placement.
+    "PluginMenuBarIconPlacement": "1.3.1",
+    "PluginMenuBarIconDescriptor": "1.3.1",
+    "PluginMenuBarIconOwner": "1.3.1",
+    "PluginMenuBarIconPlacementError": "1.3.1",
+    "PluginMenuBarIconRenderContext": "1.3.1",
+    "PluginMenuBarIconSnapshot": "1.3.1",
+    "PluginMenuBarIconProviding": "1.3.1",
+    "PluginMenuBarIconHostContext": "1.3.1",
+    "PluginMenuBarIconHostContextConsuming": "1.3.1",
+    "ActionInputDescriptor": "1.3.1",
+    "ActionInputSession": "1.3.1",
+    "PluginActionInputProviding": "1.3.1",
+    "PluginActionInputPresentationRequesting": "1.3.1",
+
+    # Centered guide APIs were added after the released 1.3.0 host.
+    "WindowSnapGuideRole": "1.3.1",
+    "WindowSnapGuideOrientation": "1.3.1",
+    "WindowSnapGuide": "1.3.1",
+    "WindowSnapResult": "1.3.1",
+    "WindowSnapGeometry": "1.3.1",
+    "WindowSnapOverlayController": "1.3.1",
+    "PluginWindowSnapCoordinator": "1.3.1",
+
     # Canonical action registry, execution, discovery, and surface bridges.
     "ActionKey": "1.2.0",
     "ActionParameterSet": "1.2.0",
@@ -110,6 +140,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginActionSafetyStateChangeProviding": "1.2.0",
     # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
     "PluginPaletteMetrics": "1.3.0",
+    "PluginPaletteColors": "1.3.1",
     "PluginPaletteSearchCommand": "1.3.0",
     "PluginPaletteSearchField": "1.3.0",
     "PluginPaletteSearchBar": "1.3.0",
@@ -122,6 +153,7 @@ NEW_API_MINIMUM_HOSTS = {
     "PluginPaletteFooter": "1.3.0",
     "PluginPrivateDataKeychainIdentity": "1.3.0",
     "PluginSettingsActionShortcutItem": "1.3.0",
+    "PluginSettingsItem": "1.3.1",
     "PluginInlineShortcutSettingsContextConsuming": "1.3.0",
     "PluginShortcutBindingValidating": "1.3.0",
     "actionShortcutItem": "1.3.0",
@@ -297,6 +329,7 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
     def test_action_model_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         action_model_symbols = public_top_level_type_names(
             ACTION_MODELS.read_text(encoding="utf-8")
+            + "\n" + ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")
         )
         plugin_source = "\n".join(
             path.read_text(encoding="utf-8")
@@ -312,6 +345,30 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             set(),
             "Public ActionModels types used by plugins must declare their minimum host",
         )
+
+    def test_menu_bar_icon_inventory_covers_new_public_types(self) -> None:
+        source = PLUGIN_INTERFACES.with_name("PluginMenuBarIcon.swift").read_text(encoding="utf-8")
+        symbols = public_top_level_type_names(source)
+        self.assertEqual(symbols - NEW_API_MINIMUM_HOSTS.keys(), set())
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertTrue(minimum_host_violations("probe", "1.3.0", symbol))
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
+
+    def test_action_input_apis_reject_released_host_1_3_0(self) -> None:
+        source = ACTION_MODELS.with_name("ActionInputModels.swift").read_text(encoding="utf-8")
+        symbols = {
+            "ActionInputDescriptor",
+            "ActionInputSession",
+            "PluginActionInputProviding",
+            "PluginActionInputPresentationRequesting",
+        }
+        self.assertTrue(symbols <= public_top_level_type_names(source))
+        for symbol in symbols:
+            with self.subTest(symbol=symbol):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.3.1")
+                self.assertEqual(len(minimum_host_violations("probe", "1.3.0", symbol)), 1)
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
 
     def test_action_execution_bridge_inventory_requires_the_first_compatible_host(self) -> None:
         bridge = REPO_ROOT / "Sources/MacToolsPluginKit/PluginActionExecutionHostContext.swift"
@@ -336,6 +393,22 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
             self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.2.1")
             self.assertEqual(len(minimum_host_violations("probe", "1.2.0", symbol)), 1)
             self.assertEqual(minimum_host_violations("probe", "1.2.1", symbol), [])
+
+    def test_global_panel_inventory_requires_host_1_3_1(self) -> None:
+        source = (REPO_ROOT / "Sources/MacToolsPluginKit/PluginPanelPresentation.swift").read_text(encoding="utf-8")
+        for symbol in public_top_level_type_names(source):
+            with self.subTest(symbol=symbol):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS.get(symbol), "1.3.1")
+                self.assertTrue(minimum_host_violations("probe", "1.3.0", symbol))
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
+
+    def test_centered_window_snap_inventory_requires_host_1_3_1(self) -> None:
+        for filename in ("WindowSnapGeometry.swift", "WindowSnapOverlayController.swift", "PluginWindowSnapCoordinator.swift"):
+            source = (REPO_ROOT / "Sources/MacToolsPluginKit" / filename).read_text(encoding="utf-8")
+            for symbol in public_top_level_type_names(source):
+                self.assertEqual(NEW_API_MINIMUM_HOSTS[symbol], "1.3.1")
+                self.assertTrue(minimum_host_violations("probe", "1.3.0", symbol))
+                self.assertEqual(minimum_host_violations("probe", "1.3.1", symbol), [])
 
     def test_component_theme_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         component_theme_symbols = public_top_level_type_names(

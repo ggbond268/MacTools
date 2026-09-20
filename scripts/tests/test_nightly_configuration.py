@@ -72,7 +72,7 @@ class NightlyConfigurationTests(unittest.TestCase):
         build = workflow.split("- name: Build unsigned Nightly app and plugins", 1)[1].split("\n      - name:", 1)[0]
         prepare_cli = workflow.split("- name: Prepare arm64 Nightly CLI", 1)[1].split("\n      - name:", 1)[0]
         certificate = workflow.split("- name: Import Developer ID certificate", 1)[1].split("\n      - name:", 1)[0]
-        package = workflow.split("- name: Package signed Nightly CLI", 1)[1].split("\n      - name:", 1)[0]
+        package = workflow.split("- name: Sign app bundle", 1)[1].split("\n      - name:", 1)[0]
         notarize = workflow.split("- name: Notarize Nightly app and CLI distributions", 1)[1].split("\n      - name:", 1)[0]
         keychain_cleanup = workflow.split("- name: Remove release signing keychain before appcast signing", 1)[1].split("\n      - name:", 1)[0]
         checksums = workflow.split("- name: Generate Nightly notes, checksums, and statically verify CLI", 1)[1].split("\n      - name:", 1)[0]
@@ -150,12 +150,28 @@ class NightlyConfigurationTests(unittest.TestCase):
     def test_ci_workflows_use_their_configured_build_products_and_have_sufficient_timeout(self) -> None:
         build_workflow = (REPO_ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
         nightly_workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        nightly_validation = nightly_workflow.split(
+            "- name: Run contributor-testable validation",
+            1,
+        )[1].split("\n      - name:", 1)[0]
 
         self.assertIn("timeout-minutes: 60", build_workflow)
+        self.assertIn("make ci", nightly_validation)
+        self.assertIn('DERIVED_DATA="$DERIVED_DATA"', nightly_validation)
+        self.assertIn('BUILD_DESTINATION="platform=macOS"', nightly_validation)
+        self.assertIn("XCODEBUILD=xcodebuild", nightly_validation)
+        self.assertNotIn("scripts/changelog.py validate", nightly_validation)
+        for option in [
+            "-parallel-testing-enabled NO",
+            "-test-timeouts-enabled YES",
+            "-default-test-execution-time-allowance 120",
+            "-maximum-test-execution-time-allowance 120",
+        ]:
+            self.assertIn(option, makefile)
         self.assertIn(
-            './scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh \\\n'
-            '            "$DERIVED_DATA/Build/Products/Debug"',
-            nightly_workflow,
+            'verify-plugin-kit-v6-binary-compatibility.sh "$(abspath $(DEBUG_BUILD_PRODUCTS_DIR))"',
+            makefile,
         )
 
     def test_nightly_plugin_builder_accepts_an_empty_filter_list_on_system_bash(self) -> None:
@@ -323,11 +339,11 @@ class NightlyConfigurationTests(unittest.TestCase):
             interface.chmod(0o755)
 
             scenarios = [
-                ("3", True, True),
+                ("4", True, True),
                 ("absent", True, False),
                 ("1", True, False),
                 ("2", True, False),
-                ("3", False, False),
+                ("4", False, False),
             ]
             for index, (reported_interface, has_guide, accepted) in enumerate(scenarios):
                 with self.subTest(interface=reported_interface, has_guide=has_guide):
@@ -356,7 +372,7 @@ class NightlyConfigurationTests(unittest.TestCase):
                         self.assertEqual(github_env.read_text(), f"SOURCE_SHA={'a' * 40}\n")
                         self.assertEqual(github_output.read_text(), f"source_sha={'a' * 40}\n")
                     else:
-                        self.assertIn("rollback refs must support release interface v3", result.stderr)
+                        self.assertIn("rollback refs must support release interface v4", result.stderr)
 
     def test_gate_reads_advertised_release_and_manual_runs_bypass_lookup(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")

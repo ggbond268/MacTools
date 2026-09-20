@@ -2,7 +2,8 @@ import SwiftUI
 import MacToolsPluginKit
 
 struct PluginManagementSettingsView: View {
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    @StateObject private var presentation: PluginMarketplacePresentationModel
     @ObservedObject var navigationCoordinator: SettingsNavigationCoordinator
     @ObservedObject var uninstallConfirmationSession: PluginUninstallConfirmationSession
     var appRelauncher: any AppRelaunching = AppRelauncher()
@@ -20,8 +21,23 @@ struct PluginManagementSettingsView: View {
     @State private var activeSearchTarget: MarketplacePluginSearchTarget?
     @State private var clearSearchTargetTask: Task<Void, Never>?
 
+    init(
+        pluginHost: PluginHost,
+        navigationCoordinator: SettingsNavigationCoordinator,
+        uninstallConfirmationSession: PluginUninstallConfirmationSession,
+        appRelauncher: any AppRelaunching = AppRelauncher()
+    ) {
+        self.pluginHost = pluginHost
+        self.navigationCoordinator = navigationCoordinator
+        self.uninstallConfirmationSession = uninstallConfirmationSession
+        self.appRelauncher = appRelauncher
+        _presentation = StateObject(wrappedValue: PluginMarketplacePresentationModel(host: pluginHost))
+    }
+
     var body: some View {
-        SettingsPageScaffold {
+        let filteredItems = filteredItems
+        let configurationPluginIDs = presentation.configurationPluginIDs
+        return SettingsPageScaffold {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(
@@ -38,7 +54,7 @@ struct PluginManagementSettingsView: View {
                             PluginUninstallConfirmationPausedBanner(session: uninstallConfirmationSession)
                         }
 
-                        if pluginHost.pluginManagementItems.isEmpty {
+                        if presentation.items.isEmpty {
                             ContentUnavailableView(
                                 AppL10n.plugins("plugin.marketplace.empty.title", defaultValue: "暂无插件"),
                                 systemImage: "shippingbox",
@@ -74,9 +90,9 @@ struct PluginManagementSettingsView: View {
                                             item: item,
                                             hasSettings: configurationPluginIDs.contains(item.id),
                                             isBusy: activeOperationID == item.id
-                                                || pluginHost.automaticPluginUpdateStatus.isUpdatingPlugin(id: item.id),
+                                                || presentation.automaticUpdateStatus.isUpdatingPlugin(id: item.id),
                                             isInteractionDisabled: activeOperationID != nil
-                                                || pluginHost.automaticPluginUpdateStatus.isActive,
+                                                || presentation.automaticUpdateStatus.isActive,
                                             onInstall: { runOperation(id: item.id) { try await pluginHost.installPluginFromCatalog(pluginID: item.id) } },
                                             onUpdate: { runOperation(id: item.id) { try await pluginHost.updatePluginFromCatalog(pluginID: item.id) } },
                                             onUninstall: { requestUninstall(item) },
@@ -113,7 +129,7 @@ struct PluginManagementSettingsView: View {
             }
         }
         .task {
-            guard !pluginHost.automaticPluginUpdateStatus.isActive else {
+            guard !presentation.automaticUpdateStatus.isActive else {
                 return
             }
 
@@ -142,7 +158,7 @@ struct PluginManagementSettingsView: View {
             )
         }
         .onAppear {
-            syncAutomaticBulkUpdateProgress(pluginHost.automaticPluginUpdateStatus)
+            syncAutomaticBulkUpdateProgress(presentation.automaticUpdateStatus)
             applySearchFocusRequest(navigationCoordinator.searchFocusRequest)
         }
         .onDisappear {
@@ -161,12 +177,12 @@ struct PluginManagementSettingsView: View {
         .onChange(of: isSearchFocused) { _, isFocused in
             navigationCoordinator.setSearchField(.pluginMarketplace, focused: isFocused)
         }
-        .onChange(of: pluginHost.pluginManagementItems.isEmpty) { _, isEmpty in
+        .onChange(of: presentation.items.isEmpty) { _, isEmpty in
             if isEmpty {
                 isSearchFocused = false
             }
         }
-        .onChange(of: pluginHost.pluginManagementItems) { _, items in
+        .onChange(of: presentation.items) { _, items in
             guard
                 let activeSearchTarget,
                 !MarketplacePluginSearchAvailability.contains(
@@ -183,7 +199,7 @@ struct PluginManagementSettingsView: View {
                 matching: .marketplace(activeSearchTarget)
             )
         }
-        .onChange(of: pluginHost.automaticPluginUpdateStatus) { _, status in
+        .onChange(of: presentation.automaticUpdateStatus) { _, status in
             syncAutomaticBulkUpdateProgress(status)
         }
     }
@@ -191,7 +207,7 @@ struct PluginManagementSettingsView: View {
     private func applySearchFocusRequest(_ request: SettingsSearchFocusRequest?) {
         guard
             request?.field == .pluginMarketplace,
-            !pluginHost.pluginManagementItems.isEmpty,
+            !presentation.items.isEmpty,
             !isSearchFocused
         else {
             return
@@ -213,7 +229,7 @@ struct PluginManagementSettingsView: View {
 
         guard MarketplacePluginSearchAvailability.contains(
             pluginID: target.pluginID,
-            in: pluginHost.pluginManagementItems
+            in: presentation.items
         ) else {
             navigationCoordinator.clearSearchRevealRequest(request)
             return
@@ -243,7 +259,7 @@ struct PluginManagementSettingsView: View {
     }
 
     private var filteredItems: [PluginManagementItem] {
-        let filtered = pluginHost.pluginManagementItems.filter {
+        let filtered = presentation.items.filter {
             PluginListFilter.matches(managementItem: $0, query: searchText, filter: selectedFilter)
         }
         return PluginMarketplaceSortMode.sorted(filtered, by: sortMode)
@@ -251,13 +267,9 @@ struct PluginManagementSettingsView: View {
 
     private var countsByFilter: [PluginCategoryFilter: Int] {
         PluginListFilter.countsByFilter(
-            managementItems: pluginHost.pluginManagementItems,
+            managementItems: presentation.items,
             query: searchText
         )
-    }
-
-    private var configurationPluginIDs: Set<String> {
-        Set(pluginHost.pluginSettingsItems.map(\.pluginID))
     }
 
     private var marketplaceSortPicker: some View {
@@ -292,7 +304,7 @@ struct PluginManagementSettingsView: View {
     }
 
     private var marketplaceIntroductionConfiguration: SettingsPageIntroductionConfiguration {
-        let status = pluginHost.pluginCatalogStatus
+        let status = presentation.catalogStatus
         let updatedText = status.lastUpdatedAt.map {
             $0.formatted(date: .omitted, time: .shortened)
         }
@@ -325,8 +337,8 @@ struct PluginManagementSettingsView: View {
             .disabled(
                 activeOperationID != nil
                     || !hasAvailablePluginUpdates
-                    || pluginHost.pluginCatalogStatus.isRefreshing
-                    || pluginHost.automaticPluginUpdateStatus.isActive
+                    || presentation.catalogStatus.isRefreshing
+                    || presentation.automaticUpdateStatus.isActive
             )
         }
 
@@ -340,13 +352,13 @@ struct PluginManagementSettingsView: View {
         .buttonStyle(.bordered)
         .disabled(
             activeOperationID != nil
-                || pluginHost.pluginCatalogStatus.isRefreshing
-                || pluginHost.automaticPluginUpdateStatus.isActive
+                || presentation.catalogStatus.isRefreshing
+                || presentation.automaticUpdateStatus.isActive
         )
     }
 
     private var hasAvailablePluginUpdates: Bool {
-        pluginHost.pluginManagementItems.contains { $0.canUpdate }
+        presentation.items.contains { $0.canUpdate }
     }
 
     private var shouldShowBulkUpdateControls: Bool {
@@ -355,7 +367,7 @@ struct PluginManagementSettingsView: View {
 
     private var isBulkPluginUpdateBusy: Bool {
         activeOperationID == "catalog.updateAll"
-            || pluginHost.automaticPluginUpdateStatus.phase == .updating
+            || presentation.automaticUpdateStatus.phase == .updating
     }
 
     @ViewBuilder
@@ -373,7 +385,7 @@ struct PluginManagementSettingsView: View {
 
     private func runOperation(id: String, _ operation: @escaping () async throws -> Void) {
         guard activeOperationID == nil,
-              !pluginHost.automaticPluginUpdateStatus.isActive
+              !presentation.automaticUpdateStatus.isActive
         else {
             return
         }
@@ -394,7 +406,7 @@ struct PluginManagementSettingsView: View {
 
     private func runBulkUpdate() {
         guard activeOperationID == nil,
-              !pluginHost.automaticPluginUpdateStatus.isActive
+              !presentation.automaticUpdateStatus.isActive
         else {
             return
         }
@@ -537,7 +549,7 @@ struct PluginManagementSettingsView: View {
     }
 
     private var availablePluginUpdateCount: Int {
-        pluginHost.pluginManagementItems.filter(\.canUpdate).count
+        presentation.items.filter(\.canUpdate).count
     }
 }
 

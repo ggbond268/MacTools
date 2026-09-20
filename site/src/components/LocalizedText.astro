@@ -1,0 +1,12 @@
+---
+type Props = {
+  zh?: string | null;
+  en?: string | null;
+};
+
+const { zh, en } = Astro.props as Props;
+const zhText = zh?.trim() || en?.trim() || "";
+const enText = en?.trim() || zh?.trim() || "";
+---
+
+<span data-i18n-zh>{zhText}</span><span data-i18n-en>{enText}</span>

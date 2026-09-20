@@ -34,11 +34,12 @@ final class ClipboardHistoryHostingContainer<Content: View>: NSView {
     }
 }
 
-/// Companion windows share their surface; only the Actions window emphasizes focus.
+/// History and its companion palettes use the host's system-managed surface.
 struct ClipboardHistoryWindowSurface: View {
     enum Role {
         case history
         case actions
+        case queue
     }
 
     let role: Role
@@ -46,16 +47,5 @@ struct ClipboardHistoryWindowSurface: View {
 
     var body: some View {
         PluginPaletteSurface(reducesTransparency: reducesTransparency)
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
-                    style: .continuous
-                )
-                .strokeBorder(
-                    role == .actions ? Color.accentColor.opacity(0.55) : PluginSettingsTheme.Palette.cardBorder,
-                    lineWidth: 1
-                )
-            }
-            .allowsHitTesting(false)
     }
 }

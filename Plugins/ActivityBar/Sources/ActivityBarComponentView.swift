@@ -15,7 +15,7 @@ private struct ActivityBarContentHeightPreferenceKey: PreferenceKey {
     }
 }
 
-private enum ActivityBarTrendMode: String, CaseIterable {
+enum ActivityBarTrendMode: String, CaseIterable {
     case codingTools = "Coding Tools"
     case input = "Input"
 
@@ -49,6 +49,29 @@ private enum ActivityBarChartRange: String, CaseIterable {
     }
 
     var label: String { rawValue }
+}
+
+/// Live copies share their presentation, just as they share the plugin's measured
+/// card height. Keep selections across viewport unmounts; previews use their own state.
+@MainActor
+final class ActivityBarComponentPresentation: ObservableObject {
+    @Published var expandedAppName: String?
+    @Published var selectedDateOffset = 0
+    @Published var trendMode: ActivityBarTrendMode = .input
+    private var didSelectInitialTrend = false
+    private var didSelectInitialApp = false
+
+    func selectInitialTrend(hasCodingToolsData: Bool) {
+        guard !didSelectInitialTrend else { return }
+        didSelectInitialTrend = true
+        trendMode = hasCodingToolsData ? .codingTools : .input
+    }
+
+    func selectInitialApp(_ name: String?) {
+        guard !didSelectInitialApp, let name else { return }
+        didSelectInitialApp = true
+        expandedAppName = name
+    }
 }
 
 private enum ActivityBarFunFact {
@@ -126,7 +149,8 @@ struct ActivityBarComponentView: View {
         }
     }
 
-    @ObservedObject var controller: ActivityBarController
+    let controller: ActivityBarController
+    @ObservedObject private var presentation: ActivityBarComponentPresentation
     let localization: PluginLocalization
     let onContentHeightChange: (CGFloat) -> Void
 
@@ -134,24 +158,23 @@ struct ActivityBarComponentView: View {
 
     @State private var hoveredDate: String?
     @State private var hoveredScreenTimeDate: String?
-    @State private var expandedAppName: String?
-    @State private var selectedDateOffset = 0
-    @State private var trendMode: ActivityBarTrendMode = .input
     @AppStorage("activity-bar.stats-expanded") private var statsExpanded = true
     @AppStorage("activity-bar.chart-range") private var chartRange = ActivityBarChartRange.sevenDays
 
     init(
         controller: ActivityBarController,
         localization: PluginLocalization = PluginLocalization(bundle: .main),
+        presentation: ActivityBarComponentPresentation = ActivityBarComponentPresentation(),
         onContentHeightChange: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.controller = controller
         self.localization = localization
+        self.presentation = presentation
         self.onContentHeightChange = onContentHeightChange
     }
 
     private var selectedDate: Date {
-        Calendar.current.date(byAdding: .day, value: selectedDateOffset, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .day, value: presentation.selectedDateOffset, to: Date()) ?? Date()
     }
 
     private var selectedDateKey: String {
@@ -167,7 +190,7 @@ struct ActivityBarComponentView: View {
     }
 
     private var isViewingToday: Bool {
-        selectedDateOffset == 0
+        presentation.selectedDateOffset == 0
     }
 
     private var canGoBack: Bool {
@@ -186,6 +209,12 @@ struct ActivityBarComponentView: View {
     }
 
     var body: some View {
+        PluginObservedContent(controller) { _ in
+            activityContent
+        }
+    }
+
+    private var activityContent: some View {
         VStack(spacing: 0) {
             headerBar
             todayStats
@@ -201,7 +230,7 @@ struct ActivityBarComponentView: View {
             divider
             statsDisclosure
             if statsExpanded {
-                if trendMode == .codingTools {
+                if presentation.trendMode == .codingTools {
                     codingToolsChart
                 } else {
                     weeklyChart
@@ -236,11 +265,10 @@ struct ActivityBarComponentView: View {
         )
         .animation(.easeInOut(duration: 0.2), value: statsExpanded)
         .animation(.easeInOut(duration: 0.2), value: chartRange)
-        .animation(.easeInOut(duration: 0.2), value: trendMode)
-        .animation(.easeInOut(duration: 0.15), value: selectedDateOffset)
+        .animation(.easeInOut(duration: 0.2), value: presentation.trendMode)
+        .animation(.easeInOut(duration: 0.15), value: presentation.selectedDateOffset)
         .onAppear {
-            controller.refresh()
-            trendMode = hasCodingToolsData ? .codingTools : .input
+            presentation.selectInitialTrend(hasCodingToolsData: hasCodingToolsData)
         }
     }
 
@@ -255,8 +283,8 @@ struct ActivityBarComponentView: View {
             HStack(spacing: 4) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
-                        selectedDateOffset -= 1
-                        expandedAppName = nil
+                        presentation.selectedDateOffset -= 1
+                        presentation.expandedAppName = nil
                     }
                 } label: {
                     Image(systemName: "chevron.left")
@@ -275,8 +303,8 @@ struct ActivityBarComponentView: View {
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
-                        selectedDateOffset += 1
-                        expandedAppName = nil
+                        presentation.selectedDateOffset += 1
+                        presentation.expandedAppName = nil
                     }
                 } label: {
                     Image(systemName: "chevron.right")
@@ -572,9 +600,7 @@ struct ActivityBarComponentView: View {
                     appRow(name: app.name, stats: app.stats, maxScreenTime: maxTime)
                 }
                 .onAppear {
-                    if expandedAppName == nil {
-                        expandedAppName = apps.first?.name
-                    }
+                    presentation.selectInitialApp(apps.first?.name)
                 }
             }
         }
@@ -583,12 +609,12 @@ struct ActivityBarComponentView: View {
     }
 
     private func appRow(name: String, stats: ActivityBarAppStats, maxScreenTime: Double) -> some View {
-        let isExpanded = expandedAppName == name
+        let isExpanded = presentation.expandedAppName == name
 
         return VStack(spacing: 3) {
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) {
-                    expandedAppName = isExpanded ? nil : name
+                    presentation.expandedAppName = isExpanded ? nil : name
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -673,13 +699,13 @@ struct ActivityBarComponentView: View {
                 ForEach(ActivityBarTrendMode.allCases, id: \.self) { mode in
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
-                            trendMode = mode
+                            presentation.trendMode = mode
                             hoveredDate = nil
                         }
                     } label: {
                         Text(mode.label(localization: localization))
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(trendMode == mode ? theme.text.primary : theme.text.tertiary)
+                            .foregroundStyle(presentation.trendMode == mode ? theme.text.primary : theme.text.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1237,7 +1263,7 @@ struct ActivityBarComponentView: View {
             return localization.string("component.date.today", defaultValue: "Today")
         }
 
-        if selectedDateOffset == -1 {
+        if presentation.selectedDateOffset == -1 {
             return localization.string("component.date.yesterday", defaultValue: "Yesterday")
         }
 

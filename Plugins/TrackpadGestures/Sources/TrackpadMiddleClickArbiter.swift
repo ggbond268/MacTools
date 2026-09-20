@@ -1308,6 +1308,7 @@ struct TrackpadMiddleClickArbiter: Sendable {
         tipTapEpisodeID: TrackpadTipTapEpisodeID? = nil,
         pairCapacity: Int = 1,
         bufferingWindow: TimeInterval? = nil,
+        canStartBuffering: Bool = true,
         canAdoptBufferedClickForTipTap: Bool = true,
         isAwaitingTipTapAddedContact: Bool = false
     ) -> NativeEventOutcome {
@@ -1492,6 +1493,15 @@ struct TrackpadMiddleClickArbiter: Sendable {
         }
 
         guard case .down = event else {
+            return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
+        }
+        guard canStartBuffering else {
+            if let contactEpisodeID {
+                actions.append(contentsOf: observePassedThroughNativeClick(
+                    contactEpisodeID: contactEpisodeID,
+                    at: time
+                ))
+            }
             return NativeEventOutcome(decision: .passThrough, deferredActions: actions)
         }
         guard candidateDeadlinesByDevice.count == 1,
@@ -1825,6 +1835,8 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
     private let synthesizeMiddleClick: () -> Void
     private let releaseMiddleButton: () -> Void
     private let postEvent: (CGEvent) -> Void
+    private let postEventAtTap: (CGEventTapProxy, CGEvent) -> Void
+    private var currentEventTapProxy: CGEventTapProxy?
     private let candidateTimeline: TrackpadMiddleClickCandidateTimeline
     private let eventOrigin: (CGEvent) -> TrackpadMiddleClickArbiter.NativeEventOrigin
     private let recognizePhysicalClick: @Sendable (TrackpadGesture, UInt64) -> Void
@@ -1854,6 +1866,9 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         postEvent: @escaping (CGEvent) -> Void = {
             $0.post(tap: .cghidEventTap)
         },
+        postEventAtTap: @escaping (CGEventTapProxy, CGEvent) -> Void = { proxy, event in
+            event.tapPostEvent(proxy)
+        },
         tipTapOrderingWindow: TimeInterval = 0.02,
         doubleTapBufferingWindow: TimeInterval = 0.40,
         candidateTimeline: TrackpadMiddleClickCandidateTimeline = .init(),
@@ -1873,6 +1888,7 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         self.synthesizeMiddleClick = synthesizeMiddleClick
         self.releaseMiddleButton = releaseMiddleButton
         self.postEvent = postEvent
+        self.postEventAtTap = postEventAtTap
         self.tipTapOrderingWindow = tipTapOrderingWindow
         self.doubleTapBufferingWindow = doubleTapBufferingWindow
         self.candidateTimeline = candidateTimeline
@@ -1971,7 +1987,16 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
         return attempt.wasAccepted
     }
 
-    func handleNativeEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handleNativeEvent(
+        type: CGEventType,
+        event: CGEvent,
+        proxy: CGEventTapProxy? = nil
+    ) -> Unmanaged<CGEvent>? {
+        // A callback replay must precede the current event at this same tap. Posting back to
+        // the HID entry point can let the current click overtake the replayed click pair.
+        let previousProxy = currentEventTapProxy
+        currentEventTapProxy = proxy
+        defer { currentEventTapProxy = previousProxy }
         if event.getIntegerValueField(.eventSourceUserData) == Self.replayMarker {
             return Unmanaged.passUnretained(event)
         }
@@ -2244,6 +2269,13 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
             tipTapEpisodeID: activeTipTapEpisodeID,
             pairCapacity: nativePairCapacity,
             bufferingWindow: nativeBufferingWindow,
+            // Fixed contacts alone are only speculative evidence while TipTap awaits another
+            // finger. After release or cancellation, preserve their ordinary native click.
+            canStartBuffering: activeTipTapEpisodeID != nil
+                || ordinaryCandidate.map {
+                    nativeClickContactCounts.contains($0.contactCount)
+                        || isAwaitingTipTapAddedContact
+                } == true,
             canAdoptBufferedClickForTipTap: origin.trackpadDeviceID.map {
                 candidateTimeline.canAdoptBufferedClickForTipTap(deviceID: $0)
             } ?? false,
@@ -2654,7 +2686,11 @@ final class TrackpadMiddleClickCoordinator: @unchecked Sendable {
 
     private func post(_ event: CGEvent) {
         event.setIntegerValueField(.eventSourceUserData, value: Self.replayMarker)
-        postEvent(event)
+        if let currentEventTapProxy {
+            postEventAtTap(currentEventTapProxy, event)
+        } else {
+            postEvent(event)
+        }
     }
 
     private func rewriteAsMiddle(

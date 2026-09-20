@@ -822,12 +822,18 @@ struct SystemStatusComponentView: View {
         static let spacing = SystemStatusComponentLayout.cardSpacing
     }
 
-    @ObservedObject var viewModel: SystemStatusViewModel
+    let viewModel: SystemStatusViewModel
     @ObservedObject var settingsController: SystemStatusSettingsController
     let localization: PluginLocalization
     let onMetricDetail: (SystemStatusMetricKind) -> Void
 
     var body: some View {
+        PluginObservedContent(viewModel) { _ in
+            dashboard
+        }
+    }
+
+    private var dashboard: some View {
         SystemStatusDashboardView(
             snapshot: viewModel.snapshot,
             visibleKinds: settingsController.configuration.visiblePanelMetricKinds,

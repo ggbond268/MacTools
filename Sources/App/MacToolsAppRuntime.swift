@@ -224,6 +224,7 @@ final class MacToolsAppRuntime {
             }
         }
         cliHostBridge.start()
+        CLIInstallController.shared.start()
     }
 
     private func activateAppURLRouter() {

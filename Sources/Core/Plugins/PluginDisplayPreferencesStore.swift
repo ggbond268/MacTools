@@ -1,21 +1,14 @@
 import Foundation
 
-enum PluginDisplaySurface: CaseIterable, Hashable, Sendable {
+enum PluginDisplaySurface: String, Codable, CaseIterable, Hashable, Sendable {
     case dashboard
     case featurePanel
-}
-
-enum PluginSettingsLandingPage: String, Sendable {
-    case dashboard
-    case featurePanel
-    case marketplace
 }
 
 @MainActor
 final class PluginDisplayPreferencesStore {
     private enum DefaultsKey {
         static let storage = "plugin.display.preferences"
-        static let lastPluginSettingsLandingPage = "plugin.settings.lastLandingPage"
     }
 
     private struct LegacyStoredPreferences: Codable, Equatable {
@@ -102,22 +95,6 @@ final class PluginDisplayPreferencesStore {
     ) {
         self.userDefaults = userDefaults
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
-    }
-
-    // MARK: - Plugin settings navigation
-
-    /// This is deliberately kept outside the exportable layout payload. It is
-    /// local navigation state, not part of a user's portable configuration.
-    func lastPluginSettingsLandingPage() -> PluginSettingsLandingPage? {
-        guard let rawValue = userDefaults.string(forKey: DefaultsKey.lastPluginSettingsLandingPage) else {
-            return nil
-        }
-
-        return PluginSettingsLandingPage(rawValue: rawValue)
-    }
-
-    func setLastPluginSettingsLandingPage(_ page: PluginSettingsLandingPage) {
-        userDefaults.set(page.rawValue, forKey: DefaultsKey.lastPluginSettingsLandingPage)
     }
 
     /// Adds IDs that were hidden by the pre-layout-editor global checkbox.
@@ -325,7 +302,8 @@ final class PluginDisplayPreferencesStore {
     func backupSnapshot(
         defaultPluginIDs: [String],
         dashboardDefaultPluginIDs: [String],
-        featurePanelDefaultPluginIDs: [String]
+        featurePanelDefaultPluginIDs: [String],
+        panelConfiguration: MenuBarPanelConfiguration? = nil
     ) -> PluginDisplayPreferencesBackup {
         migrateLegacyHiddenPluginIDs(
             dashboardDefaultPluginIDs: dashboardDefaultPluginIDs,
@@ -363,7 +341,8 @@ final class PluginDisplayPreferencesStore {
             ).sorted(),
             featurePanelHiddenPluginIDs: Array(
                 preferences.featurePanelHiddenPluginIDs.union(preferences.legacyHiddenPluginIDs)
-            ).sorted()
+            ).sorted(),
+            panelConfiguration: panelConfiguration
         )
     }
 

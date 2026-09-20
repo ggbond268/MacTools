@@ -237,9 +237,18 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         let readiness = try readinessPipe.fileHandleForReading.read(upToCount: 6)
         XCTAssertEqual(readiness.flatMap { String(data: $0, encoding: .utf8) }, "ready\n")
 
+        // Model a cold helper launch on a busy runner without loading the real clipboard.
+        let helperDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: helperDirectory) }
+        let delayedHelperURL = helperDirectory.appendingPathComponent("delayed-reader.sh")
+        try "#!/bin/sh\nsleep 0.15\nexec \"$@\"\n".write(to: delayedHelperURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: delayedHelperURL.path)
         let reader = ClipboardPasteboardReaderProcess(
-            helperURL: { helperURL },
-            requestTimeout: .milliseconds(75)
+            helperURL: { delayedHelperURL },
+            helperArguments: [helperURL.path],
+            // Include cold process startup; the dedicated deadline test covers short timeouts.
+            requestTimeout: .seconds(2)
         )
         defer { Task { await reader.stop() } }
         let preparation = Task { @MainActor in

@@ -8,6 +8,8 @@ For catalog-based installation, GitHub release distribution, and Debug `file://`
 
 For a complete workspace-plugin example with a typed catalog, verified adapters, portable preferences, profiles, and composition of canonical actions from other providers, see [Mac Settings](mac-settings.md).
 
+For a foreground capture plugin with native editing windows, host-owned permissions and shortcuts, local recognition, and capture-session cleanup, see [Screenshot](screenshot.md).
+
 ## Package Layout
 
 Use a directory package with the `.mactoolsplugin` extension:
@@ -138,6 +140,14 @@ To update an existing plugin, change its code/resources/tests beside the plugin 
 
 When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for every plugin. `make release` automatically selects and bumps every affected manifest so all plugin packages are rebuilt against the same PluginKit build. A manual version bump is needed only when bypassing `make release` and using the lower-level release workflow directly.
 
+## Panel Widgets and Runtime Ownership
+
+Users can remove every widget or add multiple copies of the same plugin. A widget is a presentation entry, not a new plugin instance: installation, activation, shortcuts, and independently enabled background services remain plugin-owned.
+
+Use `PluginPanelSurfaceLifecycleHandling` for work required by the currently visible panel. The host sends one visibility transition per plugin and surface, regardless of copy count; switching between panels containing the same surface keeps that consumer alive. Removing the last visible copy releases it. Plugins with multiple foreground surfaces should track a set of consumers, as System Status does.
+
+Component views are mounted near the scroll viewport and can be recycled. Keep durable selection state and business tasks in a plugin-owned model; reserve view-local state for transient interaction. Do not start polling or refresh business data from each copy's `onAppear`. Library previews receive `PluginComponentContext.isPanelVisible == false`: they must not acquire foreground consumers or change live layout measurements. That context distinguishes preview creation from live content; lifecycle callbacks are the authority for subsequent panel visibility changes.
+
 ## Settings UI
 
 Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:
@@ -160,6 +170,8 @@ Settings changes use typed `PluginSettingsAction` values (`setBoolean`, `setSele
 Custom sections and workspaces provide only plugin-specific content. The settings window title, plugin icon, description, permission cards, shortcut cards, scrolling shell, and system background are derived by the host; do not repeat a page title inside custom content. Form sections must not draw their own outer card or section header: use `presentation: .standard` for normal custom content, or `.edgeToEdge` for an AppKit table or an internally padded row collection. Add/Refresh-style actions belong in `.headerAccessory`.
 
 All custom settings views should use `MacToolsPluginKit.PluginSettingsTheme` for typography, spacing, radii, colors, and shared card backgrounds. This keeps the dependency direction clean: the host app and plugins both depend on `MacToolsPluginKit`, while plugins never depend on `Sources/App/SettingsStyle.swift`.
+
+Use `PluginSettingsItem` (host 1.3.1+) for an icon, title, optional description, and trailing custom control. It shares the host form row layout and neutral icon styling. The containing form or custom section still owns padding and separators; use `pluginSettingsListRowPadding` for internally padded sections.
 
 Recommended mapping:
 
@@ -241,3 +253,11 @@ func deactivate(reason: PluginDeactivationReason)
 `deactivate` is called before updating, uninstalling, and host shutdown. It can also be called when the host isolates a plugin after a runtime failure or when an installed package is no longer loadable. Plugins should cancel tasks, timers, observers, event taps, windows, and other retained system resources there.
 
 Native bundle code is treated as loaded for the lifetime of the current app process. If a loaded plugin is updated or uninstalled, its contributions are removed from MacTools immediately and `deactivate` is called, but the executable code is considered fully released only after the app restarts. Updating a loaded plugin replaces the package files on disk and activates the new code on the next launch.
+
+## Palette text input (MacTools 1.3.1)
+
+A provider can additionally adopt `PluginActionInputProviding` to expose one required string input through host-owned composition and optional explicit aliases. Declare an existing canonical action with a sensitive, local-only string parameter, then publish an `ActionInputDescriptor`. The host keeps these incomplete descriptors separate from executable catalog references. After preparation and validation, it assembles the complete reference and uses the normal action executor.
+
+Preparation returns an ephemeral `ActionInputSession`; it must not send input or create a conversation. The host releases unsubmitted sessions when composition ends and transfers accepted sessions to execution completion. Other surfaces do not implicitly gain input forms or expose aliases. Use the first host version exporting these new types as the plugin's minimum host version.
+
+Aliases must be unambiguous at a space boundary. `ask siri <message>` is the first implementation. An alias recognizes an action; it never executes merely because text was entered. Plugins do not parse the raw query themselves.

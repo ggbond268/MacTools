@@ -35,6 +35,7 @@ enum MacToolsSearchAction: Hashable {
         target: SettingsSearchRevealTarget?
     )
     case executeAction(ActionReference)
+    case collectActionInput(ActionInputItem)
     case pluginCommand(
         pluginID: String,
         expectedDefinition: PluginCommandDefinition
@@ -434,32 +435,8 @@ enum MacToolsSearchIndexBuilder {
                 suggestionPriority: 5
             ),
             navigationResult(
-                id: "navigation.dashboard",
-                title: AppL10n.settings("plugins.sidebar.dashboard", defaultValue: "仪表盘"),
-                subtitle: AppL10n.search("search.subtitle.plugins", defaultValue: "插件"),
-                detail: AppL10n.settings(
-                    "plugins.dashboard.description",
-                    defaultValue: "拖拽调整仪表盘组件的排列顺序。"
-                ),
-                systemImage: "square.grid.2x2",
-                destination: .plugins(.dashboardLayout),
-                suggestionPriority: 0
-            ),
-            navigationResult(
-                id: "navigation.feature-panel",
-                title: AppL10n.settings("plugins.sidebar.featurePanel", defaultValue: "功能面板"),
-                subtitle: AppL10n.search("search.subtitle.plugins", defaultValue: "插件"),
-                detail: AppL10n.settings(
-                    "plugins.featurePanel.description",
-                    defaultValue: "拖拽调整功能面板操作的排列顺序。"
-                ),
-                systemImage: "switch.2",
-                destination: .plugins(.featurePanelLayout),
-                suggestionPriority: 1
-            ),
-            navigationResult(
                 id: "navigation.marketplace",
-                title: AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "市场"),
+                title: AppL10n.settings("plugins.sidebar.marketplace", defaultValue: "插件市场"),
                 subtitle: AppL10n.search("search.subtitle.plugins", defaultValue: "插件"),
                 detail: AppL10n.plugins(
                     "plugin.marketplace.description",
@@ -483,7 +460,7 @@ enum MacToolsSearchIndexBuilder {
             )
         ]
 
-        items += generalSettingsResults(pluginHost: pluginHost)
+        items += generalSettingsResults()
 
         let managementItemsByID = Dictionary(
             uniqueKeysWithValues: pluginHost.pluginManagementItems.map { ($0.id, $0) }
@@ -518,63 +495,6 @@ enum MacToolsSearchIndexBuilder {
             )
         }
 
-        let surfaceItems = mergedSurfaceItems(pluginHost: pluginHost)
-        items += surfaceItems.compactMap { item -> MacToolsSearchResult? in
-            guard configurationItemsByID[item.id] == nil else {
-                return nil
-            }
-
-            let destination: SettingsNavigationDestination
-            let surface: PluginDisplaySurface
-            let subtitle: String
-            if item.capabilities.supportsFeaturePanel {
-                surface = .featurePanel
-                destination = .plugins(.featurePanelLayout)
-                subtitle = AppL10n.settings(
-                    "plugins.sidebar.featurePanel",
-                    defaultValue: "功能面板"
-                )
-            } else if item.capabilities.supportsDashboard {
-                surface = .dashboard
-                destination = .plugins(.dashboardLayout)
-                subtitle = AppL10n.settings(
-                    "plugins.sidebar.dashboard",
-                    defaultValue: "仪表盘"
-                )
-            } else {
-                return nil
-            }
-            let surfaceID = switch surface {
-            case .dashboard: "dashboard"
-            case .featurePanel: "feature-panel"
-            }
-
-            return MacToolsSearchResult(
-                id: "plugin.surface.\(surfaceID).\(item.id)",
-                kind: .navigation,
-                title: item.title,
-                subtitle: subtitle,
-                detail: item.description,
-                keywords: pluginMetadataKeywords(
-                    pluginID: item.id,
-                    category: item.category,
-                    releaseChannel: item.releaseChannel
-                ),
-                systemImage: item.iconName,
-                action: .navigate(
-                    destination: destination,
-                    target: .surface(
-                        SurfaceSettingsSearchTarget(
-                            surface: surface,
-                            pluginID: item.id
-                        )
-                    )
-                ),
-                confirmation: nil,
-                suggestionPriority: nil
-            )
-        }
-
         items += pluginHost.pluginManagementItems.compactMap { item in
             return MacToolsSearchResult(
                 id: "plugin.marketplace.\(item.id)",
@@ -582,7 +502,7 @@ enum MacToolsSearchIndexBuilder {
                 title: item.title,
                 subtitle: AppL10n.settings(
                     "plugins.sidebar.marketplace",
-                    defaultValue: "市场"
+                    defaultValue: "插件市场"
                 ),
                 detail: item.detailText,
                 keywords: pluginMetadataKeywords(
@@ -642,6 +562,16 @@ enum MacToolsSearchIndexBuilder {
             pluginHost.pluginManagementItems.map { ($0.id, $0.title) },
             uniquingKeysWith: { first, _ in first }
         )
+        items += pluginHost.actionInputRegistry.items.map { item in
+            MacToolsSearchResult(
+                id: "action.input.\(item.id.id)", kind: .command,
+                title: item.definition.title, subtitle: item.descriptor.destination,
+                detail: item.definition.description,
+                keywords: item.definition.keywords + item.descriptor.aliases,
+                systemImage: item.definition.systemImage, action: .collectActionInput(item),
+                confirmation: nil, suggestionPriority: nil
+            )
+        }
         items += pluginHost.actionCatalogEntries.enumerated().compactMap { index, entry in
             if entry.reference.key.providerID == "mactools",
                let appAction = AppShortcutAction(
@@ -771,16 +701,7 @@ enum MacToolsSearchIndexBuilder {
         )
     }
 
-    private static func generalSettingsResults(
-        pluginHost: PluginHost
-    ) -> [MacToolsSearchResult] {
-        let sharedShortcutActions = Set(AppHostCommandCatalog.sharedAppShortcutActions)
-        let shortcutKeywords = pluginHost.appShortcutItems
-            .filter { sharedShortcutActions.contains($0.action) }
-            .flatMap { item in
-                [item.title, item.description, item.bindingText]
-            }
-
+    private static func generalSettingsResults() -> [MacToolsSearchResult] {
         return [
             generalSettingResult(
                 target: .launchAtLogin,
@@ -827,29 +748,13 @@ enum MacToolsSearchIndexBuilder {
                 systemImage: "menubar.rectangle"
             ),
             generalSettingResult(
-                target: .menuBarClickBehavior,
-                title: AppL10n.settings("menuBarClick.title", defaultValue: "交换左键与右键功能"),
-                detail: AppL10n.settings(
-                    "menuBarClick.description",
-                    defaultValue: "关闭时左键打开仪表盘、右键功能打开功能面板；开启后互换。"
-                ),
-                keywords: [
-                    AppL10n.settings("general.section.menuBarIcon", defaultValue: "状态栏图标"),
-                    AppL10n.settings(
-                        "menuBarClick.rightClickShortcutNotice",
-                        defaultValue: "可以使用 Option + 左键触发右键功能。"
-                    )
-                ],
-                systemImage: "cursorarrow.click.2"
-            ),
-            generalSettingResult(
                 target: .appShortcuts,
                 title: AppL10n.settings("shortcuts.title", defaultValue: "键盘快捷键"),
                 detail: AppL10n.settings(
                     "shortcuts.description",
                     defaultValue: "为常用动作配置全局快捷键。编辑后立即生效，必要项不可删除。"
                 ),
-                keywords: shortcutKeywords,
+                keywords: [],
                 systemImage: "command"
             ),
             generalSettingResult(
@@ -1045,16 +950,6 @@ enum MacToolsSearchIndexBuilder {
             confirmation: nil,
             suggestionPriority: nil
         )
-    }
-
-    private static func mergedSurfaceItems(pluginHost: PluginHost) -> [PluginSurfaceLayoutItem] {
-        var seenIDs: Set<String> = []
-        return (
-            pluginHost.featurePanelLayoutItems
-                + pluginHost.featurePanelHiddenLayoutItems
-                + pluginHost.dashboardLayoutItems
-                + pluginHost.dashboardHiddenLayoutItems
-        ).filter { seenIDs.insert($0.id).inserted }
     }
 
     static func pluginMetadataKeywords(

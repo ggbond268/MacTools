@@ -28,6 +28,33 @@ struct ClipboardPasteboardReaderRequest: Codable, Sendable {
     }
 }
 
+enum ClipboardPasteboardSourceHint: Codable, Equatable, Sendable {
+    case application(String)
+    case universalClipboard
+    case unknown
+
+    static let applicationType = "org.nspasteboard.source"
+    static let remoteType = "com.apple.is-remote-clipboard"
+
+    static func marker(in types: Set<String>) -> Self? {
+        if types.contains(remoteType) { return .universalClipboard }
+        if types.contains(applicationType) { return .unknown }
+        return nil
+    }
+
+    static func applicationIdentifier(from data: Data?) -> Self {
+        guard let data, !data.isEmpty, data.count <= 255,
+              let identifier = String(data: data, encoding: .utf8),
+              identifier.utf8.allSatisfy({
+                  (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0)
+                      || $0 == 45 || $0 == 46 || $0 == 95
+              }),
+              !identifier.split(separator: ".", omittingEmptySubsequences: false).contains(where: \.isEmpty)
+        else { return .unknown }
+        return .application(identifier)
+    }
+}
+
 struct ClipboardPasteboardReaderResponse: Codable, Sendable {
     enum Status: String, Codable, Equatable, Sendable {
         case payload
@@ -49,6 +76,13 @@ struct ClipboardPasteboardReaderResponse: Codable, Sendable {
 
     let status: Status
     let items: [Item]
+    let sourceHint: ClipboardPasteboardSourceHint?
+
+    init(status: Status, items: [Item], sourceHint: ClipboardPasteboardSourceHint? = nil) {
+        self.status = status
+        self.items = items
+        self.sourceHint = sourceHint
+    }
 
     static func status(_ status: Status) -> Self {
         Self(status: status, items: [])
@@ -121,6 +155,11 @@ enum ClipboardPasteboardReaderWire {
                 : .status(.changed)
         }
 
+        let advertisedTypes = Set((pasteboard.types ?? []).map(\.rawValue))
+            .union(sourceItems.flatMap(\.types).map(\.rawValue))
+        guard advertisedTypes.isDisjoint(with: ignoredProducerTypes) else { return .status(.unsafe) }
+        let sourceHint = readSourceHint(from: pasteboard, items: sourceItems, types: advertisedTypes)
+
         var storedItems: [ClipboardPasteboardReaderResponse.Item] = []
         var storedByteCount = 0
         for sourceItem in sourceItems {
@@ -160,7 +199,29 @@ enum ClipboardPasteboardReaderWire {
             return .status(.changed)
         }
         guard !storedItems.isEmpty else { return .status(.empty) }
-        return ClipboardPasteboardReaderResponse(status: .payload, items: storedItems)
+        return ClipboardPasteboardReaderResponse(status: .payload, items: storedItems, sourceHint: sourceHint)
+    }
+
+    private static func readSourceHint(
+        from pasteboard: NSPasteboard,
+        items: [NSPasteboardItem],
+        types: Set<String>
+    ) -> ClipboardPasteboardSourceHint? {
+        guard let marker = ClipboardPasteboardSourceHint.marker(in: types) else { return nil }
+        // Marker presence is sufficient for Handoff. Never ask a remote provider for its value.
+        if marker == .universalClipboard { return marker }
+        let type = NSPasteboard.PasteboardType(ClipboardPasteboardSourceHint.applicationType)
+        let markedItems = items.filter { $0.types.contains(type) }
+        if markedItems.isEmpty {
+            return .applicationIdentifier(from: pasteboard.data(forType: type))
+        }
+        var source: ClipboardPasteboardSourceHint?
+        for item in markedItems {
+            let hint = ClipboardPasteboardSourceHint.applicationIdentifier(from: item.data(forType: type))
+            if hint == .unknown || (source != nil && source != hint) { return .unknown }
+            source = hint
+        }
+        return source ?? .unknown
     }
 
     private static func readCompleteSnapshot(

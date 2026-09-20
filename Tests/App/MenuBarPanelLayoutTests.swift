@@ -83,7 +83,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: [item]),
-            NSSize(width: 316, height: 220)
+            NSSize(width: 316, height: 224)
         )
     }
 
@@ -215,7 +215,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
             MenuBarPanelLayout.preferredPanelHeight(for: items, screen: nil),
             MenuBarPanelLayout.featureListMaximumHeight
                 + MenuBarPanelLayout.contentVerticalPadding
-                + MenuBarPanelLayout.topChromeHeight
+                + MenuBarPanelLayout.panelChromeHeight
         )
         XCTAssertEqual(MenuBarPanelLayout.maximumPanelHeight(visibleFrameHeight: 1000), 750)
     }
@@ -223,8 +223,29 @@ final class MenuBarPanelLayoutTests: XCTestCase {
     func testEmptyContentSizeIncludesMarketplacePrompt() {
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: []),
-            NSSize(width: 316, height: 220)
+            NSSize(width: 316, height: 224)
         )
+    }
+
+    func testEditorDragFramesPreserveExpandedFeatureRowGeometry() {
+        let expanded = makeItem(id: "expanded", controlStyle: .disclosure, isExpanded: true,
+                                controls: [PluginPanelControl(
+                                    id: "enabled", kind: .switchRow, options: [], selectedOptionID: nil,
+                                    dateValue: nil, minimumDate: nil, displayedComponents: nil,
+                                    datePickerStyle: nil, sectionTitle: nil, actionTitle: "Enabled",
+                                    actionIconSystemName: "checkmark", isEnabled: true
+                                )])
+        let collapsed = makeItem(id: "collapsed", controlStyle: .disclosure, isExpanded: false)
+        let entries = [expanded, collapsed].map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
+        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: [expanded, collapsed])
+        let frames = PanelLayoutEntryFrame.frames(entries: entries, placement: placement)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertEqual(frames[0].frame.height, MenuBarPanelLayout.rowHeight(for: expanded))
+        XCTAssertGreaterThan(frames[0].frame.height, frames[1].frame.height)
+        XCTAssertEqual(frames[1].frame.minY, frames[0].frame.maxY + MenuBarPanelLayout.featureRowSpacing)
+        XCTAssertEqual(placement.height, frames[1].frame.maxY)
+        XCTAssertEqual(PanelLayoutEntryFrame.destination(at: CGPoint(x: 20, y: frames[0].frame.maxY - 1),
+                                                          frames: frames, rightToLeft: false), 1)
     }
 
     private func makeItem(
@@ -255,6 +276,22 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
 @MainActor
 final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
+    func testRepeatedActionRowsUseTheirOwnHoverAnchors() {
+        let coordinator = HoverSecondaryPanelCoordinator(activationDelay: nil)
+        let first = HoverSecondaryPanelCoordinator.Activation(pluginID: "a", controlID: "list", optionID: "item", instanceID: "first")
+        let second = HoverSecondaryPanelCoordinator.Activation(pluginID: "a", controlID: "list", optionID: "item", instanceID: "second")
+        let firstFrame = CGRect(x: 0, y: 0, width: 100, height: 40)
+        let secondFrame = CGRect(x: 0, y: 100, width: 100, height: 40)
+        coordinator.updateRowFrame(firstFrame, for: first)
+        coordinator.updateRowFrame(secondFrame, for: second)
+        coordinator.hoverBegan(pluginID: "a", controlID: "list", optionID: "item", instanceID: "first")
+        XCTAssertEqual(coordinator.selectedRowFrame, firstFrame)
+        coordinator.hoverBegan(pluginID: "a", controlID: "list", optionID: "item", instanceID: "second")
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+        coordinator.updateRowFrame(nil, for: first)
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+    }
+
     func testSwitchingActivationClearsPreviousAnchor() {
         let coordinator = HoverSecondaryPanelCoordinator(
             dismissDelay: .milliseconds(5),

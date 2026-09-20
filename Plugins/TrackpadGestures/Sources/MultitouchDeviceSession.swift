@@ -1716,7 +1716,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
             | (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
 
-        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+        let callback: CGEventTapCallBack = { proxy, type, event, userInfo in
             guard let userInfo else {
                 return Unmanaged.passUnretained(event)
             }
@@ -1734,7 +1734,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
             }
 
             return context.withOwner {
-                $0.handleEventTapEvent(type: type, event: event)
+                $0.handleEventTapEvent(type: type, event: event, proxy: proxy)
             } ?? Unmanaged.passUnretained(event)
         }
 
@@ -1995,7 +1995,8 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
 
     private nonisolated func handleEventTapEvent(
         type: CGEventType,
-        event: CGEvent
+        event: CGEvent,
+        proxy: CGEventTapProxy? = nil
     ) -> Unmanaged<CGEvent>? {
         if type == .keyDown || type == .keyUp {
             if MacToolsSyntheticInputEvent.isMarked(event) {
@@ -2021,7 +2022,7 @@ final class MultitouchDeviceSession: MultitouchDeviceSessionManaging,
                     event: event
                 )
             }
-            return middleClickCoordinator.handleNativeEvent(type: type, event: event)
+            return middleClickCoordinator.handleNativeEvent(type: type, event: event, proxy: proxy)
         }
         if !middleClickCoordinator.hasTerminalNativePairsAwaitingUp {
             DispatchQueue.main.async { [weak self] in

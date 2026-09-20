@@ -6,6 +6,28 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryWindowStyleTests: XCTestCase {
+    func testHistoryPanelKeepsResizingAndTextEditingWithoutApplicationActivation() throws {
+        let panel = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 900, height: 620),
+            styleMask: ClipboardHistoryPanelController.panelStyleMask, backing: .buffered, defer: false)
+        PluginPanelPresentation.configure(panel)
+        defer { panel.close() }
+        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
+        XCTAssertTrue(panel.styleMask.contains(.titled))
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertFalse(panel.hidesOnDeactivate)
+        let field = NSTextField(frame: NSRect(x: 20, y: 20, width: 240, height: 24))
+        panel.contentView?.addSubview(field)
+        let originalPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        PluginPanelPresentation.present(panel)
+        XCTAssertTrue(panel.makeFirstResponder(field))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("Clipboard search", replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertEqual(field.stringValue, "Clipboard search")
+        XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, originalPID)
+        XCTAssertTrue(ClipboardSnippetKeywordExpander.isHostPanelKey)
+    }
+
     func testHistoryWindowMovesOnlyThroughItsExplicitDragHandle() {
         let panel = NSPanel()
         panel.isMovableByWindowBackground = true
@@ -65,31 +87,6 @@ final class ClipboardHistoryWindowStyleTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(collapsed.fittingSize.height, 36)
         XCTAssertEqual(expanded.fittingSize.width, 400, accuracy: 0.5)
         XCTAssertGreaterThan(expanded.fittingSize.height, collapsed.fittingSize.height + 180)
-    }
-
-    func testAdvancedDividerIsCompactTransparentAndHasATrailingHairline() throws {
-        for scheme in [ColorScheme.light, .dark] {
-            for title in ["Advanced", "高级", "Erweitert", "Расширенные настройки", "متقدم"] {
-                let view = ClipboardSettingsAdvancedDivider(title: title)
-                    .frame(width: 400)
-                    .environment(\.colorScheme, scheme)
-                let hosting = NSHostingView(rootView: view)
-                XCTAssertEqual(hosting.fittingSize.width, 400, accuracy: 0.5)
-                XCTAssertLessThan(hosting.fittingSize.height, 45, "The divider must not become another large card")
-
-                let renderer = ImageRenderer(content: view)
-                renderer.scale = 2
-                let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
-                XCTAssertEqual(try XCTUnwrap(bitmap.colorAt(x: 2, y: 2)).alphaComponent, 0)
-                let lineRows = (0..<bitmap.pixelsHigh).filter { y in
-                    (bitmap.colorAt(x: bitmap.pixelsWide - 2, y: y)?.alphaComponent ?? 0) > 0
-                }
-                XCTAssertFalse(lineRows.isEmpty, "The trailing horizontal rule must be visible")
-                XCTAssertLessThanOrEqual(lineRows.count, 2, "The rule must remain a hairline")
-                XCTAssertGreaterThan(try XCTUnwrap(lineRows.first), bitmap.pixelsHigh / 2,
-                    "More breathing room belongs above the divider than below it")
-            }
-        }
     }
 
     func testHistoryContentFillsNativeWindowFrameBeforeAndAfterResizing() throws {

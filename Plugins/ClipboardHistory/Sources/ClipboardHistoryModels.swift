@@ -258,6 +258,12 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
 
     var plainText: String? { plainTexts.first }
 
+    var hasSinglePlainTextRepresentation: Bool {
+        pasteboardItems.count == 1
+            && pasteboardItems[0].representations.count == 1
+            && pasteboardItems[0].representations[0].typeIdentifier == ClipboardRepresentationType.plainText
+    }
+
     var fileURLs: [URL] {
         representations.compactMap { representation in
             guard representation.typeIdentifier == ClipboardRepresentationType.fileURL,
@@ -633,7 +639,8 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     private let payloadReference: ClipboardHistoryPayloadReference
     let text: String
     let capturedAt: Date
-    let sourceApplication: ClipboardSourceApplication?
+    let source: ClipboardHistorySource
+    var sourceApplication: ClipboardSourceApplication? { source.application }
     let kind: ClipboardHistoryContentKind
     let payloadByteCount: Int
     let filterContentKinds: Set<ClipboardHistoryContentKind>
@@ -641,6 +648,8 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     let fileReferenceCount: Int
     let linkURLs: [URL]
     let representationTypeIdentifiers: [String]
+    let hasSinglePlainTextRepresentation: Bool?
+    var isPlainTextOnly: Bool { hasSinglePlainTextRepresentation == true }
     private(set) var semanticTraits: Set<ClipboardHistorySemanticTrait>
     let payloadDigest: Data
     let allowsRichTextImport: Bool
@@ -668,14 +677,15 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         hasCompletedImageTextIndexing: Bool = false,
         isInHistory: Bool = true,
         savedMetadata: ClipboardHistorySavedMetadata? = nil,
-        precomputedPayloadDigest: Data? = nil
+        precomputedPayloadDigest: Data? = nil,
+        source: ClipboardHistorySource? = nil
     ) {
         self.id = id
         payloadReference = ClipboardHistoryPayloadReference(payload: payload)
         let searchableText = payload.searchableText
         text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         self.capturedAt = capturedAt
-        self.sourceApplication = sourceApplication
+        self.source = source ?? ClipboardHistorySource(application: sourceApplication)
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
@@ -684,6 +694,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
+        hasSinglePlainTextRepresentation = payload.hasSinglePlainTextRepresentation
         payloadDigest = precomputedPayloadDigest ?? Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
         textCharacterCount = searchableText.count
@@ -704,7 +715,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         )
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: boundedImageSearchText
@@ -774,6 +785,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount: Int? = nil,
         linkURLs: [URL] = [],
         representationTypeIdentifiers: [String],
+        hasSinglePlainTextRepresentation: Bool? = nil,
         semanticTraits: Set<ClipboardHistorySemanticTrait>? = nil,
         searchIndex: ClipboardHistorySearchIndex? = nil,
         payloadDigest: Data,
@@ -787,6 +799,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         hasCompletedImageTextIndexing: Bool,
         isInHistory: Bool = true,
         savedMetadata: ClipboardHistorySavedMetadata? = nil,
+        source: ClipboardHistorySource? = nil,
         payloadLoader: @escaping @Sendable () throws -> ClipboardHistoryPayload
     ) {
         self.id = id
@@ -794,7 +807,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         let boundedText = String(text.prefix(Self.maximumSearchableCharacterCount))
         self.text = boundedText
         self.capturedAt = capturedAt
-        self.sourceApplication = sourceApplication
+        self.source = source ?? ClipboardHistorySource(application: sourceApplication)
         self.kind = kind
         self.payloadByteCount = payloadByteCount
         self.filterContentKinds = filterContentKinds
@@ -802,6 +815,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.fileReferenceCount = max(fileURLs.count, fileReferenceCount ?? fileURLs.count)
         self.linkURLs = linkURLs
         self.representationTypeIdentifiers = representationTypeIdentifiers
+        self.hasSinglePlainTextRepresentation = hasSinglePlainTextRepresentation
         let boundedImageSearchText = imageSearchText.map {
             String($0.prefix(Self.maximumSearchableCharacterCount))
         }
@@ -823,7 +837,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.hasCompletedImageTextIndexing = hasCompletedImageTextIndexing
         self.searchIndex = searchIndex ?? ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: boundedText, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: fileURLs,
             linkURLs: linkURLs,
             imageSearchText: boundedImageSearchText
@@ -880,14 +894,15 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             imageSearchText: capturedItem.imageSearchText,
             hasCompletedImageTextIndexing: capturedItem.hasCompletedImageTextIndexing,
             isInHistory: true,
-            savedMetadata: savedMetadata
+            savedMetadata: savedMetadata,
+            source: capturedItem.source
         )
     }
 
     private mutating func refreshSearchIndex() {
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: fileURLs,
             linkURLs: linkURLs,
             imageSearchText: imageSearchText
@@ -907,6 +922,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         case payload
         case capturedAt
         case sourceApplication
+        case source
         case lastUsedAt
         case imageSearchText
         case hasCompletedImageTextIndexing
@@ -922,10 +938,10 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         let searchableText = payload.searchableText
         text = String(searchableText.prefix(Self.maximumSearchableCharacterCount))
         capturedAt = try container.decode(Date.self, forKey: .capturedAt)
-        sourceApplication = try container.decodeIfPresent(
-            ClipboardSourceApplication.self,
-            forKey: .sourceApplication
-        )
+        source = try container.decodeIfPresent(ClipboardHistorySource.self, forKey: .source)
+            ?? ClipboardHistorySource(application: container.decodeIfPresent(
+                ClipboardSourceApplication.self, forKey: .sourceApplication
+            ))
         kind = payload.kind
         payloadByteCount = payload.byteCount
         filterContentKinds = payload.filterContentKinds
@@ -934,6 +950,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
+        hasSinglePlainTextRepresentation = payload.hasSinglePlainTextRepresentation
         imageSearchText = try container.decodeIfPresent(String.self, forKey: .imageSearchText).map {
             String($0.prefix(Self.maximumSearchableCharacterCount))
         }
@@ -959,7 +976,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         ) ?? false
         searchIndex = ClipboardHistorySearch.makeIndex(
             text: Self.searchableText(text: text, savedMetadata: savedMetadata),
-            sourceApplication: sourceApplication,
+            sourceApplication: self.source.application,
             fileURLs: payload.metadataFileURLs,
             linkURLs: payload.metadataLinkURLs,
             imageSearchText: imageSearchText
@@ -972,6 +989,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         try container.encode(loadPayload(), forKey: .payload)
         try container.encode(capturedAt, forKey: .capturedAt)
         try container.encodeIfPresent(sourceApplication, forKey: .sourceApplication)
+        try container.encodeIfPresent(source.storageOverride, forKey: .source)
         try container.encodeIfPresent(lastUsedAt, forKey: .lastUsedAt)
         try container.encodeIfPresent(imageSearchText, forKey: .imageSearchText)
         if !isInHistory {
@@ -987,7 +1005,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         lhs.id == rhs.id
             && lhs.text == rhs.text
             && lhs.capturedAt == rhs.capturedAt
-            && lhs.sourceApplication == rhs.sourceApplication
+            && lhs.source == rhs.source
             && lhs.kind == rhs.kind
             && lhs.payloadByteCount == rhs.payloadByteCount
             && lhs.filterContentKinds == rhs.filterContentKinds
@@ -995,6 +1013,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             && lhs.fileReferenceCount == rhs.fileReferenceCount
             && lhs.linkURLs == rhs.linkURLs
             && lhs.representationTypeIdentifiers == rhs.representationTypeIdentifiers
+            && lhs.hasSinglePlainTextRepresentation == rhs.hasSinglePlainTextRepresentation
             && lhs.semanticTraits == rhs.semanticTraits
             && lhs.payloadDigest == rhs.payloadDigest
             && lhs.allowsRichTextImport == rhs.allowsRichTextImport
@@ -1130,7 +1149,8 @@ enum ClipboardCapturePolicy {
         settings: ClipboardHistorySettings,
         newestItem: ClipboardHistoryItem?,
         now: Date = Date(),
-        makeID: () -> UUID = UUID.init
+        makeID: () -> UUID = UUID.init,
+        source: ClipboardHistorySource? = nil
     ) -> ClipboardCaptureDecision {
         guard let payload, !payload.pasteboardItems.isEmpty else {
             return .ignore(.empty)
@@ -1157,7 +1177,8 @@ enum ClipboardCapturePolicy {
             sourceApplication: sourceApplication,
             isPinned: false,
             lastUsedAt: nil,
-            precomputedPayloadDigest: payloadDigest
+            precomputedPayloadDigest: payloadDigest,
+            source: source
         ))
     }
 
@@ -1235,13 +1256,15 @@ enum ClipboardRetentionPolicy {
         _ items: [ClipboardHistoryItem],
         settings: ClipboardHistorySettings,
         now: Date = Date(),
-        protectedItemIDs: Set<UUID> = []
+        protectedItemIDs: Set<UUID> = [],
+        shortcutRetainedItemIDs: Set<UUID> = []
     ) -> [ClipboardHistoryItem] {
         evaluate(
             items,
             settings: settings,
             now: now,
-            protectedItemIDs: protectedItemIDs
+            protectedItemIDs: protectedItemIDs,
+            shortcutRetainedItemIDs: shortcutRetainedItemIDs
         ).items
     }
 
@@ -1249,7 +1272,8 @@ enum ClipboardRetentionPolicy {
         _ items: [ClipboardHistoryItem],
         settings: ClipboardHistorySettings,
         now: Date = Date(),
-        protectedItemIDs: Set<UUID> = []
+        protectedItemIDs: Set<UUID> = [],
+        shortcutRetainedItemIDs: Set<UUID> = []
     ) -> ClipboardRetentionResult {
         let historyItems = items.filter(\.isInHistory)
         let newestFirstItems: [ClipboardHistoryItem]
@@ -1264,7 +1288,9 @@ enum ClipboardRetentionPolicy {
         if let interval = settings.expiration.interval {
             let cutoff = now.addingTimeInterval(-interval)
             unexpired = newestFirstItems.filter {
-                protectedItemIDs.contains($0.id) || $0.capturedAt >= cutoff
+                protectedItemIDs.contains($0.id)
+                    || shortcutRetainedItemIDs.contains($0.id)
+                    || $0.capturedAt >= cutoff
             }
         } else {
             unexpired = newestFirstItems
@@ -1272,18 +1298,23 @@ enum ClipboardRetentionPolicy {
         let queueProtected = unexpired.filter {
             protectedItemIDs.contains($0.id)
         }
+        // Shortcut-retained History remains available until its timer ends, but it does not
+        // consume the ordinary History count or payload budget used for new captures.
+        let shortcutRetained = unexpired.filter {
+            !protectedItemIDs.contains($0.id) && shortcutRetainedItemIDs.contains($0.id)
+        }
         let recent = unexpired.filter {
-            !protectedItemIDs.contains($0.id)
+            !protectedItemIDs.contains($0.id) && !shortcutRetainedItemIDs.contains($0.id)
         }
         let maximumItemCount = max(0, settings.maximumItemCount)
 
         // Active sequential queues protect their immutable snapshot until completion or
-        // cancellation. Every other History item remains subject to ordinary retention.
-        var retained = queueProtected
-        let protectedItemCount = retained.count
-        let protectedPayloadBytes = retained.reduce(0) { $0 + $1.payloadByteCount }
+        // cancellation. Shortcut-retained items are exempt from ordinary History retention.
+        var retained = queueProtected + shortcutRetained
+        let protectedItemCount = queueProtected.count
+        let protectedPayloadBytes = queueProtected.reduce(0) { $0 + $1.payloadByteCount }
         var retainedPayloadBytes = protectedPayloadBytes
-        let availableRecentCount = max(0, maximumItemCount - retained.count)
+        let availableRecentCount = max(0, maximumItemCount - queueProtected.count)
         var retainedRecentCount = 0
         for item in recent {
             if retainedRecentCount >= availableRecentCount {

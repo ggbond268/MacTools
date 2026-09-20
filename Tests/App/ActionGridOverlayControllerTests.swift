@@ -63,15 +63,6 @@ final class ActionGridOverlayControllerTests: XCTestCase {
         XCTAssertNil(ActionSurfaceExecutionSupport.feedback(for: .completed(.succeeded())))
     }
 
-    func testConfirmationSheetKeepsActionGridAliveWhilePanelResignsKey() {
-        XCTAssertFalse(ActionGridPanelDismissalPolicy.shouldCloseWhenResigningKey(
-            isPresentingConfirmation: true
-        ))
-        XCTAssertTrue(ActionGridPanelDismissalPolicy.shouldCloseWhenResigningKey(
-            isPresentingConfirmation: false
-        ))
-    }
-
     func testConfirmationRequiredActionUsesGridAnchoredPresenter() async throws {
         let plugin = ConfirmationActionGridTestPlugin()
         let host = makePluginHostForTests(plugins: [plugin])
@@ -754,7 +745,7 @@ final class ActionGridOverlayControllerTests: XCTestCase {
 
         let tile = try XCTUnwrap(controller.presentedEntries.first)
         XCTAssertEqual(tile.title, "Feature Panel")
-        XCTAssertEqual(tile.invocationTitle, "Toggle Feature Panel")
+        XCTAssertEqual(tile.invocationTitle, "Panel 2")
         XCTAssertNil(tile.tileStatus)
         XCTAssertTrue(tile.helpText.contains("MacTools"))
     }
@@ -815,6 +806,12 @@ final class ActionGridOverlayControllerTests: XCTestCase {
         XCTAssertTrue(behavior.contains(.fullScreenAuxiliary))
         XCTAssertTrue(behavior.contains(.transient))
         XCTAssertTrue(behavior.contains(.ignoresCycle))
+        XCTAssertTrue(behavior.contains(.canJoinAllApplications))
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier == ActionGridOverlayController.panelIdentifier && $0.isVisible
+        })
+        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
+        XCTAssertFalse(panel.canBecomeMain)
 
         let escape = try XCTUnwrap(
             NSEvent.keyEvent(
@@ -877,21 +874,20 @@ final class ActionGridOverlayControllerTests: XCTestCase {
         XCTAssertTrue(controller.isShown)
     }
 
-    func testPointerDismissalKeepsInsideClickAndClosesForOutsideClick() throws {
+    func testLosingPanelKeyboardFocusClosesThroughSharedDismissalMonitor() async throws {
         let host = makePluginHostForTests(plugins: [])
         let controller = ActionGridOverlayController(pluginHost: host)
         defer { controller.close(restoringFocus: false) }
 
         XCTAssertTrue(controller.present(entries: [testEntry()]))
-        let frame = try XCTUnwrap(controller.presentedPanelFrame)
-        controller.dismissIfPointerIsOutside(
-            CGPoint(x: frame.midX, y: frame.midY)
-        )
-        XCTAssertTrue(controller.isShown)
-
-        controller.dismissIfPointerIsOutside(
-            CGPoint(x: frame.maxX + 1, y: frame.maxY + 1)
-        )
+        let other = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 200, height: 100),
+                            styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        defer { other.close() }
+        PluginPanelPresentation.present(other)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
         XCTAssertFalse(controller.isShown)
     }
 
@@ -928,8 +924,9 @@ final class ActionGridOverlayControllerTests: XCTestCase {
         )
         XCTAssertTrue(controller.processKeyEvent(enter))
 
-        for _ in 0 ..< 50 where presentationRequests.isEmpty || controller.isShown {
-            await Task.yield()
+        let deadline = ContinuousClock.now + .seconds(2)
+        while (presentationRequests.isEmpty || controller.isShown), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
         }
 
         XCTAssertEqual(presentationRequests, [.toggleDashboard])

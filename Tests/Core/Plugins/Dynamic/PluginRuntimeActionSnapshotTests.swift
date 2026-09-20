@@ -40,6 +40,8 @@ import NightShiftPlugin
 import PhysicalCleanModePlugin
 import QuitAppsPlugin
 import SavedScriptsPlugin
+import ScreenshotPlugin
+import SiriPlugin
 import SidecarPlugin
 import StageManagerPlugin
 import SystemMutePlugin
@@ -327,6 +329,8 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
         .init(pluginID: "physical-clean-mode", makeProvider: PhysicalCleanModePluginFactory.makeProvider),
         .init(pluginID: "quit-apps", makeProvider: QuitAppsPluginFactory.makeProvider),
         .init(pluginID: "saved-scripts", makeProvider: SavedScriptsPluginFactory.makeProvider),
+        .init(pluginID: "screenshot", makeProvider: ScreenshotPluginFactory.makeProvider),
+        .init(pluginID: "siri", makeProvider: SiriPluginFactory.makeProvider),
         .init(pluginID: "sidecar", makeProvider: SidecarPluginFactory.makeProvider),
         .init(pluginID: "stage-manager", makeProvider: StageManagerPluginFactory.makeProvider),
         .init(pluginID: "system-mute", makeProvider: SystemMutePluginFactory.makeProvider),

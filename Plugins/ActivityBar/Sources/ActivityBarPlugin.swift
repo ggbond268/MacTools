@@ -25,7 +25,7 @@ private struct ActivityBarPluginProvider: PluginProvider {
 
 @MainActor
 final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel,
-    PluginActionProviding, PluginActionPermissionProviding
+    PluginActionProviding, PluginActionPermissionProviding, PluginPanelSurfaceLifecycleHandling
 {
     private enum ActionID {
         static let setTrackingEnabled = "set-tracking-enabled"
@@ -63,6 +63,8 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
 
     private let localization: PluginLocalization
     private let controller: ActivityBarController
+    private let componentPresentation = ActivityBarComponentPresentation()
+    private var visiblePanelSurfaces: Set<PluginPanelSurface> = []
     private var isExpanded = false
     private var dashboardSpanHeight = PluginComponentPanelLayoutMetrics.default.heightSpan(
         closestToOriginalSpanHeight: 9
@@ -94,6 +96,10 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
             )
         )
         self.controller = controller ?? ActivityBarController(context: context, localization: localization)
+        self.controller.onStatisticsChange = { [weak self] in
+            guard let self, !self.visiblePanelSurfaces.isEmpty else { return }
+            self.onStateChange?()
+        }
     }
 
     var primaryPanelState: PluginPanelState {
@@ -243,6 +249,7 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        visiblePanelSurfaces.removeAll()
         controller.deactivate(reason: reason)
     }
 
@@ -265,12 +272,28 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
         }
     }
 
-    func makeView(context _: PluginComponentContext) -> AnyView {
+    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
+        guard visiblePanelSurfaces.insert(surface).inserted else { return }
+        if surface == .component {
+            controller.refresh()
+        } else {
+            // Primary rows need the latest count, not a synchronous persistence flush.
+            onStateChange?()
+        }
+    }
+
+    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
+        visiblePanelSurfaces.remove(surface)
+    }
+
+    func makeView(context: PluginComponentContext) -> AnyView {
         AnyView(
             ActivityBarComponentView(
                 controller: controller,
                 localization: localization,
+                presentation: context.isPanelVisible ? componentPresentation : ActivityBarComponentPresentation(),
                 onContentHeightChange: { [weak self] height in
+                    guard context.isPanelVisible else { return }
                     self?.dashboardContentHeightDidChange(height)
                 }
             )
