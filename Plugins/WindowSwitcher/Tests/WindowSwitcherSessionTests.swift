@@ -698,6 +698,160 @@ final class WindowSwitcherSessionTests: XCTestCase {
         }
     }
 
+    func testCyclingIgnoresCommandFBeforeHeldModifiersBecomeText() throws {
+        for held: NSEvent.ModifierFlags in [.command, .option, [.command, .option]] {
+            let controller = WindowSwitcherOverlayController()
+            controller.show(WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: false,
+                originalWindowID: nil, invocationModifiers: held), currentPID: 100, showsPreview: false)
+            defer { controller.hide() }
+            let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+            let responder = try XCTUnwrap(panel.firstResponder)
+            func key(_ text: String, code: Int, flags: NSEvent.ModifierFlags, repeated: Bool = false) throws -> NSEvent {
+                try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: text,
+                    charactersIgnoringModifiers: text, isARepeat: repeated, keyCode: UInt16(code)))
+            }
+            for flags in [NSEvent.ModifierFlags.command, held.union(.command)] {
+                let find = try key("f", code: kVK_ANSI_F, flags: flags)
+                XCTAssertTrue(panel.performKeyEquivalent(with: find))
+                panel.sendEvent(try key("f", code: kVK_ANSI_F, flags: flags, repeated: true))
+                responder.keyDown(with: find)
+                XCTAssertTrue(panel.firstResponder === responder)
+                XCTAssertFalse(controller.isEditingSearch)
+                XCTAssertEqual(controller.session?.isPersistent, false)
+                XCTAssertEqual(controller.session?.query, "")
+                XCTAssertEqual(controller.session?.selectedID, "one")
+            }
+
+            // Other letters still enter search while the invocation chord is held.
+            panel.sendEvent(try key("w", code: kVK_ANSI_W, flags: held))
+            XCTAssertEqual(controller.session?.query, "w")
+            XCTAssertTrue(controller.isEditingSearch)
+            let editor = try XCTUnwrap(panel.firstResponder as? NSTextView)
+            let find = try key("f", code: kVK_ANSI_F, flags: held.union(.command))
+            XCTAssertTrue(panel.performKeyEquivalent(with: find))
+            panel.sendEvent(find)
+            XCTAssertEqual(controller.session?.query, "w", "Held Command-F must not append F after search has opened")
+            editor.setMarkedText("pin", selectedRange: NSRange(location: 3, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+            panel.sendEvent(find)
+            XCTAssertTrue(editor.hasMarkedText())
+            editor.unmarkText()
+
+            // F without Command remains ordinary text input.
+            let release = try XCTUnwrap(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+                isARepeat: false, keyCode: UInt16(kVK_Command)))
+            panel.sendEvent(release)
+            editor.selectAll(nil)
+            panel.sendEvent(try key("f", code: kVK_ANSI_F, flags: []))
+            XCTAssertEqual(controller.session?.query, "f")
+        }
+    }
+
+    func testSearchSelectDoesNotUseCommandFToFocusOrChangeSearch() throws {
+        let controller = WindowSwitcherOverlayController()
+        controller.show(WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: true,
+            originalWindowID: nil), currentPID: 100, showsPreview: false)
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        let responder = try XCTUnwrap(panel.firstResponder)
+        let find = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "f",
+                    charactersIgnoringModifiers: "f", isARepeat: false, keyCode: UInt16(kVK_ANSI_F)))
+        panel.sendEvent(find)
+        XCTAssertTrue(panel.firstResponder === responder)
+        XCTAssertFalse(controller.isEditingSearch)
+        XCTAssertEqual(controller.session?.query, "")
+    }
+
+    func testDirectKeyTabNavigationWrapsWithinScopeWithoutActivating() throws {
+        for layout in [WindowSwitcherLayout.grid, .list] {
+            let controller = WindowSwitcherOverlayController()
+            let entries = [entry("one"), entry("other", pid: 200), entry("two"), entry("three")]
+            controller.show(WindowSwitcherSession(entries: entries, selectedID: "one", scope: .currentApplication(100),
+                isPersistent: true, originalWindowID: nil, usesDirectKeys: true),
+                currentPID: 100, showsPreview: false, preferredLayout: layout)
+            defer { controller.hide() }
+            let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+            let responder = try XCTUnwrap(panel.firstResponder)
+            var opened: [String] = []
+            var changes: [String?] = []
+            controller.onSelect = { opened.append($0.id) }
+            controller.onSessionChange = { changes.append($0.selectedID) }
+            func tab(_ flags: NSEvent.ModifierFlags = [], repeated: Bool = false) throws -> NSEvent {
+                try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\t",
+                    charactersIgnoringModifiers: "\t", isARepeat: repeated, keyCode: UInt16(kVK_Tab)))
+            }
+            panel.sendEvent(try tab())
+            XCTAssertEqual(controller.session?.selectedID, "two")
+            XCTAssertTrue(panel.performKeyEquivalent(with: try tab(.shift)))
+            XCTAssertEqual(controller.session?.selectedID, "one")
+            responder.keyDown(with: try tab(.shift))
+            XCTAssertEqual(controller.session?.selectedID, "three")
+            panel.sendEvent(try tab(repeated: true))
+            XCTAssertEqual(controller.session?.selectedID, "one")
+            XCTAssertEqual(changes, ["two", "one", "three", "one"])
+            for flags: NSEvent.ModifierFlags in [.command, .option, .control] {
+                XCTAssertFalse(controller.handleChooserShortcut(try tab(flags)), "Modified Tab keeps its configured behavior")
+            }
+            XCTAssertTrue(panel.firstResponder === responder)
+            XCTAssertTrue(opened.isEmpty)
+            XCTAssertEqual(controller.session?.scope, .currentApplication(100))
+            XCTAssertEqual(controller.session?.usesDirectKeys, true)
+            XCTAssertEqual(controller.session?.isPersistent, true)
+            XCTAssertFalse(controller.isEditingSearch)
+            let enter = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: UInt16(kVK_Return)))
+            responder.keyDown(with: enter)
+            XCTAssertEqual(opened, ["one"])
+        }
+    }
+
+    func testDirectKeyTabPreservesSearchAndRecordingAndHandlesSmallResults() throws {
+        let controller = WindowSwitcherOverlayController()
+        let entries = [entry("one", title: "Project"), entry("two", title: "Project Notes")]
+        defer { controller.hide() }
+        for count in [0, 1, 2] {
+            controller.show(WindowSwitcherSession(entries: Array(entries.prefix(count)), selectedID: count > 0 ? "one" : nil,
+                isPersistent: true, originalWindowID: nil, usesDirectKeys: true), currentPID: 100, showsPreview: false)
+            let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+            let tab = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\t",
+                charactersIgnoringModifiers: "\t", isARepeat: false, keyCode: UInt16(kVK_Tab)))
+            if count < 2 {
+                panel.sendEvent(tab)
+                XCTAssertEqual(controller.session?.selectedID, count == 0 ? nil : "one")
+                XCTAssertEqual(controller.session?.usesDirectKeys, true)
+                controller.hide()
+                continue
+            }
+            func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+            let views = descendants(try XCTUnwrap(panel.contentView))
+            let search = try XCTUnwrap(views.first { $0.identifier?.rawValue == "window-switcher-search" } as? NSTextField)
+            let button = try XCTUnwrap(views.first { $0.identifier?.rawValue == "window-switcher-enter-search" } as? NSButton)
+            button.performClick(nil)
+            let editor = try XCTUnwrap(search.currentEditor() as? NSTextView)
+            editor.insertText("Project", replacementRange: NSRange(location: NSNotFound, length: 0))
+            XCTAssertFalse(controller.handleChooserShortcut(tab), "Tab belongs to the native editor while searching")
+            panel.sendEvent(tab)
+            XCTAssertEqual(controller.session?.selectedID, "one")
+            XCTAssertEqual(controller.session?.query, "Project")
+            button.performClick(nil)
+            panel.sendEvent(tab)
+            XCTAssertEqual(controller.session?.selectedID, "two")
+            let edit = try XCTUnwrap(controller.contextMenu(forRow: 1)?.items.last)
+            XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(edit.action), to: edit.target, from: edit))
+            let cancel = try XCTUnwrap(views.first { $0.identifier?.rawValue == "window-shortcut-recording-cancel" } as? NSButton)
+            XCTAssertFalse(cancel.isHidden)
+            panel.sendEvent(tab)
+            XCTAssertFalse(cancel.isHidden, "Tab must not leave shortcut recording")
+            XCTAssertEqual(controller.session?.selectedID, "two")
+            XCTAssertFalse(controller.isEditingSearch)
+        }
+    }
+
     func testInlineSearchSharesNarrowFilterRowAndClosingPreservesFilters() async throws {
         var first = entry("first", title: "Project"); first.windowNumber = 1
         first.displayID = 1; first.displayNameContext = "Built-in Display"
@@ -1387,7 +1541,7 @@ final class WindowSwitcherSessionTests: XCTestCase {
     }
 
     func testHeldCommandLettersStartSearchInsteadOfRunningCommands() throws {
-        for (text, code) in [("f", kVK_ANSI_F), ("w", kVK_ANSI_W), ("q", kVK_ANSI_Q)] {
+        for (text, code) in [("w", kVK_ANSI_W), ("q", kVK_ANSI_Q)] {
             let controller = WindowSwitcherOverlayController()
             var session = WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: false, originalWindowID: nil)
             session.invocationModifiers = .command

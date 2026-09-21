@@ -81,7 +81,9 @@ Try development features with `MacTools-Nightly.dmg` from a [`nightly-*` prerele
 
 Search actions, settings, workflows, and plugins from the **Command Palette**. Press **⌘K** within MacTools, or assign a global shortcut to open it from anywhere. Use **Action Grid**, keyboard shortcuts, mouse mappings, or trackpad gestures for frequent actions; connect Apple Shortcuts, saved scripts, and [Run Links](docs/url-scheme.md) to your setup.
 
-Window Switcher keeps search collapsed in direct-key and cycling modes. All Windows sits beside the display filter and expands when an app scope is available; Search, More, and the grid/list control align to the right. Click Search to expand and focus search. In Direct Keys mode, **⌘F** also opens search and is consumed by the panel; window-key assignments reserve it for search. Cycling retains its existing keyboard behavior. Close Search clears the query and restores the previous mode while keeping scope and display filters. Search Select mode keeps its full-width search field.
+Window Switcher keeps search collapsed in direct-key and cycling modes. All Windows sits beside the display filter and expands when an app scope is available; Search, More, and the grid/list control align to the right. Click Search to expand and focus search. Only Direct Keys supports **⌘F** to open or refocus search; the panel consumes the event and reserves the shortcut from window assignments. Cycling ignores **⌘F**, so it neither opens search nor inserts F while invocation modifiers are held. Close Search clears the query and restores the previous mode while keeping scope and display filters. Search Select mode keeps its full-width search field.
+
+In Direct Keys mode, **Tab** selects the next window and **Shift-Tab** selects the previous one, wrapping within the current results. **Return** opens the selected window. Search editing and shortcut recording keep their own Tab behavior.
 
 Switching between grid and list keeps the selected window and visible shortcut numbers in sync, including after scrolling or filtering. Scrollbars hide when all results fit, and the grid stays clear of overlaid navigation buttons.
 

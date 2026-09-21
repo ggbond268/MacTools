@@ -22,12 +22,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private(set) var session: WindowSwitcherSession?
 
     private final class Panel: NSPanel {
-        var directSearchShortcutHandler: ((NSEvent) -> Bool)?
+        var searchShortcutHandler: ((NSEvent) -> Bool)?
         var shortcutHandler: ((NSEvent) -> Bool)?
         var searchEventFilter: ((NSEvent) -> NSEvent)?
         var searchTransitionHandler: ((NSEvent) -> Bool)?
         override func sendEvent(_ event: NSEvent) {
-            if directSearchShortcutHandler?(event) == true { return }
+            if searchShortcutHandler?(event) == true { return }
             let filtered = searchEventFilter?(event) ?? event
             if filtered.type == .keyDown {
                 if shortcutHandler?(filtered) == true || searchTransitionHandler?(filtered) == true { return }
@@ -37,7 +37,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            if directSearchShortcutHandler?(event) == true { return true }
+            if searchShortcutHandler?(event) == true { return true }
             let filtered = searchEventFilter?(event) ?? event
             if filtered.modifierFlags != event.modifierFlags {
                 // Consume the original chord so AppKit cannot retry menus with
@@ -119,6 +119,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private var usesInlineSearch = false
     private var isInlineSearchExpanded = false
     private var modeBeforeSearch: (isPersistent: Bool, usesDirectKeys: Bool)?
+    private var supportsSearchShortcut: Bool {
+        session != nil && (session?.usesDirectKeys == true || modeBeforeSearch?.usesDirectKeys == true)
+    }
     private let previewDivider = NSBox()
     private let count = NSTextField(labelWithString: "")
     private let footer = NSTextField(wrappingLabelWithString: "")
@@ -369,7 +372,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     private func buildPanel() {
         panel.identifier = NSUserInterfaceItemIdentifier("WindowSwitcherChooser")
-        panel.directSearchShortcutHandler = { [weak self] event in self?.handleDirectSearchShortcut(event) ?? false }
+        panel.searchShortcutHandler = { [weak self] event in self?.handleSearchShortcut(event) ?? false }
         panel.searchEventFilter = { [weak self] event in self?.filterSearchEvent(event) ?? event }
         panel.searchTransitionHandler = { [weak self] event in
             guard let self, let session, !session.isPersistent,
@@ -797,8 +800,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             ("chooser.open", "打开窗口", "Return"), ("chooser.cancel", "取消", "Esc"),
             ("chooser.close", "关闭窗口", "⌘W"), ("chooser.quit", "退出应用", "⌘Q"),
             ("chooser.contextActions", "窗口操作", "⇧F10"),
-            ("chooser.focusNext", "下一个控件", "Tab / ⇧Tab")
+            (session?.usesDirectKeys == true ? "chooser.selectWindow" : "chooser.focusNext",
+             session?.usesDirectKeys == true ? "选择窗口" : "下一个控件", "Tab / ⇧Tab")
         ] {
+            if chord == "⌘F" && !supportsSearchShortcut { continue }
             if session?.usesDirectKeys == true && chord.hasPrefix("⌘") && chord != "⌘F" { continue }
             if ["⌘W", "⌘Q"].contains(chord), session?.protectedCommandKeys.contains(chord == "⌘W" ? "w" : "q") == true { continue }
             let item = NSMenuItem(title: localization.string(key, defaultValue: fallback) + "   " + chord, action: nil, keyEquivalent: "")
@@ -820,7 +825,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         if showsAppScope { scope.setToolTip("\(scope.label(forSegment: 1) ?? "") · ⌘⇧2", forSegment: 1) }
         display.toolTip = "\(localization.string("chooser.displayFilter", defaultValue: "显示器筛选")) · ⌘D"
         previewButton.title += " ⌘P"
-        search.toolTip = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用") + " · ⌘F"
+        search.toolTip = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
+            + (supportsSearchShortcut ? " · ⌘F" : "")
         updateSearchButton()
         if session?.usesDirectKeys == true {
             scope.setToolTip(scope.label(forSegment: 0), forSegment: 0)
@@ -1137,13 +1143,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     @discardableResult
     func handleChooserShortcut(_ event: NSEvent) -> Bool {
-        if handleDirectSearchShortcut(event) { return true }
+        if handleSearchShortcut(event) { return true }
         if event.keyCode == UInt16(kVK_F10),
            event.modifierFlags.intersection([.command, .option, .control, .shift]) == .shift {
             showSelectedContextMenu()
             return true
         }
         if recordingEntryID != nil { return recordShortcut(event) }
+        if handleDirectTabNavigation(event) { return true }
         if session?.usesDirectKeys == true { return handleDirectKey(event) }
         guard session != nil, var key = event.charactersIgnoringModifiers?.lowercased() else { return false }
         // Shift-number characters are punctuation on many layouts. Match the
@@ -1156,7 +1163,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let digit = Int(key).flatMap { (1...9).contains($0) ? $0 : nil }
         let zoomKey = (modifiers == .command && ["+", "=", "-", "0"].contains(key)) ||
             (modifiers == [.command, .shift] && ["+", "="].contains(key))
-        let recognized = zoomKey || (modifiers == .command && (digit != nil || ["d", "p", "f", "w", "q", "k"].contains(key)))
+        let recognized = zoomKey || (modifiers == .command && (digit != nil || ["d", "p", "w", "q", "k"].contains(key)))
             || ((modifiers == [.command, .option] || modifiers == [.command, .shift]) && ["1", "2"].contains(key))
         guard recognized else { return false }
         if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
@@ -1180,7 +1187,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             case "d": display.performClick(nil)
             case "p": previewButton.state = showsPreview ? .off : .on; previewChanged()
             case "k": more.performClick(nil)
-            case "f": enterSearch()
             case "w": closeSelected()
             case "q": quitSelected()
             default: return false
@@ -1189,15 +1195,24 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         return true
     }
 
-    private func handleDirectSearchShortcut(_ event: NSEvent) -> Bool {
-        guard event.type == .keyDown, session != nil, recordingEntryID == nil,
-              session?.usesDirectKeys == true || modeBeforeSearch?.usesDirectKeys == true,
-              event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+    private func handleSearchShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, let session, recordingEntryID == nil,
               event.charactersIgnoringModifiers?.lowercased() == "f" else { return false }
-        // Direct Keys reserves Find, including while its inline search is open.
-        // Cycling keeps its existing handling of held invocation modifiers.
-        // An active input-method composition keeps its existing editor and text.
-        if (search.currentEditor() as? NSTextView)?.hasMarkedText() != true { enterSearch() }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        let heldModifiers = session.isPersistent ? searchHeldModifiers : session.invocationModifiers
+        let shortcutModifiers = supportsSearchShortcut ? modifiers : modifiers.subtracting(heldModifiers.subtracting(.command))
+        guard shortcutModifiers == .command else { return false }
+        // Consume Find before modifier filtering can turn Command-F into text.
+        // Only Direct Keys opens search; other modes ignore the chord.
+        if supportsSearchShortcut, (search.currentEditor() as? NSTextView)?.hasMarkedText() != true { enterSearch() }
+        return true
+    }
+
+    private func handleDirectTabNavigation(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, event.keyCode == UInt16(kVK_Tab),
+              session?.usesDirectKeys == true, recordingEntryID == nil,
+              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
+        move(event.modifierFlags.contains(.shift) ? -1 : 1)
         return true
     }
 
@@ -1318,9 +1333,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     private func handleKey(_ original: NSEvent) -> Bool {
-        if handleDirectSearchShortcut(original) { return true }
+        if handleSearchShortcut(original) { return true }
         var event = original
         if recordingEntryID != nil { return recordShortcut(event) }
+        if handleDirectTabNavigation(event) { return true }
         if session?.usesDirectKeys == true, handleDirectKey(event) { return true }
         switch Int(event.keyCode) {
         case kVK_Tab:
@@ -1342,7 +1358,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             }
             let command = event.modifierFlags.contains(.command)
             let key = event.charactersIgnoringModifiers?.lowercased()
-            if command && key != "f" && key != "v" { return false }
+            if command && key != "v" { return false }
             guard let text = event.charactersIgnoringModifiers, !text.isEmpty,
                   !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return false }
             beginSearch()
