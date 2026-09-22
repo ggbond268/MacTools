@@ -35,6 +35,7 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
 
     struct ApplicationPreferences: Codable, Equatable, Sendable {
         let appearancePreference: String
+        let floatingPanelAppearance: String?
         let languagePreference: String
         // Decode older backups only; current exports store the panel order instead.
         let menuBarClickBehavior: String?
@@ -43,12 +44,14 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
 
         init(
             appearancePreference: String,
+            floatingPanelAppearance: String? = nil,
             languagePreference: String,
             menuBarClickBehavior: String? = nil,
             settingsSidebarPluginSortMode: String? = nil,
             settingsSidebarCustomPluginOrder: [String]? = nil
         ) {
             self.appearancePreference = appearancePreference
+            self.floatingPanelAppearance = floatingPanelAppearance
             self.languagePreference = languagePreference
             self.menuBarClickBehavior = menuBarClickBehavior
             self.settingsSidebarPluginSortMode = settingsSidebarPluginSortMode
@@ -606,5 +609,6 @@ protocol PreferencesBackupApplicationStoring: AnyObject {
     func validates(_ preferences: PreferencesBackup.ApplicationPreferences) -> Bool
     func apply(_ preferences: PreferencesBackup.ApplicationPreferences)
     func setAppearancePreference(rawValue: String) -> Bool
+    func setFloatingPanelAppearance(rawValue: String) -> Bool
     func setLanguagePreference(rawValue: String) -> Bool
 }

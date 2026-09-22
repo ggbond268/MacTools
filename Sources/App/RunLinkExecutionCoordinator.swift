@@ -22,10 +22,16 @@ struct RunLinkExecutionFeedback: Equatable, Sendable {
         }
     }
 
+    enum BackgroundStyle: Equatable, Sendable {
+        case runLinkMaterial
+        case floatingPanel
+    }
+
     let tone: Tone
     let title: String
     let message: String
     let presentation: Presentation
+    let backgroundStyle: BackgroundStyle
     let dismissDelay: Duration?
 
     var accessibilityLabel: String {
@@ -42,12 +48,14 @@ struct RunLinkExecutionFeedback: Equatable, Sendable {
         title: String,
         message: String,
         presentation: Presentation = .standard,
+        backgroundStyle: BackgroundStyle = .runLinkMaterial,
         dismissDelay: Duration? = nil
     ) {
         self.tone = tone
         self.title = title
         self.message = message
         self.presentation = presentation
+        self.backgroundStyle = backgroundStyle
         self.dismissDelay = dismissDelay
     }
 }
@@ -164,15 +172,27 @@ private struct RunLinkFeedbackView: View {
             height: feedback.presentation.size.height
         )
         .background {
+            background
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(feedback.accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        switch feedback.backgroundStyle {
+        case .runLinkMaterial:
             RoundedRectangle(cornerRadius: 14)
                 .fill(
                     reduceTransparency
                         ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
                         : AnyShapeStyle(.regularMaterial)
                 )
+        case .floatingPanel:
+            PluginFloatingPanelSurface(
+                shape: .roundedRectangle(cornerRadius: 14)
+            )
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(feedback.accessibilityLabel)
     }
 }
 
@@ -208,25 +228,29 @@ enum WindowLayoutActionFeedback {
                 title: message,
                 message: actionTitle,
                 presentation: .compact,
+                backgroundStyle: .floatingPanel,
                 dismissDelay: .milliseconds(1_100)
             )
         case let .completed(.failed(message)):
             return RunLinkExecutionFeedback(
                 tone: .failure,
                 title: actionTitle,
-                message: message
+                message: message,
+                backgroundStyle: .floatingPanel
             )
         case .completed(.cancelled):
             return RunLinkExecutionFeedback(
                 tone: .failure,
                 title: actionTitle,
-                message: FeatureL10n.string("操作已取消。")
+                message: FeatureL10n.string("操作已取消。"),
+                backgroundStyle: .floatingPanel
             )
         case let .rejected(rejection):
             return RunLinkExecutionFeedback(
                 tone: .failure,
                 title: actionTitle,
-                message: ActionSurfaceExecutionSupport.message(for: rejection)
+                message: ActionSurfaceExecutionSupport.message(for: rejection),
+                backgroundStyle: .floatingPanel
             )
         }
     }

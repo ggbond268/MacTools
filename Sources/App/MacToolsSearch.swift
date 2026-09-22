@@ -726,6 +726,19 @@ enum MacToolsSearchIndexBuilder {
                 systemImage: "circle.lefthalf.filled"
             ),
             generalSettingResult(
+                target: .floatingPanels,
+                title: AppL10n.settings(
+                    "floatingPanelAppearance.title",
+                    defaultValue: "浮动面板外观"
+                ),
+                detail: AppL10n.settings(
+                    "floatingPanelAppearance.description",
+                    defaultValue: "跟随 macOS 的透明效果，或使用不透明的实色背景。"
+                ),
+                keywords: PluginFloatingPanelAppearance.allCases.map(\.title),
+                systemImage: "rectangle.on.rectangle"
+            ),
+            generalSettingResult(
                 target: .language,
                 title: AppL10n.settings("language.title", defaultValue: "语言"),
                 detail: AppL10n.settings(

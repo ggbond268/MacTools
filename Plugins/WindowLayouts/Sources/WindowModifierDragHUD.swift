@@ -64,7 +64,12 @@ struct WindowModifierDragHUDView: View {
         .padding(.vertical, 5)
         .foregroundStyle(foregroundColor)
         .background {
-            backgroundPill
+            ZStack {
+                PluginFloatingPanelSurface(shape: .capsule)
+                if case .active = state {
+                    Capsule().fill(Color.accentColor)
+                }
+            }
         }
         .overlay {
             Capsule()
@@ -87,20 +92,6 @@ struct WindowModifierDragHUDView: View {
             return .white
         case .failure:
             return .primary
-        }
-    }
-
-    @ViewBuilder
-    private var backgroundPill: some View {
-        switch state {
-        case .active:
-            Capsule().fill(Color.accentColor)
-        case .armed, .failure:
-            if reduceTransparency {
-                Capsule().fill(Color(nsColor: .windowBackgroundColor))
-            } else {
-                Capsule().fill(.regularMaterial)
-            }
         }
     }
 

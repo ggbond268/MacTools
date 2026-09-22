@@ -1,4 +1,5 @@
 import Foundation
+import MacToolsPluginKit
 
 @MainActor
 final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
@@ -17,6 +18,7 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
         let sidebarSortMode = SettingsSidebarPreferencesStore.storedSortMode(in: userDefaults)
         return PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.stored(in: userDefaults).rawValue,
+            floatingPanelAppearance: PluginFloatingPanelAppearance.stored(in: userDefaults).rawValue,
             languagePreference: AppLanguagePreference.stored(in: userDefaults).rawValue,
             settingsSidebarPluginSortMode: sidebarSortMode.rawValue,
             settingsSidebarCustomPluginOrder:
@@ -25,9 +27,13 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
     }
 
     func validates(_ preferences: PreferencesBackup.ApplicationPreferences) -> Bool {
-        guard AppAppearancePreference(rawValue: preferences.appearancePreference) != nil
-            && AppLanguagePreference(rawValue: preferences.languagePreference) != nil
+        guard AppAppearancePreference(rawValue: preferences.appearancePreference) != nil,
+              AppLanguagePreference(rawValue: preferences.languagePreference) != nil
         else {
+            return false
+        }
+        if let rawValue = preferences.floatingPanelAppearance,
+           PluginFloatingPanelAppearance(rawValue: rawValue) == nil {
             return false
         }
 
@@ -60,6 +66,9 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
 
         let previousPreferences = applicationPreferences()
         appearance.storeAndApply(in: userDefaults)
+        let floatingPanelAppearance = preferences.floatingPanelAppearance
+            .flatMap { PluginFloatingPanelAppearance(rawValue: $0) } ?? .system
+        floatingPanelAppearance.store(in: userDefaults)
         language.store(in: userDefaults)
 
         if let rawSortMode = preferences.settingsSidebarPluginSortMode,
@@ -80,6 +89,17 @@ final class PreferencesBackupStore: PreferencesBackupApplicationStoring {
         let changed = AppAppearancePreference.stored(in: userDefaults) != preference
         preference.storeAndApply(in: userDefaults)
         guard AppAppearancePreference.stored(in: userDefaults) == preference else { return false }
+        if changed {
+            preferencesBackupChangeReporter?.didPersist(.application)
+        }
+        return true
+    }
+
+    func setFloatingPanelAppearance(rawValue: String) -> Bool {
+        guard let preference = PluginFloatingPanelAppearance(rawValue: rawValue) else { return false }
+        let changed = PluginFloatingPanelAppearance.stored(in: userDefaults) != preference
+        preference.store(in: userDefaults)
+        guard PluginFloatingPanelAppearance.stored(in: userDefaults) == preference else { return false }
         if changed {
             preferencesBackupChangeReporter?.didPersist(.application)
         }

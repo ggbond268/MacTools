@@ -59,7 +59,7 @@ Try development features with `MacTools-Nightly.dmg` from a [`nightly-*` prerele
     </td>
     <td width="50%" valign="top">
       <h3>Custom themes</h3>
-      <p>Choose built-in palettes or import iTerm2 and Base16/Base24 themes. Set light and dark themes separately, and personalize the menu bar icon with images or animations.</p>
+      <p>Choose built-in palettes or import iTerm2 and Base16/Base24 themes. Set light and dark themes separately, choose system glass or solid floating panels, and personalize the menu bar icon with images or animations.</p>
       <a href="docs/assets/screenshots/readme/themes-en-dark.png"><img width="100%" src="docs/assets/screenshots/readme/themes-en-dark.png" alt="Dark theme gallery with System Default, One Dark, GitHub Dark, and other palettes"></a>
     </td>
   </tr>

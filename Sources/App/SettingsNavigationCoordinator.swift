@@ -117,6 +117,7 @@ struct AboutUpdateActionRequest: Equatable {
 enum GeneralSettingsSearchTarget: String, Hashable {
     case launchAtLogin
     case appearance
+    case floatingPanels
     case language
     case menuBarIcon
     case appShortcuts
