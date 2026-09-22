@@ -1,97 +1,22 @@
 <div align="center">
-  <img src="docs/assets/logo-mactools-rounded.png" width="96" height="96" alt="MacTools logo">
-  <h1>免费开源的 macOS 原生菜单栏工具集合</h1>
-  <p><strong>A free and open-source collection of native macOS menu bar tools</strong></p>
-  <p>[中文] <a href="README.md">[English]</a></p>
-
+  <img src="docs/assets/logo-mactools-rounded.png" width="88" height="88" alt="MacTools 图标">
+  <h1>MacTools</h1>
+  <p><strong>Mac 常用工具，尽在菜单栏。</strong></p>
+  <p>免费、开源、原生。自由组合面板，串联常用操作，按需添加工具。</p>
+  <p><a href="README.md">English</a> · <strong>简体中文</strong></p>
   <p>
-    <a href="https://github.com/ggbond268/MacTools/stargazers"><img src="https://img.shields.io/github/stars/ggbond268/MacTools?style=social" alt="GitHub stars"></a>
-    <a href="https://github.com/ggbond268/MacTools/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ggbond268/MacTools" alt="License"></a>
-    <a href="https://github.com/ggbond268/MacTools/releases"><img src="https://img.shields.io/github/v/release/ggbond268/MacTools?filter=v*" alt="Latest app release"></a>
-    <a href="https://hellogithub.com/repository/ggbond268/MacTools" target="_blank"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=6cddbd75f09848fb8848b58510394a5c&claim_uid=g4n28zqFcD0Vhw3&theme=small" alt="Featured｜HelloGitHub" /></a>
+    <a href="https://github.com/ggbond268/MacTools/releases"><img src="https://img.shields.io/github/v/release/ggbond268/MacTools?filter=v*" alt="最新应用版本"></a>
+    <img src="https://img.shields.io/badge/macOS-14%2B-24292f" alt="macOS 14 或更高版本">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0-only 许可证"></a>
   </p>
-
-  <p>聚合高频系统能力，保持轻量、快速、低打扰。使用 SwiftUI + AppKit 构建，支持 macOS 14.0 及以上版本。</p>
+  <p><a href="https://mactools.ggbond.app">官网</a> · <a href="https://github.com/ggbond268/MacTools/releases">下载</a> · <a href="docs/README.zh-CN.md">文档</a> · <a href="https://github.com/ggbond268/MacTools/issues">反馈</a></p>
 </div>
 
-## 截图
-
-<img src="docs/assets/screenshots/readme-hero-zh-dark.png" alt="MacTools 深色模式菜单栏面板">
-
-## 功能
-
-| 功能             | 说明                                                                                                                      |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 显示器分辨率     | 查看已连接显示器，并按显示器切换可用分辨率。                                                                              |
-| 显示器亮度       | 快速调节内建屏、DDC/CI 外接屏亮度，快捷键可跟随鼠标或同步控制所有显示器，并提供 Gamma/Shade 回退。                                   |
-| 原彩显示         | 自动调节显示器颜色以适应环境光，支持 MacBook 和兼容显示器。                                                               |
-| 显示器休眠       | 一键让所有显示器立即进入休眠，移动鼠标或按键可唤醒。                                                                      |
-| 深色模式         | 一键切换系统亮色与深色外观，并实时跟随系统主题变化同步状态。                                                              |
-| Mac 设置         | 按类别浏览当前 Mac 的全部 47 项精选设置，或通过紧凑的命令面板搜索并调整，包括即时生效的指针大小、缩放手势、键盘辅助功能、辅助点按手势、区分设备的滚动速度、程序坞、访达、外观、原彩显示和夜览控制；保存指针大小需要一次性授予完全磁盘访问。固定常用控制，查看最近更改和可处理的问题，并通过比较、逐项选择、验证、结构化结果与回滚来创建和应用可移植的类型化配置。若当前 macOS 版本或硬件无法直接应用，相关控制会回退到对应的系统设置页面。Wi-Fi 开关和低电量模式等常规临时控制仍由 macOS 控制中心提供。 |
-| 夜览             | 一键开关 Night Shift，降低屏幕蓝光，使颜色偏暖，保护夜间视力。                                                            |
-| 阻止休眠         | 保持任意 Mac 唤醒，并可选择允许屏幕关闭、保持屏幕常亮，或让屏幕工具继续工作。屏幕工具模式还会防止自动锁定，手动锁定仍然有效。MacBook 合盖运行要求连接电源；仅在合盖且没有外接显示器时创建实验性内置虚拟显示器。支持 30 分钟、1 小时、2 小时、5 小时后自动停止。 |
-| 清洁模式         | 全屏黑色覆盖并临时禁用输入，适合清洁屏幕、键盘或触控板。                                                                  |
-| 鼠标增强         | 分别调整鼠标与触控板滚动，支持独立设置水平和垂直方向翻转。                                                               |
-| 模拟鼠标中键     | 使用三指、四指或五指轻点触控板模拟鼠标中键，并在系统唤醒、显示器变化或触控板重新连接后自动恢复监听。                     |
-| 触控板手势       | 仅添加需要的 TipTap、三至五指轻点、双击和长触手势，并映射到键盘快捷键或鼠标中键；TipTap 可在固定手指保持按住时反复触发，并提供无障碍控件、内置 TipTap 指引、唯一手势映射、快捷键复用提示和不执行操作的测试模式。同一时间只允许一个 MacTools 进程持有设备监听，临时开发或测试进程不会再中断稳定应用；原中键设置会自动迁移。 |
-| 自定义快捷操作   | 将键盘、触控板、鼠标按键和滚动输入设置为快捷键、鼠标导航或常用 macOS 系统操作；菜单栏标题会列出键盘、触控板和鼠标输入来源。危险映射需确认，并可随时按 Control-Option-Command-Escape 停用。                                          |
-| 隐藏刘海         | 自动遮挡内建刘海屏顶部区域，不修改用户原始壁纸。                                                                          |
-| 自动隐藏菜单栏   | 自动隐藏菜单栏，提供更完整的屏幕显示空间。                                                                                |
-| 自动隐藏程序坞   | 自动隐藏程序坞，提供更干净的桌面环境。                                                                                    |
-| 锁定程序坞       | 防止程序坞在多显示器之间意外移动，并可在设置中开启或关闭。                                                                |
-| 台前调度         | 开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边。                                                                    |
-| 系统静音         | 一键静音或恢复系统音频输出，通过 CoreAudio 直接控制默认输出设备，停用插件时自动恢复。                                     |
-| 麦克风静音       | 一键静音或恢复默认麦克风输入，通过 CoreAudio 直接控制输入设备，无需录音权限。                                             |
-| 应用音量         | 在 macOS 15 及以上版本中分别调节正在播放音频的应用音量，设置会按应用保存在本机；首次使用需要系统音频录制权限。             |
-| 磁盘清理         | 扫描系统缓存、开发产物（node_modules、构建输出）与残留安装包，默认移到废纸篓；执行前做路径安全校验、完全磁盘访问引导与敏感数据保护。 |
-| Xcode 清理       | 分类扫描 DerivedData、设备支持、归档、模拟器与预览缓存，Xcode 运行时自动禁用，仅在白名单根目录下执行删除。                |
-| 推出磁盘         | 一键推出所有可移动磁盘，自动过滤系统卷并在无可推出磁盘时给出状态提示。                                                    |
-| 清空废纸篓       | 显示废纸篓项目数，一键通过 Finder 清空，废纸篓为空时自动禁用按钮。                                                        |
-| 清空剪贴板       | 一键清空当前剪贴板内容，保护隐私，防止误粘贴。                                                                            |
-| Cloudflare R2 上传 | 使用保存在 macOS 钥匙串中的 S3 兼容凭据上传文件；上传前可重命名，或生成保留扩展名的随机 UUID 文件名，遇到同名对象时可选择取消、重新命名或覆盖，并在同一窗口查看进度或取消。上传完成后可在弹窗中复制校验通过的公开链接；支持全局快捷键、Action Grid 和前台工作流，所有界面均跟随 MacTools 中选择的语言。 |
-| IP 检测          | 查看国内/国际出口 IP、本地局域网 IP、归属地、运营商、ASN 与 macOS 网络测速，并支持复制单项或完整检测结果。                |
-| 翻译             | 按全局快捷键翻译当前选中文本，第一版支持 OpenAI-compatible 服务与自动语言选择。                                          |
-| 窗口布局         | 通过确定性的命令将聚焦窗口排列到半屏、四分之一、三分之一、四分之一列、六分之一、屏幕边缘或自定义固定位置；按步进增减窗口宽度与高度；切换全屏，在显示器之间移动，并恢复上一个位置。还可选择精确的修饰键组合，无需点击即可移动指针下方最上层窗口，配合指针状态提示与小幅启动阈值避免误触，且不会改变焦点。可通过快捷键、Run Link、统一搜索、操作网格、触控板手势或工作流调用；当 MacTools 设置确实位于最前方时，也可直接调整其窗口。快捷键预设会先显示更改预览，再由用户明确应用。可选的精简反馈会确认快捷键与手势执行成功，失败则始终显示。窗口拖拽吸附与交互式平铺预览仍由 macOS 提供。 |
-| 应用快捷键       | 为常用应用绑定全局快捷键，按下即可打开或将应用切换到前台；若应用已在前台则隐藏。                                          |
-| 操作与快捷键     | 在统一搜索或集中设置页发现并运行 MacTools 与插件发布的操作，通过同一套冲突检测与注册服务分配全局快捷键；安全、可移植且支持后台运行的操作也可通过 Apple“快捷指令”、Siri 与聚焦调用，运行时不会打开设置，已保存的选择可随受支持的参数架构迁移继续使用。跨进程熔断器会限制同一操作的快速重复调用，并设置更高的全局应急上限，在约束不透明递归循环的同时允许正常的多操作快捷指令。                  |
-| 自动化           | 将已发布操作组合为可复用、可排序的命名工作流，手动运行、测试或停止并查看逐步历史；还可添加日程、日历、应用、电源、显示器或网络规则与条件。 |
-| 操作网格         | 在可选的指针优先网格中配置最多九个常用操作或工作流，支持键盘、数字键、多显示器和 VoiceOver。                               |
-| 已存脚本         | 在可搜索的脚本库中保存 AppleScript、zsh、Bash 与 POSIX Shell 脚本，直接运行、停止并查看输出；超时可通过滑块或数字输入设置，运行及刚完成时功能面板都会显示状态提示。也可从功能面板快速运行，无需配置自动化或操作网格。每个脚本都会成为可选用于快捷键、手势、网格、工作流与 Run Link 的稳定 MacTools 操作，并可逐个设置其他 MacTools 功能运行前是否询问。 |
-| 运行链接         | 复制稳定的 `mactools://app/actions/...` 链接，参数化操作使用本地预设链接，可从启动器、快捷指令、脚本或文档调用并保留安全检查。 |
-| 自动切换输入法   | 记住每个应用最后使用的输入法，切回时自动恢复；也可为应用指定固定输入法。                                                  |
-| 启动台           | 全屏或紧凑窗口唤出应用网格，支持即时搜索、横向分页、键盘导航、拖拽叠放建夹与文件夹改名（点开夹标题直接编辑，右键可重命名/解散），可调标签外观（颜色自动/白/黑/强调色、字重、随图标协调缩放的字号档，应用名称与文件夹标题共用），并对中文/日文输入法组字安全。 |
-| 右键工具         | 为 Finder 右键菜单添加新建文件夹、常见文本/数据/Web/脚本空文件（.txt、.md、.csv、.json、.yaml、.yml、.xml、.html、.css、.js、.ts、.sh、.py）、终端打开、应用打开与路径复制。 |
-| 锁定屏幕         | 一键立即锁定屏幕，进入密码解锁界面，等同于 Cmd+Ctrl+Q 快捷键。                                                            |
-| 系统软重启       | 无需重启 Mac 即可重启 macOS 用户服务，尝试恢复常见运行异常；运行前强制确认，可保留程序坞布局并重新打开普通应用和独立三方菜单栏应用，后台组件交由 launchd 恢复，异常时显示可复制的精简诊断。 |
-| 启动项管理       | 可视化查看 LaunchAgent/LaunchDaemon，支持搜索筛选、字段解释和用户级启动项启停管理。                                       |
-| 日历组件         | 在组件面板中查看月历、农历、节假日与当天日程。                                                                            |
-| 系统状态         | 紧凑展示 CPU、GPU、内存、磁盘、网络、电量与高占用进程概览，并可在概览旁打开支持悬停、固定读数及 30 分钟、2 小时、24 小时范围的交互详情；可点击或拖拽菜单栏实时数值，将其放入“第一个数值”和可选的“第二个数值”位置，为每个指标分别选择详细、紧凑或极简样式及自动、上下排列或并排显示方式；自动会让详细样式并排显示数值，让紧凑和极简样式上下排列，紧凑与极简的全高并排数值会使用更大字号以提升可读性。还可通过批量操作将所有指标设为同一样式、仅重置样式与布局或重置所有菜单栏设置，拖拽调整指标顺序，从菜单栏读数旁打开相同概览，并支持偏好设置导出/导入。                    |
-| 活动统计         | 统计键盘、鼠标、滚动、前台应用使用时长，并可通过手动 Hook 记录 Claude Code、Cursor、Codex 活动。                          |
-| 设备电量         | 聚合 Mac、通过 USB 或 Wi-Fi 连接的已信任 iPhone/iPad/Apple Watch、蓝牙外设、AirPods 分体电量和雷柏 VT 系列鼠标电量，支持多种组件布局和可选低电量通知。                            |
-| 风扇控制         | 通过预设管理风扇转速，支持自动、全速与自定义固定转速，实时显示当前转速；首次控制时会安装内置组件并请求管理员授权。          |
-| 电池充电上限     | 限制电池充电至指定上限（默认 80%），达到上限后停止充电；电量低于上限时不自动恢复，由用户决定何时继续充电或强制放电。      |
-| 修复损坏应用     | 移除应用隔离属性，解决「已损坏，无法打开」提示，通过文件面板选择 .app 并以管理员权限执行修复。                            |
-| 退出应用         | 选择并退出正在运行的应用，或一键退出全部；同一应用的多个实例会合并为一个稳定条目，并支持反选，方便快速圈定目标；选择面板失焦后会自动关闭。                           |
-| zsh 配置         | 在应用内直接查看和编辑 zsh 配置文件（.zshrc、.zshenv 等），支持语法高亮、常用片段快速插入和保存前自动备份。               |
-| 插件与设置       | 在任一 MacTools 界面按 ⌘K 打开统一搜索；空查询时优先显示最近成功完成的无参数操作，再显示建议入口；最近操作仅保存在本机，数量有上限，可随时清除或关闭，且不会进入偏好设置备份。输入查询后按标题完全匹配、标题前缀、标题、关键词、辅助文本排序，仅在相关性相同时使用最近操作顺序。可用 ↑/↓、Tab/Shift-Tab、Return、Command-Return 和 ⌘1–⌘9 完全使用键盘导航。设置中的“权限”会合并已安装插件共用的 macOS 权限，列出受影响功能，并在从系统设置返回后刷新状态，不会在启动时集中弹出请求。插件设置由宿主统一渲染 macOS 分组表单、语义背景、权限与快捷键行；还可安装和更新插件、管理全局快捷键，并选择性导出/导入应用偏好、插件布局、自动化、Run Link 及插件设置。 |
-| 状态栏图标自定义 | 上传本地图片或轻量 GIF/MP4 动画作为菜单栏图标，也可从在线图库按需下载动态图标，并支持自动扣背景和恢复默认。 |
-| 多语言           | 默认跟随系统语言，也可在「设置 > 通用 > 外观」中固定应用语言；语言选择器会同时显示系统语言名称和语言本名，菜单栏操作按钮会适配不同语言的文案长度。                |
-
-> **窗口位置：** 独立命令面板和可调整大小的剪贴板历史窗口都提供专属拖拽手柄、参考辅助线，并可按当前窗口尺寸磁吸到默认屏幕锚点；命令面板还可通过搜索命令重置位置。
-
-> **快捷键设置：** 插件与应用快捷键会将操作图标、名称和录入框紧凑排列。
-
-> **偏好设置备份：** 导出和导入界面会分别说明应用偏好、插件布局、快捷键、自动化、已保存 Run Link 与插件设置的范围及依赖。工作流标识和直接工作流 Run Link 会保持不变；在新 Mac 上导入单个工作流也会保留标识，仅在标识已存在时创建新副本。已存脚本文本仍需逐个允许备份，工作目录、权限、缓存和凭证不会导出。
-
-> **菜单栏面板：** 仪表盘卡片、嵌套控件与外层弹出面板使用统一的不透明语义背景，并适配浅色、深色和“增强对比度”，避免壁纸影响内容辨识。可在设置中分别选择浅色与深色主题，使用系统默认或十款内置配色，并实时预览，也可导入 `.itermcolors`（包括 `.txt`）或 Base16/Base24 YAML/JSON；主题不改变布局、字体、日历事件色和品牌色。
-
-> **右键功能：** 可以使用 Option + 左键点击 MacTools 图标触发右键功能。
-
-> **深层链接与运行链接：** 可通过受保护的 [`mactools://app/...` URL API](docs/url-scheme.md) 打开 MacTools 界面，或调用明确允许外部执行的操作与工作流。
-
-## 支持语言
-
-MacTools 支持简体中文、繁體中文、English、Español、Français、Русский、Português、Deutsch、日本語、한국어和 العربية。
+<p align="center">
+  <a href="docs/assets/screenshots/readme/dashboard-zh-dark.png"><img src="docs/assets/screenshots/readme/dashboard-zh-dark.png" width="32%" alt="系统状态面板，包含实时指标、进程、设备电量和快捷控件"></a>
+  <a href="docs/assets/screenshots/readme/activity-zh-dark.png"><img src="docs/assets/screenshots/readme/activity-zh-dark.png" width="32%" alt="活动统计面板，包含输入次数、屏幕时间、应用使用情况与趋势"></a>
+  <a href="docs/assets/screenshots/readme/controls-zh-dark.png"><img src="docs/assets/screenshots/readme/controls-zh-dark.png" width="32%" alt="显示、外观、音频和电源快捷控制面板"></a>
+</p>
 
 ## 安装
 
@@ -99,48 +24,101 @@ MacTools 支持简体中文、繁體中文、English、Español、Français、Р
 brew install --cask mactools
 ```
 
-### Nightly 构建
+也可从 [GitHub Releases](https://github.com/ggbond268/MacTools/releases) 下载。需要 **macOS 14 或更高版本**；部分插件需要更新的系统或兼容硬件。
 
-公开 Nightly 发布可用后，请从最新的 [`nightly-*` 预发布](https://github.com/ggbond268/MacTools/releases)下载 `MacTools-Nightly.dmg`。Nightly 是不稳定的独立签名应用，使用单独的设置目录、URL Scheme、更新源和同一提交构建的插件目录，因此可以与稳定版 MacTools 同时安装。请勿将它用于关键工作流；已发布的 Nightly 产物只会保留有限时间。
+打开 MacTools，在「**设置 → 插件市场**」中安装工具，再按习惯整理菜单栏面板。系统权限按需申请。
 
-### 实验性命令行原型
+<details>
+<summary>更新与 Nightly 构建</summary>
 
-Nightly 发布会提供可单独下载的 `mactools` 测试原型，它不会打包进应用。当前支持 `help`、`version`、`doctor`、只读操作发现，以及通过 `actions run <id>` 执行安全、后台、自动、可移植且无参数的操作；同时支持 `--json`、超时与 Ctrl-C 取消。类型化参数和预设仍不受支持。请按 [Nightly CLI 下载与安装指南](docs/testing/cli-nightly-distribution.md)测试发布产物；开发 CLI 本身时可使用 [Phase 2 源码构建指南](docs/testing/cli-phase-2.md)。
-
-For local AI-agent experiments, follow the [AI-agent usage guide](docs/cli/agent-usage.md).
-
-## 升级
+MacTools 会自动检查应用更新。通过 Homebrew 更新：
 
 ```bash
 brew update
 brew upgrade --cask --greedy mactools
 ```
 
-MacTools 每天会在后台静默检查一次应用更新。发现新版本后，菜单栏面板会在“设置”旁显示更新按钮；点击后会打开“关于”并进入 Sparkle 标准更新流程。
+可从 [`nightly-*` 预发布](https://github.com/ggbond268/MacTools/releases) 下载 `MacTools-Nightly.dmg`，体验开发中功能。Nightly 使用独立的偏好设置和插件，可与稳定版共存，适合测试使用；硬件控制仍作用于同一台 Mac。
 
-如果仍提示已经是最新版本，可以先查看本地识别到的 cask 版本：
+</details>
+
+## 按你的习惯组合
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>自定义面板</h3>
+      <p>自由组合实时组件、快捷控件和功能行。拖拽调整顺序、跨面板移动，并为每个面板选择图标。</p>
+      <a href="docs/assets/screenshots/readme/components-zh-dark.png"><img width="100%" src="docs/assets/screenshots/readme/components-zh-dark.png" alt="组件库中的系统状态预览，可添加到当前面板"></a>
+    </td>
+    <td width="50%" valign="top">
+      <h3>自定义主题</h3>
+      <p>选择内置配色，或导入 iTerm2、Base16/Base24 主题。分别设置浅色与深色主题，也可用图片或动画自定义菜单栏图标。</p>
+      <a href="docs/assets/screenshots/readme/themes-zh-dark.png"><img width="100%" src="docs/assets/screenshots/readme/themes-zh-dark.png" alt="深色主题库，包含系统默认、One Dark、GitHub Dark 等配色"></a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>自动化与工作流</h3>
+      <p>将多个操作串联，设置等待时间与失败处理。支持按时间、日历事件、应用、电源、显示器和网络变化触发，并查看运行记录。</p>
+      <a href="docs/assets/screenshots/readme/automation-zh-dark.png"><img width="100%" src="docs/assets/screenshots/readme/automation-zh-dark.png" alt="自动化编辑器中的多步骤工作流"></a>
+    </td>
+    <td width="50%" valign="top">
+      <h3>丰富的插件市场</h3>
+      <p>数十款插件，覆盖效率、显示、音频、清理与监控。按需安装和更新，在同一处管理设置与快捷键。</p>
+      <a href="docs/assets/screenshots/readme/marketplace-zh-dark.png"><img width="100%" src="docs/assets/screenshots/readme/marketplace-zh-dark.png" alt="插件市场的分类筛选与已安装插件列表"></a>
+    </td>
+  </tr>
+</table>
+
+## 快速找到并执行操作
+
+在**命令面板**中搜索操作、设置、工作流和插件。MacTools 内按 **⌘K**，或设置全局快捷键随时呼出。常用操作也能通过**操作网格**、键盘快捷键、鼠标映射和触控板手势执行，并与 Apple 快捷指令、已存脚本和 [Run Link](docs/url-scheme.md) 配合使用。
+
+<p align="center"><a href="docs/assets/screenshots/readme/search-zh-dark.png"><img src="docs/assets/screenshots/readme/search-zh-dark.png" width="640" alt="中文命令面板搜索窗口相关操作、设置和插件"></a></p>
+
+## 日常所需，按需取用
+
+| 分类 | 主要功能 |
+| --- | --- |
+| 截图与剪贴板 | 截图标注、文字与二维码识别、贴图、滚动截图、区域录屏；本地加密剪贴板历史、文本片段和粘贴队列。 |
+| 窗口与工作区 | 窗口切换与布局、应用启动台、台前调度、Finder 右键工具。 |
+| 键盘、鼠标与触控板 | 输入映射、手势、应用快捷键、滚动调节、模拟中键、自动输入。 |
+| 显示与外观 | 亮度与分辨率、Sidecar、原彩显示、夜览、隐藏刘海、菜单栏图标与程序坞管理。 |
+| 音频与电源 | 系统、麦克风、应用和显示器音量；阻止休眠、风扇控制、充电上限、锁屏、睡眠和关机。 |
+| 监控与日历 | 系统状态、设备电量、活动统计、AI 用量、网络检测；日历与近期日程。 |
+| 清理与维护 | 磁盘与 Xcode 清理、Homebrew 与启动项管理、推出磁盘、清空废纸篓、退出应用、修复隔离应用、系统软重启、屏幕键盘清洁模式。 |
+| 工具与配置 | 划词翻译、Cloudflare R2 上传、zsh 编辑、Siri、可重复应用的 Mac 设置配置方案。 |
+
+截图支持 macOS 14+；区域录屏和应用音量需要 macOS 15+。硬件控制取决于设备支持，详见[功能指南](docs/README.zh-CN.md)。
+
+**带走你的配置：** 导入、导出偏好设置，保留本地备份，或通过云盘及共享文件夹同步支持的设置。应用支持 **11 种语言**，默认跟随系统。
+
+## 终端中的 `mactools`
+
+通过脚本或本地 AI Agent 发现操作、检查可用性并执行支持的操作，提供 **JSON 输出**、超时与取消。
+
+CLI 目前是面向 **Apple 芯片 Mac 的 Nightly 实验性功能**。在支持的 Nightly 版本中，前往「**设置 → 通用 → 命令行**」安装并启用集成。Nightly 命令名为 `mactools-nightly`，普通稳定版尚未开放托管安装。
 
 ```bash
-brew info --cask mactools
+mactools-nightly doctor --json
+mactools-nightly actions list --json
 ```
+
+用 `actions describe <id>` 和 `actions availability <id>` 检查列表返回的操作，再通过 `actions run <id>` 执行。目前仅支持符合安全、后台、自动、可移植要求的无参数操作，暂不支持类型化参数和已存预设。
+
+[CLI 安装指南](docs/testing/cli-nightly-distribution.md) · [AI Agent 使用指南](docs/cli/agent-usage.md) · [URL API](docs/url-scheme.md)
 
 ## 参与贡献
 
-开发环境、测试、插件开发和发布流程请参考 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
+欢迎反馈问题、改进翻译、提出插件想法或提交 PR。Swift 6 / SwiftUI / AppKit 开发环境与流程见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)，插件开发见[本地插件指南](docs/plugins/local-native-plugins.md)。
 
-## 许可证
+<a href="https://github.com/ggbond268/MacTools/graphs/contributors"><img src="https://contrib.rocks/image?repo=ggbond268/MacTools&max=120&columns=12" width="480" alt="MacTools 贡献者"></a>
 
-MacTools 基于 [GPL-3.0-only](LICENSE) 开源，适用范围和第三方例外见 [LICENSING.md](LICENSING.md)。
+## 隐私与许可
 
-## 隐私
+优先本地处理，不包含维护者运营的分析或广告服务。联网功能与系统权限说明见[隐私政策](https://mactools.ggbond.app/privacy-policy)。
 
-MacTools 以本地处理为优先，不包含由项目维护者运营的分析或广告服务。关于本地数据、系统权限和需要联网的功能，请查看中英双语[隐私政策](https://mactools.ggbond.app/privacy-policy)。
+采用 [GPL-3.0-only](LICENSE) 许可证。[许可范围](LICENSING.md)与[第三方声明](Sources/Resources/ThirdPartyNotices/README.md)列明依赖、素材和致谢。
 
-## 致谢
-
-- 第三方素材、依赖与实现参考见 [Sources/Resources/ThirdPartyNotices](Sources/Resources/ThirdPartyNotices)。
-- 贡献者
-
-  <a href="https://github.com/ggbond268/MacTools/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=ggbond268/MacTools&max=120&columns=12" width="480" alt="contributors">
-  </a>
+<a href="https://hellogithub.com/repository/ggbond268/MacTools"><img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=6cddbd75f09848fb8848b58510394a5c&claim_uid=g4n28zqFcD0Vhw3&theme=small" alt="HelloGitHub 推荐项目"></a>

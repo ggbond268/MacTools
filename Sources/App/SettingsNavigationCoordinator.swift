@@ -97,11 +97,9 @@ extension FeatureSettingsPane {
         configurationIDs: some Sequence<String>
     ) -> [FeatureSettingsPane] {
         [
+            .marketplace,
             .actionsAndShortcuts,
-            .automation,
-            .dashboardLayout,
-            .featurePanelLayout,
-            .marketplace
+            .automation
         ] + configurationIDs.map(FeatureSettingsPane.configuration)
     }
 }
@@ -133,7 +131,6 @@ enum SettingsSearchRevealTarget: Hashable {
     case general(GeneralSettingsSearchTarget)
     case marketplace(MarketplacePluginSearchTarget)
     case plugin(PluginSettingsSearchTarget)
-    case surface(SurfaceSettingsSearchTarget)
     case automation(AutomationWorkflowSearchTarget)
 }
 
@@ -144,21 +141,6 @@ struct AutomationWorkflowSearchTarget: Hashable {
 struct SettingsSearchRevealRequest: Equatable {
     let id: UInt
     let target: SettingsSearchRevealTarget
-}
-
-struct SurfaceSettingsSearchTarget: Hashable {
-    let surface: PluginDisplaySurface
-    let pluginID: String
-
-    func scrollID(isHidden: Bool) -> String {
-        let surfaceID = switch surface {
-        case .dashboard:
-            "dashboard"
-        case .featurePanel:
-            "feature-panel"
-        }
-        return "surface-search-anchor.\(surfaceID).\(isHidden ? "hidden" : "visible").\(pluginID)"
-    }
 }
 
 struct MarketplacePluginSearchTarget: Hashable {
@@ -268,7 +250,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private(set) var historyIndex: Int
     private(set) var focusedSearchField: SettingsSearchField?
 
-    private let pluginSettingsLandingPage: () -> FeatureSettingsPane
     private let sidebarOrder: () -> [SettingsNavigationDestination]
     private let isPluginConfigurationAvailable: (String) -> Bool
     private let hasPluginSettingsSearchField: (String) -> Bool
@@ -277,7 +258,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
     private let isPluginSettingsSearchTargetAvailable: (PluginSettingsSearchTarget) -> Bool
     private let isPluginManagementAvailable: (String) -> Bool
     private let isMarketplaceDetailAvailable: (MarketplacePluginDetailTarget) -> Bool
-    private let isPluginSurfaceAvailable: (SurfaceSettingsSearchTarget) -> Bool
     private let isAutomationWorkflowAvailable: (UUID) -> Bool
     private let selectPluginSettingsPane: (FeatureSettingsPane) -> Bool
     private var nextSearchFocusRequestID: UInt = 0
@@ -292,7 +272,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
         sidebarPreferences: SettingsSidebarPreferencesStore? = nil
     ) {
         self.init(
-            pluginSettingsLandingPage: { pluginHost.pluginSettingsLandingPage() },
             sidebarOrder: {
                 let settingsItems = pluginHost.pluginSettingsItems
                 let orderItems = settingsItems.map {
@@ -326,15 +305,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
             isMarketplaceDetailAvailable: { target in
                 pluginHost.hasMarketplaceDetail(target: target)
             },
-            isPluginSurfaceAvailable: { target in
-                let items = switch target.surface {
-                case .dashboard:
-                    pluginHost.dashboardLayoutItems + pluginHost.dashboardHiddenLayoutItems
-                case .featurePanel:
-                    pluginHost.featurePanelLayoutItems + pluginHost.featurePanelHiddenLayoutItems
-                }
-                return items.contains { $0.id == target.pluginID }
-            },
             isAutomationWorkflowAvailable: { workflowID in
                 pluginHost.automationController.workflows.contains { $0.id == workflowID }
             },
@@ -344,7 +314,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
 
     init(
         initialDestination: SettingsNavigationDestination = .general,
-        pluginSettingsLandingPage: @escaping () -> FeatureSettingsPane = { .marketplace },
         sidebarOrder: @escaping () -> [SettingsNavigationDestination] = { [] },
         isPluginConfigurationAvailable: @escaping (String) -> Bool = { _ in true },
         hasPluginSettingsSearchField: @escaping (String) -> Bool = { _ in false },
@@ -353,14 +322,12 @@ final class SettingsNavigationCoordinator: ObservableObject {
         isPluginSettingsSearchTargetAvailable: @escaping (PluginSettingsSearchTarget) -> Bool = { _ in true },
         isPluginManagementAvailable: @escaping (String) -> Bool = { _ in true },
         isMarketplaceDetailAvailable: @escaping (MarketplacePluginDetailTarget) -> Bool = { _ in true },
-        isPluginSurfaceAvailable: @escaping (SurfaceSettingsSearchTarget) -> Bool = { _ in true },
         isAutomationWorkflowAvailable: @escaping (UUID) -> Bool = { _ in true },
         selectPluginSettingsPane: @escaping (FeatureSettingsPane) -> Bool = { _ in true }
     ) {
         self.destination = initialDestination
         self.history = [initialDestination]
         self.historyIndex = 0
-        self.pluginSettingsLandingPage = pluginSettingsLandingPage
         self.sidebarOrder = sidebarOrder
         self.isPluginConfigurationAvailable = isPluginConfigurationAvailable
         self.hasPluginSettingsSearchField = hasPluginSettingsSearchField
@@ -369,7 +336,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
         self.isPluginSettingsSearchTargetAvailable = isPluginSettingsSearchTargetAvailable
         self.isPluginManagementAvailable = isPluginManagementAvailable
         self.isMarketplaceDetailAvailable = isMarketplaceDetailAvailable
-        self.isPluginSurfaceAvailable = isPluginSurfaceAvailable
         self.isAutomationWorkflowAvailable = isAutomationWorkflowAvailable
         self.selectPluginSettingsPane = selectPluginSettingsPane
     }
@@ -393,7 +359,7 @@ final class SettingsNavigationCoordinator: ObservableObject {
         case .about:
             navigate(to: .about)
         case .pluginConfiguration:
-            navigate(to: .plugins(pluginSettingsLandingPage()))
+            navigate(to: .plugins(.marketplace))
         }
     }
 
@@ -702,8 +668,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
             isPluginManagementAvailable(target.pluginID)
         case let .plugin(target):
             isPluginSettingsSearchTargetAvailable(target)
-        case let .surface(target):
-            isPluginSurfaceAvailable(target)
         case let .automation(target):
             isAutomationWorkflowAvailable(target.workflowID)
         }
@@ -720,13 +684,6 @@ final class SettingsNavigationCoordinator: ObservableObject {
             true
         case let (.plugin(target), .plugins(.configuration(pluginID))):
             target.pluginID == pluginID
-        case let (.surface(target), .plugins(pane)):
-            switch (target.surface, pane) {
-            case (.dashboard, .dashboardLayout), (.featurePanel, .featurePanelLayout):
-                true
-            default:
-                false
-            }
         case (.automation, .plugins(.automation)):
             true
         default:

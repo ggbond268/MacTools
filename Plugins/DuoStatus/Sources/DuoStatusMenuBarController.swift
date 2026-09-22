@@ -15,13 +15,14 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
     private var appearanceObserver: DuoStatusAppearanceObserverView?
     private var snapshot: DuoSystemStatusSnapshot?
     private var tooltip: String?
+    private let iconPresentation = DuoStatusIconPresentation()
+    private var isRedrawScheduled = false
 
     isolated deinit {
         remove()
     }
 
     func update(snapshot: DuoSystemStatusSnapshot, tooltip: String) {
-        let needsRedraw = item == nil || self.snapshot != snapshot
         self.snapshot = snapshot
         if item == nil {
             PluginPresentationSafety.prepareForWindowOrdering()
@@ -39,9 +40,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
             observer.setAccessibilityElement(false)
             item.button?.addSubview(observer)
             observer.onAppearanceChange = { [weak self] in
-                DispatchQueue.main.async { [weak self] in
-                    self?.redraw()
-                }
+                self?.scheduleRedraw()
             }
             appearanceObserver = observer
         }
@@ -50,7 +49,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
             item?.button?.toolTip = tooltip
             item?.button?.setAccessibilityLabel(tooltip)
         }
-        if needsRedraw { redraw() }
+        redraw()
     }
 
     func remove() {
@@ -66,16 +65,53 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
         item = nil
         snapshot = nil
         tooltip = nil
+        iconPresentation.reset()
+    }
+
+    private func scheduleRedraw() {
+        guard !isRedrawScheduled else { return }
+        isRedrawScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            isRedrawScheduled = false
+            redraw()
+        }
     }
 
     private func redraw() {
         guard let snapshot, let button = item?.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        button.image = DuoStatusIcon.image(for: snapshot, appearance: isDark ? .dark : .light)
+        iconPresentation.update(on: button, snapshot: snapshot, context: .init(
+            pointSize: DuoStatusIcon.size,
+            displayScale: button.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2,
+            appearance: isDark ? .dark : .light
+        ))
     }
 
     @objc private func clicked() {
         openSettings?()
+    }
+}
+
+@MainActor
+final class DuoStatusIconPresentation {
+    private struct RenderState: Equatable {
+        let snapshot: DuoSystemStatusSnapshot
+        let context: PluginMenuBarIconRenderContext
+    }
+
+    private var lastRenderState: RenderState?
+
+    func reset() { lastRenderState = nil }
+
+    func update(on button: NSButton, snapshot: DuoSystemStatusSnapshot, context: PluginMenuBarIconRenderContext) {
+        let state = RenderState(snapshot: snapshot, context: context)
+        guard state != lastRenderState else { return }
+        // AppKit can notify appearance changes while replicating a status item.
+        // Reassigning an unchanged image here can schedule another replication.
+        lastRenderState = state
+        button.image = DuoStatusIcon.image(for: snapshot,
+            appearance: context.appearance == .dark ? .dark : .light, pointSize: context.pointSize)
     }
 }
 
@@ -84,6 +120,11 @@ private final class DuoStatusAppearanceObserverView: NSView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        onAppearanceChange?()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
         onAppearanceChange?()
     }
 

@@ -12,19 +12,30 @@ enum ConfiguredMenuBarPanelLayout {
         var height: CGFloat = 0
     }
 
-    static func componentHeight(_ items: [PluginComponentItem]) -> CGFloat {
+    static func componentHeight(_ items: [PluginPanelWidgetSnapshot]) -> CGFloat {
         guard !items.isEmpty else { return 0 }
         return ComponentPanelLayout.gridContentHeight(for: ComponentGridPlacementEngine.placements(for: items))
     }
 
     static func placement(
-        entries: [MenuBarPanelEntry], components: [PluginComponentItem], features: [PluginPanelItem]
+        entries: [MenuBarPanelEntry], components: [PluginPanelWidgetSnapshot], features: [PluginPanelRowSnapshot]
+    ) -> Placement {
+        placement(order: entries.map { ($0.id, $0.kind) }, components: components, features: features)
+    }
+
+    static func placement(features: [PluginPanelRowSnapshot]) -> Placement {
+        placement(order: features.map { ($0.id, .row) }, components: [], features: features)
+    }
+
+    private static func placement(
+        order: [(String, PluginPanelItemKind)], components: [PluginPanelWidgetSnapshot],
+        features: [PluginPanelRowSnapshot]
     ) -> Placement {
         let componentLookup = Dictionary(uniqueKeysWithValues: components.map { ($0.id, $0) })
         let featureLookup = Dictionary(uniqueKeysWithValues: features.map { ($0.id, $0) })
         var result = Placement()
-        var pendingComponents: [(id: String, span: PluginComponentSpan)] = []
-        var previousSurface: PluginDisplaySurface?
+        var pendingComponents: [(id: String, span: PluginPanelWidgetSpan)] = []
+        var previousSurface: PluginPanelItemKind?
 
         func flushComponents() {
             guard !pendingComponents.isEmpty else { return }
@@ -33,29 +44,30 @@ enum ConfiguredMenuBarPanelLayout {
             let originY = result.height
             result.components += placements.map {
                 ComponentGridPlacement(id: $0.id, row: $0.row, column: $0.column, span: $0.span,
-                                       yOffset: originY + $0.yOffset)
+                                       yOffset: originY + $0.yOffset, gridColumns: $0.gridColumns,
+                                       gridSpacing: $0.gridSpacing)
             }
             result.height += ComponentPanelLayout.gridContentHeight(for: placements)
             pendingComponents.removeAll(keepingCapacity: true)
-            previousSurface = .dashboard
+            previousSurface = .widget
         }
 
-        for entry in entries {
-            switch entry.surface {
-            case .dashboard:
-                if let item = componentLookup[entry.pluginID] { pendingComponents.append((entry.presentationID, item.span)) }
-            case .featurePanel:
-                guard let item = featureLookup[entry.pluginID] else { continue }
+        for (id, kind) in order {
+            switch kind {
+            case .widget:
+                if let item = componentLookup[id] { pendingComponents.append((id, item.span)) }
+            case .row:
+                guard let item = featureLookup[id] else { continue }
                 // A full-width action ends the current card grid; later cards cannot fill earlier gaps.
                 flushComponents()
                 if let previousSurface {
-                    result.height += previousSurface == .featurePanel ? MenuBarPanelLayout.featureRowSpacing : itemSpacing
+                    result.height += previousSurface == .row ? MenuBarPanelLayout.featureRowSpacing : itemSpacing
                 }
-                result.featureOffsets[entry.presentationID] = result.height
+                result.featureOffsets[id] = result.height
                 let height = MenuBarPanelLayout.rowHeight(for: item)
-                result.featureHeights[entry.presentationID] = height
+                result.featureHeights[id] = height
                 result.height += height
-                previousSurface = .featurePanel
+                previousSurface = .row
             }
         }
         flushComponents()
@@ -63,16 +75,16 @@ enum ConfiguredMenuBarPanelLayout {
     }
 
     static func contentHeight(
-        components: [PluginComponentItem], features: [PluginPanelItem], screen: NSScreen?,
+        components: [PluginPanelWidgetSnapshot], features: [PluginPanelRowSnapshot], screen: NSScreen?,
         entries: [MenuBarPanelEntry]? = nil
     ) -> CGFloat {
         if entries == nil {
             if components.isEmpty { return MenuBarPanelLayout.preferredFeatureContentHeight(for: features, screen: screen) }
             if features.isEmpty { return ComponentPanelLayout.preferredContentHeight(for: components, screen: screen) }
         }
-        let entries = entries ?? components.map { MenuBarPanelEntry(pluginID: $0.id, surface: .dashboard) }
-            + features.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
-        let height = placement(entries: entries, components: components, features: features).height
+        let order = entries.map { $0.map { ($0.id, $0.kind) } }
+            ?? components.map { ($0.id, PluginPanelItemKind.widget) } + features.map { ($0.id, PluginPanelItemKind.row) }
+        let height = placement(order: order, components: components, features: features).height
         if components.isEmpty {
             return MenuBarPanelLayout.preferredFeatureContentHeight(featureContentHeight: height,
                 maximumFeatureListHeight: MenuBarPanelLayout.maximumFeatureListHeight(for: screen))
@@ -84,7 +96,8 @@ enum ConfiguredMenuBarPanelLayout {
 }
 
 struct ConfiguredMenuBarPanelsContent: View {
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    @EnvironmentObject private var presentation: MenuBarPanelPresentationModel
     @ObservedObject var model: MenuBarUnifiedPanelModel
     let contentBodyHeight: CGFloat
     let onDismiss: () -> Void
@@ -94,6 +107,7 @@ struct ConfiguredMenuBarPanelsContent: View {
     @State private var visited: Set<String> = []
 
     var body: some View {
+        let _ = presentation.revision
         ZStack(alignment: .topLeading) {
             ForEach(pluginHost.menuBarPanels.filter { visited.contains($0.id) || $0.id == model.selectedTab.id }) {
                 panel in
@@ -121,7 +135,8 @@ struct ConfiguredMenuBarPanelsContent: View {
 }
 
 private struct ConfiguredMenuBarPanelContent: View {
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    @EnvironmentObject private var presentation: MenuBarPanelPresentationModel
     let panelID: String
     let availableBodyHeight: CGFloat
     let maximumFeatureListHeight: CGFloat
@@ -139,6 +154,7 @@ private struct ConfiguredMenuBarPanelContent: View {
     }
 
     var body: some View {
+        let _ = presentation.revision
         let components = pluginHost.componentItems(in: panelID)
         let features = pluginHost.panelItems(in: panelID)
         let mixed = !components.isEmpty && !features.isEmpty
@@ -192,20 +208,20 @@ private struct ConfiguredMenuBarPanelContent: View {
     }
 
     private func componentContent(
-        _ items: [PluginComponentItem], height: CGFloat, embedded: Bool = false,
+        _ items: [PluginPanelWidgetSnapshot], height: CGFloat, embedded: Bool = false,
         placements: [ComponentGridPlacement]? = nil, gridHeight: CGFloat? = nil
     ) -> some View {
         ComponentPanelContent(
-            pluginHost: pluginHost, contentBodyHeight: height, isPanelVisible: isVisible,
+            pluginHost: pluginHost, contentBodyHeight: height, isPanelVisible: isVisible && !isFeatureDetailInline,
             onDismiss: onDismiss, panelID: panelID, suppliedItems: items,
-            suppliedEntries: pluginHost.panelEntries(in: panelID).filter { $0.surface == .dashboard }, embedded: embedded,
+            embedded: embedded,
             suppliedPlacements: placements, suppliedGridHeight: gridHeight ?? (placements == nil ? nil : height),
             onInlinePresentationChange: { isComponentDetailInline = $0 }
         )
     }
 
     private func featureContent(
-        _ items: [PluginPanelItem], height: CGFloat, embedded: Bool = false,
+        _ items: [PluginPanelRowSnapshot], height: CGFloat, embedded: Bool = false,
         rowOffsets: [String: CGFloat]? = nil
     ) -> some View {
         MenuBarContent(
@@ -214,7 +230,7 @@ private struct ConfiguredMenuBarPanelContent: View {
             isPanelVisible: isVisible, onDismiss: onDismiss, onOpenSettings: onOpenSettings,
             onPresentDiskCleanConfiguration: onPresentDiskCleanConfiguration,
             onPresentLaunchControlConfiguration: onPresentLaunchControlConfiguration,
-            suppliedItems: items, suppliedEntries: pluginHost.panelEntries(in: panelID).filter { $0.surface == .featurePanel },
+            suppliedItems: items,
             embedded: embedded, suppliedRowOffsets: rowOffsets,
             onInlinePresentationChange: { isFeatureDetailInline = $0 }
         )

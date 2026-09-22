@@ -59,9 +59,9 @@
     "action.set-enabled.description": "@standardAction.set-enabled.description",
     "action.set-enabled.parameter-summary": "@standardAction.set-enabled.description"
   },
-  "version": "1.0.1",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "version": "2.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "DockLock.bundle",
   "factoryClass": "DockLockPlugin.DockLockPluginFactory",
   "build": {
@@ -69,8 +69,10 @@
     "scheme": "DockLockPlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": false,
+    "panelItems": [
+      "row",
+      "widget"
+    ],
     "settings": "form"
   },
   "permissions": [

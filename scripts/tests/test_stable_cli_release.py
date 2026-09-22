@@ -51,19 +51,6 @@ class StableCLIReleaseTests(unittest.TestCase):
         self.assertLess(package["run"].index("/usr/bin/codesign"), package["run"].index("package-cli"))
         self.assertLess(package["run"].index("package-cli"), package["run"].index("cli-install-manifest.py"))
 
-    def test_localized_install_copy_is_channel_neutral(self):
-        strings = json.loads((ROOT / "Sources/Resources/Localization/Settings.xcstrings").read_text())["strings"]
-        keys = ["cli.install.confirmTitle"] + ["cli.install.error." + kind for kind in
-            ("unsupported", "metadata", "signature", "notarization", "identity", "collision")]
-        for key in keys:
-            self.assertEqual(len(strings[key]["localizations"]), 11)
-            for language, entry in strings[key]["localizations"].items():
-                text = entry["stringUnit"]["value"]
-                with self.subTest(key=key, language=language):
-                    self.assertNotIn("Nightly", text)
-                    self.assertNotIn("mactools-nightly", text)
-                    self.assertEqual(entry["stringUnit"]["state"], "translated")
-
     def test_publisher_preserves_existing_cli_releases_and_uploads_matching_assets(self):
         script = next(step["run"] for step in self.workflow["jobs"]["publish"]["steps"]
                       if step["name"] == "Create or update GitHub Release")

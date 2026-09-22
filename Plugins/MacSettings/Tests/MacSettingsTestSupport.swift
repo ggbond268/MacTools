@@ -67,6 +67,7 @@ final class FirstReadSuspendingSystemSettingAdapter: SystemSettingAdapter {
     var value: SystemSettingValue
     private(set) var firstReadStarted = false
     var suspendNextRead: Bool
+    var onReadSuspended: (() -> Void)?
     private var firstReadContinuation: CheckedContinuation<SystemSettingValue, Error>?
 
     init(value: SystemSettingValue, suspendsFirstRead: Bool = true) {
@@ -80,6 +81,7 @@ final class FirstReadSuspendingSystemSettingAdapter: SystemSettingAdapter {
         firstReadStarted = true
         return try await withCheckedThrowingContinuation { continuation in
             firstReadContinuation = continuation
+            onReadSuspended?()
         }
     }
 

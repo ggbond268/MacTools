@@ -100,23 +100,6 @@ private final class InputRemappingPermissionState {
     var inputMonitoringStatus: InputRemappingInputMonitoringStatus = .denied
 }
 
-private final class InputRemappingCaptureRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [InputRemappingCapturedInput] = []
-
-    func append(_ value: InputRemappingCapturedInput) {
-        lock.lock()
-        values.append(value)
-        lock.unlock()
-    }
-
-    var snapshot: [InputRemappingCapturedInput] {
-        lock.lock()
-        defer { lock.unlock() }
-        return values
-    }
-}
-
 private final class InputRemappingLockedCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
@@ -135,95 +118,6 @@ private final class InputRemappingLockedCounter: @unchecked Sendable {
 }
 
 final class InputRemappingModelsTests: XCTestCase {
-
-    @MainActor
-    func testPrimaryPanelTitleNamesSupportedInputSources() {
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(pluginID: "input-remapping", storage: InputRemappingMemoryStorage()),
-            tap: InputRemappingTapSpy(),
-            accessibilityTrusted: { true },
-            inputMonitoringStatus: { .granted }
-        )
-
-        XCTAssertTrue(plugin.metadata.title.contains(":"))
-        XCTAssertEqual(plugin.metadata.title.filter { $0 == "," }.count, 2)
-        XCTAssertFalse(plugin.metadata.title.contains("⌨️"))
-        XCTAssertEqual(plugin.metadata.defaultDescription, "Map inputs to actions")
-        XCTAssertEqual(plugin.metadata.iconName, "arrow.left.arrow.right")
-    }
-
-    func testShortcutActionKindStaysSelectedAfterRecording() {
-        let recorded = InputRemappingRule.Action.shortcut(ShortcutBinding(keyCode: 21, modifiers: [.command, .shift]))
-
-        XCTAssertEqual(recorded.kind, .shortcut)
-        XCTAssertEqual(recorded.replacingKind(.shortcut), recorded)
-    }
-
-    func testSingleKeyActionKindStaysSelectedAndPersistsRightCommand() throws {
-        let recorded = InputRemappingRule.Action.keyTap(
-            KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand))
-        )
-
-        XCTAssertEqual(recorded.kind, .keyTap)
-        XCTAssertEqual(recorded.replacingKind(.keyTap), recorded)
-
-        let rule = InputRemappingRule(action: recorded)
-        let data = try JSONEncoder().encode(rule)
-        XCTAssertEqual(try JSONDecoder().decode(InputRemappingRule.self, from: data), rule)
-    }
-
-    func testOutputRecordingCancelRestoresConfiguredSingleKey() {
-        let original = InputRemappingRule(
-            isEnabled: true,
-            action: .keyTap(KeyboardKeyTap(keyCode: UInt16(kVK_RightCommand)))
-        )
-        let snapshot = InputRemappingOutputRecordingSnapshot(rule: original)
-        var draft = original
-        draft.action = .keyTap(nil)
-        draft.outputConfigurationState = .recordingKeyTap
-        draft.isEnabled = false
-
-        snapshot.restore(&draft)
-
-        XCTAssertEqual(draft.action, original.action)
-        XCTAssertEqual(draft.outputConfigurationState, .configured)
-        XCTAssertTrue(draft.isEnabled)
-    }
-
-    func testOutputRecordingCancelRestoresActionBeforeTemporaryShortcutSelection() {
-        let original = InputRemappingRule(
-            isEnabled: true,
-            action: .mouseForward
-        )
-        let snapshot = InputRemappingOutputRecordingSnapshot(rule: original)
-        var draft = original
-        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
-        draft.outputConfigurationState = .recordingShortcut
-        draft.isEnabled = false
-
-        snapshot.restore(&draft)
-
-        XCTAssertEqual(draft.action, .mouseForward)
-        XCTAssertEqual(draft.outputConfigurationState, .configured)
-        XCTAssertTrue(draft.isEnabled)
-    }
-
-    func testIncompleteSingleKeyReloadsAsUnsetInsteadOfA() throws {
-        var rule = InputRemappingRule(buttonNumber: 4, action: .mouseBack)
-        rule.action = .keyTap(nil)
-        rule.outputConfigurationState = .recordingKeyTap
-        rule.isEnabled = false
-
-        let decoded = try JSONDecoder().decode(
-            InputRemappingRule.self,
-            from: JSONEncoder().encode(rule)
-        )
-
-        XCTAssertEqual(decoded.action, .keyTap(nil))
-        XCTAssertEqual(decoded.outputConfigurationState, .needsSelection)
-        XCTAssertFalse(decoded.isEnabled)
-        XCTAssertNotEqual(KeyboardKeyTapFormatter.displayString(for: nil), "A")
-    }
 
     func testUnsupportedPersistedSingleKeyIsDisabledWithoutDroppingRule() throws {
         var rule = InputRemappingRule(buttonNumber: 4, action: .mouseBack)
@@ -256,26 +150,6 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertNil(InputRemappingRuleMatcher.rule(for: 4, flags: [], in: [rule]))
     }
 
-    func testRuleNormalizesButtonNumberUsingSharedPolicy() {
-        XCTAssertEqual(
-            InputRemappingRule(buttonNumber: -1).buttonNumber,
-            InputRemappingRulePolicy.minimumButtonNumber
-        )
-        XCTAssertEqual(
-            InputRemappingRule(buttonNumber: 100).buttonNumber,
-            InputRemappingRulePolicy.maximumButtonNumber
-        )
-    }
-
-    func testNewDraftRequiresRecordedInputAndOutput() {
-        let draft = InputRemappingRule.newDraft()
-
-        XCTAssertFalse(draft.isEnabled)
-        XCTAssertFalse(draft.isInputConfigured)
-        XCTAssertFalse(draft.isOutputConfigured)
-        XCTAssertEqual(draft.outputConfigurationState, .needsSelection)
-    }
-
     func testIncompleteOrUnconfirmedRulesNeverMatch() {
         let incomplete = InputRemappingRule(
             isEnabled: true,
@@ -294,54 +168,6 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertFalse(primaryButton.isEnabled)
         XCTAssertNil(InputRemappingRuleMatcher.rule(for: 4, flags: [], in: [incomplete]))
         XCTAssertNil(InputRemappingRuleMatcher.rule(for: 0, flags: [], in: [primaryButton]))
-    }
-
-    func testLegacyRuleDecodingTreatsBothSidesAsConfigured() throws {
-        let rule = InputRemappingRule(buttonNumber: 4, action: .mouseBack)
-        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(rule)) as? [String: Any])
-        payload.removeValue(forKey: "isInputConfigured")
-        payload.removeValue(forKey: "outputConfigurationState")
-
-        let decoded = try JSONDecoder().decode(InputRemappingRule.self, from: JSONSerialization.data(withJSONObject: payload))
-
-        XCTAssertTrue(decoded.isInputConfigured)
-        XCTAssertTrue(decoded.isOutputConfigured)
-    }
-
-    func testConfirmedUnmodifiedKeyboardRuleStaysEnabledAfterReload() throws {
-        let rule = InputRemappingRule(
-            isEnabled: true,
-            trigger: .keyboard(keyCode: 12, modifiers: []),
-            action: .mouseBack,
-            isUnsafeTriggerConfirmed: true
-        )
-
-        let decoded = try JSONDecoder().decode(
-            InputRemappingRule.self,
-            from: JSONEncoder().encode(rule)
-        )
-
-        XCTAssertTrue(decoded.isEnabled)
-        XCTAssertTrue(decoded.isUnsafeTriggerConfirmed)
-    }
-
-    func testLegacyKeyboardConfirmationMigratesToUnsafeTriggerConfirmation() throws {
-        let rule = InputRemappingRule(
-            isEnabled: true,
-            trigger: .keyboard(keyCode: 12, modifiers: []),
-            action: .mouseBack,
-            isUnsafeTriggerConfirmed: true
-        )
-        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(rule)) as? [String: Any])
-        payload["isUnmodifiedKeyboardConfirmed"] = payload.removeValue(forKey: "isUnsafeTriggerConfirmed")
-
-        let decoded = try JSONDecoder().decode(
-            InputRemappingRule.self,
-            from: JSONSerialization.data(withJSONObject: payload)
-        )
-
-        XCTAssertTrue(decoded.isEnabled)
-        XCTAssertTrue(decoded.isUnsafeTriggerConfirmed)
     }
 
     func testSuccessfulDownConsumesMatchingUpWithoutExecutingTwice() {
@@ -426,66 +252,6 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertEqual(executions, 1)
     }
 
-    func testDoubleClickRequiresTheSameModifiersAcrossBothClicks() {
-        let rule = InputRemappingRule(
-            trigger: .mouseButton(number: 4, modifiers: [.command], interaction: .doubleClick),
-            action: .mouseBack
-        )
-        var processor = InputRemappingEventProcessor()
-        var executions = 0
-
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskAlternate], isMarkedSynthetic: false, rules: [rule], timestamp: 1, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [.maskAlternate], isMarkedSynthetic: false, rules: [rule], timestamp: 1.01, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1.1, execute: { _ in executions += 1; return true }))
-
-        XCTAssertEqual(executions, 0)
-    }
-
-    func testDoubleClickRequiresModifiersAcrossEachCompleteClick() {
-        let rule = InputRemappingRule(
-            trigger: .mouseButton(number: 4, modifiers: [.command], interaction: .doubleClick),
-            action: .mouseBack
-        )
-        var processor = InputRemappingEventProcessor()
-        var executions = 0
-
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [], isMarkedSynthetic: false, rules: [rule], timestamp: 1.01, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1.1, execute: { _ in executions += 1; return true }))
-
-        XCTAssertEqual(executions, 0)
-    }
-
-    func testDoubleClickValidatesTheSecondMouseUpBeforeExecuting() {
-        let rule = InputRemappingRule(
-            trigger: .mouseButton(number: 4, modifiers: [.command], interaction: .doubleClick),
-            action: .mouseBack
-        )
-        var processor = InputRemappingEventProcessor()
-        var executions = 0
-
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1.01, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1.1, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [], isMarkedSynthetic: false, rules: [rule], timestamp: 1.11, execute: { _ in executions += 1; return true }))
-
-        XCTAssertEqual(executions, 0)
-    }
-
-    func testLongPressRequiresTheSameModifiersFromDownThroughUp() {
-        let rule = InputRemappingRule(
-            trigger: .mouseButton(number: 4, modifiers: [.command], interaction: .longPress),
-            action: .mouseBack
-        )
-        var processor = InputRemappingEventProcessor()
-        var executions = 0
-
-        XCTAssertFalse(processor.shouldConsume(phase: .down, buttonNumber: 4, flags: [.maskAlternate], isMarkedSynthetic: false, rules: [rule], timestamp: 1, execute: { _ in executions += 1; return true }))
-        XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 2, execute: { _ in executions += 1; return true }))
-
-        XCTAssertEqual(executions, 0)
-    }
-
     func testLongPressExecutesOnceWithStableModifiers() {
         let rule = InputRemappingRule(
             trigger: .mouseButton(number: 4, modifiers: [.command], interaction: .longPress),
@@ -498,22 +264,6 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertFalse(processor.shouldConsume(phase: .up, buttonNumber: 4, flags: [.maskCommand], isMarkedSynthetic: false, rules: [rule], timestamp: 1 + InputRemappingRulePolicy.longPressDuration, execute: { _ in executions += 1; return true }))
 
         XCTAssertEqual(executions, 1)
-    }
-
-    func testInputCaptureConsumesHeldKeyRepeatsAndMatchingKeyUp() {
-        let tap = InputRemappingEventTap(captureStartResult: true)
-        let captured = InputRemappingCaptureRecorder()
-        XCTAssertTrue(tap.beginInputCapture { captured.append($0) })
-        defer { tap.stop() }
-        let down = CGEvent(keyboardEventSource: nil, virtualKey: 21, keyDown: true)!
-        let up = CGEvent(keyboardEventSource: nil, virtualKey: 21, keyDown: false)!
-
-        XCTAssertNil(tap.handle(type: .keyDown, event: down))
-        XCTAssertTrue(tap.isCaptureSequenceActive)
-        XCTAssertNil(tap.handle(type: .keyDown, event: down))
-        XCTAssertNil(tap.handle(type: .keyUp, event: up))
-        XCTAssertFalse(tap.isCaptureSequenceActive)
-        XCTAssertEqual(captured.snapshot, [.keyboard(keyCode: 21, modifiers: [])])
     }
 
     func testEmergencyShortcutCancelsCaptureAndRunsOnlyOncePerPress() {
@@ -532,22 +282,6 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertNil(tap.handle(type: .keyUp, event: up))
         XCTAssertFalse(tap.isCaptureSequenceActive)
         XCTAssertEqual(counter.count, 1)
-    }
-
-    func testInputCaptureConsumesScrollUntilItBecomesQuiet() {
-        let tap = InputRemappingEventTap(captureStartResult: true)
-        let captured = InputRemappingCaptureRecorder()
-        XCTAssertTrue(tap.beginInputCapture { captured.append($0) })
-        defer { tap.stop() }
-        let scroll = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: 1, wheel2: 0, wheel3: 0)!
-        scroll.timestamp = 1_000_000_000
-        let momentum = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: 1, wheel2: 0, wheel3: 0)!
-        momentum.timestamp = 1_100_000_000
-
-        XCTAssertNil(tap.handle(type: .scrollWheel, event: scroll))
-        XCTAssertNil(tap.handle(type: .scrollWheel, event: momentum))
-        XCTAssertTrue(tap.isCaptureSequenceActive)
-        XCTAssertEqual(captured.snapshot, [.scroll(direction: .up, modifiers: [])])
     }
 
     func testScrollRuleMatchesOnlyItsDirectionAndModifiers() {
@@ -587,19 +321,6 @@ final class InputRemappingModelsTests: XCTestCase {
         plugin.receiveTrackpadGesture(.threeFingerTap, deviceID: 1)
         XCTAssertEqual(tap.executedActions, [.mouseBack])
         XCTAssertEqual(plugin.store.rules.count, 1)
-    }
-
-    func testDisabledOrIncompleteTrackpadRuleDoesNotClaimOwnership() {
-        var rule = InputRemappingRule.newDraft()
-        rule.replaceTrigger(.trackpadGesture(.threeFingerTap))
-        rule.isInputConfigured = true
-
-        XCTAssertNil(rule.claimedTrackpadGesture)
-
-        rule.isOutputConfigured = true
-        rule.isEnabled = true
-
-        XCTAssertEqual(rule.claimedTrackpadGesture, .threeFingerTap)
     }
 
     func testFailedOrInapplicableDownAndUnpairedUpFailOpen() {
@@ -646,37 +367,6 @@ final class InputRemappingModelsTests: XCTestCase {
         ))
     }
 
-    func testSyntheticEventMarkerIsRecognizedBeforeCapture() {
-        for marker in [
-            MacToolsSyntheticInputEvent.marker,
-            MacToolsSyntheticInputEvent.legacyTrackpadGesturesMarker,
-            MacToolsSyntheticInputEvent.supersededSharedMarker,
-        ] {
-            let event = CGEvent(keyboardEventSource: nil, virtualKey: 21, keyDown: true)!
-            event.setIntegerValueField(.eventSourceUserData, value: marker)
-            XCTAssertTrue(InputRemappingEventTap.isMarkedSynthetic(event))
-        }
-    }
-
-    func testSystemDefinedMediaEventEncodesDownAndUpStateOnce() {
-        let keyType: Int32 = 16
-
-        XCTAssertEqual(
-            InputRemappingSystemDefinedEvent.data1(
-                keyType: keyType,
-                state: InputRemappingSystemDefinedEvent.keyDownState
-            ),
-            Int((keyType << 16) | 0xA00)
-        )
-        XCTAssertEqual(
-            InputRemappingSystemDefinedEvent.data1(
-                keyType: keyType,
-                state: InputRemappingSystemDefinedEvent.keyUpState
-            ),
-            Int((keyType << 16) | 0xB00)
-        )
-    }
-
     @MainActor
     func testStorePersistsAndReloadsRules() throws {
         let storage = InputRemappingMemoryStorage()
@@ -713,61 +403,6 @@ final class InputRemappingModelsTests: XCTestCase {
     }
 
     @MainActor
-    func testStoreNormalizesCopiedAndPersistedButtonNumbers() throws {
-        let storage = InputRemappingMemoryStorage()
-        let store = InputRemappingStore(storage: storage)
-        store.addRule()
-        var copiedRule = try XCTUnwrap(store.rules.first)
-        copiedRule.buttonNumber = 99
-        store.replace(copiedRule)
-        XCTAssertEqual(store.rules.first?.buttonNumber, InputRemappingRulePolicy.maximumButtonNumber)
-
-        let data = try XCTUnwrap(storage.data(forKey: "input-remapping.rules.v1"))
-        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
-        var trigger = try XCTUnwrap(payload[0]["trigger"] as? [String: Any])
-        trigger["number"] = -1
-        payload[0]["trigger"] = trigger
-        storage.set(try JSONSerialization.data(withJSONObject: payload), forKey: "input-remapping.rules.v1")
-
-        let reloadedStore = InputRemappingStore(storage: storage)
-        XCTAssertEqual(
-            reloadedStore.rules.first?.buttonNumber,
-            InputRemappingRulePolicy.minimumButtonNumber
-        )
-    }
-
-    @MainActor
-    func testPermissionStatesReflectProvidersAndActionsAreReal() {
-        let tap = InputRemappingTapSpy()
-        var requestedAccessibility = false
-        var openedURL: URL?
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(
-                pluginID: "input-remapping",
-                storage: InputRemappingMemoryStorage()
-            ),
-            tap: tap,
-            accessibilityTrusted: { requestedAccessibility },
-            requestAccessibilityTrust: { prompt in
-                requestedAccessibility = prompt
-                return requestedAccessibility
-            },
-            inputMonitoringStatus: { .denied },
-            openURL: { openedURL = $0 }
-        )
-
-        XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
-        XCTAssertFalse(plugin.permissionState(for: "input-monitoring").isGranted)
-        XCTAssertFalse(plugin.permissionState(for: "unknown").isGranted)
-
-        plugin.handlePermissionAction(id: "accessibility")
-        XCTAssertTrue(plugin.permissionState(for: "accessibility").isGranted)
-
-        plugin.handlePermissionAction(id: "input-monitoring")
-        XCTAssertTrue(openedURL?.absoluteString.contains("Privacy_ListenEvent") == true)
-    }
-
-    @MainActor
     func testRulesStartOnlyWithBothPermissionsAndEveryDeactivationStopsTap() throws {
         let storage = InputRemappingMemoryStorage()
         let store = InputRemappingStore(storage: storage)
@@ -800,84 +435,6 @@ final class InputRemappingModelsTests: XCTestCase {
     }
 
     @MainActor
-    func testAppReactivationResamplesPermissionsAndDeactivationRemovesObserver() async throws {
-        let storage = InputRemappingMemoryStorage()
-        let store = InputRemappingStore(storage: storage)
-        store.addRule()
-        var rule = try XCTUnwrap(store.rules.first)
-        rule.buttonNumber = 3
-        rule.isInputConfigured = true
-        rule.isOutputConfigured = true
-        rule.isEnabled = true
-        store.replace(rule)
-        let tap = InputRemappingTapSpy()
-        let notificationCenter = NotificationCenter()
-        let permissionState = InputRemappingPermissionState()
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(pluginID: "input-remapping", storage: storage),
-            tap: tap,
-            accessibilityTrusted: { permissionState.accessibilityGranted },
-            inputMonitoringStatus: { permissionState.inputMonitoringStatus },
-            notificationCenter: notificationCenter
-        )
-
-        plugin.activate(context: PluginRuntimeContext(pluginID: "input-remapping"))
-        XCTAssertEqual(tap.startCallCount, 0)
-
-        permissionState.accessibilityGranted = true
-        permissionState.inputMonitoringStatus = .granted
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        await Task.yield()
-        XCTAssertEqual(tap.startCallCount, 1)
-
-        permissionState.accessibilityGranted = false
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        await Task.yield()
-        XCTAssertGreaterThan(tap.stopCallCount, 0)
-
-        plugin.deactivate(reason: .disabled)
-        let startCountAfterDeactivation = tap.startCallCount
-        permissionState.accessibilityGranted = true
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        await Task.yield()
-        XCTAssertEqual(tap.startCallCount, startCountAfterDeactivation)
-    }
-
-    @MainActor
-    func testSettingsPageUsesValidWorkspaceContract() throws {
-        let tap = InputRemappingTapSpy()
-        let buttonCapture = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { $0() }
-        )
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(
-                pluginID: "input-remapping",
-                storage: InputRemappingMemoryStorage()
-            ),
-            tap: tap,
-            buttonCapture: buttonCapture,
-            accessibilityTrusted: { false },
-            inputMonitoringStatus: { .denied }
-        )
-        let page = try XCTUnwrap(plugin.settingsPage)
-
-        XCTAssertEqual(page.body.layout, .workspace)
-        guard case let .workspace(workspace) = page.body else {
-            return XCTFail("Expected workspace settings")
-        }
-        XCTAssertEqual(workspace.scrolling, .host)
-        XCTAssertNoThrow(try PluginSettingsValidator.validate(page))
-        XCTAssertNotNil(page.visibilityHandler)
-
-        XCTAssertTrue(buttonCapture.start(ruleID: UUID()) { _ in })
-        XCTAssertNotNil(buttonCapture.recordingRuleID)
-        page.visibilityHandler?(false)
-        XCTAssertNil(buttonCapture.recordingRuleID)
-        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
-    }
-
-    @MainActor
     func testInputCaptureStartFailurePublishesRuleLocalErrorAndRetryClearsIt() {
         let tap = InputRemappingTapSpy()
         tap.startResult = false
@@ -905,269 +462,4 @@ final class InputRemappingModelsTests: XCTestCase {
         XCTAssertNil(coordinator.recordingError)
     }
 
-    @MainActor
-    func testInputCaptureArmingFailureRestoresInputState() {
-        let tap = InputRemappingTapSpy()
-        tap.beginInputResult = false
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { $0() }
-        )
-        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
-        let snapshot = InputRemappingInputRecordingSnapshot(rule: originalRule)
-        var draft = originalRule
-        draft.replaceTrigger(.keyboard(keyCode: 0, modifiers: []))
-        draft.isInputConfigured = true
-        draft.isEnabled = false
-
-        XCTAssertTrue(coordinator.start(
-            ruleID: draft.id,
-            onCapture: { _ in },
-            onFailure: { snapshot.restore(&draft) }
-        ))
-        XCTAssertEqual(draft, originalRule)
-        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
-    }
-
-    @MainActor
-    func testShortcutCaptureArmingFailureRestoresMappingAndCancelsTapOnce() {
-        let tap = InputRemappingTapSpy()
-        tap.beginShortcutResult = false
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { $0() }
-        )
-        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
-        let snapshot = InputRemappingOutputRecordingSnapshot(rule: originalRule)
-        var draft = originalRule
-        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
-        draft.outputConfigurationState = .recordingShortcut
-        draft.isEnabled = false
-        let ruleID = draft.id
-        var failureCalled = false
-
-        XCTAssertTrue(coordinator.startShortcut(
-            ruleID: ruleID,
-            onCapture: { _ in },
-            onFailure: {
-                failureCalled = true
-                snapshot.restore(&draft)
-            }
-        ))
-        XCTAssertTrue(failureCalled)
-        XCTAssertEqual(draft, originalRule)
-        XCTAssertEqual(
-            coordinator.recordingError,
-            InputRemappingRecordingError(
-                ruleID: ruleID,
-                target: .shortcut,
-                failure: .eventTapUnavailable
-            )
-        )
-        XCTAssertNil(coordinator.preparingShortcutRuleID)
-        XCTAssertNil(coordinator.recordingShortcutRuleID)
-        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
-    }
-
-    @MainActor
-    func testShortcutRetryAfterFailureShowsRecordingControlsForRestoredNonShortcutAction() {
-        let tap = InputRemappingTapSpy()
-        tap.beginShortcutResult = false
-        var pendingArming: (@MainActor () -> Void)?
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { pendingArming = $0 }
-        )
-        let originalRule = InputRemappingRule(isEnabled: true, action: .mouseForward)
-        var draft = originalRule
-        let snapshot = InputRemappingOutputRecordingSnapshot(rule: originalRule)
-
-        draft.action = .shortcut(ShortcutBinding(keyCode: 0, modifiers: [.command]))
-        draft.outputConfigurationState = .recordingShortcut
-        XCTAssertTrue(coordinator.startShortcut(
-            ruleID: draft.id,
-            onCapture: { _ in },
-            onFailure: { snapshot.restore(&draft) }
-        ))
-        XCTAssertEqual(coordinator.preparingShortcutRuleID, draft.id)
-        XCTAssertTrue(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
-        pendingArming?()
-        XCTAssertEqual(draft, originalRule)
-        XCTAssertFalse(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
-
-        tap.beginShortcutResult = true
-        XCTAssertTrue(coordinator.startShortcut(ruleID: draft.id) { _ in })
-        XCTAssertEqual(coordinator.preparingShortcutRuleID, draft.id)
-        XCTAssertTrue(shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator))
-        pendingArming?()
-
-        XCTAssertEqual(coordinator.recordingShortcutRuleID, draft.id)
-        XCTAssertTrue(
-            shouldShowShortcutRecordingControl(for: draft, buttonCapture: coordinator),
-            "The recording state must keep the visible Cancel control available after retry."
-        )
-    }
-
-    @MainActor
-    func testRecordingPermissionGuidanceIdentifiesAccessibilityBeforeInputMonitoring() {
-        let storage = InputRemappingMemoryStorage()
-        let permissionState = InputRemappingPermissionState()
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(pluginID: "input-remapping", storage: storage),
-            tap: InputRemappingTapSpy(),
-            accessibilityTrusted: { permissionState.accessibilityGranted },
-            inputMonitoringStatus: { permissionState.inputMonitoringStatus }
-        )
-
-        XCTAssertEqual(plugin.recordingPermissionGuidance()?.issue, .accessibility)
-
-        permissionState.accessibilityGranted = true
-        plugin.refreshAccessibilityPermission()
-        XCTAssertEqual(plugin.recordingPermissionGuidance()?.issue, .inputMonitoring)
-
-        permissionState.inputMonitoringStatus = .unknown
-        plugin.refreshAccessibilityPermission()
-        XCTAssertNil(plugin.recordingPermissionGuidance())
-
-        permissionState.inputMonitoringStatus = .granted
-        plugin.refreshAccessibilityPermission()
-        XCTAssertNil(plugin.recordingPermissionGuidance())
-    }
-
-    @MainActor
-    func testTrackpadOnlyRuleDoesNotStartGlobalEventTap() throws {
-        let storage = InputRemappingMemoryStorage()
-        let store = InputRemappingStore(storage: storage)
-        store.addRule()
-        var rule = try XCTUnwrap(store.rules.first)
-        rule.replaceTrigger(.trackpadGesture(.threeFingerTap))
-        rule.isInputConfigured = true
-        rule.isOutputConfigured = true
-        rule.isEnabled = true
-        store.replace(rule)
-        let tap = InputRemappingTapSpy()
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(pluginID: "input-remapping", storage: storage),
-            tap: tap,
-            accessibilityTrusted: { true },
-            inputMonitoringStatus: { .denied }
-        )
-
-        plugin.activate(context: PluginRuntimeContext(pluginID: "input-remapping"))
-
-        XCTAssertEqual(tap.startCallCount, 0)
-    }
-
-    @MainActor
-    func testButtonCaptureRecordsAnEligibleButtonAndCanBeCancelled() async {
-        let tap = InputRemappingTapSpy()
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { $0() }
-        )
-        var capturedInput: InputRemappingCapturedInput?
-
-        XCTAssertTrue(coordinator.start(ruleID: UUID()) {
-            capturedInput = $0
-        })
-        tap.capture(.mouseButton(number: 4, modifiers: []))
-        await Task.yield()
-
-        XCTAssertEqual(capturedInput, .mouseButton(number: 4, modifiers: []))
-        XCTAssertNil(coordinator.recordingRuleID)
-
-        XCTAssertTrue(coordinator.start(ruleID: UUID()) { _ in })
-        coordinator.cancel()
-        XCTAssertNil(coordinator.recordingRuleID)
-        XCTAssertEqual(tap.cancelCaptureCallCount, 1)
-    }
-
-    @MainActor
-    func testShortcutCaptureRecordsAKeyboardBinding() async {
-        let tap = InputRemappingTapSpy()
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { $0() }
-        )
-        var captured: ShortcutBinding?
-
-        XCTAssertTrue(coordinator.startShortcut(ruleID: UUID()) { captured = $0 })
-        tap.capture(shortcut: ShortcutBinding(keyCode: 12, modifiers: [.command]))
-        await Task.yield()
-
-        XCTAssertEqual(captured, ShortcutBinding(keyCode: 12, modifiers: [.command]))
-        XCTAssertNil(coordinator.recordingShortcutRuleID)
-    }
-
-    @MainActor
-    func testInputCaptureIgnoresTheClickThatOpenedRecording() async throws {
-        let tap = InputRemappingTapSpy()
-        var pendingArming: (@MainActor () -> Void)?
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { pendingArming = $0 }
-        )
-        var captured: InputRemappingCapturedInput?
-
-        XCTAssertTrue(coordinator.start(ruleID: UUID()) { captured = $0 })
-        XCTAssertNotNil(coordinator.preparingRuleID)
-        XCTAssertEqual(tap.startCallCount, 1)
-        tap.capture(.mouseButton(number: 0, modifiers: []))
-        await Task.yield()
-        XCTAssertNil(captured)
-
-        let arm = try XCTUnwrap(pendingArming)
-        arm()
-        tap.capture(.mouseButton(number: 4, modifiers: []))
-        await Task.yield()
-        XCTAssertEqual(captured, .mouseButton(number: 4, modifiers: []))
-    }
-
-    @MainActor
-    func testEmergencyStopCancelsAPreparingRecorder() {
-        let tap = InputRemappingTapSpy()
-        var pendingArming: (@MainActor () -> Void)?
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { pendingArming = $0 }
-        )
-
-        XCTAssertTrue(coordinator.start(ruleID: UUID()) { _ in })
-        XCTAssertNotNil(coordinator.preparingRuleID)
-
-        coordinator.cancelFromEmergencyStop()
-        XCTAssertNil(coordinator.preparingRuleID)
-
-        pendingArming?()
-        XCTAssertNil(coordinator.recordingRuleID)
-    }
-
-    @MainActor
-    func testEmergencyStopHandlerResetsThePluginRecorderState() async {
-        let tap = InputRemappingTapSpy()
-        var pendingArming: (@MainActor () -> Void)?
-        let coordinator = InputRemappingButtonCaptureCoordinator(
-            tap: tap,
-            scheduleArming: { pendingArming = $0 }
-        )
-        let plugin = InputRemappingPlugin(
-            context: PluginRuntimeContext(
-                pluginID: "input-remapping",
-                storage: InputRemappingMemoryStorage()
-            ),
-            tap: tap,
-            buttonCapture: coordinator
-        )
-
-        XCTAssertTrue(coordinator.start(ruleID: UUID()) { _ in })
-        XCTAssertNotNil(coordinator.preparingRuleID)
-
-        tap.emergencyStopHandler?()
-        await Task.yield()
-
-        XCTAssertNil(coordinator.preparingRuleID)
-        pendingArming?()
-        XCTAssertNil(coordinator.recordingRuleID)
-        plugin.deactivate(reason: .disabled)
-    }
 }

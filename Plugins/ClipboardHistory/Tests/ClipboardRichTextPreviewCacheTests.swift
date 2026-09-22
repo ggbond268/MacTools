@@ -1,110 +1,85 @@
+import Foundation
 import XCTest
 @testable import ClipboardHistoryPlugin
 
 @MainActor
 final class ClipboardRichTextPreviewCacheTests: XCTestCase {
-    func testOrdinaryCloseReusesPreparedLightAndDarkDocument() async {
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { _ in
-            reads += 1
-            return .formatted(.init(AttributedString("Readable text")))
-        }
-        let item = clip("First")
-        _ = await cache.preview(for: item)
-        cache.invalidatePendingLoad()
-        guard case let .formatted(document) = await cache.preview(for: item) else {
-            return XCTFail("Expected the prepared document")
-        }
-        XCTAssertEqual(String(document.light.characters), "Readable text")
-        XCTAssertEqual(String(document.dark.characters), "Readable text")
-        XCTAssertEqual(reads, 1)
-    }
-
-    func testOnlyLastDocumentIsRetainedAndExplicitDiscardForcesReload() async {
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { item in
-            reads += 1
+    func testSwitchingReusesRecentPreviewsWithinCapacityAndRetriesFailures() async {
+        let first = item("First"), second = item("Second"), third = item("Third")
+        var reads: [UUID: Int] = [:]
+        let cache = ClipboardRichTextPreviewCache(maximumCount: 2) { item in
+            reads[item.id, default: 0] += 1
+            if item.id == third.id, reads[item.id] == 1 {
+                return .fallback(item.text, isTruncated: false)
+            }
             return .plainText(item.text, isSimplified: true)
         }
-        let first = clip("First")
-        let second = clip("Second")
+
         _ = await cache.preview(for: first)
         _ = await cache.preview(for: second)
         _ = await cache.preview(for: first)
-        XCTAssertEqual(reads, 3)
-        cache.removeAll()
-        _ = await cache.preview(for: first)
-        XCTAssertEqual(reads, 4)
+        XCTAssertEqual(reads[first.id], 1)
+
+        _ = await cache.preview(for: third)
+        XCTAssertNil(cache.cachedPreview(for: third))
+        _ = await cache.preview(for: third)
+        XCTAssertEqual(reads[third.id], 2)
+        XCTAssertNil(cache.cachedPreview(for: second))
+        XCTAssertNotNil(cache.cachedPreview(for: first))
+
+        let edited = item("Edited", id: first.id)
+        XCTAssertNil(cache.cachedPreview(for: edited))
+        _ = await cache.preview(for: edited)
+        XCTAssertNil(cache.cachedPreview(for: first))
+        XCTAssertNotNil(cache.cachedPreview(for: edited))
+        cache.retain { $0.itemID != edited.id }
+        XCTAssertNil(cache.cachedPreview(for: edited))
     }
 
-    func testChangedPayloadAndDeletedItemInvalidateThePreview() async {
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { item in
-            reads += 1
-            return .plainText(item.text, isSimplified: true)
+    func testInvalidatedInFlightPreviewCannotReturnOrRetainDeletedContent() async {
+        let selected = item("Removed during preview")
+        let started = expectation(description: "Preview started")
+        var completion: CheckedContinuation<ClipboardRichTextPreviewResult, Never>?
+        let cache = ClipboardRichTextPreviewCache { _ in
+            await withCheckedContinuation {
+                completion = $0
+                started.fulfill()
+            }
         }
-        let first = clip("First")
-        let replacement = clip("Replacement", id: first.id)
-        _ = await cache.preview(for: first)
-        _ = await cache.preview(for: replacement)
-        XCTAssertEqual(reads, 2)
-        cache.retain { $0 == ClipboardEmbeddedPreviewKey(replacement) }
-        _ = await cache.preview(for: replacement)
-        XCTAssertEqual(reads, 2)
+        let request = Task { await cache.preview(for: selected) }
+        await fulfillment(of: [started], timeout: 5)
         cache.retain { _ in false }
-        _ = await cache.preview(for: replacement)
-        XCTAssertEqual(reads, 3)
+        completion?.resume(returning: .plainText(selected.text, isSimplified: true))
+        let result = await request.value
+        guard case .unavailable = result else {
+            return XCTFail("An invalidated preview must not be presented")
+        }
+        XCTAssertNil(cache.cachedPreview(for: selected))
     }
 
-    func testFailedReadsAreRetried() async {
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { _ in
-            reads += 1
-            return reads == 1 ? .fallback("Saved text", isTruncated: false) : .unavailable
+    func testOversizedRichTextPreviewUsesMetadataWithoutReadingOriginalPayload() async {
+        let payload = ClipboardHistoryPayload(pasteboardItems: [.init(representations: [
+            .init(typeIdentifier: ClipboardRepresentationType.html,
+                  data: Data(repeating: 32, count: ClipboardRichTextPreviewPolicy.maximumFormattedByteCount + 1)),
+            .init(typeIdentifier: ClipboardRepresentationType.plainText,
+                  data: Data("Saved text summary".utf8)),
+        ])])
+        let selected = ClipboardHistoryItem(id: UUID(), payload: payload, capturedAt: .now,
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil)
+        selected.configurePayloadLoader({
+            XCTFail("A simplified preview must not read the original rich-text payload")
+            throw CocoaError(.fileReadNoSuchFile)
+        }, discardCachedPayload: true)
+
+        let result = await ClipboardRichTextPreviewCache().preview(for: selected)
+        guard case let .plainText(text, isSimplified) = result else {
+            return XCTFail("Expected the saved text summary")
         }
-        let item = clip("First")
-        for _ in 0..<3 { _ = await cache.preview(for: item) }
-        XCTAssertEqual(reads, 3)
+        XCTAssertEqual(text, "Saved text summary")
+        XCTAssertTrue(isSimplified)
     }
 
-    func testDiscardDuringImportRejectsLateResult() async {
-        var resume: CheckedContinuation<ClipboardRichTextPreviewResult, Never>?
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { _ in
-            reads += 1
-            if reads == 1 { return await withCheckedContinuation { resume = $0 } }
-            return .plainText("Current", isSimplified: true)
-        }
-        let item = clip("First")
-        let pending = Task { await cache.preview(for: item) }
-        while resume == nil { await Task.yield() }
-        cache.removeAll()
-        resume?.resume(returning: .plainText("Stale", isSimplified: true))
-        guard case .unavailable = await pending.value else { return XCTFail("Discarded import must not publish") }
-        guard case let .plainText(text, _) = await cache.preview(for: item) else {
-            return XCTFail("Expected a fresh read")
-        }
-        XCTAssertEqual(text, "Current")
-        XCTAssertEqual(reads, 2)
-    }
-
-    func testCancelledImportCannotPopulateCache() async {
-        var reads = 0
-        let cache = ClipboardRichTextPreviewCache { _ in
-            reads += 1
-            if reads == 1 { try? await Task.sleep(for: .seconds(60)) }
-            return .plainText("Preview", isSimplified: true)
-        }
-        let item = clip("First")
-        let pending = Task { await cache.preview(for: item) }
-        while reads == 0 { await Task.yield() }
-        pending.cancel()
-        guard case .unavailable = await pending.value else { return XCTFail("Cancelled import must not publish") }
-        _ = await cache.preview(for: item)
-        XCTAssertEqual(reads, 2)
-    }
-
-    private func clip(_ text: String, id: UUID = UUID()) -> ClipboardHistoryItem {
+    private func item(_ text: String, id: UUID = UUID()) -> ClipboardHistoryItem {
         ClipboardHistoryItem(id: id, text: text, capturedAt: .now,
             sourceApplication: nil, isPinned: false, lastUsedAt: nil)
     }

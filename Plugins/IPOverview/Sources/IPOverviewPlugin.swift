@@ -20,12 +20,19 @@ private struct IPOverviewPluginProvider: PluginProvider {
 
 @MainActor
 final class IPOverviewPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginSettingsPresenting,
-    PluginPanelSurfaceLifecycleHandling,
-    PluginActionProviding
-{
+    MacToolsPlugin, PluginSettingsPresenting, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let copyLocalIPv4 = "copy-local-ipv4"
         static let copyPublicIPv4 = "copy-public-ipv4"
@@ -40,7 +47,7 @@ final class IPOverviewPlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     private let viewModel: IPOverviewViewModel
     private let localization: PluginLocalization
@@ -68,7 +75,7 @@ final class IPOverviewPlugin:
                 defaultValue: "查看公网 IP、本地地址和归属地"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.check", defaultValue: "检测") }
@@ -90,15 +97,15 @@ final class IPOverviewPlugin:
         viewModel.refreshAddresses()
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .primary else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "control" else {
             return
         }
 
         viewModel.refreshAddresses()
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {}
+    func panelItemDidBecomeHidden(_ surface: String) {}
 
     private var addressControls: [PluginPanelControl] {
         let snapshot = viewModel.snapshot
@@ -128,13 +135,12 @@ final class IPOverviewPlugin:
         ]
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: viewModel.snapshot.isRefreshing,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: PluginPanelDetail(controls: addressControls),
             errorMessage: viewModel.snapshot.errorMessage
         )

@@ -186,6 +186,24 @@ struct PluginPackageUpdateFailure {
     let error: Error
 }
 
+struct InstalledPluginMetadata {
+    let capabilitiesByID: [String: PluginPackageManifest.Capabilities]
+    let categoriesByID: [String: String?]
+    let releaseChannelsByID: [String: String?]
+    let manifestsByID: [String: PluginPackageManifest]
+    let installedAtByID: [String: Date]
+
+    init(records: [PluginPackageRecord]) {
+        capabilitiesByID = Dictionary(uniqueKeysWithValues: records.compactMap {
+            $0.state.isLoadable ? ($0.id, $0.manifest.capabilities) : nil
+        })
+        categoriesByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.manifest.category) })
+        releaseChannelsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.manifest.releaseChannel) })
+        manifestsByID = Dictionary(records.map { ($0.id, $0.manifest) }, uniquingKeysWith: { _, latest in latest })
+        installedAtByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.installedAt) })
+    }
+}
+
 @MainActor
 final class DynamicPluginManager: ObservableObject {
     private let packageStore: PluginPackageStore
@@ -778,6 +796,11 @@ final class DynamicPluginManager: ObservableObject {
         )
     }
 
+    /// Shares one fresh scan across host metadata projections without caching filesystem state.
+    func installedMetadata() -> InstalledPluginMetadata {
+        InstalledPluginMetadata(records: packageStore.installedRecords())
+    }
+
     func installedPackageVersionsByID() -> [String: String] {
         Dictionary(
             uniqueKeysWithValues: packageStore.installedRecords().map {
@@ -846,7 +869,8 @@ final class DynamicPluginManager: ObservableObject {
         }
     }
 
-    func rebuildManagementItems(catalogSnapshot: PluginCatalogSnapshot?) {
+    @discardableResult
+    func rebuildManagementItems(catalogSnapshot: PluginCatalogSnapshot?) -> InstalledPluginMetadata {
         self.catalogSnapshot = catalogSnapshot
         let records = packageStore.installedRecords()
         let results = records.map { record in
@@ -857,6 +881,7 @@ final class DynamicPluginManager: ObservableObject {
             )
         }
         rebuildManagementItems(results: results, catalogSnapshot: catalogSnapshot)
+        return InstalledPluginMetadata(records: records)
     }
 
     private func deactivateMissingPlugins(records: [PluginPackageRecord]) {

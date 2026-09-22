@@ -70,6 +70,10 @@ enum ClipboardRichTextPreviewLoader {
         for item: ClipboardHistoryItem,
         fallbackText: String
     ) async -> ClipboardRichTextPreviewResult {
+        guard !Task.isCancelled else { return .unavailable }
+        if item.kind == .richText, !item.allowsRichTextImport {
+            return ClipboardRichTextPreviewPolicy.simplifiedPreview(for: fallbackText)
+        }
         let worker = Task.detached(priority: .userInitiated) {
             defer { item.discardCachedPayloadIfReloadable() }
             guard !Task.isCancelled else { return ClipboardRichTextPreviewResult.unavailable }
@@ -173,7 +177,7 @@ enum ClipboardRichTextPreviewPolicy {
         ].contains(typeIdentifier)
     }
 
-    private static func simplifiedPreview(for text: String) -> ClipboardRichTextPreviewResult {
+    static func simplifiedPreview(for text: String) -> ClipboardRichTextPreviewResult {
         guard !text.isEmpty else { return .unavailable }
         let bounded = boundedPlainText(text)
         return .plainText(bounded.text, isSimplified: true)

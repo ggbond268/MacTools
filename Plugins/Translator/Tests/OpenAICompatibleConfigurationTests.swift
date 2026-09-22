@@ -4,119 +4,42 @@ import XCTest
 
 @MainActor
 final class OpenAICompatibleConfigurationTests: XCTestCase {
-    func testDefaultValues() {
-        let configuration = OpenAICompatibleConfiguration()
-
-        XCTAssertEqual(configuration.baseURL, "https://api.openai.com")
-        XCTAssertEqual(configuration.model, "gpt-5.4-mini")
-        XCTAssertTrue(configuration.promptTemplate.contains("{{source_language}}"))
-        XCTAssertTrue(configuration.promptTemplate.contains("{{target_language}}"))
-        XCTAssertTrue(configuration.promptTemplate.contains("{{text}}"))
-    }
-
-    func testEndpointAppendsChatCompletionsPath() throws {
-        let configuration = OpenAICompatibleConfiguration(baseURL: "https://api.openai.com")
-
-        XCTAssertEqual(
-            try configuration.endpointURL().absoluteString,
-            "https://api.openai.com/v1/chat/completions"
-        )
-    }
-
-    func testEndpointDoesNotDuplicateV1Path() throws {
-        let configuration = OpenAICompatibleConfiguration(baseURL: "https://gateway.example.com/v1/")
-
-        XCTAssertEqual(
-            try configuration.endpointURL().absoluteString,
-            "https://gateway.example.com/v1/chat/completions"
-        )
-    }
-
-    func testEndpointKeepsFullChatCompletionsPath() throws {
-        let configuration = OpenAICompatibleConfiguration(
-            baseURL: "https://gateway.example.com/openai/v1/chat/completions"
-        )
-
-        XCTAssertEqual(
-            try configuration.endpointURL().absoluteString,
-            "https://gateway.example.com/openai/v1/chat/completions"
-        )
-    }
-
-    func testEndpointKeepsProviderSpecificChatCompletionsPath() throws {
-        let configuration = OpenAICompatibleConfiguration(
-            baseURL: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-        )
-
-        XCTAssertEqual(
-            try configuration.endpointURL().absoluteString,
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-        )
-    }
-
-    func testPromptTemplateMissingTextIsInvalidWithExactMessage() {
-        let configuration = OpenAICompatibleConfiguration(promptTemplate: "翻译 {{source_language}} 到 {{target_language}}")
-
-        XCTAssertEqual(configuration.validationError?.localizedDescription, "提示词必须包含 {{text}}。")
-    }
-
-    func testBlankBaseURLIsInvalidWithExactMessage() {
-        let configuration = OpenAICompatibleConfiguration(baseURL: "   \n  ")
-
-        XCTAssertEqual(configuration.validationError?.localizedDescription, "Base URL 不能为空。")
-    }
-
-    func testMissingHostIsInvalidWithExactMessage() {
-        let configurations = [
-            OpenAICompatibleConfiguration(baseURL: "https:///v1"),
-            OpenAICompatibleConfiguration(baseURL: "not-a-url"),
+    func testEndpointNormalizationPreservesProviderPaths() throws {
+        let cases = [
+            ("https://api.openai.com", "https://api.openai.com/v1/chat/completions"),
+            ("https://gateway.example.com/v1/", "https://gateway.example.com/v1/chat/completions"),
+            ("https://gateway.example.com/openai/v1/chat/completions", "https://gateway.example.com/openai/v1/chat/completions"),
+            ("https://provider.example.com/api/v4/chat/completions", "https://provider.example.com/api/v4/chat/completions"),
         ]
-
-        for configuration in configurations {
-            XCTAssertEqual(configuration.validationError?.localizedDescription, "Base URL 无效。")
+        for (baseURL, expected) in cases {
+            let configuration = OpenAICompatibleConfiguration(baseURL: baseURL)
+            XCTAssertEqual(try configuration.endpointURL().absoluteString, expected, baseURL)
         }
     }
 
-    func testUnsupportedSchemeIsInvalidWithExactMessage() {
-        let configuration = OpenAICompatibleConfiguration(baseURL: "ftp://example.com")
-
-        XCTAssertEqual(configuration.validationError?.localizedDescription, "Base URL 无效。")
-    }
-
-    func testRemoteHTTPBaseURLIsInvalidWithExactMessage() {
-        let configuration = OpenAICompatibleConfiguration(baseURL: "http://gateway.example.com")
-
-        XCTAssertEqual(configuration.validationError?.localizedDescription, "Base URL 无效。")
+    func testEndpointRejectsInvalidOrInsecureConfiguration() {
+        let cases: [(String, OpenAICompatibleConfiguration, OpenAICompatibleConfigurationError)] = [
+            ("missing text placeholder", .init(promptTemplate: "Translate {{source_language}}"), .missingTextPlaceholder),
+            ("blank URL", .init(baseURL: "  "), .blankBaseURL),
+            ("missing host", .init(baseURL: "https:///v1"), .invalidBaseURL),
+            ("malformed URL", .init(baseURL: "not-a-url"), .invalidBaseURL),
+            ("unsupported scheme", .init(baseURL: "ftp://example.com"), .invalidBaseURL),
+            ("insecure remote endpoint", .init(baseURL: "http://gateway.example.com"), .invalidBaseURL),
+            ("blank model", .init(model: "  "), .blankModel),
+        ]
+        for (label, configuration, expected) in cases {
+            XCTAssertEqual(configuration.validationError, expected, label)
+            XCTAssertThrowsError(try configuration.endpointURL(), label) { error in
+                XCTAssertEqual(error as? OpenAICompatibleConfigurationError, expected, label)
+            }
+        }
     }
 
     func testLoopbackHTTPBaseURLIsAllowedForLocalGateways() throws {
-        let configurations = [
-            OpenAICompatibleConfiguration(baseURL: "http://localhost:11434"),
-            OpenAICompatibleConfiguration(baseURL: "http://127.0.0.1:11434"),
-            OpenAICompatibleConfiguration(baseURL: "http://[::1]:11434"),
-        ]
-
-        for configuration in configurations {
-            XCTAssertNil(configuration.validationError)
-            XCTAssertTrue(try configuration.endpointURL().absoluteString.contains("/v1/chat/completions"))
-        }
-    }
-
-    func testWhitespaceOnlyModelIsInvalidWithExactMessage() {
-        let configuration = OpenAICompatibleConfiguration(model: " \n\t ")
-
-        XCTAssertEqual(configuration.validationError?.localizedDescription, "模型不能为空。")
-    }
-
-    func testEndpointThrowsValidationErrorForBlankModel() {
-        let configuration = OpenAICompatibleConfiguration(
-            baseURL: "https://gateway.example.com",
-            model: " \n\t ",
-            promptTemplate: "{{text}}"
-        )
-
-        XCTAssertThrowsError(try configuration.endpointURL()) { error in
-            XCTAssertEqual(error as? OpenAICompatibleConfigurationError, .blankModel)
+        for baseURL in ["http://localhost:11434", "http://127.0.0.1:11434", "http://[::1]:11434"] {
+            let configuration = OpenAICompatibleConfiguration(baseURL: baseURL)
+            XCTAssertNil(configuration.validationError, baseURL)
+            XCTAssertTrue(try configuration.endpointURL().absoluteString.contains("/v1/chat/completions"), baseURL)
         }
     }
 

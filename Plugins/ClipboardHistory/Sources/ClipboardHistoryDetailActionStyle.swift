@@ -1,53 +1,38 @@
-import MacToolsPluginKit
 import SwiftUI
 
-/// One hit target and visual treatment for the preview's primary and secondary actions.
-struct ClipboardHistoryDetailActionStyle: ButtonStyle {
-    var isPrimary = false
-    @Environment(\.isEnabled) private var isEnabled
+/// Preserve native button behavior while aligning labels and adding neutral hover feedback.
+struct ClipboardHistoryDetailActionStyle: PrimitiveButtonStyle {
+    var isActive = false
 
     func makeBody(configuration: Configuration) -> some View {
-        ActionBody(configuration: configuration, isPrimary: isPrimary, isEnabled: isEnabled)
+        ActionBody(configuration: configuration, isActive: isActive)
     }
 
     private struct ActionBody: View {
-        let configuration: ButtonStyleConfiguration
-        let isPrimary: Bool
-        let isEnabled: Bool
-        @State private var isHovered = false
+        let configuration: PrimitiveButtonStyleConfiguration
+        let isActive: Bool
+        @Environment(\.isEnabled) private var isEnabled
         @Environment(\.colorSchemeContrast) private var contrast
+        @State private var isHovered = false
 
         var body: some View {
-            configuration.label
-                .font(PluginSettingsTheme.Typography.secondaryLabel)
-                .padding(.horizontal, 10)
-                .frame(minWidth: 36)
-                .frame(height: 36)
-                .foregroundStyle(!isEnabled ? Color.secondary : isPrimary
-                    ? PluginPaletteColors.selectedText : Color.primary)
-                .background(background, in: RoundedRectangle(cornerRadius: 7))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(
-                            contrast == .increased || (isPrimary && (isHovered || configuration.isPressed))
-                                ? (isPrimary && isEnabled
-                                ? PluginPaletteColors.selectedText : Color.primary)
-                                : PluginSettingsTheme.Palette.cardBorder,
-                            lineWidth: configuration.isPressed ? 2 : 1
-                        )
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 7))
-                .onHover { isHovered = $0 }
-                .animation(.easeOut(duration: 0.1), value: isHovered)
-        }
-
-        private var background: Color {
-            if isPrimary && isEnabled {
-                return Color(nsColor: .selectedContentBackgroundColor)
+            Button(role: configuration.role, action: configuration.trigger) {
+                configuration.label
+                    .frame(minWidth: 18)
+                    .frame(height: 18)
             }
-            return isHovered || configuration.isPressed
-                ? PluginSettingsTheme.Palette.activeControlBackground
-                : PluginSettingsTheme.Palette.fieldBackground
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .font(.subheadline)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isEnabled && (isHovered || isActive)
+                        ? Color.primary.opacity(contrast == .increased ? 0.12 : 0.06)
+                        : .clear)
+                    .allowsHitTesting(false)
+            }
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.1), value: isHovered)
         }
     }
 }

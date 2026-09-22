@@ -41,13 +41,19 @@ struct ClipboardBackupRecord: Codable, Sendable {
         }
     }
 
-    func selected(scope: ClipboardBackupScope) throws -> Self? {
+    func selected(
+        scope: ClipboardBackupScope,
+        excludingSavedMetadata: ClipboardHistorySavedMetadata? = nil
+    ) throws -> Self? {
         var record = self
         switch table {
         case .items:
             var value = try history
             value.isInHistory = scope.history && (value.isInHistory ?? true)
-            if !scope.saved { value.savedMetadata = nil }
+            let isProvisionalSave = excludingSavedMetadata.map { value.savedMetadata == $0 } ?? false
+            if !scope.saved || isProvisionalSave {
+                value.savedMetadata = nil
+            }
             guard value.isInHistory == true || value.savedMetadata != nil else { return nil }
             record.metadata = try JSONEncoder().encode(value)
         case .saved_items:

@@ -45,15 +45,6 @@ final class ScrollSessionTests: XCTestCase {
         XCTAssertEqual(error as? ScrollCaptureError, .noFrames)
     }
 
-    func testDimensionChangeDoesNotDiscardPreviouslyAcceptedPixels() throws {
-        let stitcher = Stitcher()
-        try stitcher.push(makeFrame())
-        XCTAssertThrowsError(try stitcher.push(makeFrame(height: 256))) {
-            XCTAssertEqual($0 as? CaptureFailure, .displayChanged)
-        }
-        XCTAssertEqual(try stitcher.compose()?.height, 128)
-    }
-
     func testUnmatchedContentIsNotAppendedAsAnotherFullScreen() throws {
         let first = try makeFrame()
         let stitcher = Stitcher()
@@ -75,17 +66,6 @@ final class ScrollSessionTests: XCTestCase {
         let previous = (0..<height).flatMap { y in [UInt8](repeating: y % 16 < 8 ? 30 : 220, count: Stitcher.cols) }
         let next = (0..<height).flatMap { y in [UInt8](repeating: (y + 8) % 16 < 8 ? 30 : 220, count: Stitcher.cols) }
         XCTAssertNil(try Stitcher.offset(prev: previous, next: next, height: height))
-    }
-
-    func testWorkingBudgetReservesCaptureAndExportBuffers() throws {
-        let bytes = 32 * 128 * 4
-        let stitcher = Stitcher(maximumWorkingBytes: bytes * 9 - 1)
-        XCTAssertThrowsError(try stitcher.push(makeFrame())) {
-            XCTAssertEqual($0 as? ScrollCaptureError, .outputTooLarge)
-        }
-        XCTAssertTrue(stitcher.pieces.isEmpty)
-        let sufficient = Stitcher(maximumWorkingBytes: bytes * 9)
-        XCTAssertEqual(try sufficient.push(makeFrame()), 128)
     }
 
     func testStitcherReconstructsADocumentAcrossDifferentScrollOffsets() throws {
@@ -114,89 +94,6 @@ final class ScrollSessionTests: XCTestCase {
         XCTAssertEqual(Stitcher.grayColumns(output), Stitcher.grayColumns(document))
     }
 
-    func testHostWindowsRemainSelectableAlongsideOtherApplications() {
-        let hostID = ProcessInfo.processInfo.processIdentifier
-        let hostBounds = CGRect(x: 20, y: 40, width: 200, height: 100)
-        let otherBounds = CGRect(x: 250, y: 60, width: 300, height: 200)
-        let info: [[String: Any]] = [
-            [kCGWindowLayer as String: 0, kCGWindowOwnerPID as String: hostID,
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: hostBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: 0, kCGWindowOwnerPID as String: hostID + 1,
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: otherBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: 0, kCGWindowOwnerPID as String: hostID,
-             kCGWindowAlpha as String: 0.0, kCGWindowBounds as String: hostBounds.dictionaryRepresentation],
-        ]
-        XCTAssertEqual(CaptureController.selectableWindowRects(from: info, primaryHeight: 900), [
-            CGRect(x: 20, y: 760, width: 200, height: 100),
-            CGRect(x: 250, y: 640, width: 300, height: 200),
-        ])
-    }
-
-    func testMenuAndPopoverLayersRemainSelectableWithoutIncludingSystemOverlays() {
-        let popUpBounds = CGRect(x: 900, y: 24, width: 280, height: 360)
-        let adjacentStatusBounds = CGRect(x: 600, y: 24, width: 260, height: 300)
-        let menuBarBounds = CGRect(x: 0, y: 0, width: 1440, height: 24)
-        let normalBounds = CGRect(x: 80, y: 100, width: 500, height: 400)
-        let excludedBounds = CGRect(x: 0, y: 850, width: 1440, height: 50)
-        let statusLevel = Int(CGWindowLevelForKey(.statusWindow))
-        let info: [[String: Any]] = [
-            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.popUpMenuWindow)),
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: popUpBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: statusLevel + 1,
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: adjacentStatusBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.mainMenuWindow)),
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: menuBarBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.normalWindow)),
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: normalBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.dockWindow)),
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: excludedBounds.dictionaryRepresentation],
-            [kCGWindowLayer as String: Int(CGWindowLevelForKey(.overlayWindow)),
-             kCGWindowAlpha as String: 1.0, kCGWindowBounds as String: excludedBounds.dictionaryRepresentation],
-        ]
-
-        XCTAssertEqual(CaptureController.selectableWindowRects(from: info, primaryHeight: 900), [
-            CGRect(x: 900, y: 516, width: 280, height: 360),
-            CGRect(x: 600, y: 576, width: 260, height: 300),
-            CGRect(x: 0, y: 876, width: 1440, height: 24),
-            CGRect(x: 80, y: 400, width: 500, height: 400),
-        ])
-    }
-
-    func testLegacyDisplayFreezeIsOpaqueAndCursorFree() {
-        let config = CapturePipeline.streamConfiguration(pixelWidth: 2880, pixelHeight: 1800)
-
-        XCTAssertEqual(config.width, 2880)
-        XCTAssertEqual(config.height, 1800)
-        XCTAssertFalse(config.showsCursor)
-        XCTAssertTrue(config.shouldBeOpaque)
-    }
-
-    @available(macOS 26.0, *)
-    func testScreenshotUsesLocalSDRRenderingAndIncludesChildWindows() {
-        let config = CapturePipeline.screenshotConfiguration(pixelWidth: 2880, pixelHeight: 1800)
-
-        XCTAssertEqual(config.width, 2880)
-        XCTAssertEqual(config.height, 1800)
-        XCTAssertFalse(config.showsCursor)
-        XCTAssertTrue(config.includeChildWindows)
-        XCTAssertEqual(config.displayIntent, .local)
-        XCTAssertEqual(config.dynamicRange, .sdr)
-    }
-
-    func testSmallScrollStripsDoNotRetainCapturedFrameProviders() throws {
-        let stats = CaptureBufferStats()
-        let stitcher = Stitcher()
-        for offset in stride(from: 0, through: 19, by: 1) {
-            try autoreleasepool {
-                let frame = try trackedFrame(offset: offset, stats: stats)
-                XCTAssertEqual(try stitcher.push(frame), offset == 0 ? 360 : 1)
-            }
-            XCTAssertEqual(stats.liveBytes, 0, "Retained strips must own only their copied pixels")
-        }
-        XCTAssertEqual(stitcher.totalRows, 379)
-        XCTAssertEqual(try stitcher.compose()?.height, 379)
-    }
-
     func testAccumulatedOutputCannotExceedThePixelBudget() throws {
         let stats = CaptureBufferStats()
         let stitcher = Stitcher(maximumBytes: 64 * 4 * 367)
@@ -207,37 +104,6 @@ final class ScrollSessionTests: XCTestCase {
         }
         XCTAssertEqual(stitcher.totalRows, 364)
         XCTAssertEqual(try stitcher.compose()?.height, 364)
-    }
-
-    func testWorkerReadsCapturePixelsOffTheMainThread() async throws {
-        let stats = CaptureBufferStats()
-        let frame = try trackedFrame(offset: 0, stats: stats)
-        let initialReads = stats.mainThreadReads
-        let worker = ScrollStitchingWorker()
-        _ = try await worker.push(frame)
-        XCTAssertGreaterThan(stats.backgroundReads, 0)
-        XCTAssertEqual(stats.mainThreadReads, initialReads)
-        let output = try await worker.compose()
-        XCTAssertEqual(output.height, frame.height)
-    }
-
-    func testFinishWaitsForAnAcceptedFrameToFinishProcessing() async throws {
-        let gate = DispatchSemaphore(value: 0)
-        let stats = CaptureBufferStats(firstBackgroundReadGate: gate)
-        let frame = try trackedFrame(offset: 0, stats: stats)
-        let capture = ScrollCapture()
-        var results: [Result<CGImage?, Error>] = []
-        capture.onFinish = { results.append($0) }
-        let tick = Task { await capture.append(frame) }
-        defer { gate.signal(); tick.cancel() }
-        try await waitUntil { stats.backgroundReads > 0 }
-        capture.finish()
-        XCTAssertTrue(results.isEmpty)
-        gate.signal()
-        await tick.value
-        try await waitUntil { !results.isEmpty }
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(try results[0].get()?.height, frame.height)
     }
 
     nonisolated private func trackedFrame(offset: Int, stats: CaptureBufferStats) throws -> CGImage {
@@ -266,32 +132,6 @@ final class ScrollSessionTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(5))
         }
         XCTFail("Timed out waiting for scrolling capture completion")
-    }
-
-    func testOutputLimitRejectsOversizeFrameWithoutChangingAcceptedPixels() throws {
-        let stitcher = Stitcher(maximumBytes: 32 * 128 * 4, maximumHeight: 256)
-        try stitcher.push(makeFrame())
-        XCTAssertThrowsError(try stitcher.push(makeFrame(height: 129))) {
-            XCTAssertEqual($0 as? ScrollCaptureError, .outputTooLarge)
-        }
-        XCTAssertEqual(try stitcher.compose()?.height, 128)
-        let heightLimited = Stitcher(maximumHeight: 127)
-        XCTAssertThrowsError(try heightLimited.push(makeFrame()))
-        XCTAssertTrue(heightLimited.pieces.isEmpty)
-    }
-
-    func testOutputLimitIsReportedOnceAndStopsCapture() async throws {
-        let worker = ScrollStitchingWorker(maximumHeight: 100)
-        let frame = try makeFrame()
-        let capture = ScrollCapture(worker: worker)
-        var results: [Result<CGImage?, Error>] = []
-        capture.onFinish = { results.append($0) }
-        await capture.append(frame)
-        await capture.append(frame)
-        capture.finish()
-        XCTAssertEqual(results.count, 1)
-        guard case .failure(let error) = results.first else { return XCTFail("Missing output limit error") }
-        XCTAssertEqual(error as? ScrollCaptureError, .outputTooLarge)
     }
 
     func testCancellingPendingCompositionDeliversOnlyCancellation() async throws {

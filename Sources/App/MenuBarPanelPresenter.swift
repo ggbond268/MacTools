@@ -273,8 +273,10 @@ final class MenuBarPanelPresenter: NSObject {
     private let onAllPanelsClosed: () -> Void
 
     private let popover = NSPopover()
+    private let nativeMenuPresenter: MenuBarPanelMenuPresenter
     private let panelModel: MenuBarUnifiedPanelModel
     private let hostingController: MenuBarPanelHostingController<MenuBarUnifiedPanelContent>
+    private let contentPresentation: MenuBarPanelPresentationModel
     private let containerController: MenuBarPanelContainerController<MenuBarUnifiedPanelContent>
     private var appearanceObserver: NSObjectProtocol?
     private var themeObserver: NSObjectProtocol?
@@ -320,9 +322,15 @@ final class MenuBarPanelPresenter: NSObject {
             isPanelVisible: false
         )
         self.panelModel = panelModel
+        let contentPresentation = MenuBarPanelPresentationModel(host: pluginHost)
+        self.contentPresentation = contentPresentation
+        let nativeMenuPresenter = MenuBarPanelMenuPresenter()
+        self.nativeMenuPresenter = nativeMenuPresenter
         let hostingController = MenuBarPanelHostingController(
             rootView: MenuBarUnifiedPanelContent(
                 pluginHost: pluginHost,
+                nativeMenuPresenter: nativeMenuPresenter,
+                presentation: contentPresentation,
                 appUpdater: appUpdater,
                 menuBarPanelThemeStore: menuBarPanelThemeStore,
                 model: panelModel,
@@ -369,7 +377,6 @@ final class MenuBarPanelPresenter: NSObject {
         observePanelItemChanges()
         applyCurrentAppearance()
         prewarm()
-        scheduleComponentViewPrewarm()
     }
 
     isolated deinit {
@@ -390,6 +397,8 @@ final class MenuBarPanelPresenter: NSObject {
     private func refreshLocalization() {
         hostingController.rootView = MenuBarUnifiedPanelContent(
             pluginHost: pluginHost,
+            nativeMenuPresenter: nativeMenuPresenter,
+            presentation: contentPresentation,
             appUpdater: appUpdater,
             menuBarPanelThemeStore: menuBarPanelThemeStore,
             model: panelModel,
@@ -442,9 +451,12 @@ final class MenuBarPanelPresenter: NSObject {
     }
 
     func dismissPanels() {
+        nativeMenuPresenter.cancel()
         guard !panelModel.preventDismissalWhileEditing() else { return }
         popover.performClose(nil)
     }
+
+    var isTrackingNativeMenu: Bool { nativeMenuPresenter.isTrackingMenu }
 
     func containsPresentedWindow(_ window: NSWindow) -> Bool {
         window === popover.contentViewController?.view.window
@@ -519,16 +531,6 @@ final class MenuBarPanelPresenter: NSObject {
         containerController.view.setFrameSize(popover.contentSize)
     }
 
-    private func scheduleComponentViewPrewarm() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
-
-            self.pluginHost.prewarmComponentViews(dismiss: self.onDismiss)
-        }
-    }
-
     private func show(_ popover: NSPopover, relativeTo button: NSStatusBarButton) {
         applyCurrentAppearance()
         PluginPresentationSafety.prepareForWindowOrdering()
@@ -563,6 +565,7 @@ final class MenuBarPanelPresenter: NSObject {
     private func handleKeyboardShortcut(_ event: NSEvent) -> NSEvent? {
         guard
             popover.isShown,
+            !nativeMenuPresenter.isTrackingMenu,
             let eventWindow = event.window,
             containsPresentedWindow(eventWindow)
         else {
@@ -638,11 +641,14 @@ final class MenuBarPanelPresenter: NSObject {
     }
 
     private func focus(_ popover: NSPopover) {
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard !nativeMenuPresenter.isPresenting else { return }
+        let menuGeneration = nativeMenuPresenter.generation
         popover.contentViewController?.view.window?.makeKey()
 
-        DispatchQueue.main.async { [weak popover] in
-            guard let popover, popover.isShown else {
+        DispatchQueue.main.async { [weak self, weak popover] in
+            guard let self, let popover, popover.isShown,
+                  self.nativeMenuPresenter.generation == menuGeneration,
+                  !self.nativeMenuPresenter.isPresenting else {
                 return
             }
 
@@ -816,6 +822,7 @@ final class MenuBarPanelPresenter: NSObject {
         let panels = pluginHost.visibleMenuBarPanels
         guard let selected = panels.first(where: { $0.id == selectedPanel.id }) ?? panels.first else { return }
         selectedPanel = MenuBarPanelTab(id: selected.id)
+        guard popover.isShown else { return }
         updateContent(selectedTab: selectedPanel,
                       screen: popover.contentViewController?.view.window?.screen ?? NSScreen.main,
                       isPanelVisible: popover.isShown)
@@ -879,8 +886,11 @@ final class MenuBarPanelPresenter: NSObject {
             )
             height = PanelLayoutDestination.editorContentHeight(
                 itemHeight: placement.height,
-                maximumHeight: max(MenuBarPanelLayout.minimumContentHeight,
-                    MenuBarPanelLayout.maximumContentHeight(for: screen) - MenuBarPanelLayout.editingActionBarHeight)
+                maximumHeight: max(
+                    MenuBarPanelLayout.minimumPanelHeight - MenuBarPanelLayout.editingPanelChromeHeight,
+                    MenuBarPanelLayout.maximumPanelHeight(for: screen)
+                        - MenuBarPanelLayout.editingPanelChromeHeight - MenuBarPanelLayout.editingActionBarHeight
+                )
             )
         } else {
             height = ConfiguredMenuBarPanelLayout.contentHeight(
@@ -894,6 +904,7 @@ final class MenuBarPanelPresenter: NSObject {
     private func panelKind(for tab: MenuBarPanelTab) -> PanelKind { tab }
 
     private func updatePanelSurfaceVisibility(for tab: MenuBarPanelTab, isPanelVisible: Bool) {
+        contentPresentation.setVisible(isPanelVisible)
         pluginHost.setVisibleMenuBarPanel(isPanelVisible ? tab.id : nil)
     }
 
@@ -922,6 +933,7 @@ extension MenuBarPanelPresenter: NSPopoverDelegate {
 
     func popoverDidClose(_ notification: Notification) {
         if let closedPopover = notification.object as? NSPopover, closedPopover === popover {
+            nativeMenuPresenter.cancel()
             removeKeyboardShortcutMonitorIfNeeded()
             updateContent(
                 selectedTab: tab(for: selectedPanel),
@@ -1043,7 +1055,9 @@ final class MenuBarUnifiedPanelModel: ObservableObject {
 }
 
 struct MenuBarUnifiedPanelContent: View {
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    let nativeMenuPresenter: MenuBarPanelMenuPresenter
+    @ObservedObject var presentation: MenuBarPanelPresentationModel
     @ObservedObject var appUpdater: AppUpdater
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject private var runtimeLocale = PluginRuntimeLocalization.source
@@ -1062,6 +1076,7 @@ struct MenuBarUnifiedPanelContent: View {
 
     var body: some View {
         let _ = runtimeLocale.revision
+        let _ = presentation.revision
         let appearance = MenuBarPanelThemeResolver.appearance(for: colorScheme)
         let theme = MenuBarPanelThemeResolver.resolve(
             definition: menuBarPanelThemeStore.selectedDefinition(for: appearance),
@@ -1117,25 +1132,19 @@ struct MenuBarUnifiedPanelContent: View {
                     }
                 )
                 .frame(height: MenuBarPanelLayout.editingActionBarHeight)
-                .popover(isPresented: $showsComponentLibrary, arrowEdge: .top) {
+                .popover(isPresented: $showsComponentLibrary, arrowEdge: .trailing) {
                     PanelComponentLibrary(pluginHost: pluginHost, panelID: model.selectedTab.id) { entry in
-                        guard pluginHost.addPanelEntry(entry, to: model.selectedTab.id) else { return false }
+                        guard pluginHost.addPanelItem(entry, to: model.selectedTab.id) else { return false }
                         layoutEditingSession.reset()
                         additionRevealRequest = UUID()
-                        showsComponentLibrary = false
                         return true
                     }
-                    .background {
-                        MenuWindowAccessor { window in
-                            if let window { MenuBarPanelWindowRegistry.markEditingPopover(window) }
-                        }.allowsHitTesting(false)
-                    }
-                    .onExitCommand { showsComponentLibrary = false }
                 }
             }
         }
         .padding(.top, MenuBarPanelLayout.panelTopPadding)
-        .padding(.bottom, MenuBarPanelLayout.panelBottomPadding)
+        .padding(.bottom, model.isEditingLayout
+            ? MenuBarPanelLayout.editingPanelBottomPadding : MenuBarPanelLayout.panelBottomPadding)
         .frame(
             width: MenuBarPanelLayout.baseWidth,
             height: MenuBarPanelLayout.panelHeight(
@@ -1150,6 +1159,8 @@ struct MenuBarUnifiedPanelContent: View {
         .foregroundStyle(theme.text.primary)
         .tint(theme.accent)
         .id(runtimeLocale.revision)
+        .environmentObject(presentation)
+        .environmentObject(nativeMenuPresenter)
         .environment(\.menuBarPanelTheme, theme)
         .environment(\.pluginComponentTheme, theme.componentTheme)
         .environment(\.locale, PluginRuntimeLocalization.locale)
@@ -1451,16 +1462,6 @@ struct MenuBarPanelEditingActionBar: View {
                 panelToDelete = selectedPanel
             }
             .accessibilityIdentifier("menuBarPanel.delete")
-            .popover(item: $panelToDelete, arrowEdge: .top) { panel in
-                // Retain the addressed panel until the confirmation finishes closing.
-                MenuBarPanelDeleteConfirmation(panel: panel, onCancel: { panelToDelete = nil }) {
-                    let error = onDeletePanel(panel.id)
-                    if error == nil { panelToDelete = nil }
-                    return error
-                }
-                .controlSize(.regular)
-                .onExitCommand { panelToDelete = nil }
-            }
             MenuBarPanelEditingButton(title: FeatureL10n.string("添加面板"), emphasis: .standard,
                                       isEnabled: canAddPanel, action: onAddPanel)
                 .accessibilityIdentifier("menuBarPanel.add")
@@ -1469,6 +1470,16 @@ struct MenuBarPanelEditingActionBar: View {
         .padding(.vertical, MenuBarPanelLayout.editingActionBarVerticalPadding)
         .controlSize(.small)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .popover(item: $panelToDelete, arrowEdge: .trailing) { panel in
+            // Retain the addressed panel until the confirmation finishes closing.
+            MenuBarPanelDeleteConfirmation(panel: panel, onCancel: { panelToDelete = nil }) {
+                let error = onDeletePanel(panel.id)
+                if error == nil { panelToDelete = nil }
+                return error
+            }
+            .controlSize(.regular)
+            .onExitCommand { panelToDelete = nil }
+        }
         .onChange(of: selectedPanel?.id) { _, _ in panelToDelete = nil }
     }
 }
@@ -1489,7 +1500,7 @@ private struct MenuBarPanelEditingDoneButton: View {
             .accessibilityIdentifier("panel.layout.edit")
             .help(PanelLayoutCopy.finishEditingHint)
             .accessibilityHint(PanelLayoutCopy.finishEditingHint)
-            .keyframeAnimator(initialValue: FeedbackFrame(), trigger: feedbackTrigger) { content, frame in
+            .keyframeAnimator(initialValue: FeedbackFrame(), trigger: feedbackTrigger) { [reduceMotion] content, frame in
                 content
                     .offset(x: reduceMotion ? 0 : frame.offset)
                     .brightness(reduceMotion ? frame.highlight * 0.14 : 0)
@@ -1526,49 +1537,14 @@ struct MenuBarPanelOverflowMenu: View {
     @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
-        Menu {
-            if canEditLayout {
-                Button(action: onEditLayout) {
-                    menuItemLabel(
-                        PanelLayoutCopy.edit,
-                        systemImage: "rectangle.3.group"
-                    )
-                }
-                .accessibilityIdentifier("panel.layout.edit")
-
-                Divider()
-            }
-
-            Button(action: onOpenUpdate) {
-                Label {
-                    Text(AppL10n.settings("about.update.check", defaultValue: "检查更新"))
-                } icon: {
-                    Image(nsImage: MenuBarPanelUpdateIndicator.menuImage(
-                        showsBadge: availableUpdateVersion != nil, theme: theme
-                    ))
-                }
-                .labelStyle(.titleAndIcon)
-            }
-            .accessibilityLabel(updateAccessibilityTitle)
-            .accessibilityIdentifier("panel.update.check")
-
-            Button(action: onQuit) {
-                menuItemLabel(
-                    AppL10n.settings("app.quit", defaultValue: "退出"),
-                    systemImage: "rectangle.portrait.and.arrow.right"
-                )
-            }
-            .accessibilityIdentifier("panel.quit")
-        } label: {
+        MenuBarPanelMenu(makeMenu: makeMenu) {
             MenuBarPanelIconLabel(
                 systemImage: "ellipsis.circle",
                 showsNotificationDot: availableUpdateVersion != nil,
                 isHovered: isHovered
             )
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .tint(theme.text.secondary)
         .help(availabilityLabel(AppL10n.search("search.footer.actions", defaultValue: "操作")))
         .accessibilityLabel(availabilityLabel(AppL10n.search("search.footer.actions", defaultValue: "操作")))
@@ -1587,16 +1563,25 @@ struct MenuBarPanelOverflowMenu: View {
         return "\(title)：\(availability)"
     }
 
-    private func menuItemLabel(_ title: String, systemImage: String) -> some View {
-        Label {
-            Text(title)
-        } icon: {
-            Image(systemName: PluginSystemImage.resolvedName(systemImage))
-                .symbolRenderingMode(.monochrome)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.text.secondary)
+    private func makeMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        if canEditLayout {
+            menu.addItem(MenuBarPanelMenuItem(PanelLayoutCopy.edit,
+                image: NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: nil),
+                identifier: "panel.layout.edit", action: onEditLayout))
+            menu.addItem(.separator())
         }
-        .labelStyle(.titleAndIcon)
+        let update = MenuBarPanelMenuItem(
+            AppL10n.settings("about.update.check", defaultValue: "检查更新"),
+            image: MenuBarPanelUpdateIndicator.menuImage(showsBadge: availableUpdateVersion != nil, theme: theme),
+            identifier: "panel.update.check", action: onOpenUpdate)
+        update.setAccessibilityLabel(updateAccessibilityTitle)
+        menu.addItem(update)
+        menu.addItem(MenuBarPanelMenuItem(AppL10n.settings("app.quit", defaultValue: "退出"),
+            image: NSImage(systemSymbolName: "rectangle.portrait.and.arrow.right", accessibilityDescription: nil),
+            identifier: "panel.quit", action: onQuit))
+        return menu
     }
 }
 

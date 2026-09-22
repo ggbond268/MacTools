@@ -10,6 +10,19 @@ struct ClipboardPreviewRequestID<Key: Hashable>: Hashable {
     var isActive = true
 }
 
+enum ClipboardPreviewLoadPolicy {
+    /// Let keyboard navigation settle before starting uncached preview work.
+    /// Selection, scrolling, cached previews, and metadata-only text stay immediate.
+    static func waitForSelection() async -> Bool {
+        do {
+            try await Task.sleep(for: .milliseconds(100))
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
+    }
+}
+
 struct ClipboardPreviewUnavailableView: View {
     let localization: PluginLocalization
     var isUnsupported = false

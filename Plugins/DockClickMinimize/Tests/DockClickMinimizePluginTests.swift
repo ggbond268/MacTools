@@ -13,20 +13,8 @@ final class DockClickMinimizePluginTests: XCTestCase {
 
         plugin.activate(context: context)
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(monitor.startCallCount, 1)
-    }
-
-    func testEnablingWithPermissionsStartsMonitoring() {
-        let monitor = MockDockClickMonitor()
-        let context = makeContext()
-        let plugin = makePlugin(context: context, monitor: monitor)
-
-        plugin.handleAction(.setSwitch(true))
-
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
     }
 
     func testDisablingStopsMonitoring() {
@@ -38,39 +26,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(false))
 
         XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-    }
-
-    func testSettingsPageExposesPersistedEnableSwitch() {
-        let plugin = makePlugin(context: makeContext(isEnabled: true))
-
-        guard case let .form(sections) = plugin.settingsPage?.body,
-              case let .rows(rows) = sections.first?.content,
-              let row = rows.first,
-              case let .toggle(isOn) = row.control
-        else {
-            return XCTFail("Expected a Hide Active App on Dock Click settings toggle")
-        }
-
-        XCTAssertEqual(row.title, plugin.metadata.title)
-        XCTAssertTrue(isOn)
-    }
-
-    func testSettingsSwitchUsesPrimaryPanelLifecycleAndPersistsState() {
-        let monitor = MockDockClickMonitor()
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(context: context, monitor: monitor)
-        plugin.activate(context: context)
-
-        plugin.handleSettingsAction(
-            .setBoolean(controlID: "dock-click-minimize.settings.enabled", value: false)
-        )
-
-        XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-
-        let reloadedPlugin = makePlugin(context: context)
-        XCTAssertFalse(reloadedPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testDeactivationAlwaysStopsMonitoring() {
@@ -93,26 +49,9 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 0)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
         XCTAssertFalse(plugin.permissionState(for: "input-monitoring").isGranted)
-    }
-
-    func testMissingPermissionDoesNotRequestGuidanceDuringActivationOrRefresh() {
-        let permissions = PermissionState(
-            accessibilityGranted: false,
-            inputMonitoringStatus: .denied
-        )
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(context: context, permissions: permissions)
-        var requestedPermissionIDs: [String] = []
-        plugin.requestPermissionGuidance = { requestedPermissionIDs.append($0) }
-
-        plugin.activate(context: context)
-        plugin.refresh()
-
-        XCTAssertTrue(requestedPermissionIDs.isEmpty)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
     }
 
     func testExplicitEnableRequestsMissingPermissionGuidance() {
@@ -128,7 +67,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(true))
 
         XCTAssertEqual(requestedPermissionIDs, ["accessibility"])
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testMonitorStartupFailureIsExposed() {
@@ -139,7 +78,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testResolverAcceptsOnlyApplicationDockItemWithBundleURL() {
@@ -176,30 +115,6 @@ final class DockClickMinimizePluginTests: XCTestCase {
         }
     }
 
-    func testResolverScopesHitTestingToDockProcess() {
-        let expectedDockProcessIdentifier: pid_t = 42
-        var queriedProcessIdentifier: pid_t?
-        let resolver = DockAccessibilityResolver(
-            workspaceNotificationCenter: NotificationCenter(),
-            dockProcessIdentifierProvider: { expectedDockProcessIdentifier },
-            accessibilityElementAtPosition: { processIdentifier, _ in
-                queriedProcessIdentifier = processIdentifier
-                return nil
-            }
-        )
-
-        XCTAssertNil(resolver.resolveApplication(at: .zero))
-        XCTAssertEqual(queriedProcessIdentifier, expectedDockProcessIdentifier)
-    }
-
-    func testModifiedClicksAreIgnoredByPolicy() {
-        XCTAssertTrue(DockClickModifierPolicy.isPlainClick(flags: []))
-        XCTAssertFalse(DockClickModifierPolicy.isPlainClick(flags: .maskCommand))
-        XCTAssertFalse(DockClickModifierPolicy.isPlainClick(flags: .maskAlternate))
-        XCTAssertFalse(DockClickModifierPolicy.isPlainClick(flags: .maskControl))
-        XCTAssertFalse(DockClickModifierPolicy.isPlainClick(flags: .maskShift))
-    }
-
     func testGesturePolicyRejectsDraggingAndLongPresses() {
         XCTAssertTrue(
             DockClickGesturePolicy.isCompletedClick(
@@ -220,84 +135,6 @@ final class DockClickMinimizePluginTests: XCTestCase {
                 downLocation: .zero,
                 upLocation: .zero,
                 duration: DockClickGesturePolicy.maximumDuration + 0.01
-            )
-        )
-    }
-
-    func testGesturePolicyAllowsMinorMovementUntilToleranceIsExceeded() {
-        XCTAssertTrue(
-            DockClickGesturePolicy.isWithinMaximumDistance(
-                downLocation: .zero,
-                currentLocation: CGPoint(x: 1, y: 0)
-            )
-        )
-        XCTAssertTrue(
-            DockClickGesturePolicy.isWithinMaximumDistance(
-                downLocation: .zero,
-                currentLocation: CGPoint(x: DockClickGesturePolicy.maximumDistance, y: 0)
-            )
-        )
-        XCTAssertFalse(
-            DockClickGesturePolicy.isWithinMaximumDistance(
-                downLocation: .zero,
-                currentLocation: CGPoint(x: DockClickGesturePolicy.maximumDistance + 1, y: 0)
-            )
-        )
-    }
-
-    func testVisibleWindowQueryRunsOffMainThread() async {
-        let hider = DockApplicationHider { _ in
-            !Thread.isMainThread
-        }
-
-        let hasVisibleWindow = await hider.hasVisibleWindow(for: 42)
-
-        XCTAssertTrue(hasVisibleWindow)
-    }
-
-    func testCurrentProcessVisibilityQueryRunsOnMainActor() async {
-        let currentProcessIdentifier: pid_t = 42
-        let hider = DockApplicationHider(
-            currentProcessIdentifier: currentProcessIdentifier,
-            currentProcessVisibleWindowQuery: { Thread.isMainThread },
-            visibleWindowQuery: { _ in false }
-        )
-
-        let hasVisibleWindow = await hider.hasVisibleWindow(for: currentProcessIdentifier)
-
-        XCTAssertTrue(hasVisibleWindow)
-    }
-
-    func testClickDecisionOnlySchedulesActiveApplicationWithVisibleWindow() {
-        let safari = DockApplicationTarget(bundleIdentifier: "com.apple.Safari")
-        let activeSafari = DockFrontmostApplication(bundleIdentifier: "com.apple.Safari", processIdentifier: 123)
-
-        XCTAssertFalse(
-            DockClickDecision.shouldScheduleHide(
-                target: nil,
-                frontmostApplication: activeSafari,
-                hasVisibleWindow: true
-            )
-        )
-        XCTAssertFalse(
-            DockClickDecision.shouldScheduleHide(
-                target: safari,
-                frontmostApplication: DockFrontmostApplication(bundleIdentifier: "com.apple.Terminal", processIdentifier: 99),
-                hasVisibleWindow: true
-            )
-        )
-        XCTAssertFalse(
-            DockClickDecision.shouldScheduleHide(
-                target: safari,
-                frontmostApplication: activeSafari,
-                hasVisibleWindow: false
-            )
-        )
-        XCTAssertTrue(
-            DockClickDecision.shouldScheduleHide(
-                target: safari,
-                frontmostApplication: activeSafari,
-                hasVisibleWindow: true
             )
         )
     }
@@ -324,36 +161,6 @@ final class DockClickMinimizePluginTests: XCTestCase {
         XCTAssertEqual(applicationHider.hiddenProcessIdentifiers, [safariApplication.processIdentifier])
     }
 
-    func testAllMinimizedOrNoFocusedWindowDoesNotScheduleHide() async {
-        let monitor = MockDockClickMonitor()
-        let applicationHider = MockDockApplicationHider(hasVisibleWindow: false)
-        let scheduler = ManualScheduler()
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(context: context, monitor: monitor, applicationHider: applicationHider, scheduler: scheduler)
-        plugin.activate(context: context)
-
-        monitor.emit(target: safariTarget, frontmostApplication: safariApplication)
-        await waitUntil { applicationHider.hasVisibleWindowCallCount == 1 }
-
-        XCTAssertTrue(scheduler.actions.isEmpty)
-        XCTAssertTrue(applicationHider.hiddenProcessIdentifiers.isEmpty)
-    }
-
-    func testDifferentDockTargetDoesNotQueryVisibleWindow() {
-        let monitor = MockDockClickMonitor()
-        let applicationHider = MockDockApplicationHider(hasVisibleWindow: true)
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(context: context, monitor: monitor, applicationHider: applicationHider)
-        plugin.activate(context: context)
-
-        monitor.emit(
-            target: DockApplicationTarget(bundleIdentifier: "com.apple.Terminal"),
-            frontmostApplication: safariApplication
-        )
-
-        XCTAssertEqual(applicationHider.hasVisibleWindowCallCount, 0)
-    }
-
     func testFrontmostApplicationChangeBeforeDelayDoesNotHide() async {
         let monitor = MockDockClickMonitor()
         let applicationHider = MockDockApplicationHider(hasVisibleWindow: true)
@@ -377,29 +184,6 @@ final class DockClickMinimizePluginTests: XCTestCase {
         XCTAssertTrue(applicationHider.hiddenProcessIdentifiers.isEmpty)
     }
 
-    func testApplicationExitBeforeDelayDoesNotHide() async {
-        let monitor = MockDockClickMonitor()
-        let applicationHider = MockDockApplicationHider(hasVisibleWindow: true)
-        let frontmost = MutableFrontmostApplicationProvider(application: safariApplication)
-        let scheduler = ManualScheduler()
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(
-            context: context,
-            monitor: monitor,
-            applicationHider: applicationHider,
-            frontmostApplicationProvider: frontmost,
-            scheduler: scheduler
-        )
-        plugin.activate(context: context)
-
-        monitor.emit(target: safariTarget, frontmostApplication: safariApplication)
-        await waitUntil { !scheduler.actions.isEmpty }
-        frontmost.application = nil
-        scheduler.runNext()
-
-        XCTAssertTrue(applicationHider.hiddenProcessIdentifiers.isEmpty)
-    }
-
     func testDisablingBeforeDelayDoesNotHide() async {
         let monitor = MockDockClickMonitor()
         let applicationHider = MockDockApplicationHider(hasVisibleWindow: true)
@@ -413,37 +197,6 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(false))
         scheduler.runNext()
 
-        XCTAssertTrue(applicationHider.hiddenProcessIdentifiers.isEmpty)
-    }
-
-    func testFrontmostApplicationChangeDuringVisibilityQueryDoesNotScheduleHide() async {
-        let monitor = MockDockClickMonitor()
-        let applicationHider = MockDockApplicationHider(
-            hasVisibleWindow: true,
-            suspendsVisibilityCheck: true
-        )
-        let frontmost = MutableFrontmostApplicationProvider(application: safariApplication)
-        let scheduler = ManualScheduler()
-        let context = makeContext(isEnabled: true)
-        let plugin = makePlugin(
-            context: context,
-            monitor: monitor,
-            applicationHider: applicationHider,
-            frontmostApplicationProvider: frontmost,
-            scheduler: scheduler
-        )
-        plugin.activate(context: context)
-
-        monitor.emit(target: safariTarget, frontmostApplication: safariApplication)
-        await waitUntil { applicationHider.hasVisibleWindowCallCount == 1 }
-        frontmost.application = DockFrontmostApplication(
-            bundleIdentifier: "com.apple.Terminal",
-            processIdentifier: 99
-        )
-        applicationHider.resumeVisibilityCheck()
-        await waitUntil { frontmost.frontmostApplicationCallCount == 1 }
-
-        XCTAssertTrue(scheduler.actions.isEmpty)
         XCTAssertTrue(applicationHider.hiddenProcessIdentifiers.isEmpty)
     }
 

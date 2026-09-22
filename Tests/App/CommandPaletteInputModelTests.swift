@@ -82,7 +82,7 @@ private final class InputModelFixture {
     init() throws {
         defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         host = PluginHost(plugins: [provider], shortcutStore: ShortcutStore(userDefaults: defaults),
-                          pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+                          pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
                           preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
                           globalShortcutManager: GlobalShortcutManager())
     }

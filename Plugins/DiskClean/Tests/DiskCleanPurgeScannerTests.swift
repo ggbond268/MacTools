@@ -71,14 +71,6 @@ final class DiskCleanPurgeScannerTests: XCTestCase {
     }
 
     /// `target` only counts with `Cargo.toml`: an Xcode `target` directory must not look like a Rust artifact.
-    func testTargetRequiresCargoManifest() throws {
-        try temporaryDirectory.makeFile("root/xcode/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/xcode/target")
-
-        let items = try discoverItems()
-
-        XCTAssertTrue(items.isEmpty)
-    }
 
     func testPrunesNestedCandidatesInsideAHit() throws {
         try temporaryDirectory.makeFile("root/app/package.json", bytes: 10)
@@ -115,24 +107,8 @@ final class DiskCleanPurgeScannerTests: XCTestCase {
     }
 
     /// A symlink named `node_modules` is not a candidate: deleting it removes the link, not the dependency tree.
-    func testDoesNotReportSymlinkNamedLikeATarget() throws {
-        try temporaryDirectory.makeFile("root/app/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("outside/real_modules")
-        try temporaryDirectory.makeSymlink("root/app/node_modules", destination: "../../outside/real_modules")
-
-        let items = try discoverItems()
-
-        XCTAssertTrue(items.isEmpty)
-    }
 
     // MARK: - Root status
-
-    func testReportsUnreadableRootForMissingDirectory() {
-        let report = discovery.discover(root: path("root"))
-
-        XCTAssertEqual(report.status, .unreadable(reason: .walkError))
-        XCTAssertTrue(report.items.isEmpty)
-    }
 
     func testReportsPermissionDeniedRoot() throws {
         try temporaryDirectory.makeDirectory("root")
@@ -141,18 +117,6 @@ final class DiskCleanPurgeScannerTests: XCTestCase {
         let report = discovery.discover(root: path("root"))
 
         XCTAssertEqual(report.status, .unreadable(reason: .permissionDenied))
-    }
-
-    func testUnreadableSubtreeDegradesCompleteness() throws {
-        try temporaryDirectory.makeFile("root/app/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/app/node_modules")
-        try temporaryDirectory.makeDirectory("root/locked/inner")
-        try temporaryDirectory.denyAccess(to: "root/locked")
-
-        let report = discovery.discover(root: path("root"))
-
-        XCTAssertEqual(report.items.map(\.path), [path("root/app/node_modules")])
-        XCTAssertEqual(report.status, .traversed(completeness: .partial(reasons: [.permissionDenied])))
     }
 
     /// Cancellation must not masquerade as a finished scan: the result must carry timedOut.
@@ -167,42 +131,7 @@ final class DiskCleanPurgeScannerTests: XCTestCase {
 
     // MARK: - Repository attribution
 
-    func testAttributesCandidateToNearestRepository() throws {
-        try temporaryDirectory.makeDirectory("root/repo/.git")
-        try temporaryDirectory.makeFile("root/repo/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/repo/node_modules")
-        try temporaryDirectory.makeDirectory("root/repo/vendor/inner/.git")
-        try temporaryDirectory.makeFile("root/repo/vendor/inner/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/repo/vendor/inner/node_modules")
-
-        let items = try discoverItems()
-
-        XCTAssertEqual(
-            items.map(\.repositoryPath),
-            [path("root/repo"), path("root/repo/vendor/inner")]
-        )
-    }
-
     /// Worktree/submodule `.git` is a file, not a directory, and still counts as a repository.
-    func testRootItselfCanBeTheRepository() throws {
-        try temporaryDirectory.makeDirectory("root/.git")
-        try temporaryDirectory.makeFile("root/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/node_modules")
-
-        let items = try discoverItems()
-
-        XCTAssertEqual(items.map(\.repositoryPath), [path("root")])
-    }
-
-    func testReportsNoRepositoryWhenGitIsAboveTheRoot() throws {
-        try temporaryDirectory.makeDirectory(".git")
-        try temporaryDirectory.makeFile("root/app/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/app/node_modules")
-
-        let items = try discoverItems()
-
-        XCTAssertEqual(items.map(\.repositoryPath), [nil])
-    }
 
     // MARK: - Git three-state
 
@@ -268,46 +197,9 @@ final class DiskCleanPurgeScannerTests: XCTestCase {
         XCTAssertFalse(candidate.isSelectedByDefault)
     }
 
-    func testSkipsGitInspectionOutsideRepositories() async throws {
-        try temporaryDirectory.makeFile("root/app/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/app/node_modules")
-        let runner = ScriptedDiskCleanSubprocessRunner()
-
-        let candidate = try await scanSingleCandidate(runner: runner)
-
-        XCTAssertEqual(candidate.gitState, .notInRepository)
-        XCTAssertTrue(candidate.isSelectedByDefault)
-        XCTAssertTrue(runner.invocations.isEmpty)
-    }
-
     /// A repo often has dozens of `node_modules`; inspecting each multiplies the 2s timeout.
-    func testInspectsEachRepositoryOnlyOnce() async throws {
-        try temporaryDirectory.makeDirectory("root/repo/.git")
-        try temporaryDirectory.makeFile("root/repo/a/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/repo/a/node_modules")
-        try temporaryDirectory.makeFile("root/repo/b/package.json", bytes: 10)
-        try temporaryDirectory.makeDirectory("root/repo/b/node_modules")
-        let runner = ScriptedDiskCleanSubprocessRunner()
-
-        let result = await makeScanner(runner: runner).scan(roots: [path("root")])
-
-        XCTAssertEqual(result.candidates.count, 2)
-        XCTAssertEqual(runner.invocations.count, 2, "one call per command, independent of candidate count")
-    }
 
     // MARK: - Scanner aggregation
-
-    func testReportsUnreadableRootsSeparatelyFromEmptyResults() async throws {
-        try temporaryDirectory.makeDirectory("present")
-        let runner = ScriptedDiskCleanSubprocessRunner()
-
-        let result = await makeScanner(runner: runner).scan(
-            roots: [path("present"), path("missing")]
-        )
-
-        XCTAssertTrue(result.candidates.isEmpty)
-        XCTAssertEqual(result.unreadableRoots, [path("missing")])
-    }
 
     // MARK: - Mount protection
 

@@ -23,29 +23,33 @@ private struct SystemStatusPluginProvider: PluginProvider {
 
 @MainActor
 final class SystemStatusPlugin:
-    MacToolsPlugin,
-    PluginActionProviding,
-    PluginActionShortcutSettingsProviding,
-    PluginComponentPanel,
-    PluginPanelSurfaceLifecycleHandling,
-    PluginSettingsPresenting,
-    PluginDashboardPresenting,
-    PluginComponentDetailPresenting,
-    PluginPortablePreferencesProviding,
-    PluginPortablePreferencesRestorationReporting,
-    PluginPersistentPreferencesChangeSignaling
-{
+    MacToolsPlugin, PluginActionProviding, PluginActionShortcutSettingsProviding, PluginSettingsPresenting, PluginDashboardPresenting, PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting, PluginPersistentPreferencesChangeSignaling {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    detail: { [weak self] in self?.makePanelDetailContent(detailID: $0, dismiss: $1) },
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("widget") }
+                    else { self?.panelItemDidBecomeHidden("widget") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let showSystemStatus = "show-system-status"
     }
 
     let metadata: PluginMetadata
 
-    var descriptor: PluginComponentDescriptor {
-        PluginComponentDescriptor(
-            span: PluginComponentSpan(
+    var descriptor: PluginPanelWidgetDescriptor {
+        PluginPanelWidgetDescriptor(
+            span: PluginPanelWidgetSpan(
                 width: 4,
-                height: PluginComponentPanelLayoutMetrics.default.heightSpan(
+                height: PluginPanelWidgetLayoutMetrics.default.heightSpan(
                     fittingContentHeight: SystemStatusComponentLayout.contentHeight(
                         for: settingsController.configuration.visiblePanelMetricKinds
                     )
@@ -116,18 +120,17 @@ final class SystemStatusPlugin:
             menuBarMetricsController.requestDashboardPresentation = requestDashboardPresentation
         }
     }
-    var requestComponentDetailPresentation: ((String) -> Void)?
     var onPersistentPreferencesChange: (() -> Void)? {
         get { persistentPreferencesChanges.onChange }
         set { persistentPreferencesChanges.onChange = newValue }
     }
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(
             subtitle: metadata.defaultDescription,
             isActive: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             errorMessage: nil
         )
     }
@@ -203,23 +206,23 @@ final class SystemStatusPlugin:
         ])
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(
             SystemStatusComponentView(
                 viewModel: viewModel,
                 settingsController: settingsController,
                 localization: localization,
-                onMetricDetail: { [weak self] kind in
-                    self?.requestComponentDetailPresentation?(kind.rawValue)
+                onMetricDetail: { kind in
+                    context.presentDetail(kind.rawValue)
                 }
             )
         )
     }
 
-    func makeComponentDetailContent(
+    func makePanelDetailContent(
         detailID: String,
         dismiss: @escaping () -> Void
-    ) -> PluginComponentDetailContent? {
+    ) -> PluginPanelDetailContent? {
         guard
             let kind = SystemStatusMetricKind(rawValue: detailID),
             kind != .topProcesses
@@ -227,7 +230,7 @@ final class SystemStatusPlugin:
             return nil
         }
 
-        return PluginComponentDetailContent(
+        return PluginPanelDetailContent(
             id: detailID,
             title: kind.title(localization: localization),
             content: AnyView(
@@ -272,16 +275,16 @@ final class SystemStatusPlugin:
         settingsController.restorePortablePreferences(from: data)
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
         viewModel.startForeground()
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
@@ -822,12 +825,18 @@ struct SystemStatusComponentView: View {
         static let spacing = SystemStatusComponentLayout.cardSpacing
     }
 
-    @ObservedObject var viewModel: SystemStatusViewModel
+    let viewModel: SystemStatusViewModel
     @ObservedObject var settingsController: SystemStatusSettingsController
     let localization: PluginLocalization
     let onMetricDetail: (SystemStatusMetricKind) -> Void
 
     var body: some View {
+        PluginObservedContent(viewModel) { _ in
+            dashboard
+        }
+    }
+
+    private var dashboard: some View {
         SystemStatusDashboardView(
             snapshot: viewModel.snapshot,
             visibleKinds: settingsController.configuration.visiblePanelMetricKinds,

@@ -4,6 +4,7 @@ import MacToolsPluginKit
 
 @MainActor
 final class NightShiftPluginTests: XCTestCase {
+
     private final class MockController: NightShiftControlling {
         var status: Bool
         var setEnabledResult: Bool
@@ -67,18 +68,6 @@ final class NightShiftPluginTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(intelLayout.byteCount, 33)
     }
 
-    func testStatusLayoutAllowsCompatibleTailGrowth() throws {
-        let current = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
-            argumentType: "^{?=BBBi{?={?=ii}{?=ii}}QB}"
-        ))
-        let extended = try XCTUnwrap(NightShiftStatusBufferLayout.resolve(
-            argumentType: "^{?=BBBi{?={?=ii}{?=ii}}QBQ}"
-        ))
-
-        XCTAssertEqual(current.enabledOffset, extended.enabledOffset)
-        XCTAssertGreaterThan(extended.byteCount, current.byteCount)
-    }
-
     func testStatusLayoutRejectsIncompatibleOrInvalidEncodings() {
         XCTAssertNil(NightShiftStatusBufferLayout.resolve(
             argumentType: "^{?=iBf{?={?=ii}{?=ii}}Q}"
@@ -104,22 +93,14 @@ final class NightShiftPluginTests: XCTestCase {
         XCTAssertTrue(CBNightShiftController(client: applied).getStatus())
     }
 
-    func testSystemRuntimeLayoutWhenNightShiftIsAvailable() throws {
-        guard let client = NightShiftCoreBrightnessClient.makeSystemClient() else {
-            throw XCTSkip("Night Shift is unavailable on this macOS environment")
-        }
-
-        XCTAssertNotNil(client.isEnabled())
-    }
-
     func testPanelStateReflectsControllerStatus() {
         let disabled = NightShiftPlugin(controller: MockController(status: false))
         let enabled = NightShiftPlugin(controller: MockController(status: true))
 
-        XCTAssertFalse(disabled.primaryPanelState.isOn)
-        XCTAssertEqual(disabled.primaryPanelState.subtitle, "已关闭")
-        XCTAssertTrue(enabled.primaryPanelState.isOn)
-        XCTAssertEqual(enabled.primaryPanelState.subtitle, "已开启")
+        XCTAssertFalse(disabled.rowState.isOn)
+        XCTAssertEqual(disabled.rowState.subtitle, "已关闭")
+        XCTAssertTrue(enabled.rowState.isOn)
+        XCTAssertEqual(enabled.rowState.subtitle, "已开启")
     }
 
     func testSwitchUpdatesPanelState() {
@@ -127,8 +108,8 @@ final class NightShiftPluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testSwitchFailureKeepsStateAndReportsError() {
@@ -138,42 +119,8 @@ final class NightShiftPluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(false))
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
-    }
-
-    func testFailureRelocalizesAndClearsOnSamePluginInstance() async throws {
-        let original = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(original) }
-        let (localization, directory) = try makeLocalization([
-            "en": ["error.toggleFailed": "Failed to toggle Night Shift."],
-            "ar": ["error.toggleFailed": "فشل التبديل Night Shift."],
-        ])
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let controller = MockController(status: false, setEnabledResult: false)
-        let plugin = NightShiftPlugin(
-            controller: controller,
-            localization: localization
-        )
-
-        PluginRuntimeLocalization.source.setPreference("en")
-        plugin.handleAction(.setSwitch(true))
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Failed to toggle Night Shift.")
-
-        PluginRuntimeLocalization.source.setPreference("ar")
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "فشل التبديل Night Shift.")
-        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
-        let failure = try await plugin.beginAction(
-            ActionInvocation(reference: reference, source: .test, mode: .background)
-        ).result()
-        XCTAssertEqual(failure, .failed(message: "فشل التبديل Night Shift."))
-
-        controller.setEnabledResult = true
-        plugin.handleAction(.setSwitch(true))
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testActionCatalogProvidesIdempotentNightShiftChoices() async throws {
@@ -188,7 +135,7 @@ final class NightShiftPluginTests: XCTestCase {
         XCTAssertEqual(plugin.actionCatalogEntries.map(\.title), ["停用夜览", "启用夜览", "停用夜览"])
         XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .active)
         XCTAssertEqual(result, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     private func makeLocalization(

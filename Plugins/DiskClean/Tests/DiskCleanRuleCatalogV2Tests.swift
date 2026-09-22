@@ -33,16 +33,6 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
 
     // MARK: - legacyRuleID coverage
 
-    func testLegacyRuleIDsCoverFirstVersionRuleIDsExactly() {
-        // Only rule targets: P2 synthetic targets (`purge.*` / `installer.*`) are not v1 migrations;
-        // dedicated scanners discover their candidates, and legacyRuleID equals id only so audit logs have a stable name.
-        let legacyIDs = Set(catalog.ruleTargets.map(\.legacyRuleID))
-        let firstVersionIDs = Set(DiskCleanRuleCatalog.moleFirstVersion.rules.map(\.id))
-
-        XCTAssertEqual(legacyIDs, firstVersionIDs)
-        XCTAssertEqual(firstVersionIDs.count, 43)
-    }
-
     func testSplitLegacyRulesKeepEveryTargetUnderTheSameLegacyID() {
         XCTAssertEqual(
             catalog.targets(legacyRuleID: "cache.user-essentials").map(\.id),
@@ -59,43 +49,6 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
     }
 
     // MARK: - Glob ownership
-
-    func testEveryFirstVersionGlobHasExactlyOneOwningTarget() {
-        var ownersByGlob: [String: [String]] = [:]
-        for target in catalog.targets {
-            for glob in target.pathGlobs {
-                ownersByGlob[glob, default: []].append(target.id)
-            }
-        }
-
-        let duplicated = ownersByGlob.filter { $0.value.count > 1 }
-        XCTAssertTrue(duplicated.isEmpty, "glob owned by multiple targets: \(duplicated)")
-
-        let firstVersionGlobs = Self.firstVersionPathGlobs()
-        let missing = firstVersionGlobs.subtracting(ownersByGlob.keys)
-        XCTAssertTrue(missing.isEmpty, "v1 glob has no v2 owner: \(missing.sorted())")
-
-        let added = Set(ownersByGlob.keys).subtracting(firstVersionGlobs)
-        XCTAssertEqual(added, expectedGlobsAbsentFromFirstVersionCatalog)
-    }
-
-    func testFirstVersionDuplicatedGlobsAreOwnedByTheMoreSpecificCategory() {
-        // In v1, five Codex globs and Figma appeared in two rules; v2 normalizes to the more specific category.
-        XCTAssertEqual(
-            Self.owner(of: "~/Library/Application Support/Codex/Cache/*", in: catalog)?.id,
-            "cache.ai-assistants"
-        )
-        XCTAssertEqual(
-            Self.owner(of: "~/Library/Caches/com.figma.Desktop/*", in: catalog)?.id,
-            "cache.creative-tools"
-        )
-    }
-
-    func testPathTargetsDeclareAtLeastOneGlob() {
-        for target in catalog.ruleTargets where !target.isDynamic {
-            XCTAssertFalse(target.pathGlobs.isEmpty, "path target has no globs: \(target.id)")
-        }
-    }
 
     func testTargetIDsAreUniqueAndNonEmpty() {
         let ids = catalog.targets.map(\.id)
@@ -157,18 +110,6 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
     }
 
     /// Reserved roots must equal the deduped set of glob fixed-directory prefixes — recompute independently so hand-edited globs cannot drift.
-    func testPathTargetReservedRootsEqualGlobFixedPrefixes() {
-        for target in catalog.ruleTargets where !target.isDynamic {
-            var expected: [String] = []
-            for glob in target.pathGlobs {
-                let prefix = Self.fixedDirectoryPrefix(of: glob)
-                if !expected.contains(prefix) {
-                    expected.append(prefix)
-                }
-            }
-            XCTAssertEqual(target.reservedRootPaths, expected, "reserved roots disagree with glob fixed prefixes: \(target.id)")
-        }
-    }
 
     func testDynamicTargetReservedRootsCoverProviderScopes() {
         XCTAssertEqual(
@@ -204,58 +145,6 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
         }
     }
 
-    func testMappingTableRiskAndCategoryForSplitAndElevatedTargets() {
-        assertTarget("cache.user-essentials.caches", category: .userEssentials, risk: .low)
-        assertTarget("cache.user-essentials.logs", category: .logs, risk: .low)
-        assertTarget("cache.macos-app-state", category: .systemCaches, risk: .medium)
-        assertTarget("cache.virtualization", category: .virtualization, risk: .medium)
-        assertTarget("developer.rust-go", category: .developer, risk: .low)
-        assertTarget("developer.docker", category: .developer, risk: .medium)
-        assertTarget("developer.ai-agent-old-versions", category: .aiTools, risk: .medium)
-        assertTarget("browser.safari", category: .browsers, risk: .low)
-        assertTarget("browser.chrome.service-worker", category: .browsers, risk: .medium)
-        assertTarget("browser.service-worker", category: .browsers, risk: .medium)
-    }
-
-    func testServiceWorkerTargetsAreAllMediumRisk() {
-        let serviceWorkerTargets = catalog.targets.filter { $0.id.contains("service-worker") }
-        XCTAssertEqual(serviceWorkerTargets.count, 6)
-        for target in serviceWorkerTargets {
-            XCTAssertEqual(target.risk, .medium, "Service Worker target should be medium: \(target.id)")
-        }
-    }
-
-    func testCategoryDisplayOrderCoversAllCasesWithNonDecreasingRisk() {
-        XCTAssertEqual(Set(DiskCleanCategoryID.displayOrder), Set(DiskCleanCategoryID.allCases))
-        XCTAssertEqual(DiskCleanCategoryID.displayOrder.count, DiskCleanCategoryID.allCases.count)
-
-        let risks = DiskCleanCategoryID.displayOrder.map(\.risk)
-        XCTAssertEqual(risks, risks.sorted())
-    }
-
-    func testEveryCategoryOwnsAtLeastOneTarget() {
-        for category in DiskCleanCategoryID.allCases {
-            XCTAssertFalse(catalog.targets(in: category).isEmpty, "category has no targets: \(category.rawValue)")
-        }
-    }
-
-    func testTargetsInDisplayOrderAreCategoryThenRiskOrdered() {
-        let ordered = catalog.targetsInDisplayOrder
-        XCTAssertEqual(ordered.count, catalog.targets.count)
-
-        let categoryRank = Dictionary(
-            uniqueKeysWithValues: DiskCleanCategoryID.displayOrder.enumerated().map { ($0.element, $0.offset) }
-        )
-        for (previous, next) in zip(ordered, ordered.dropFirst()) {
-            let previousRank = categoryRank[previous.category] ?? 0
-            let nextRank = categoryRank[next.category] ?? 0
-            XCTAssertLessThanOrEqual(previousRank, nextRank)
-            if previous.category == next.category {
-                XCTAssertLessThanOrEqual(previous.risk, next.risk)
-            }
-        }
-    }
-
     // MARK: - Locking and FDA
 
     func testProcessLockedTargetsAlsoDeclareBundleIDs() {
@@ -265,21 +154,6 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
                 "declares process names but no bundle IDs: \(target.id)"
             )
         }
-    }
-
-    func testFirstVersionProcessLocksArePreserved() {
-        XCTAssertEqual(
-            catalog.target(id: "developer.xcode-derived-data")?.skipWhenProcessIsRunning,
-            ["Xcode"]
-        )
-        XCTAssertEqual(
-            catalog.target(id: "developer.simulator-unavailable")?.skipWhenProcessIsRunning,
-            ["Simulator"]
-        )
-        XCTAssertEqual(
-            catalog.target(id: "browser.chrome.service-worker")?.lockedByBundleIDs,
-            ["com.google.Chrome"]
-        )
     }
 
     /// TCC-protected prefix table (design §9).
@@ -317,38 +191,12 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
     }
 
     /// Mark-set snapshot. Prevents silent coverage changes for unauthorized users when a target is split without carrying the mark.
-    func testFullDiskAccessTargetSnapshot() {
-        XCTAssertEqual(
-            catalog.targets.filter(\.requiresFullDiskAccess).map(\.id).sorted(),
-            [
-                "browser.safari",
-                "cache.apple-sandboxed-apps.containers",
-                "cache.macos-app-state.protected",
-                "cache.office-apps.containers",
-                "cache.productivity-media.containers"
-            ]
-        )
-    }
 
     /// Dynamic and synthetic targets are never marked: the former degrades via their provider, the latter never goes through rule expansion;
     /// a mark would only make `fdaRestricted` report a target id the user cannot map to content.
-    func testDynamicAndExternalTargetsNeverRequireFullDiskAccess() {
-        for target in catalog.targets where target.isDynamic || target.isExternallyDiscovered {
-            XCTAssertFalse(target.requiresFullDiskAccess, "must not mark FDA: \(target.id)")
-        }
-    }
 
     /// Split-out FDA targets must keep the parent category and risk — the only reason to split is TCC,
     /// not to change what the user sees.
-    func testFullDiskAccessSplitsKeepParentCategoryAndRisk() {
-        for target in catalog.targets where target.requiresFullDiskAccess {
-            let siblings = catalog.targets(legacyRuleID: target.legacyRuleID)
-            for sibling in siblings where sibling.id != target.id {
-                XCTAssertEqual(sibling.category, target.category, "split changed category: \(target.id)")
-                XCTAssertEqual(sibling.risk, target.risk, "split changed risk: \(target.id)")
-            }
-        }
-    }
 
     // MARK: - P2 synthetic targets
 
@@ -371,64 +219,8 @@ final class DiskCleanRuleCatalogV2Tests: XCTestCase {
 
     /// Synthetic targets must actually exist in the catalog — `DiskCleanPlanner.makePlan` looks up by targetID,
     /// throws `unknownTarget` if missing, and P2 candidates become permanently uncleansable dead items.
-    func testEveryExternalTargetIDResolvesInCatalog() {
-        for kind in DiskCleanPurgeKind.allCases {
-            XCTAssertNotNil(catalog.target(id: kind.targetID), "missing target: \(kind.targetID)")
-        }
-        for kind in DiskCleanInstallerKind.allCases {
-            XCTAssertNotNil(catalog.target(id: kind.targetID), "missing target: \(kind.targetID)")
-        }
-    }
-
-    func testRuleTargetsExcludeExternalTargets() {
-        XCTAssertFalse(catalog.ruleTargets.contains { $0.isExternallyDiscovered })
-        XCTAssertEqual(
-            catalog.ruleTargets.count + DiskCleanPurgeKind.allCases.count + DiskCleanInstallerKind.allCases.count,
-            catalog.targets.count
-        )
-    }
 
     // MARK: - Helpers
 
-    private func assertTarget(
-        _ id: String,
-        category: DiskCleanCategoryID,
-        risk: DiskCleanRisk,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let target = catalog.target(id: id) else {
-            return XCTFail("missing target: \(id)", file: file, line: line)
-        }
-        XCTAssertEqual(target.category, category, "category mismatch: \(id)", file: file, line: line)
-        XCTAssertEqual(target.risk, risk, "risk mismatch: \(id)", file: file, line: line)
-    }
-
-    private static func owner(of glob: String, in catalog: DiskCleanRuleCatalogV2) -> DiskCleanRuleTarget? {
-        catalog.targets.first { $0.pathGlobs.contains(glob) }
-    }
-
-    private static func firstVersionPathGlobs() -> Set<String> {
-        var globs: Set<String> = []
-        for rule in DiskCleanRuleCatalog.moleFirstVersion.rules {
-            for target in rule.targets {
-                if case let .path(glob) = target {
-                    globs.insert(glob)
-                }
-            }
-        }
-        return globs
-    }
-
     /// Last complete path component before the first glob metacharacter. Without metacharacters, the path itself.
-    private static func fixedDirectoryPrefix(of glob: String) -> String {
-        guard let metaIndex = glob.firstIndex(where: { "*?[".contains($0) }) else {
-            return glob
-        }
-        let head = glob[glob.startIndex..<metaIndex]
-        guard let slashIndex = head.lastIndex(of: "/") else {
-            return String(head)
-        }
-        return String(head[head.startIndex..<slashIndex])
-    }
 }

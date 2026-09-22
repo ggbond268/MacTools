@@ -14,8 +14,8 @@ final class PluginHostFailureIsolationTests: XCTestCase {
             suiteName: "PluginHostFailureIsolationTests-state"
         )
 
-        XCTAssertEqual(host.panelItems.map(\.id), ["good"])
-        XCTAssertEqual(host.featureManagementItems.map(\.id), ["good"])
+        XCTAssertEqual(host.panelItems.map(\.pluginID), ["good"])
+        XCTAssertEqual(host.availablePanelItems.map(\.key.pluginID), ["good"])
         XCTAssertEqual(failingPlugin.deactivationReasons, [.disabled])
     }
 
@@ -26,30 +26,39 @@ final class PluginHostFailureIsolationTests: XCTestCase {
             suiteName: "PluginHostFailureIsolationTests-action"
         )
 
-        XCTAssertEqual(host.panelItems.map(\.id), ["bad"])
+        XCTAssertEqual(host.panelItems.map(\.pluginID), ["bad"])
 
-        host.setSwitchValue(true, for: "bad")
+        let placementID = host.testEntry(pluginID: "bad", kind: .row).id
+        host.setSwitchValue(true, for: placementID)
 
         XCTAssertTrue(host.panelItems.isEmpty)
-        XCTAssertTrue(host.featureManagementItems.isEmpty)
+        XCTAssertTrue(host.availablePanelItems.isEmpty)
         XCTAssertEqual(plugin.handleActionCallCount, 1)
         XCTAssertEqual(plugin.deactivationReasons, [.disabled])
 
-        host.setSwitchValue(false, for: "bad")
+        host.setSwitchValue(false, for: placementID)
 
         XCTAssertEqual(plugin.handleActionCallCount, 1)
     }
 }
 
 @MainActor
-private final class ExceptionPrimaryPlugin: MacToolsPlugin, PluginPrimaryPanel {
+private final class ExceptionPrimaryPlugin: MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     enum FailurePoint {
         case action
         case panelState
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -72,17 +81,16 @@ private final class ExceptionPrimaryPlugin: MacToolsPlugin, PluginPrimaryPanel {
         self.failurePoint = failurePoint
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         if failurePoint == .panelState {
             raiseTestPluginException(reason: "panel state failed")
         }
 
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: "Ready",
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

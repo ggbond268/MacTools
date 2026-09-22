@@ -182,8 +182,13 @@ public enum KeyboardKeyTapEventPoster {
         }
 
         let preservedFlags = ambientFlags.intersection(modifierFlags)
-        down.flags.formUnion(preservedFlags)
-        up.flags.formUnion(preservedFlags)
+        if ShortcutKeyCode.isModifier(keyTap.keyCode) {
+            down.flags.formUnion(preservedFlags)
+            up.flags.formUnion(preservedFlags)
+        } else {
+            down.flags = down.flags.subtracting(modifierFlags).union(preservedFlags)
+            up.flags = up.flags.subtracting(modifierFlags).union(preservedFlags)
+        }
         MacToolsSyntheticInputEvent.mark(down)
         MacToolsSyntheticInputEvent.mark(up)
         let timestamp = DispatchTime.now().uptimeNanoseconds

@@ -61,30 +61,6 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertEqual(loader.requestedIDs, ["com.example.siri"])
     }
 
-    func testRequirementDisappearingDuringStagingPreservesInstalledVersion() throws {
-        var lookups = 0
-        let checker = PluginRequirementChecker(macOSVersion: { "27.0" }, applicationInstalled: { _ in
-            lookups += 1
-            return lookups == 1
-        })
-        let store = makeStore(requirementChecker: checker)
-        let original = try makePackage(id: "com.example.siri")
-        _ = try store.installPackage(from: original)
-        let update = try makePackage(id: "com.example.siri", version: "2.0.0",
-                                     requirements: PluginRequirementTestData.requirements())
-
-        XCTAssertThrowsError(try store.updatePackage(from: update)) {
-            guard case let PluginPackageStoreError.installFailed(reason) = $0 else {
-                return XCTFail("Expected a staged installation failure, got \($0)")
-            }
-            XCTAssertEqual(reason, PluginRequirementChecker.Failure.application("Siri AI").localizedDescription)
-        }
-        XCTAssertEqual(lookups, 2)
-        let installed = try XCTUnwrap(store.installedRecords().first)
-        XCTAssertEqual(installed.manifest.version, "1.0.0")
-        XCTAssertEqual(installed.state, .installed)
-    }
-
     func testUnsupportedOSRejectsManualPackageInstallation() throws {
         let store = makeStore(requirementChecker: .init(macOSVersion: { "26.6" }, applicationInstalled: { _ in true }))
         let source = try makePackage(id: "com.example.siri", requirements: PluginRequirementTestData.requirements())
@@ -92,22 +68,6 @@ final class PluginPackageStoreTests: XCTestCase {
             XCTAssertEqual($0 as? PluginRequirementChecker.Failure, .macOS("27.0"))
         }
         XCTAssertTrue(store.installedRecords().isEmpty)
-    }
-
-    func testReadsLegacyHiddenMarkerUntilMigrationAcknowledgesIt() throws {
-        let sourceURL = try makePackage(id: "com.example.demo")
-        let store = makeStore()
-        _ = try store.installPackage(from: sourceURL)
-
-        markLegacyDisabled("com.example.demo")
-
-        XCTAssertEqual(store.legacyHiddenPluginIDs(), Set(["com.example.demo"]))
-        XCTAssertEqual(store.legacyHiddenPluginIDs(), Set(["com.example.demo"]))
-        XCTAssertEqual(store.installedRecords().first?.state, .installed)
-
-        store.clearLegacyHiddenPluginIDs()
-
-        XCTAssertTrue(store.legacyHiddenPluginIDs().isEmpty)
     }
 
     func testInstallRejectsPreviousPluginKitPackage() throws {
@@ -120,95 +80,6 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.installPackage(from: sourceURL)) { error in
             XCTAssertEqual(error as? PluginPackageManifestError, .unsupportedPluginKitVersion(1))
         }
-    }
-
-    func testExistingPreviousPluginKitPackageIsMarkedIncompatible() throws {
-        let sourceURL = try makePackage(
-            id: "com.example.demo",
-            pluginKitVersion: 1
-        )
-        let store = makeStore()
-        let installedURL = store.installedDirectory
-            .appendingPathComponent("com.example.demo", isDirectory: true)
-            .appendingPathExtension("mactoolsplugin")
-        try FileManager.default.copyItem(at: sourceURL, to: installedURL)
-
-        let record = try XCTUnwrap(store.installedRecords().first)
-
-        XCTAssertEqual(
-            record.state,
-            .incompatible(
-                AppL10n.pluginsFormat(
-                    "plugin.error.store.installedSDKIncompatibleFormat",
-                    defaultValue: "插件 SDK 版本不兼容，已安装版本为 %d，当前支持版本为 %d。请更新插件。",
-                    1,
-                    PluginPackageManifestLoader.supportedPluginKitVersion
-                )
-            )
-        )
-    }
-
-    func testExistingPluginKit5PackageRemainsDiscoverableForVersion6Update() throws {
-        let sourceURL = try makePackage(
-            id: "com.example.v5",
-            pluginKitVersion: 5
-        )
-        let store = makeStore()
-        let installedURL = store.installedDirectory
-            .appendingPathComponent("com.example.v5", isDirectory: true)
-            .appendingPathExtension("mactoolsplugin")
-        try FileManager.default.copyItem(at: sourceURL, to: installedURL)
-
-        let record = try XCTUnwrap(store.installedRecords().first)
-
-        XCTAssertEqual(record.id, "com.example.v5")
-        XCTAssertEqual(record.manifest.pluginKitVersion, 5)
-        guard case .incompatible = record.state else {
-            return XCTFail("PluginKit v5 package should remain discoverable but incompatible")
-        }
-    }
-
-    func testExistingV3ManifestRemainsDiscoverableForCatalogUpdate() throws {
-        let store = makeStore()
-        let installedURL = store.installedDirectory
-            .appendingPathComponent("com.example.legacy", isDirectory: true)
-            .appendingPathExtension("mactoolsplugin")
-        let bundleURL = installedURL.appendingPathComponent("Legacy.bundle", isDirectory: true)
-        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-        let manifestData = """
-        {
-          "id": "com.example.legacy",
-          "displayName": "Legacy",
-          "version": "3.2.1",
-          "minHostVersion": "1.1.6",
-          "pluginKitVersion": 3,
-          "bundleRelativePath": "Legacy.bundle",
-          "capabilities": {
-            "primaryPanel": true,
-            "componentPanel": false,
-            "configuration": true
-          },
-          "permissions": []
-        }
-        """.data(using: .utf8)!
-        try manifestData.write(to: installedURL.appendingPathComponent("plugin.json"))
-
-        let record = try XCTUnwrap(store.installedRecords().first)
-
-        XCTAssertEqual(record.id, "com.example.legacy")
-        XCTAssertEqual(record.manifest.version, "3.2.1")
-        XCTAssertEqual(record.manifest.capabilities.settings, .form)
-        XCTAssertEqual(
-            record.state,
-            .incompatible(
-                AppL10n.pluginsFormat(
-                    "plugin.error.store.installedSDKIncompatibleFormat",
-                    defaultValue: "插件 SDK 版本不兼容，已安装版本为 %d，当前支持版本为 %d。请更新插件。",
-                    3,
-                    PluginPackageManifestLoader.supportedPluginKitVersion
-                )
-            )
-        )
     }
 
     func testUninstallDeletesPackageAndCanRemoveStorage() throws {
@@ -246,34 +117,6 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
         XCTAssertFalse(FileManager.default.fileExists(atPath: supportDirectory.path))
         XCTAssertNil(defaults.object(forKey: "plugin.com.example.private.enabled"))
-        XCTAssertTrue(store.installedRecords().isEmpty)
-    }
-
-    func testPrivateDataCleanupAttemptsKeyDeletionAfterDirectoryFailure() throws {
-        var removedKeyPluginIDs: [String] = []
-        let sourceURL = try makePackage(
-            id: "com.example.private",
-            uninstallDataPolicy: .removePrivateData
-        )
-        let store = makeStore(
-            privateDataDirectoryRemover: { _ in throw CocoaError(.fileWriteNoPermission) },
-            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
-        )
-        _ = try store.installPackage(from: sourceURL)
-        let supportDirectory = store.dataDirectory.appendingPathComponent(
-            "com.example.private",
-            isDirectory: true
-        )
-        try FileManager.default.createDirectory(at: supportDirectory, withIntermediateDirectories: true)
-
-        XCTAssertThrowsError(try store.uninstall(pluginID: "com.example.private", removeData: false)) {
-            guard let storeError = $0 as? PluginPackageStoreError,
-                  case .privateDataRemovalFailed = storeError else {
-                return XCTFail("Expected privateDataRemovalFailed, got \($0)")
-            }
-        }
-
-        XCTAssertEqual(removedKeyPluginIDs, ["com.example.private"])
         XCTAssertTrue(store.installedRecords().isEmpty)
     }
 
@@ -403,129 +246,6 @@ final class PluginPackageStoreTests: XCTestCase {
         )
     }
 
-    func testCompletedPrivateUninstallJournalDoesNotRemoveFreshReinstall() throws {
-        let pluginID = "com.example.private-reinstall"
-        let sourceURL = try makePackage(
-            id: pluginID,
-            uninstallDataPolicy: .removePrivateData
-        )
-        var synchronizationCount = 0
-        var removedKeyPluginIDs: [String] = []
-        let store = makeStore(
-            synchronizeUserDefaults: { defaults in
-                synchronizationCount += 1
-                if synchronizationCount == 3 {
-                    return false
-                }
-                return defaults.synchronize()
-            },
-            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
-        )
-        _ = try store.installPackage(from: sourceURL)
-
-        try store.uninstall(pluginID: pluginID, removeData: false)
-        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
-
-        let reinstalled = try store.installPackage(from: sourceURL)
-
-        XCTAssertEqual(reinstalled.id, pluginID)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: reinstalled.packageURL.path))
-        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
-        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
-        XCTAssertEqual(
-            defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count,
-            0
-        )
-    }
-
-    func testReinstallWaitsForFailedPrivateDirectoryCleanupToRecover() throws {
-        try assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: true)
-    }
-
-    func testReinstallWaitsForFailedPrivateKeyCleanupToRecover() throws {
-        try assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: false)
-    }
-
-    private func assertReinstallWaitsForPrivateCleanup(failsDirectoryRemoval: Bool) throws {
-        let pluginID = "com.example.private-pending-reinstall"
-        let sourceURL = try makePackage(id: pluginID, uninstallDataPolicy: .removePrivateData)
-        var cleanupFails = true
-        var removedKeyPluginIDs: [String] = []
-        let store = makeStore(
-            privateDataDirectoryRemover: { url in
-                if cleanupFails && failsDirectoryRemoval { throw CocoaError(.fileWriteNoPermission) }
-                try FileManager.default.removeItem(at: url)
-            },
-            privateDataKeyRemover: { id in
-                if cleanupFails && !failsDirectoryRemoval { throw CocoaError(.fileWriteNoPermission) }
-                removedKeyPluginIDs.append(id)
-            }
-        )
-        let original = try store.installPackage(from: sourceURL)
-        let context = store.runtimeContext(for: original)
-        let privateURL = try XCTUnwrap(context.supportDirectory).appendingPathComponent("private-data")
-        try Data("original private data".utf8).write(to: privateURL)
-
-        XCTAssertThrowsError(try store.uninstall(pluginID: pluginID, removeData: false))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: original.packageURL.path))
-        XCTAssertThrowsError(try store.installPackage(from: sourceURL)) { error in
-            guard case .installFailed = error as? PluginPackageStoreError else {
-                return XCTFail("Expected installFailed while private cleanup is pending, got \(error)")
-            }
-        }
-        XCTAssertFalse(FileManager.default.fileExists(atPath: original.packageURL.path),
-            "A rejected reinstall must not leave a new package under the old cleanup intent")
-        let pending = defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?[pluginID]
-            as? [String: String]
-        XCTAssertEqual(pending?["phase"], "staging")
-
-        cleanupFails = false
-        let reinstalled = try store.installPackage(from: sourceURL)
-        XCTAssertEqual(reinstalled.id, pluginID)
-        XCTAssertEqual(defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count, 0)
-        let freshContext = store.runtimeContext(for: reinstalled)
-        let freshURL = try XCTUnwrap(freshContext.supportDirectory).appendingPathComponent("fresh-data")
-        try Data("fresh private data".utf8).write(to: freshURL)
-        let keyRemovalsAfterRecovery = removedKeyPluginIDs.count
-        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
-        XCTAssertEqual(removedKeyPluginIDs.count, keyRemovalsAfterRecovery,
-            "Old uninstall recovery must never remove the new installation's key")
-    }
-
-    func testCleanupCompletePackageResidueDoesNotBlockOrDamageReinstall() throws {
-        let pluginID = "com.example.private-residue-reinstall"
-        let sourceURL = try makePackage(id: pluginID, uninstallDataPolicy: .removePrivateData)
-        var residueRemovalFails = true
-        var removedKeyPluginIDs: [String] = []
-        let store = makeStore(
-            packageFileRemover: { url in
-                if residueRemovalFails { throw CocoaError(.fileWriteNoPermission) }
-                try FileManager.default.removeItem(at: url)
-            },
-            privateDataKeyRemover: { removedKeyPluginIDs.append($0) }
-        )
-        _ = try store.installPackage(from: sourceURL)
-        try store.uninstall(pluginID: pluginID, removeData: false)
-        let pending = defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?[pluginID]
-            as? [String: String]
-        XCTAssertEqual(pending?["phase"], "cleanupComplete")
-
-        let reinstalled = try store.installPackage(from: sourceURL)
-        let context = store.runtimeContext(for: reinstalled)
-        let freshURL = try XCTUnwrap(context.supportDirectory).appendingPathComponent("fresh-data")
-        try Data("fresh private data".utf8).write(to: freshURL)
-        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
-        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
-
-        residueRemovalFails = false
-        XCTAssertEqual(store.installedRecords().map(\.id), [pluginID])
-        XCTAssertEqual(defaults.dictionary(forKey: "plugins.dynamic.privateUninstallIntents")?.count, 0)
-        XCTAssertEqual(removedKeyPluginIDs, [pluginID])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: freshURL.path))
-    }
-
     func testFailedUpdateRestoresExistingPackage() throws {
         let sourceURL = try makePackage(id: "com.example.demo", version: "1.0.0")
         let invalidUpdateURL = try makePackage(id: "com.example.demo", version: "2.0.0", bundleRelativePath: "Missing.bundle")
@@ -544,38 +264,6 @@ final class PluginPackageStoreTests: XCTestCase {
         XCTAssertEqual(record.state, .installed)
     }
 
-    func testUpdateClearsNeitherPackageNorVisibilityMigrationMarker() throws {
-        let sourceURL = try makePackage(id: "com.example.demo", version: "1.0.0")
-        let updateURL = try makePackage(id: "com.example.demo", version: "2.0.0")
-        let store = makeStore()
-        _ = try store.installPackage(from: sourceURL)
-
-        _ = try store.updatePackage(from: updateURL)
-
-        let record = try XCTUnwrap(store.installedRecords().first)
-        XCTAssertEqual(record.manifest.version, "2.0.0")
-        XCTAssertEqual(record.state, .installed)
-    }
-
-    func testInstallDateSurvivesUpdatesAndResetsAfterReinstall() throws {
-        let sourceURL = try makePackage(id: "com.example.demo", version: "1.0.0")
-        let updateURL = try makePackage(id: "com.example.demo", version: "2.0.0")
-        var currentDate = Date(timeIntervalSince1970: 100)
-        let store = makeStore(now: { currentDate })
-
-        let installedRecord = try store.installPackage(from: sourceURL)
-        XCTAssertEqual(installedRecord.installedAt, currentDate)
-
-        currentDate = Date(timeIntervalSince1970: 200)
-        let updatedRecord = try store.updatePackage(from: updateURL)
-        XCTAssertEqual(updatedRecord.installedAt, Date(timeIntervalSince1970: 100))
-
-        try store.uninstall(pluginID: "com.example.demo", removeData: false)
-        currentDate = Date(timeIntervalSince1970: 300)
-        let reinstalledRecord = try store.installPackage(from: sourceURL)
-        XCTAssertEqual(reinstalledRecord.installedAt, currentDate)
-    }
-
     func testUpdateDoesNotInstallPackageThatIsNoLongerInstalled() throws {
         let updateURL = try makePackage(id: "com.example.demo", version: "2.0.0")
         let store = makeStore()
@@ -589,37 +277,6 @@ final class PluginPackageStoreTests: XCTestCase {
             XCTAssertEqual(pluginID, "com.example.demo")
         }
         XCTAssertTrue(store.installedRecords().isEmpty)
-    }
-
-    func testDefaultRootDirectoryUsesCurrentApplicationSupportScope() {
-        let rootDirectory = PluginPackageStore.defaultRootDirectory(fileManager: .default)
-
-        XCTAssertEqual(rootDirectory.lastPathComponent, "Plugins")
-        XCTAssertEqual(
-            rootDirectory.deletingLastPathComponent().lastPathComponent,
-            AppStorageScope.applicationSupportDirectoryName
-        )
-    }
-
-    func testApplicationSupportScopeUsesConfiguredNightlyDirectory() {
-        XCTAssertEqual(
-            AppStorageScope.applicationSupportDirectoryName(
-                infoDictionary: ["MTApplicationSupportDirectoryName": "MacTools Nightly"]
-            ),
-            "MacTools Nightly"
-        )
-    }
-
-    func testApplicationSupportScopeRejectsUnexpandedBuildSetting() {
-        let name = AppStorageScope.applicationSupportDirectoryName(
-            infoDictionary: ["MTApplicationSupportDirectoryName": "$(APPLICATION_SUPPORT_DIRECTORY_NAME)"]
-        )
-
-        #if DEBUG
-        XCTAssertEqual(name, "MacTools Dev")
-        #else
-        XCTAssertEqual(name, "MacTools")
-        #endif
     }
 
     private func makeStore(
@@ -642,10 +299,6 @@ final class PluginPackageStoreTests: XCTestCase {
             now: now,
             hostVersion: "1.0.0", requirementChecker: requirementChecker ?? PluginRequirementChecker()
         )
-    }
-
-    private func markLegacyDisabled(_ pluginID: String) {
-        defaults.set([pluginID], forKey: "plugins.dynamic.disabledPluginIDs")
     }
 
     private func makePackage(

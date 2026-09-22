@@ -42,7 +42,7 @@
 
 已提交的第三方静态 SVG、固定上游 revision、许可证和 catalog ID 映射记录在 `docs/icon-gallery/sources/manifest.json`。生成后的 PNG 使用透明画布和黑色模板图形，不应直接修改而丢失上游来源。
 
-First-party artwork recovered from repository history is not a third-party source and stays out of `sources/manifest.json`; record its origin here instead. `mactools v1` (`static-mactools-legacy-t`) reproduces the original MacTools menu-bar mark from commit `ce39bc66`, rasterized from that commit's app-icon artwork as black template artwork on a transparent 96×96 canvas.
+First-party artwork recovered from repository history is not a third-party source and stays out of `sources/manifest.json`; record its origin here instead. `MacTools Original` (`static-mactools-legacy-t`) reproduces the original MacTools menu-bar mark from commit `ce39bc66`, rasterized from that commit's app-icon artwork as black template artwork on a transparent 96×96 canvas.
 
 也可以不用 zip，直接声明帧路径：
 

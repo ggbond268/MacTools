@@ -4,17 +4,37 @@ import MacToolsPluginKit
 
 @MainActor
 final class EjectDiskPluginTests: XCTestCase {
+    func testWidgetDiscoversVolumesAndSharesVisibilityWithRow() async throws {
+        let probe = VolumeDiscoveryProbe(volumes: [makeVolume("Disk4")])
+        let plugin = EjectDiskPlugin(discoverVolumes: { try await probe.discover() })
+        let items = plugin.panelItems
+        let rowVisibility = try XCTUnwrap(items.first { $0.id == "control" }?.visibilityHandler)
+        let widgetVisibility = try XCTUnwrap(items.first { $0.id == "quick-control" }?.visibilityHandler)
+        widgetVisibility(true)
+        rowVisibility(true)
+        rowVisibility(false)
+        await waitUntil { plugin.rowState.isEnabled }
+        let requestCount = await probe.requestCountValue()
+        XCTAssertEqual(requestCount, 1, "Both renderers share one discovery and hiding the row keeps the widget active")
+        widgetVisibility(false)
+        widgetVisibility(true)
+        await waitUntil { plugin.rowState.isEnabled }
+        let reopenedCount = await probe.requestCountValue()
+        XCTAssertEqual(reopenedCount, 2)
+        widgetVisibility(false)
+    }
+
     func testRefreshDoesNotDiscoverVolumesWhilePanelIsHidden() async {
         let probe = VolumeDiscoveryProbe(volumes: [makeVolume("Disk4")])
         let plugin = EjectDiskPlugin(discoverVolumes: { try await probe.discover() })
 
         plugin.refresh()
-        plugin.panelSurfaceDidBecomeVisible(.component)
+        plugin.panelItemDidBecomeVisible("widget")
         await Task.yield()
 
         let requestCount = await probe.requestCountValue()
         XCTAssertEqual(requestCount, 0)
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isEnabled)
     }
 
     func testOpeningPrimaryPanelDiscoversMountedEjectableVolumes() async {
@@ -24,23 +44,23 @@ final class EjectDiskPluginTests: XCTestCase {
         ])
         let plugin = EjectDiskPlugin(discoverVolumes: { try await probe.discover() })
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "正在检测...")
-        await waitUntil { plugin.primaryPanelState.subtitle == "2 个可推出的磁盘" }
+        XCTAssertEqual(plugin.rowState.subtitle, "正在检测...")
+        await waitUntil { plugin.rowState.subtitle == "2 个可推出的磁盘" }
         let requestCount = await probe.requestCountValue()
         XCTAssertEqual(requestCount, 1)
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
+        XCTAssertTrue(plugin.rowState.isEnabled)
     }
 
     func testDiscoveryFailureIsReportedInsteadOfSilentlyLookingEmpty() async {
         let plugin = EjectDiskPlugin(discoverVolumes: { throw VolumeDiscoveryProbeError.failed })
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
 
-        await waitUntil { plugin.primaryPanelState.errorMessage != nil }
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "无可推出的磁盘")
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        await waitUntil { plugin.rowState.errorMessage != nil }
+        XCTAssertEqual(plugin.rowState.subtitle, "无可推出的磁盘")
+        XCTAssertFalse(plugin.rowState.isEnabled)
     }
 
     func testSuccessfulEjectRemovesVolumesFromSnapshot() async {
@@ -54,15 +74,15 @@ final class EjectDiskPluginTests: XCTestCase {
             discoverVolumes: { try await discoveryProbe.discover() },
             ejectVolume: { try await ejectProbe.eject($0) }
         )
-        plugin.panelSurfaceDidBecomeVisible(.primary)
-        await waitUntil { plugin.primaryPanelState.isEnabled }
+        plugin.panelItemDidBecomeVisible("control")
+        await waitUntil { plugin.rowState.isEnabled }
 
         plugin.handleAction(.invokeAction(controlID: "execute"))
 
-        await waitUntil { !plugin.primaryPanelState.isEnabled && plugin.primaryPanelState.subtitle == "无可推出的磁盘" }
+        await waitUntil { !plugin.rowState.isEnabled && plugin.rowState.subtitle == "无可推出的磁盘" }
         let ejectedIdentifiers = await ejectProbe.ejectedIdentifiers()
         XCTAssertEqual(ejectedIdentifiers, ["/Volumes/Disk4", "/Volumes/Disk5"])
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testPartialEjectFailureKeepsOnlyFailedVolume() async {
@@ -76,14 +96,14 @@ final class EjectDiskPluginTests: XCTestCase {
             discoverVolumes: { try await discoveryProbe.discover() },
             ejectVolume: { try await ejectProbe.eject($0) }
         )
-        plugin.panelSurfaceDidBecomeVisible(.primary)
-        await waitUntil { plugin.primaryPanelState.isEnabled }
+        plugin.panelItemDidBecomeVisible("control")
+        await waitUntil { plugin.rowState.isEnabled }
 
         plugin.handleAction(.invokeAction(controlID: "execute"))
 
-        await waitUntil { plugin.primaryPanelState.subtitle == "1 个可推出的磁盘" }
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        await waitUntil { plugin.rowState.subtitle == "1 个可推出的磁盘" }
+        XCTAssertTrue(plugin.rowState.isEnabled)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         let ejectedIdentifiers = await ejectProbe.ejectedIdentifiers()
         XCTAssertEqual(ejectedIdentifiers, ["/Volumes/Disk4", "/Volumes/Disk5"])
     }

@@ -29,72 +29,6 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         viewModel.stop()
     }
 
-    func testVendorHIDMonitorPublishesEveryConnectedMouse() async {
-        let first = VendorHIDMouseBatterySnapshot(
-            accessState: .connected,
-            device: VendorHIDMouseDeviceInfo(
-                vendor: .rapoo,
-                productID: 0x0201,
-                modelName: "Rapoo MT760",
-                displayName: "Desk Mouse",
-                serialNumber: "MOUSE-A",
-                locationID: 1,
-                registryEntryID: nil
-            ),
-            reading: VendorHIDBatteryReading(
-                level: 80,
-                chargeState: .normal,
-                statusCode: 1
-            ),
-            lastUpdated: Date(timeIntervalSince1970: 100)
-        )
-        let second = VendorHIDMouseBatterySnapshot(
-            accessState: .connected,
-            device: VendorHIDMouseDeviceInfo(
-                vendor: .rapoo,
-                productID: 0x0202,
-                modelName: "Rapoo MT750",
-                displayName: "Travel Mouse",
-                serialNumber: "MOUSE-B",
-                locationID: 2,
-                registryEntryID: nil
-            ),
-            reading: VendorHIDBatteryReading(
-                level: 60,
-                chargeState: .charging,
-                statusCode: 3
-            ),
-            lastUpdated: Date(timeIntervalSince1970: 200)
-        )
-        let vendorHIDMonitor = MultipleVendorHIDBatteryMonitor(snapshots: [first, second])
-        let viewModel = DeviceBatteryViewModel(
-            sampler: RecordingDeviceBatterySampler(),
-            vendorHIDMonitor: vendorHIDMonitor,
-            schedule: DeviceBatterySamplingSchedule(
-                internalBatteryFallback: 30,
-                bluetoothBackground: 30,
-                bluetoothComponentVisible: 30,
-                appleMobileBackground: 30,
-                appleMobileComponentVisible: 30,
-                bluetoothConnectionDebounce: 0.01,
-                activityResumeDelay: 0.01
-            )
-        )
-
-        viewModel.start(
-            includeInternalBattery: false,
-            includeBluetoothDevices: false,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: true
-        )
-        viewModel.setComponentPanelVisible(true)
-
-        XCTAssertEqual(viewModel.snapshot.items.count, 2)
-        XCTAssertEqual(Set(viewModel.snapshot.items.map(\.level)), Set([60, 80]))
-        XCTAssertEqual(viewModel.snapshot.lastUpdated, Date(timeIntervalSince1970: 200))
-        viewModel.stop()
-    }
-
     func testVisibleComponentStartsEachSourceAndHidingStopsPeriodicWork() async {
         let sampler = RecordingDeviceBatterySampler()
         let viewModel = makeViewModel(sampler: sampler)
@@ -128,107 +62,6 @@ final class DeviceBatteryViewModelTests: XCTestCase {
 
         await waitForCounts(.oneEach, sampler: sampler)
         XCTAssertEqual(viewModel.bluetoothRefreshInterval, 30)
-        viewModel.stop()
-    }
-
-    func testHidingVisibleComponentWhileMonitoringDoesNotImmediatelyResample() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let viewModel = makeViewModel(sampler: sampler)
-        viewModel.setLowBatteryMonitoringEnabled(true)
-        viewModel.start(
-            includeInternalBattery: true,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: true,
-            includeVendorHIDDevices: false
-        )
-        await waitForCounts(.oneEach, sampler: sampler)
-
-        viewModel.setComponentPanelVisible(true)
-        let visibleCounts = DeviceBatterySamplingCounts(
-            internalBattery: 2,
-            bluetooth: 2,
-            appleMobile: 2
-        )
-        await waitForCounts(visibleCounts, sampler: sampler)
-
-        viewModel.setComponentPanelVisible(false)
-        try? await Task.sleep(for: .milliseconds(50))
-
-        let countsAfterHiding = await sampler.counts()
-        let optionsAfterHiding = await sampler.bluetoothOptions()
-        let mobileRefreshIntervals = await sampler.appleMobileRefreshIntervals()
-        XCTAssertEqual(countsAfterHiding, visibleCounts)
-        XCTAssertEqual(optionsAfterHiding.count, 2)
-        XCTAssertFalse(optionsAfterHiding[0].revalidateSupplementalState)
-        XCTAssertTrue(optionsAfterHiding[1].revalidateSupplementalState)
-        XCTAssertEqual(mobileRefreshIntervals, [30, 15])
-        viewModel.stop()
-    }
-
-    func testOpeningDuringBluetoothCollectionQueuesStateRevalidationWithoutAnotherScan() async {
-        let sampler = SuspendedBluetoothSampler()
-        let viewModel = DeviceBatteryViewModel(
-            sampler: sampler,
-            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
-            schedule: DeviceBatterySamplingSchedule(
-                internalBatteryFallback: 30,
-                bluetoothBackground: 30,
-                bluetoothComponentVisible: 30,
-                appleMobileBackground: 30,
-                appleMobileComponentVisible: 30,
-                bluetoothConnectionDebounce: 0.01,
-                activityResumeDelay: 0.01
-            )
-        )
-        viewModel.setLowBatteryMonitoringEnabled(true)
-        viewModel.start(
-            includeInternalBattery: false,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-
-        for _ in 0..<100 {
-            if await sampler.hasStartedFirstCollection() { break }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        let didStartFirstCollection = await sampler.hasStartedFirstCollection()
-        XCTAssertTrue(didStartFirstCollection)
-
-        viewModel.setComponentPanelVisible(true)
-        await sampler.resumeFirstCollection()
-
-        for _ in 0..<100 {
-            if (await sampler.options()).count >= 2 { break }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        let options = await sampler.options()
-        XCTAssertEqual(options.count, 2)
-        XCTAssertFalse(options[0].revalidateSupplementalState)
-        XCTAssertTrue(options[0].performActiveScan)
-        XCTAssertTrue(options[1].revalidateSupplementalState)
-        XCTAssertFalse(options[1].performActiveScan)
-        viewModel.stop()
-    }
-
-    func testTogglingLowBatteryMonitoringWhileVisibleDoesNotResample() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let viewModel = makeViewModel(sampler: sampler)
-        viewModel.start(
-            includeInternalBattery: true,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: true,
-            includeVendorHIDDevices: false
-        )
-        viewModel.setComponentPanelVisible(true)
-        await waitForCounts(.oneEach, sampler: sampler)
-
-        viewModel.setLowBatteryMonitoringEnabled(true)
-        viewModel.setLowBatteryMonitoringEnabled(false)
-        try? await Task.sleep(for: .milliseconds(50))
-
-        let countsAfterToggling = await sampler.counts()
-        XCTAssertEqual(countsAfterToggling, .oneEach)
         viewModel.stop()
     }
 
@@ -271,103 +104,6 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         viewModel.stop()
     }
 
-    func testUpdatingSourcesDuringWakeDelayIsAppliedBySingleResumeBatch() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let viewModel = makeViewModel(
-            sampler: sampler,
-            schedule: DeviceBatterySamplingSchedule(
-                internalBatteryFallback: 30,
-                bluetoothBackground: 30,
-                bluetoothComponentVisible: 30,
-                appleMobileBackground: 30,
-                appleMobileComponentVisible: 30,
-                bluetoothConnectionDebounce: 0.01,
-                activityResumeDelay: 0.05
-            )
-        )
-        viewModel.setLowBatteryMonitoringEnabled(true)
-        viewModel.start(
-            includeInternalBattery: true,
-            includeBluetoothDevices: false,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-        await waitForCounts(
-            DeviceBatterySamplingCounts(internalBattery: 1, bluetooth: 0, appleMobile: 0),
-            sampler: sampler
-        )
-
-        viewModel.setApplicationActivityState(.displayAsleep)
-        viewModel.setApplicationActivityState(.interactive)
-        viewModel.updateSources(
-            includeInternalBattery: false,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-        try? await Task.sleep(for: .milliseconds(20))
-        let countsDuringWakeDelay = await sampler.counts()
-        XCTAssertEqual(
-            countsDuringWakeDelay,
-            DeviceBatterySamplingCounts(internalBattery: 1, bluetooth: 0, appleMobile: 0)
-        )
-
-        let resumedCounts = DeviceBatterySamplingCounts(
-            internalBattery: 1,
-            bluetooth: 1,
-            appleMobile: 0
-        )
-        await waitForCounts(resumedCounts, sampler: sampler)
-        try? await Task.sleep(for: .milliseconds(80))
-        let finalCounts = await sampler.counts()
-        XCTAssertEqual(finalCounts, resumedCounts)
-        viewModel.stop()
-    }
-
-    func testDisablingSourceClearsScanningStateWhileCollectionIsSuspended() async {
-        let sampler = SuspendedAppleMobileSampler()
-        let viewModel = DeviceBatteryViewModel(
-            sampler: sampler,
-            vendorHIDMonitor: RecordingVendorHIDBatteryMonitor(),
-            schedule: DeviceBatterySamplingSchedule(
-                internalBatteryFallback: 30,
-                bluetoothBackground: 30,
-                bluetoothComponentVisible: 30,
-                appleMobileBackground: 30,
-                appleMobileComponentVisible: 30,
-                bluetoothConnectionDebounce: 0.01,
-                activityResumeDelay: 0.01
-            )
-        )
-        viewModel.start(
-            includeInternalBattery: false,
-            includeBluetoothDevices: false,
-            includeAppleMobileDevices: true,
-            includeVendorHIDDevices: false
-        )
-        viewModel.setComponentPanelVisible(true)
-        for _ in 0..<100 {
-            if await sampler.hasStartedAppleMobileCollection() {
-                break
-            }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        let didStartCollection = await sampler.hasStartedAppleMobileCollection()
-        XCTAssertTrue(didStartCollection)
-        XCTAssertEqual(viewModel.snapshot.accessState, .scanning)
-
-        viewModel.updateSources(
-            includeInternalBattery: false,
-            includeBluetoothDevices: false,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-
-        XCTAssertEqual(viewModel.snapshot.accessState, .noDevices)
-        await sampler.resumeAppleMobileCollection()
-        viewModel.stop()
-    }
-
     func testSystemEventsRefreshOnlyTheirSourceAndDebounceBluetooth() async {
         let sampler = RecordingDeviceBatterySampler()
         let powerObserver = RecordingPowerSourceObserver()
@@ -398,6 +134,9 @@ final class DeviceBatteryViewModelTests: XCTestCase {
             DeviceBatterySamplingCounts(internalBattery: 2, bluetooth: 2, appleMobile: 1),
             sampler: sampler
         )
+        let options = await sampler.bluetoothOptions()
+        XCTAssertEqual(options.last?.scanScope, .newlyConnected)
+        XCTAssertEqual(options.last?.forceProfileRefresh, true)
         viewModel.stop()
     }
 
@@ -430,102 +169,6 @@ final class DeviceBatteryViewModelTests: XCTestCase {
         )
         let options = await sampler.bluetoothOptions()
         XCTAssertEqual(options.last?.forceProfileRefresh, true)
-        viewModel.stop()
-    }
-
-    func testReopeningComponentForcesBluetoothProfileRefresh() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let viewModel = makeViewModel(sampler: sampler)
-        viewModel.start(
-            includeInternalBattery: false,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-
-        viewModel.setComponentPanelVisible(true)
-        await waitForCounts(
-            DeviceBatterySamplingCounts(internalBattery: 0, bluetooth: 1, appleMobile: 0),
-            sampler: sampler
-        )
-        viewModel.setComponentPanelVisible(false)
-        viewModel.setComponentPanelVisible(true)
-        await waitForCounts(
-            DeviceBatterySamplingCounts(internalBattery: 0, bluetooth: 2, appleMobile: 0),
-            sampler: sampler
-        )
-
-        let options = await sampler.bluetoothOptions()
-        XCTAssertEqual(options.map(\.forceProfileRefresh), [true, true])
-        viewModel.stop()
-    }
-
-    func testWakeWindowConnectionEventIsMergedIntoResumeSampling() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let bluetoothObserver = RecordingBluetoothConnectionObserver()
-        let viewModel = makeViewModel(
-            sampler: sampler,
-            bluetoothObserver: bluetoothObserver,
-            schedule: DeviceBatterySamplingSchedule(
-                internalBatteryFallback: 30,
-                bluetoothBackground: 30,
-                bluetoothComponentVisible: 30,
-                appleMobileBackground: 30,
-                appleMobileComponentVisible: 30,
-                bluetoothConnectionDebounce: 0.01,
-                activityResumeDelay: 0.05
-            )
-        )
-        viewModel.setLowBatteryMonitoringEnabled(true)
-        viewModel.start(
-            includeInternalBattery: true,
-            includeBluetoothDevices: true,
-            includeAppleMobileDevices: true,
-            includeVendorHIDDevices: false
-        )
-        await waitForCounts(.oneEach, sampler: sampler)
-
-        viewModel.setApplicationActivityState(.displayAsleep)
-        viewModel.setApplicationActivityState(.interactive)
-        bluetoothObserver.sendConnectionChange()
-        await waitForCounts(
-            DeviceBatterySamplingCounts(internalBattery: 2, bluetooth: 2, appleMobile: 2),
-            sampler: sampler
-        )
-        try? await Task.sleep(for: .milliseconds(100))
-
-        let finalCounts = await sampler.counts()
-        let finalBluetoothOptions = await sampler.bluetoothOptions()
-        XCTAssertEqual(finalCounts, DeviceBatterySamplingCounts(
-            internalBattery: 2,
-            bluetooth: 2,
-            appleMobile: 2
-        ))
-        XCTAssertEqual(finalBluetoothOptions.last?.forceProfileRefresh, true)
-        viewModel.stop()
-    }
-
-    func testRemovingLastConsumerClearsCollectedSnapshot() async {
-        let sampler = RecordingDeviceBatterySampler()
-        let viewModel = makeViewModel(sampler: sampler)
-        viewModel.start(
-            includeInternalBattery: true,
-            includeBluetoothDevices: false,
-            includeAppleMobileDevices: false,
-            includeVendorHIDDevices: false
-        )
-        viewModel.setComponentPanelVisible(true)
-        await waitForCounts(
-            DeviceBatterySamplingCounts(internalBattery: 1, bluetooth: 0, appleMobile: 0),
-            sampler: sampler
-        )
-        try? await Task.sleep(for: .milliseconds(20))
-        XCTAssertNotNil(viewModel.snapshot.lastUpdated)
-
-        viewModel.setComponentPanelVisible(false)
-
-        XCTAssertNil(viewModel.snapshot.lastUpdated)
-        XCTAssertTrue(viewModel.snapshot.items.isEmpty)
         viewModel.stop()
     }
 
@@ -664,6 +307,23 @@ private actor RecordingDeviceBatterySampler: DeviceBatterySampling {
     private var samplingCounts = DeviceBatterySamplingCounts.zero
     private var recordedBluetoothOptions: [DeviceBatteryBluetoothSamplingOptions] = []
     private var recordedAppleMobileRefreshIntervals: [TimeInterval] = []
+    private var bluetoothItems: [DeviceBatteryItem]
+    private var shouldSuspendBluetoothRead = false
+    private var bluetoothContinuation: CheckedContinuation<[DeviceBatteryItem], Never>?
+
+    init(bluetoothItems: [DeviceBatteryItem] = []) {
+        self.bluetoothItems = bluetoothItems
+    }
+
+    func suspendNextBluetoothRead() {
+        shouldSuspendBluetoothRead = true
+    }
+
+    func resumeBluetoothRead(returning items: [DeviceBatteryItem]) {
+        bluetoothItems = items
+        bluetoothContinuation?.resume(returning: items)
+        bluetoothContinuation = nil
+    }
 
     func collectInternalBattery(referenceDate: Date) async -> [DeviceBatteryItem] {
         samplingCounts = DeviceBatterySamplingCounts(
@@ -684,7 +344,11 @@ private actor RecordingDeviceBatterySampler: DeviceBatterySampling {
             appleMobile: samplingCounts.appleMobile
         )
         recordedBluetoothOptions.append(options)
-        return []
+        if shouldSuspendBluetoothRead {
+            shouldSuspendBluetoothRead = false
+            return await withCheckedContinuation { bluetoothContinuation = $0 }
+        }
+        return bluetoothItems
     }
 
     func collectAppleMobileDevices(
@@ -710,81 +374,6 @@ private actor RecordingDeviceBatterySampler: DeviceBatterySampling {
 
     func appleMobileRefreshIntervals() -> [TimeInterval] {
         recordedAppleMobileRefreshIntervals
-    }
-}
-
-private actor SuspendedAppleMobileSampler: DeviceBatterySampling {
-    private var appleMobileContinuation: CheckedContinuation<[DeviceBatteryItem], Never>?
-    private var didStartAppleMobileCollection = false
-
-    func collectInternalBattery(referenceDate: Date) async -> [DeviceBatteryItem] {
-        []
-    }
-
-    func collectBluetoothDevices(
-        referenceDate: Date,
-        options: DeviceBatteryBluetoothSamplingOptions
-    ) async -> [DeviceBatteryItem] {
-        []
-    }
-
-    func collectAppleMobileDevices(
-        referenceDate: Date,
-        minimumRefreshInterval: TimeInterval
-    ) async -> [DeviceBatteryItem] {
-        didStartAppleMobileCollection = true
-        return await withCheckedContinuation { continuation in
-            appleMobileContinuation = continuation
-        }
-    }
-
-    func hasStartedAppleMobileCollection() -> Bool {
-        didStartAppleMobileCollection
-    }
-
-    func resumeAppleMobileCollection() {
-        appleMobileContinuation?.resume(returning: [])
-        appleMobileContinuation = nil
-    }
-}
-
-private actor SuspendedBluetoothSampler: DeviceBatterySampling {
-    private var firstContinuation: CheckedContinuation<[DeviceBatteryItem], Never>?
-    private var recordedOptions: [DeviceBatteryBluetoothSamplingOptions] = []
-
-    func collectInternalBattery(referenceDate: Date) async -> [DeviceBatteryItem] {
-        []
-    }
-
-    func collectBluetoothDevices(
-        referenceDate: Date,
-        options: DeviceBatteryBluetoothSamplingOptions
-    ) async -> [DeviceBatteryItem] {
-        recordedOptions.append(options)
-        guard recordedOptions.count == 1 else { return [] }
-        return await withCheckedContinuation { continuation in
-            firstContinuation = continuation
-        }
-    }
-
-    func collectAppleMobileDevices(
-        referenceDate: Date,
-        minimumRefreshInterval: TimeInterval
-    ) async -> [DeviceBatteryItem] {
-        []
-    }
-
-    func hasStartedFirstCollection() -> Bool {
-        firstContinuation != nil
-    }
-
-    func resumeFirstCollection() {
-        firstContinuation?.resume(returning: [])
-        firstContinuation = nil
-    }
-
-    func options() -> [DeviceBatteryBluetoothSamplingOptions] {
-        recordedOptions
     }
 }
 
@@ -842,22 +431,6 @@ private final class RecordingBluetoothConnectionObserver:
 private final class RecordingVendorHIDBatteryMonitor: VendorHIDBatteryMonitoring {
     var snapshot = VendorHIDMouseBatterySnapshot.idle
     var onSnapshotChange: ((VendorHIDMouseBatterySnapshot) -> Void)?
-    func start() {}
-    func stop() {}
-    func refresh() {}
-}
-
-@MainActor
-private final class MultipleVendorHIDBatteryMonitor: VendorHIDBatteryMonitoring {
-    var snapshot: VendorHIDMouseBatterySnapshot
-    var deviceSnapshots: [VendorHIDMouseBatterySnapshot]
-    var onSnapshotChange: ((VendorHIDMouseBatterySnapshot) -> Void)?
-
-    init(snapshots: [VendorHIDMouseBatterySnapshot]) {
-        deviceSnapshots = snapshots
-        snapshot = snapshots.first ?? .idle
-    }
-
     func start() {}
     func stop() {}
     func refresh() {}

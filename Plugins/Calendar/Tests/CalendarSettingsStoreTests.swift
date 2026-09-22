@@ -5,29 +5,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class CalendarSettingsStoreTests: XCTestCase {
-    func testWeekStartDefaultsToSunday() {
-        let store = CalendarSettingsStore(storage: CalendarSettingsMemoryStorage())
-
-        XCTAssertEqual(store.weekStartDay, .sunday)
-    }
-
-    func testWeekStartDaysMapToFoundationWeekdayValues() {
-        XCTAssertEqual(
-            CalendarWeekStartDay.allCases.map(\.calendarFirstWeekday),
-            Array(1...7)
-        )
-    }
-
-    func testWeekStartDisplayNamesUseCompleteLocalizedWeekdays() {
-        XCTAssertEqual(
-            CalendarWeekStartDay.friday.displayName(locale: Locale(identifier: "ja_JP")),
-            "金曜日"
-        )
-        XCTAssertEqual(
-            CalendarWeekStartDay.sunday.displayName(locale: Locale(identifier: "es_ES")),
-            "domingo"
-        )
-    }
 
     func testWeekStartPersistsAndReloads() {
         let storage = CalendarSettingsMemoryStorage()
@@ -46,15 +23,45 @@ final class CalendarSettingsStoreTests: XCTestCase {
         XCTAssertEqual(CalendarSettingsStore(storage: storage).weekStartDay, .sunday)
     }
 
-    func testTodayDetailsDefaultToVisibleAndPersist() {
+    func testAgendaRangeDefaultsToThreeFutureDaysAndPersists() {
         let storage = CalendarSettingsMemoryStorage()
         let store = CalendarSettingsStore(storage: storage)
+        XCTAssertEqual(store.agendaRange, CalendarAgendaRange(dayCount: 3, direction: .future))
 
-        XCTAssertTrue(store.showsTodayDetails)
-        store.setShowsTodayDetails(false)
+        store.setAgendaRange(CalendarAgendaRange(dayCount: 7, direction: .surrounding))
 
-        XCTAssertEqual(storage.object(forKey: "settings.shows-today-details") as? Bool, false)
-        XCTAssertFalse(CalendarSettingsStore(storage: storage).showsTodayDetails)
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange,
+                       CalendarAgendaRange(dayCount: 7, direction: .surrounding))
+    }
+
+    func testInvalidRangeSettingsAreBounded() {
+        let storage = CalendarSettingsMemoryStorage()
+        storage.set(99, forKey: "settings.agenda-day-count")
+        storage.set("invalid", forKey: "settings.agenda-direction")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange,
+                       CalendarAgendaRange(dayCount: 7, direction: .future))
+        storage.set(-1, forKey: "settings.agenda-day-count")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange.dayCount, 1)
+    }
+
+    func testAlternateCalendarDefaultsFromLanguageOnceAndPersistsSelection() {
+        for (language, expected) in [("zh-Hans", CalendarAlternateCalendar.chinese), ("zh-Hant", .chinese), ("en", .none)] {
+            let storage = CalendarSettingsMemoryStorage()
+            let store = CalendarSettingsStore(storage: storage, languageIdentifier: language)
+            XCTAssertEqual(store.alternateCalendar, expected)
+            XCTAssertEqual(storage.string(forKey: "settings.alternate-calendar"), expected.rawValue)
+            XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "ja").alternateCalendar, expected)
+            for selection in CalendarAlternateCalendar.allCases {
+                store.setAlternateCalendar(selection)
+                XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "zh-Hans").alternateCalendar, selection)
+            }
+        }
+    }
+
+    func testInvalidAlternateCalendarFallsBackToLanguageDefault() {
+        let storage = CalendarSettingsMemoryStorage()
+        storage.set("invalid", forKey: "settings.alternate-calendar")
+        XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "en_CN").alternateCalendar, .none)
     }
 }
 

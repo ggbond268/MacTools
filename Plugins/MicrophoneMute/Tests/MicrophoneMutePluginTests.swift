@@ -26,10 +26,10 @@ final class MicrophoneMutePluginTests: XCTestCase {
         let unmuted = MicrophoneMutePlugin(controller: MockController(muteState: false))
         let muted = MicrophoneMutePlugin(controller: MockController(muteState: true))
 
-        XCTAssertFalse(unmuted.primaryPanelState.isOn)
-        XCTAssertEqual(unmuted.primaryPanelState.subtitle, "未静音")
-        XCTAssertTrue(muted.primaryPanelState.isOn)
-        XCTAssertEqual(muted.primaryPanelState.subtitle, "已静音")
+        XCTAssertFalse(unmuted.rowState.isOn)
+        XCTAssertEqual(unmuted.rowState.subtitle, "未静音")
+        XCTAssertTrue(muted.rowState.isOn)
+        XCTAssertEqual(muted.rowState.subtitle, "已静音")
     }
 
     func testSwitchUpdatesStateAndNotifiesHost() {
@@ -39,8 +39,8 @@ final class MicrophoneMutePluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
         XCTAssertEqual(notificationCount, 1)
     }
 
@@ -51,8 +51,8 @@ final class MicrophoneMutePluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testFailureRelocalizesAndClearsOnSamePluginInstance() async throws {
@@ -73,10 +73,10 @@ final class MicrophoneMutePluginTests: XCTestCase {
 
         PluginRuntimeLocalization.source.setPreference("en")
         plugin.handleAction(.setSwitch(true))
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Failed to mute microphone.")
+        XCTAssertEqual(plugin.rowState.errorMessage, "Failed to mute microphone.")
 
         PluginRuntimeLocalization.source.setPreference("ar")
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "فشل كتم صوت الميكروفون.")
+        XCTAssertEqual(plugin.rowState.errorMessage, "فشل كتم صوت الميكروفون.")
         let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
         let failure = try await plugin.beginAction(
             ActionInvocation(reference: reference, source: .test, mode: .background)
@@ -85,8 +85,8 @@ final class MicrophoneMutePluginTests: XCTestCase {
 
         controller.setMuteResult = true
         plugin.handleAction(.setSwitch(true))
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testActionCatalogProvidesIdempotentMuteChoicesAndRunLinkConfirmation() async throws {
@@ -106,7 +106,7 @@ final class MicrophoneMutePluginTests: XCTestCase {
         XCTAssertEqual(plugin.actionDefinitions.first?.externalInvocationPolicy, .confirmAlways)
         XCTAssertNotNil(plugin.actionDefinitions.first?.confirmation)
         XCTAssertEqual(result, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testRunLinkConfirmationSwitchesLanguageWithoutRecreatingPlugin() throws {

@@ -39,11 +39,16 @@ private struct AppUninstallerProvider: PluginProvider {
 }
 
 @MainActor
-final class AppUninstallerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsPresenting, PluginActionProviding, PluginActionExecutionHostContextConsuming {
+final class AppUninstallerPlugin: MacToolsPlugin, PluginSettingsPresenting, PluginActionProviding, PluginActionExecutionHostContextConsuming {
     static let pluginID = "app-uninstaller"
     static let reviewActionID = "open-review"
+    var panelItems: [PluginPanelItem] {
+        [.row(id: "control", initialPlacement: .featurePanel,
+              descriptor: rowDescriptor, state: rowState,
+              action: { [weak self] in self?.handleAction($0) })]
+    }
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    private let rowDescriptor: PluginPanelRowDescriptor
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
@@ -63,17 +68,17 @@ final class AppUninstallerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSett
         metadata = PluginMetadata(id: Self.pluginID, title: localization.string("metadata.title", defaultValue: "应用卸载"),
             iconName: "app.badge.checkmark", iconTint: .orange, order: 93,
             defaultDescription: localization.string("metadata.description", defaultValue: "检查归属证据，确认后将应用与选定的关联文件移入废纸篓。"))
-        primaryPanelDescriptor = .init(controlStyle: .button, menuActionBehavior: .dismissBeforeHandling,
-                                     buttonTitleProvider: { localization.string("review.open", defaultValue: "检查") })
+        rowDescriptor = .init(controlStyle: .button, menuActionBehavior: .dismissBeforeHandling,
+                              buttonTitleProvider: { localization.string("review.open", defaultValue: "检查") })
         controller.onStateChange = { [weak self] in self?.onStateChange?() }
         controller.openHomebrew = { [weak self] in self?.actionExecutionHostContext?.openProviderSettings(providerID: "homebrew") }
         controller.openXcodeStorage = { [weak self] in self?.actionExecutionHostContext?.openProviderSettings(providerID: "xcode-clean") }
         controller.openFullDiskAccess = { [weak self] in self?.handlePermissionAction(id: "full-disk-access") }
     }
 
-    var primaryPanelState: PluginPanelState {
-        .init(subtitle: metadata.defaultDescription, isOn: controller.isScanning || controller.isRemoving, isExpanded: false,
-              isEnabled: true, isVisible: true, detail: nil, errorMessage: controller.error)
+    private var rowState: PluginPanelRowState {
+        .init(subtitle: metadata.defaultDescription, isOn: controller.isScanning || controller.isRemoving,
+              isEnabled: true, isAvailable: true, detail: nil, errorMessage: controller.error)
     }
     var shortcutDefinitions: [PluginShortcutDefinition] { [] }
     var permissionRequirements: [PluginPermissionRequirement] {

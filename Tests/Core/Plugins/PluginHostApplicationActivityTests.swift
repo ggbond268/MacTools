@@ -15,7 +15,7 @@ final class PluginHostApplicationActivityTests: XCTestCase {
         let host = PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             applicationActivityObserver: observer
@@ -37,7 +37,7 @@ final class PluginHostApplicationActivityTests: XCTestCase {
         let host = PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             applicationActivityObserver: observer,
@@ -65,7 +65,7 @@ final class PluginHostApplicationActivityTests: XCTestCase {
         let host = PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             applicationActivityObserver: observer,

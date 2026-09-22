@@ -67,7 +67,7 @@
   },
   "version": "1.0.0",
   "minHostVersion": "1.3.1",
-  "pluginKitVersion": 6,
+  "pluginKitVersion": 7,
   "bundleRelativePath": "Siri.bundle",
   "factoryClass": "SiriPlugin.SiriPluginFactory",
   "build": {
@@ -75,8 +75,7 @@
     "scheme": "SiriPlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": false,
+    "panelItems": ["row"],
     "settings": "form"
   },
   "permissions": [

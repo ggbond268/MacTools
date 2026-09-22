@@ -6,8 +6,8 @@ import MacToolsPluginKit
 final class AutoHideMenuBarPluginTests: XCTestCase {
     func testInitialStateReflectsExactMode() {
         let plugin = makePlugin(mode: .desktopOnly)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "On Desktop Only")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "On Desktop Only")
     }
 
     func testAutomationPermissionIsReportedAsOnDemand() {
@@ -23,15 +23,15 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(true))
         plugin.handleAction(.setSwitch(false))
         XCTAssertEqual(controller.calls, [.always, .never])
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testSwitchFailureKeepsStateAndReportsError() {
         let controller = MockMenuBarAutoHideController(mode: .never, shouldFail: true)
         let plugin = makePlugin(controller: controller)
         plugin.handleAction(.setSwitch(true))
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testRefreshPublishesExternalModeChange() {
@@ -41,8 +41,8 @@ final class AutoHideMenuBarPluginTests: XCTestCase {
         plugin.onStateChange = { notificationCount += 1 }
         controller.mode = .fullScreenOnly
         plugin.refresh()
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "In Full Screen Only")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "In Full Screen Only")
         XCTAssertEqual(notificationCount, 1)
     }
 

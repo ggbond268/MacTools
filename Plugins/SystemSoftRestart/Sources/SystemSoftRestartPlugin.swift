@@ -35,11 +35,26 @@ private struct SystemSoftRestartPluginProvider: PluginProvider {
 
 @MainActor
 final class SystemSoftRestartPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    DropZoneAnchorProviding,
-    PluginActionProviding
-{
+    MacToolsPlugin, DropZoneAnchorProviding, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     static let pluginID = "system-soft-restart"
 
     private enum StorageKey {
@@ -58,7 +73,7 @@ final class SystemSoftRestartPlugin:
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var anchorRectProvider: (() -> NSRect?)?
     var onStateChange: (() -> Void)?
@@ -102,7 +117,7 @@ final class SystemSoftRestartPlugin:
                 defaultValue: "重启 macOS 用户服务，尝试恢复输入法、音频、AirDrop 等运行时异常"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: {
@@ -161,13 +176,12 @@ final class SystemSoftRestartPlugin:
             : .available
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: isExecuting,
-            isExpanded: false,
             isEnabled: runner.isAvailable && !isExecuting,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

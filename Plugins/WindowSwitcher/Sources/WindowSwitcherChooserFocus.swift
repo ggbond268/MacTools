@@ -1,14 +1,12 @@
 import AppKit
+import MacToolsPluginKit
 
 /// Owns temporary application focus for the chooser and restores its origin on cancellation.
 @MainActor
 final class WindowSwitcherChooserFocus {
-    private let hostPID: pid_t
-    private let frontmostPID: () -> pid_t?
     private let activateHost: () -> Void
-    private let activateApplication: (pid_t) -> Void
-    private var originalPID: pid_t?
-    private var acquired = false
+    private let restoration: PluginPanelFocusRestoration
+    private var isPrepared = false
 
     init(
         hostPID: pid_t = ProcessInfo.processInfo.processIdentifier,
@@ -23,30 +21,28 @@ final class WindowSwitcherChooserFocus {
             NSRunningApplication(processIdentifier: pid)?.activate(options: [])
         }
     ) {
-        self.hostPID = hostPID
-        self.frontmostPID = frontmostPID
         self.activateHost = activateHost
-        self.activateApplication = activateApplication
+        restoration = PluginPanelFocusRestoration(
+            captureRestoration: {
+                guard let pid = frontmostPID(), pid != hostPID else { return nil }
+                return { activateApplication(pid) }
+            },
+            canRestore: { frontmostPID() == hostPID }
+        )
     }
 
     func prepare() {
-        if !acquired {
-            originalPID = frontmostPID()
-            acquired = true
-        }
+        isPrepared = true
+        restoration.prepareForPresentation()
     }
 
     func acquire() {
         prepare()
-        // The caller orders the panel before requesting activation. Do not
-        // activate all host windows or recapture the origin on retry.
         activateHost()
     }
 
     func release(restoring: Bool) {
-        defer { acquired = false; originalPID = nil }
-        guard acquired, restoring, frontmostPID() == hostPID,
-              let originalPID, originalPID != hostPID else { return }
-        activateApplication(originalPID)
+        restoration.dismiss(wasVisible: isPrepared, restoringFocus: restoring)
+        isPrepared = false
     }
 }

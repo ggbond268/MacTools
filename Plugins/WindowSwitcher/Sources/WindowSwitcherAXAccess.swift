@@ -11,12 +11,18 @@ protocol WindowSwitcherAXAccess: Sendable {
     func windowAttributes(_ window: AXUIElement) -> [Any]?
     func windowNumber(_ window: AXUIElement) -> CGWindowID?
     func minimized(_ window: AXUIElement) -> Bool?
+    func isFullscreen(_ window: AXUIElement) -> Bool?
+    func boolValue(_ element: AXUIElement, attribute: String) -> Bool?
     func set(_ element: AXUIElement, attribute: String, value: Bool) -> AXError
+    func set(_ element: AXUIElement, attribute: String, window: AXUIElement) -> AXError
     func perform(_ element: AXUIElement, action: String) -> AXError
 }
 
 extension WindowSwitcherAXAccess {
     func windowNumber(_ window: AXUIElement) -> CGWindowID? { nil }
+    func isFullscreen(_ window: AXUIElement) -> Bool? { nil }
+    func boolValue(_ element: AXUIElement, attribute: String) -> Bool? { nil }
+    func set(_ element: AXUIElement, attribute: String, window: AXUIElement) -> AXError { .cannotComplete }
 }
 
 struct SystemWindowSwitcherAXAccess: WindowSwitcherAXAccess {
@@ -64,13 +70,27 @@ struct SystemWindowSwitcherAXAccess: WindowSwitcherAXAccess {
     }
 
     func minimized(_ window: AXUIElement) -> Bool? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value) == .success else { return nil }
-        return value as? Bool
+        boolValue(window, attribute: kAXMinimizedAttribute as String)
+    }
+
+    func isFullscreen(_ window: AXUIElement) -> Bool? {
+        boolValue(window, attribute: "AXFullScreen")
+    }
+
+    func boolValue(_ element: AXUIElement, attribute: String) -> Bool? {
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success else { return nil }
+        if let value = raw as? Bool { return value }
+        if let number = raw as? NSNumber { return number.boolValue }
+        return nil
     }
 
     func set(_ element: AXUIElement, attribute: String, value: Bool) -> AXError {
         AXUIElementSetAttributeValue(element, attribute as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
+    }
+
+    func set(_ element: AXUIElement, attribute: String, window: AXUIElement) -> AXError {
+        AXUIElementSetAttributeValue(element, attribute as CFString, window)
     }
 
     func perform(_ element: AXUIElement, action: String) -> AXError {

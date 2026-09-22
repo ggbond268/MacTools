@@ -45,7 +45,7 @@ The package declares `uninstallDataPolicy: removePrivateData`. The host removes 
 | Factory | `ScreenshotPlugin.ScreenshotPluginFactory` |
 | Bundle / scheme | `Screenshot.bundle` / `ScreenshotPlugin` |
 | Initial package version | `1.0.0` |
-| Compatibility | PluginKit 6, MacTools 1.3.0 or later |
+| Compatibility | PluginKit 7, MacTools 1.3.1 or later |
 | Host surfaces | Primary panel and settings form; no component panel |
 | Permission | `screen-recording` |
 | Canonical actions and shortcut IDs | `capture`, `quick-capture` |
@@ -59,6 +59,8 @@ The source manifest contains all 11 marketplace metadata locales. The plugin str
 ### Capture presentation architecture
 
 The plugin prepares one hidden nonactivating `NSPanel` per display when activated. This prepares native controls, not a screenshot or recording stream. Each explicit invocation acquires fresh opaque display images before ordering any panel. macOS 26 uses the public rectangle-based `SCScreenshotManager` API without shareable-content discovery; earlier systems use display filters. Requests run with at most three concurrent display jobs per session. Failures propagate to the user; acquisition does not fall back to obsolete CoreGraphics capture APIs. Cancellation rejects late results; it does not claim to cancel a committed operating-system screenshot request. Frame callbacks have a two-second failure deadline, not an artificial presentation delay.
+
+Before each presentation, the pool checks each cached panel's public `isOnActiveSpace` property, including hidden panels. If AppKit reports an inactive Space, only that display's panel is closed and recreated; unaffected panels retain their controls. Panels also use `canJoinAllApplications` to join other apps' full-screen Spaces without participating in Stage Manager's window layout. Both APIs are available throughout the macOS 14+ support range. This check runs after image acquisition and adds no idle polling or Space-change observers.
 
 On macOS 26 and later, screenshot configuration explicitly sets `ignoreShadows = false` to preserve system-drawn window framing, including glass edge highlights and shadows within the captured region. Relying on the default can remove these effects from the source image before either preview or export. This is separate from optional annotation shadows and does not reconstruct window decorations.
 

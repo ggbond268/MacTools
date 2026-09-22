@@ -10,19 +10,19 @@ final class FixDamagedAppPluginTests: XCTestCase {
         let plugin = FixDamagedAppPlugin()
 
         XCTAssertEqual(plugin.metadata.id, "fix-damaged-app")
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .button)
-        XCTAssertEqual(plugin.primaryPanelDescriptor.menuActionBehavior, .dismissBeforeHandling)
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
-        XCTAssertNil(plugin.componentPanel)
+        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .button)
+        XCTAssertEqual(plugin.rowDescriptor.menuActionBehavior, .dismissBeforeHandling)
+        XCTAssertTrue(plugin.rowState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
+        XCTAssertEqual(plugin.panelItems.map(\.id), ["control", "quick-control"])
+        XCTAssertNil(plugin.panelItems.last?.initialPlacement)
     }
 
     func testManifestPanelCapabilitiesMatchRuntimeContract() throws {
         struct Manifest: Decodable {
             struct Capabilities: Decodable {
-                let primaryPanel: Bool
-                let componentPanel: Bool
+                let panelItems: [String]
             }
 
             let capabilities: Capabilities
@@ -38,8 +38,7 @@ final class FixDamagedAppPluginTests: XCTestCase {
         )
         let plugin = FixDamagedAppPlugin()
 
-        XCTAssertEqual(manifest.capabilities.primaryPanel, plugin.primaryPanel != nil)
-        XCTAssertEqual(manifest.capabilities.componentPanel, plugin.componentPanel != nil)
+        XCTAssertEqual(manifest.capabilities.panelItems, plugin.panelItems.map { $0.kind.rawValue })
     }
 
     func testCanonicalActionWaitsForRepairCompletion() async throws {
@@ -62,11 +61,11 @@ final class FixDamagedAppPluginTests: XCTestCase {
         for _ in 0 ..< 20 where repair.paths.isEmpty { await Task.yield() }
 
         XCTAssertEqual(repair.paths, [appURL.path])
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isEnabled)
         repair.finish()
         let result = await resultTask.value
         XCTAssertEqual(result, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
+        XCTAssertTrue(plugin.rowState.isEnabled)
     }
 
     func testCanonicalActionTreatsDismissedChooserAsCancellation() async throws {
@@ -103,7 +102,7 @@ final class FixDamagedAppPluginTests: XCTestCase {
         ).result()
 
         XCTAssertEqual(result, .failed(message: "Repair rejected"))
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Repair rejected")
+        XCTAssertEqual(plugin.rowState.errorMessage, "Repair rejected")
     }
 
     func testCanonicalActionMapsAuthorizationCancellation() async throws {
@@ -118,7 +117,7 @@ final class FixDamagedAppPluginTests: XCTestCase {
         ).result()
 
         XCTAssertEqual(result, .cancelled)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testCanonicalActionCancellationCancelsTheRepairOperation() async throws {
@@ -133,7 +132,7 @@ final class FixDamagedAppPluginTests: XCTestCase {
             ActionInvocation(reference: reference, source: .test, mode: .foreground)
         )
         let task = Task { await handle.result() }
-        for _ in 0 ..< 20 where plugin.primaryPanelState.isEnabled {
+        for _ in 0 ..< 20 where plugin.rowState.isEnabled {
             await Task.yield()
         }
 
@@ -141,7 +140,7 @@ final class FixDamagedAppPluginTests: XCTestCase {
 
         let result = await task.value
         XCTAssertEqual(result, .cancelled)
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
+        XCTAssertTrue(plugin.rowState.isEnabled)
     }
 
     nonisolated func testDefaultProcessExecutionTerminatesItsProcessGroupOnCancellation() async throws {

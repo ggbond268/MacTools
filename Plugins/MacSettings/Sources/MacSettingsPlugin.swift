@@ -100,18 +100,15 @@ private struct MacSettingsPluginProvider: PluginProvider {
 
 @MainActor
 final class MacSettingsPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginSettingsPresenting,
-    PluginSettingsSearchFocusing,
-    PluginActionProviding,
-    PluginActionExecutionHostContextConsuming,
-    PluginPortablePreferencesProviding,
-    PluginPortablePreferencesRestorationReporting,
-    PluginPortablePreferencesActionReferencesProviding,
-    PluginActionReferenceBackupProviding,
-    PluginPersistentPreferencesChangeSignaling
-{
+    MacToolsPlugin, PluginSettingsPresenting, PluginSettingsSearchFocusing, PluginActionProviding, PluginActionExecutionHostContextConsuming, PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting, PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding, PluginPersistentPreferencesChangeSignaling {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ActionID {
         static let open = "open"
         static let openFavorites = "open-favorites"
@@ -153,7 +150,7 @@ final class MacSettingsPlugin:
             )
         )
     }
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -208,13 +205,12 @@ final class MacSettingsPlugin:
         }
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: MacSettingsStrings.format("Pinned: %@ · Needs attention: %@", "\(controller.favoriteIDs.count)", "\(controller.attentionCount)"),
             isOn: controller.attentionCount > 0,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? featurePanelDetail : nil,
             errorMessage: nil
         )

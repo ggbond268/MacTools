@@ -61,7 +61,26 @@ private struct StageManagerPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class StageManagerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding {
+final class StageManagerPlugin: MacToolsPlugin, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let toggle = "toggle"
@@ -69,7 +88,7 @@ final class StageManagerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginAction
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -108,15 +127,14 @@ final class StageManagerPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginAction
         self.isStageManagerEnabled = stateReader()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: isStageManagerEnabled
                 ? localization.string("panel.subtitle.enabled", defaultValue: "已开启")
                 : localization.string("panel.subtitle.disabled", defaultValue: "已关闭"),
             isOn: isStageManagerEnabled,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

@@ -190,8 +190,12 @@ final class ActionRegistry: ObservableObject {
         providers = nextProviders
         definitions = nextDefinitions
         catalogByReference = nextCatalog
-        catalogEntries = nextCatalogOrder
-        issues = collectedIssues
+        if catalogEntries != nextCatalogOrder {
+            catalogEntries = nextCatalogOrder
+        }
+        if issues != collectedIssues {
+            issues = collectedIssues
+        }
         if previousDefinitions != nextDefinitions || previousCatalogEntries != nextCatalogOrder {
             catalogRevision &+= 1
         }

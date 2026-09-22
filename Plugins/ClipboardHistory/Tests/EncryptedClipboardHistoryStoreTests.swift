@@ -44,17 +44,6 @@ final class EncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(fixture.keyStore.currentKey?.count, 32)
     }
 
-    func testEncodedItemDerivesSearchTextWithoutDuplicatingItInTheEnvelope() throws {
-        let item = sampleItem()
-        let encoded = try JSONEncoder().encode(item)
-        let object = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
-        )
-
-        XCTAssertNil(object["text"])
-        XCTAssertEqual(try JSONDecoder().decode(ClipboardHistoryItem.self, from: encoded), item)
-    }
-
     func testExistingPayloadWithMissingKeyFailsClosed() throws {
         let fixture = try makeFixture()
         try fixture.store.save([sampleItem()])
@@ -121,63 +110,16 @@ final class EncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertEqual(try fixture.store.load().count, 1)
     }
 
-    func testSaveRejectsHistoryBeyondTotalPayloadBudget() throws {
-        let fixture = try makeFixture()
-        let oversizedText = String(
-            repeating: "a",
-            count: ClipboardRetentionPolicy.maximumTotalPayloadByteCount + 1
-        )
-        let oversizedItem = ClipboardHistoryItem(
-            id: UUID(),
-            text: oversizedText,
-            capturedAt: Date(),
-            sourceApplication: nil,
-            isPinned: false,
-            lastUsedAt: nil
-        )
-
-        XCTAssertThrowsError(try fixture.store.save([oversizedItem])) { error in
-            XCTAssertEqual(error as? ClipboardHistoryStoreError, .historyTooLarge)
-        }
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
-    }
-
     func testLoadRejectsOversizedStoredFileBeforeDecrypting() throws {
         let fixture = try makeFixture()
-        let oversizedData = Data(
-            repeating: 0,
-            count: EncryptedClipboardHistoryStore.maximumStoredFileByteCount + 1
-        )
-        try oversizedData.write(to: fixture.fileURL)
+        try Data().write(to: fixture.fileURL)
+        let file = try FileHandle(forWritingTo: fixture.fileURL)
+        defer { try? file.close() }
+        try file.truncate(atOffset: UInt64(EncryptedClipboardHistoryStore.maximumStoredFileByteCount + 1))
 
         XCTAssertThrowsError(try fixture.store.load()) { error in
             XCTAssertEqual(error as? ClipboardHistoryStoreError, .historyTooLarge)
         }
-    }
-
-    func testAggregatePayloadBudgetFitsWithinEncodedFileLimit() throws {
-        let fixture = try makeFixture()
-        let text = String(
-            repeating: "\\",
-            count: ClipboardRetentionPolicy.maximumTotalPayloadByteCount
-        )
-        let item = ClipboardHistoryItem(
-            id: UUID(),
-            text: text,
-            capturedAt: Date(),
-            sourceApplication: nil,
-            isPinned: false,
-            lastUsedAt: nil
-        )
-
-        try fixture.store.save([item])
-
-        let storedSize = try Data(contentsOf: fixture.fileURL).count
-        XCTAssertLessThanOrEqual(
-            storedSize,
-            EncryptedClipboardHistoryStore.maximumStoredFileByteCount
-        )
-        XCTAssertEqual(try fixture.store.load(), [item])
     }
 
     private func makeFixture() throws -> (

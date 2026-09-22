@@ -180,10 +180,11 @@ final class PluginCatalogManager {
         )
     }
 
-    func refreshCatalog() async {
+    @discardableResult
+    func refreshCatalog() async -> InstalledPluginMetadata? {
         guard let catalogProvider else {
             status = .unavailable
-            return
+            return nil
         }
 
         status.isRefreshing = true
@@ -203,7 +204,7 @@ final class PluginCatalogManager {
             status.errorMessage = error.localizedDescription
         }
 
-        dynamicPluginManager.rebuildManagementItems(catalogSnapshot: snapshot)
+        return dynamicPluginManager.rebuildManagementItems(catalogSnapshot: snapshot)
     }
 
     func installPlugin(id: String) async throws {

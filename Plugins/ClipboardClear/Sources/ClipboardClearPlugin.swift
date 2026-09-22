@@ -20,7 +20,26 @@ private struct ClipboardClearPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class ClipboardClearPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding {
+final class ClipboardClearPlugin: MacToolsPlugin, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     static let pluginID = "clipboard-clear"
     static let pluginOrder: Int = 120
 
@@ -34,7 +53,7 @@ final class ClipboardClearPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActi
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     init(
         pasteboard: NSPasteboard = .general,
@@ -53,7 +72,7 @@ final class ClipboardClearPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActi
                 defaultValue: "一键清空当前剪贴板内容"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.clear", defaultValue: "清空") }
@@ -93,13 +112,12 @@ final class ClipboardClearPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActi
             : .unavailable(metadata.defaultDescription)
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: canClearClipboard,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

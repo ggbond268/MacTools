@@ -74,7 +74,7 @@ final class PreferencesBackupChangeReporterTests: XCTestCase {
     }
 
     func testPluginDisplayStoreReportsOnlyEffectiveChanges() {
-        let store = PluginDisplayPreferencesStore(
+        let store = PluginOrderingStore(
             userDefaults: defaults,
             preferencesBackupChangeReporter: reporter
         )

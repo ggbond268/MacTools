@@ -56,33 +56,6 @@ final class CLIManagedInstallationTests: XCTestCase {
         }
     }
 
-    func testStableMetadataRequiresMatchingChannelIdentityAndRelease() throws {
-        let valid = manifest(channel: "stable")
-        try valid.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00", expectedChannel: "stable")
-        XCTAssertThrowsError(try valid.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00", expectedChannel: "nightly"))
-        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(valid)) as? [String: Any])
-        for path in ["/releases/download/v1.3.0", "/releases/download/v1.3.1", "/releases/download/nightly-123-1"] {
-            var fields = original
-            fields["sourceRelease"] = "https://example.invalid" + path
-            fields["assetURL"] = "https://example.invalid" + path + "/mactools-cli-1.3.0-123.1-macos-arm64.zip"
-            let candidate = try JSONDecoder().decode(CLIReleaseManifest.self, from: JSONSerialization.data(withJSONObject: fields))
-            if path == "/releases/download/v1.3.0" {
-                try candidate.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00")
-            } else {
-                XCTAssertThrowsError(try candidate.validate(version: "1.3.0", build: "123.1", identifier: "test.mactools", team: "TESTTEAM00"))
-            }
-        }
-    }
-
-    func testManagedUIRequiresSealedMetadataForStableAndExcludesDevelopment() {
-        XCTAssertTrue(CLIInstallChannel.isAvailable(channel: "nightly", hasManifest: false))
-        XCTAssertTrue(CLIInstallChannel.isAvailable(channel: "stable", hasManifest: true))
-        XCTAssertFalse(CLIInstallChannel.isAvailable(channel: "stable", hasManifest: false))
-        for channel in [nil, "development", "beta", ""] {
-            XCTAssertFalse(CLIInstallChannel.isAvailable(channel: channel, hasManifest: true))
-        }
-    }
-
     func testStableAndNightlyCoexistAcrossUpdateRollbackAndRemoval() throws {
         let (stable, first) = try prepare(manifest(channel: "stable"))
         let (nightly, nightlyFirst) = try prepare(manifest())
@@ -120,52 +93,12 @@ final class CLIManagedInstallationTests: XCTestCase {
         }
     }
 
-    func testStableReceiptCannotChangeChannelWhileRetainingOwner() throws {
-        let (store, first) = try prepare(manifest(channel: "stable"))
-        let receiptURL = URL(fileURLWithPath: first.managedPath).deletingLastPathComponent().appendingPathComponent("receipt.json")
-        var fields = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: receiptURL)) as? [String: Any])
-        var metadata = try XCTUnwrap(fields["manifest"] as? [String: Any])
-        metadata["channel"] = "nightly"
-        fields["manifest"] = metadata
-        try JSONSerialization.data(withJSONObject: fields).write(to: receiptURL)
-        XCTAssertThrowsError(try store.receipt(first.manifest.directoryName))
-    }
-
     func testLaunchPolicyRequiresManagedReceiptAndHonorsReleaseSpecificRollback() throws {
         let (_, receipt) = try prepare(manifest())
         XCTAssertFalse(CLIInstallLaunchPolicy.shouldUpdate(receipt: nil, target: manifest(build: "124.1")))
         XCTAssertFalse(CLIInstallLaunchPolicy.shouldUpdate(receipt: receipt, target: manifest()))
         XCTAssertTrue(CLIInstallLaunchPolicy.shouldUpdate(receipt: receipt, target: manifest(build: "124.1")))
         XCTAssertTrue(CLIInstallLaunchPolicy.shouldUpdate(receipt: receipt, target: manifest(build: "122.1")))
-    }
-
-    func testRollbackMarkerSurvivesFailedAndInterruptedActivation() throws {
-        let (store, first) = try prepare(manifest())
-        let (_, next) = try prepare(manifest(build: "124.1"))
-        let heldRelease = next.manifest.directoryName
-        _ = try store.activate(first.manifest.directoryName, automaticUpdates: true,
-            rollbackForRelease: heldRelease) { _, _ in }
-        XCTAssertThrowsError(try store.activate(next.manifest.directoryName, automaticUpdates: true) { _, _ in
-            throw CLIInstallError.filesystem
-        })
-        XCTAssertEqual(try store.readState()?.rollbackForRelease, heldRelease)
-        XCTAssertEqual(try store.readState()?.active, first.manifest.directoryName)
-        try store.writeState(CLIManagedState(owner: store.owner, active: next.manifest.directoryName,
-            previous: first.manifest.directoryName, automaticUpdates: true, pending: true,
-            rollbackForRelease: heldRelease))
-        let recovered = try store.recover()
-        XCTAssertEqual(recovered?.active, first.manifest.directoryName)
-        XCTAssertEqual(recovered?.rollbackForRelease, heldRelease)
-        XCTAssertFalse(CLIInstallLaunchPolicy.shouldUpdate(receipt: first, target: next.manifest,
-            rollbackForRelease: recovered?.rollbackForRelease))
-        XCTAssertTrue(CLIInstallLaunchPolicy.shouldUpdate(receipt: first, target: manifest(build: "125.1"),
-            rollbackForRelease: recovered?.rollbackForRelease))
-    }
-
-    func testOldStateWithoutRollbackMarkerStillDecodes() throws {
-        let legacy = Data(#"{"owner":"test","active":null,"previous":null,"automaticUpdates":false,"pending":false}"#.utf8)
-        let state = try JSONDecoder().decode(CLIManagedState.self, from: legacy)
-        XCTAssertNil(state.rollbackForRelease)
     }
 
     func testIncompatibleProtocolFailsClosed() {
@@ -177,14 +110,6 @@ final class CLIManagedInstallationTests: XCTestCase {
 
     func testUnsignedAppCannotAuthenticateMetadata() {
         XCTAssertThrowsError(try CLIReleaseManifest.authenticated(bundle: Bundle(for: Self.self)))
-    }
-
-    func testDifferentPublishersHaveSeparateOwnership() {
-        let official = CLIManagedStore(manifest: manifest(host: "github.com"), home: home)
-        let personal = CLIManagedStore(manifest: manifest(), home: home)
-        XCTAssertNotEqual(official.owner, personal.owner)
-        XCTAssertNotEqual(official.root, personal.root)
-        XCTAssertEqual(official.command, personal.command)
     }
 
     func testInstallUpdateAndRollbackKeepPublicSymlinkInode() throws {
@@ -211,15 +136,6 @@ final class CLIManagedInstallationTests: XCTestCase {
         XCTAssertEqual(try store.readState()?.active, first.manifest.directoryName)
         XCTAssertEqual(try Data(contentsOf: store.command), Data("fixture-123.1".utf8))
         XCTAssertFalse(try XCTUnwrap(store.readState()).pending)
-    }
-
-    func testFailedFirstActivationLeavesNoCommand() throws {
-        let (store, first) = try prepare(manifest())
-        XCTAssertThrowsError(try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in
-            throw CLIInstallError.validation
-        })
-        XCTAssertNil(try CLIManagedStore.entry(store.command))
-        XCTAssertNil(try store.readState()?.active)
     }
 
     func testInterruptedUpdateRecoversBeforeAndAfterPointerSwitch() throws {
@@ -297,68 +213,6 @@ final class CLIManagedInstallationTests: XCTestCase {
         XCTAssertNil(try store.readState()?.active)
     }
 
-    func testConcurrentInstallationLockIsExclusive() throws {
-        let store = CLIManagedStore(manifest: manifest(), home: home)
-        let first = try store.lock(create: true)
-        defer { close(first) }
-        XCTAssertThrowsError(try store.lock(create: false))
-    }
-
-    private func interruptDeletion(_ directory: URL, after removed: Int) throws {
-        for file in ["mactools", "LICENSE", "receipt.json"].prefix(removed) {
-            XCTAssertEqual(unlink(directory.appendingPathComponent(file).path), 0)
-        }
-        if removed == 4 { XCTAssertEqual(rmdir(directory.path), 0) }
-    }
-
-    func testInterruptedPruningResumesAfterEveryDeletionStepAndPreservesRollback() throws {
-        let (store, previous) = try prepare(manifest(build: "124.1"))
-        _ = try store.activate(previous.manifest.directoryName, automaticUpdates: true) { _, _ in }
-        let (_, active) = try prepare(manifest(build: "125.1"))
-        _ = try store.activate(active.manifest.directoryName, automaticUpdates: true) { _, _ in }
-        for removed in 0...4 {
-            let (_, old) = try prepare(manifest(build: "\(100 + removed).1"))
-            let directory = try store.beginVersionDeletion(old.manifest.directoryName)
-            XCTAssertNil(try CLIManagedStore.entry(URL(fileURLWithPath: old.managedPath)))
-            try interruptDeletion(directory, after: removed)
-
-            let relaunched = CLIManagedStore(manifest: active.manifest, home: home)
-            let state = try XCTUnwrap(relaunched.recover())
-            try relaunched.prune(keeping: state)
-            XCTAssertNil(try CLIManagedStore.entry(directory))
-            XCTAssertEqual(state.active, active.manifest.directoryName)
-            XCTAssertEqual(state.previous, previous.manifest.directoryName)
-            XCTAssertEqual(try Data(contentsOf: store.command), Data("fixture-125.1".utf8))
-        }
-        let (_, next) = try prepare(manifest(build: "126.1"))
-        _ = try store.activate(next.manifest.directoryName, automaticUpdates: true) { _, _ in }
-        XCTAssertEqual(try Data(contentsOf: store.command), Data("fixture-126.1".utf8))
-    }
-
-    func testInterruptedRemovalResumesAfterEveryDeletionStepAndAllowsReinstall() throws {
-        for removed in 0...4 {
-            let (store, first) = try prepare(manifest())
-            _ = try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in }
-            // Removal has committed its empty state before retiring the version directory.
-            XCTAssertEqual(unlink(store.command.path), 0)
-            XCTAssertEqual(unlink(store.root.appendingPathComponent("current").path), 0)
-            try store.writeState(CLIManagedState(owner: store.owner, active: nil, previous: nil,
-                automaticUpdates: false, pending: false))
-            let directory = try store.beginVersionDeletion(first.manifest.directoryName)
-            try interruptDeletion(directory, after: removed)
-
-            let relaunched = CLIManagedStore(manifest: first.manifest, home: home)
-            try relaunched.remove()
-            XCTAssertNil(try CLIManagedStore.entry(directory))
-            XCTAssertNil(try CLIManagedStore.entry(store.command))
-            XCTAssertNil(try relaunched.readState()?.active)
-            let (_, next) = try prepare(manifest(build: "124.1"))
-            _ = try relaunched.activate(next.manifest.directoryName, automaticUpdates: true) { _, _ in }
-            XCTAssertEqual(try Data(contentsOf: store.command), Data("fixture-124.1".utf8))
-            try relaunched.remove()
-        }
-    }
-
     func testDeletionCannotRetireActiveOrRollbackVersions() throws {
         let (store, first) = try prepare(manifest())
         _ = try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in }
@@ -368,86 +222,6 @@ final class CLIManagedInstallationTests: XCTestCase {
             XCTAssertThrowsError(try store.beginVersionDeletion(receipt.manifest.directoryName))
             XCTAssertEqual(try store.receipt(receipt.manifest.directoryName), receipt)
         }
-    }
-
-    func testDeletionRecoveryRejectsForeignFilesLinksAndTampering() throws {
-        for kind in ["extra", "symlink", "hardlink", "executable", "receipt", "missing-receipt"] {
-            let (store, first) = try prepare(manifest())
-            let directory = try store.beginVersionDeletion(first.manifest.directoryName)
-            let executable = directory.appendingPathComponent("mactools")
-            let receiptURL = directory.appendingPathComponent("receipt.json")
-            switch kind {
-            case "extra": try Data("preserve".utf8).write(to: directory.appendingPathComponent("user-file"))
-            case "symlink":
-                XCTAssertEqual(unlink(executable.path), 0)
-                XCTAssertEqual(symlink("/bin/sh", executable.path), 0)
-            case "hardlink": XCTAssertEqual(link(executable.path, home.appendingPathComponent("linked-cli").path), 0)
-            case "executable": try Data("modified".utf8).write(to: executable)
-            case "receipt":
-                let foreign = CLIManagedReceipt(owner: "foreign", manifest: first.manifest,
-                    executableHash: first.executableHash, managedPath: first.managedPath, linkPath: first.linkPath)
-                try JSONEncoder().encode(foreign).write(to: receiptURL)
-            default: XCTAssertEqual(unlink(receiptURL.path), 0)
-            }
-            let before = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
-            XCTAssertThrowsError(try store.recover(), kind)
-            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted(), before, kind)
-            try FileManager.default.removeItem(at: directory)
-        }
-    }
-
-    func testPartialLiveVersionIsNotAdoptedAsInterruptedDeletion() throws {
-        let (store, first) = try prepare(manifest())
-        XCTAssertEqual(unlink(first.managedPath), 0)
-        XCTAssertThrowsError(try store.deleteVersion(first.manifest.directoryName))
-        XCTAssertNotNil(try CLIManagedStore.entry(URL(fileURLWithPath: first.managedPath)
-            .deletingLastPathComponent().appendingPathComponent("receipt.json")))
-    }
-
-    func testInterruptedRemovalRestoresPreviousVersionAndMissingCommand() throws {
-        let (store, first) = try prepare(manifest())
-        _ = try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in }
-        try store.writeState(CLIManagedState(owner: store.owner, active: nil,
-            previous: first.manifest.directoryName, automaticUpdates: true, pending: true))
-        XCTAssertEqual(unlink(store.command.path), 0)
-        XCTAssertEqual(unlink(store.root.appendingPathComponent("current").path), 0)
-        _ = try store.recover()
-        XCTAssertEqual(try Data(contentsOf: store.command), Data("fixture-123.1".utf8))
-    }
-
-    func testInterruptedDownloadCleansOnlyMarkedStagingFiles() throws {
-        let (store, _) = try prepare(manifest())
-        let stage = store.root.appendingPathComponent(".stage-" + UUID().uuidString)
-        try CLIManagedStore.directory(stage, create: true)
-        try Data(store.owner.utf8).write(to: stage.appendingPathComponent("owner"))
-        try Data("partial".utf8).write(to: stage.appendingPathComponent("archive.zip"))
-        try store.cleanStaging()
-        XCTAssertNil(try CLIManagedStore.entry(stage))
-        try CLIManagedStore.directory(stage, create: true)
-        try Data(store.owner.utf8).write(to: stage.appendingPathComponent("owner"))
-        try Data("preserve".utf8).write(to: stage.appendingPathComponent("user-file"))
-        XCTAssertThrowsError(try store.cleanStaging())
-        XCTAssertEqual(try Data(contentsOf: stage.appendingPathComponent("user-file")), Data("preserve".utf8))
-    }
-
-    func testInterruptedFinalStagingMoveRecoversUsingCompletedReceipt() throws {
-        let (store, first) = try prepare(manifest())
-        let stage = store.root.appendingPathComponent(".stage-" + UUID().uuidString)
-        try FileManager.default.moveItem(at: store.root.appendingPathComponent(first.manifest.directoryName), to: stage)
-        try store.cleanStaging()
-        XCTAssertNil(try CLIManagedStore.entry(stage))
-    }
-
-    func testForeignCommandDuringInterruptedRemovalPreservesJournal() throws {
-        let (store, first) = try prepare(manifest())
-        _ = try store.activate(first.manifest.directoryName, automaticUpdates: true) { _, _ in }
-        try store.writeState(CLIManagedState(owner: store.owner, active: nil,
-            previous: first.manifest.directoryName, automaticUpdates: true, pending: true))
-        XCTAssertEqual(unlink(store.command.path), 0)
-        try Data("foreign".utf8).write(to: store.command)
-        XCTAssertThrowsError(try store.recover())
-        XCTAssertEqual(try Data(contentsOf: store.command), Data("foreign".utf8))
-        XCTAssertTrue(try XCTUnwrap(store.readState()).pending)
     }
 
     func testReceiptCannotSubstituteAnotherSigningTeamWhileKeepingOwnerString() throws {

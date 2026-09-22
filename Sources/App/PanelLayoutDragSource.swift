@@ -9,6 +9,7 @@ struct PanelLayoutDragSource: NSViewRepresentable {
     let icon: String
     let showsControls: Bool
     let isDraggable: Bool
+    let rightToLeft: Bool
     let hover: PanelLayoutHoverState
     let nativeSource: PanelLayoutNativeDragSource
     let begin: () -> String?
@@ -26,6 +27,7 @@ struct PanelLayoutDragSource: NSViewRepresentable {
         view.icon = icon
         view.showsControls = showsControls
         view.isDraggable = isDraggable
+        view.rightToLeft = rightToLeft
         view.hover = hover
         view.nativeSource = nativeSource
         hover.register(view, id: id)
@@ -52,12 +54,23 @@ final class PanelLayoutDragSourceView: NSView {
             if isDraggable != oldValue { updateTrackingAreas() }
         }
     }
+    var rightToLeft = false {
+        didSet { if rightToLeft != oldValue { updateTrackingAreas() } }
+    }
+    private(set) var controlFrames: [CGRect] = []
     weak var hover: PanelLayoutHoverState?
     var onBegin: (() -> String?)?
     var onEnd: ((String) -> Void)?
     weak var nativeSource: PanelLayoutNativeDragSource?
     private var mouseDownPoint: CGPoint?
     private var cursorTrackingAreas: [NSTrackingArea] = []
+    private struct TrackingGeometry: Equatable {
+        let bounds: CGRect
+        let visibleBounds: CGRect
+        let showsControls: Bool
+        let rightToLeft: Bool
+    }
+    private var trackingGeometry: TrackingGeometry?
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -69,18 +82,24 @@ final class PanelLayoutDragSourceView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        guard bounds.contains(local), !(showsControls && menuFrame.contains(local)) else { return nil }
+        guard bounds.contains(local), !(showsControls && controlFrames.contains { $0.contains(local) }) else { return nil }
         return self
     }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
+        let visibleBounds = bounds.intersection(visibleRect)
+        let next = TrackingGeometry(bounds: bounds, visibleBounds: visibleBounds,
+                                    showsControls: showsControls, rightToLeft: rightToLeft)
+        guard next != trackingGeometry else { return }
+        trackingGeometry = next
+        controlFrames = PanelLayoutItemControlsLayout(size: bounds.size)
+            .buttonFrames(in: bounds, rightToLeft: rightToLeft)
         cursorTrackingAreas.forEach(removeTrackingArea)
         cursorTrackingAreas.removeAll(keepingCapacity: true)
-        let visibleBounds = bounds.intersection(visibleRect)
-        // The nested area gives AppKit a boundary between the card and its controls.
-        // Explicit rectangles are recomputed when scrolling changes the visible region.
-        let regions = showsControls ? [visibleBounds, menuFrame.intersection(visibleBounds)] : [visibleBounds]
+        // Track actual controls, not their bounding box: toolbar gaps remain draggable.
+        let regions = showsControls
+            ? [visibleBounds] + controlFrames.map { $0.intersection(visibleBounds) } : [visibleBounds]
         for rect in regions where !rect.isEmpty && !rect.isNull {
             let area = NSTrackingArea(rect: rect, options: [.cursorUpdate, .activeInKeyWindow],
                                       owner: self, userInfo: nil)
@@ -95,7 +114,7 @@ final class PanelLayoutDragSourceView: NSView {
             super.cursorUpdate(with: event)
             return
         }
-        if isDraggable && !(showsControls && menuFrame.contains(point)) {
+        if isDraggable && !(showsControls && controlFrames.contains { $0.contains(point) }) {
             NSCursor.openHand.set()
         } else {
             NSCursor.arrow.set()
@@ -104,6 +123,7 @@ final class PanelLayoutDragSourceView: NSView {
 
     override func layout() {
         super.layout()
+        updateTrackingAreas()
         hover?.trackingView?.scheduleRefresh()
     }
 

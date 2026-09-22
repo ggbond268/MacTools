@@ -1,4 +1,6 @@
+import AppKit
 import Combine
+import EventKit
 import Foundation
 import MacToolsPluginKit
 
@@ -7,14 +9,29 @@ final class CalendarComponentViewModel: ObservableObject {
     @Published private(set) var month: CalendarMonthModel
     @Published private(set) var selectedDay: CalendarDayModel?
     @Published private(set) var todayDay: CalendarDayModel?
+    @Published private(set) var agendaDays: [CalendarDayModel] = []
+    @Published private(set) var agendaDates: [Date] = []
     @Published private(set) var authorization: CalendarEventAuthorization
     @Published private(set) var isLoadingEvents = false
+    @Published private(set) var eventLoadingError: String?
+
+    var onStateChange: (() -> Void)?
+
+    var hasAgendaContent: Bool {
+        !agendaDays.isEmpty || !authorization.isFullAccess || eventLoadingError != nil
+    }
 
     private let eventService: CalendarEventServicing
     private let holidayProvider: CalendarHolidayProvider
     private var calendar: Calendar
     private let localization: PluginLocalization
     private let now: () -> Date
+    private let notificationCenter: NotificationCenter
+    private let calendarProvider: (() -> Calendar)?
+    private var alternateCalendar: CalendarAlternateCalendar
+    private var observation: AnyCancellable?
+    private var agendaRange: CalendarAgendaRange
+    private var showsRecentAgenda: Bool
     private var displayedMonthStart: Date
     private var selectedDate: Date
     private var todayDate: Date
@@ -27,6 +44,11 @@ final class CalendarComponentViewModel: ObservableObject {
         holidayProvider: CalendarHolidayProvider,
         calendar: Calendar = CalendarComponentCalendars.gregorian(),
         localization: PluginLocalization = PluginLocalization(bundle: .main),
+        agendaRange: CalendarAgendaRange = CalendarAgendaRange(),
+        showsRecentAgenda: Bool = true,
+        alternateCalendar: CalendarAlternateCalendar = .none,
+        calendarProvider: (() -> Calendar)? = nil,
+        notificationCenter: NotificationCenter = .default,
         today: Date = Date(),
         now: @escaping () -> Date = Date.init
     ) {
@@ -35,6 +57,11 @@ final class CalendarComponentViewModel: ObservableObject {
         self.calendar = calendar
         self.localization = localization
         self.now = now
+        self.agendaRange = agendaRange
+        self.showsRecentAgenda = showsRecentAgenda
+        self.notificationCenter = notificationCenter
+        self.alternateCalendar = alternateCalendar
+        self.calendarProvider = calendarProvider
         let initialToday = calendar.startOfDay(for: today)
         self.displayedMonthStart = CalendarComponentCalendars.monthStart(containing: initialToday, calendar: calendar)
         self.selectedDate = initialToday
@@ -43,29 +70,78 @@ final class CalendarComponentViewModel: ObservableObject {
         let initialMonth = CalendarMonthModelBuilder(
             calendar: calendar,
             holidayProvider: holidayProvider,
-            localization: localization
+            localization: localization,
+            alternateCalendar: alternateCalendar
         ).makeMonth(containing: initialToday, today: initialToday)
         self.month = initialMonth
         self.selectedDay = initialMonth.days.first { calendar.isDate($0.date, inSameDayAs: selectedDate) }
         self.todayDay = initialMonth.days.first { $0.isToday }
+        self.agendaDates = agendaRange.dates(relativeTo: initialToday, calendar: calendar)
     }
 
     func start() {
         isStarted = true
+        if observation == nil {
+            observation = Publishers.MergeMany([
+                notificationCenter.publisher(for: .EKEventStoreChanged),
+                notificationCenter.publisher(for: .NSCalendarDayChanged),
+                notificationCenter.publisher(for: NSLocale.currentLocaleDidChangeNotification),
+                notificationCenter.publisher(for: .NSSystemTimeZoneDidChange),
+                notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)
+            ])
+            .map { _ in () }
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .sink { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isStarted else { return }
+                    self.refresh()
+                }
+            }
+        }
         refresh()
     }
 
     func stop() {
         isStarted = false
+        observation = nil
         loadTask?.cancel()
         loadTask = nil
         isLoadingEvents = false
     }
 
     func refresh() {
+        if var updated = calendarProvider?() {
+            updated.firstWeekday = calendar.firstWeekday
+            if updated != calendar {
+                let displayedMonth = calendar.dateComponents([.year, .month], from: displayedMonthStart)
+                // Only time-zone changes invalidate day-start keys. Locale and
+                // week-layout changes can keep the last complete event snapshot.
+                if updated.timeZone != calendar.timeZone { eventsByDay = [:] }
+                calendar = updated
+                displayedMonthStart = calendar.date(from: displayedMonth) ?? displayedMonthStart
+            }
+        }
         todayDate = calendar.startOfDay(for: now())
         rebuildMonth()
         reloadEvents()
+    }
+
+    func refreshIfVisible() {
+        if isStarted { refresh() }
+    }
+
+    func configureAgenda(range: CalendarAgendaRange, isVisible: Bool) {
+        guard agendaRange != range || showsRecentAgenda != isVisible else { return }
+        agendaRange = range
+        showsRecentAgenda = isVisible
+        rebuildMonth()
+        if isStarted { reloadEvents() }
+    }
+
+    func setAlternateCalendar(_ display: CalendarAlternateCalendar) {
+        guard alternateCalendar != display else { return }
+        alternateCalendar = display
+        rebuildMonth()
     }
 
     func setWeekStartDay(_ day: CalendarWeekStartDay) {
@@ -75,7 +151,6 @@ final class CalendarComponentViewModel: ObservableObject {
 
         loadTask?.cancel()
         calendar.firstWeekday = day.calendarFirstWeekday
-        eventsByDay = [:]
         rebuildMonth()
         if isStarted {
             reloadEvents()
@@ -89,7 +164,8 @@ final class CalendarComponentViewModel: ObservableObject {
 
         displayedMonthStart = CalendarComponentCalendars.monthStart(containing: nextMonth, calendar: calendar)
         selectedDate = displayedMonthStart
-        eventsByDay = [:]
+        // Recent events are anchored to today, not the browsed month. Keep the
+        // last complete snapshot until both replacement queries have finished.
         rebuildMonth()
         reloadEvents()
     }
@@ -99,7 +175,6 @@ final class CalendarComponentViewModel: ObservableObject {
         todayDate = today
         displayedMonthStart = CalendarComponentCalendars.monthStart(containing: today, calendar: calendar)
         selectedDate = today
-        eventsByDay = [:]
         rebuildMonth(today: today)
         reloadEvents()
     }
@@ -117,23 +192,23 @@ final class CalendarComponentViewModel: ObservableObject {
     private func reloadEvents() {
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            guard let self else {
+            guard let self, !Task.isCancelled else {
                 return
             }
 
             authorization = eventService.authorization
             guard authorization.isFullAccess else {
                 eventsByDay = [:]
+                eventLoadingError = nil
                 isLoadingEvents = false
                 rebuildMonth()
                 return
             }
 
             let visibleDates = month.days.map(\.date)
-            let requestedToday = todayDate
+            let requestedAgendaDates = showsRecentAgenda ? agendaDates : []
             guard let firstDate = visibleDates.first,
                   let lastDate = visibleDates.last,
-                  let tomorrow = calendar.date(byAdding: .day, value: 1, to: requestedToday),
                   let endDate = calendar.date(byAdding: .day, value: 1, to: lastDate) else {
                 return
             }
@@ -152,22 +227,26 @@ final class CalendarComponentViewModel: ObservableObject {
                     calendar: calendar,
                     localization: localization
                 )
-                if requestedToday < firstDate || requestedToday >= endDate {
-                    let todayEvents = try await eventService.events(from: requestedToday, to: tomorrow)
+                let outsideDates = requestedAgendaDates.filter { $0 < firstDate || $0 >= endDate }
+                if let agendaStart = outsideDates.first,
+                   let agendaLast = outsideDates.last,
+                   let agendaEnd = calendar.date(byAdding: .day, value: 1, to: agendaLast) {
+                    let agendaEvents = try await eventService.events(from: agendaStart, to: agendaEnd)
                     guard !Task.isCancelled else {
                         return
                     }
 
-                    // Group each query only for its own dates so a cross-day event
-                    // returned by both queries appears once per day.
-                    groupedEvents[requestedToday] = CalendarEventGrouper.group(
-                        events: todayEvents,
-                        visibleDates: [requestedToday],
+                    // Only fill dates outside the grid so overlapping query results never duplicate events.
+                    let outsideEvents = CalendarEventGrouper.group(
+                        events: agendaEvents,
+                        visibleDates: outsideDates,
                         calendar: calendar,
                         localization: localization
-                    )[requestedToday] ?? []
+                    )
+                    groupedEvents.merge(outsideEvents) { _, agenda in agenda }
                 }
                 eventsByDay = groupedEvents
+                eventLoadingError = nil
                 isLoadingEvents = false
                 rebuildMonth()
             } catch {
@@ -177,6 +256,7 @@ final class CalendarComponentViewModel: ObservableObject {
 
                 eventsByDay = [:]
                 isLoadingEvents = false
+                eventLoadingError = localization.string("agenda.error", defaultValue: "暂时无法读取日程")
                 rebuildMonth()
             }
         }
@@ -187,7 +267,8 @@ final class CalendarComponentViewModel: ObservableObject {
         month = CalendarMonthModelBuilder(
             calendar: calendar,
             holidayProvider: holidayProvider,
-            localization: localization
+            localization: localization,
+            alternateCalendar: alternateCalendar
         ).makeMonth(
             containing: displayedMonthStart,
             today: referenceToday,
@@ -197,12 +278,20 @@ final class CalendarComponentViewModel: ObservableObject {
         selectedDay = month.days.first { calendar.isDate($0.date, inSameDayAs: selectedDate) }
             ?? month.days.first { $0.isToday }
             ?? month.days.first
-        todayDay = CalendarMonthModelBuilder(
+        let builder = CalendarMonthModelBuilder(
             calendar: calendar,
             holidayProvider: holidayProvider,
-            localization: localization
+            localization: localization,
+            alternateCalendar: alternateCalendar
         )
-        .makeMonth(containing: referenceToday, today: referenceToday, eventsByDay: eventsByDay)
-        .days.first { $0.isToday }
+        todayDay = builder.makeDay(
+            for: referenceToday, today: referenceToday, events: eventsByDay[referenceToday] ?? []
+        )
+        agendaDates = agendaRange.dates(relativeTo: referenceToday, calendar: calendar)
+        agendaDays = showsRecentAgenda ? agendaDates.compactMap { date in
+            guard let events = eventsByDay[date], !events.isEmpty else { return nil }
+            return builder.makeDay(for: date, today: referenceToday, events: events)
+        } : []
+        onStateChange?()
     }
 }

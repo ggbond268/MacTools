@@ -50,11 +50,13 @@ final class ClipboardHistorySettingsStore: ObservableObject {
         1 * 1_024 * 1_024,
         5 * 1_024 * 1_024,
         20 * 1_024 * 1_024,
+        30 * 1_024 * 1_024,
         50 * 1_024 * 1_024,
     ]
     static let allowedTotalPayloadByteCounts = [
         64 * 1_024 * 1_024,
         256 * 1_024 * 1_024,
+        512 * 1_024 * 1_024,
         1 * 1_024 * 1_024 * 1_024,
         ClipboardHistorySettings.maximumSupportedTotalPayloadByteCount,
     ]

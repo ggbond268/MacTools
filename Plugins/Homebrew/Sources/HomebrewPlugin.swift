@@ -24,9 +24,26 @@ private struct HomebrewPluginProvider: PluginProvider {
 }
 
 @MainActor
-public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSettingsPresenting,
-    PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding,
-    PluginActionProviding {
+public final class HomebrewPlugin: MacToolsPlugin, PluginSettingsPresenting, PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding, PluginActionProviding {
+    public var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let update = "update"
         static let upgradeAll = "upgrade-all"
@@ -39,7 +56,7 @@ public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSet
     }
 
     public let metadata: PluginMetadata
-    public let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    public let rowDescriptor: PluginPanelRowDescriptor
 
     public var onStateChange: (() -> Void)?
     public var requestPermissionGuidance: ((String) -> Void)?
@@ -56,7 +73,7 @@ public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSet
     ) {
         self.controller = controller
         self.localization = localization
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.action.manage", defaultValue: "管理") }
@@ -88,13 +105,12 @@ public final class HomebrewPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginSet
         onStateChange?()
     }
 
-    public var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    public var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: subtitleText,
             isOn: controller.isBusy,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: controller.isBrewAvailable
                 ? nil

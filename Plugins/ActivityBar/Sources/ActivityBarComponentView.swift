@@ -4,7 +4,7 @@ import SwiftUI
 import MacToolsPluginKit
 
 private enum ActivityBarComponentLayout {
-    static let cardCornerRadius = PluginComponentPanelLayoutMetrics.cardCornerRadius
+    static let cardCornerRadius = PluginPanelWidgetLayoutMetrics.cardCornerRadius
 }
 
 private struct ActivityBarContentHeightPreferenceKey: PreferenceKey {
@@ -51,8 +51,7 @@ private enum ActivityBarChartRange: String, CaseIterable {
     var label: String { rawValue }
 }
 
-/// Live copies share their presentation, just as they share the plugin's measured
-/// card height. Keep selections across viewport unmounts; previews use their own state.
+/// Each placement retains its own selections across viewport unmounts.
 @MainActor
 final class ActivityBarComponentPresentation: ObservableObject {
     @Published var expandedAppName: String?
@@ -149,7 +148,7 @@ struct ActivityBarComponentView: View {
         }
     }
 
-    @ObservedObject var controller: ActivityBarController
+    let controller: ActivityBarController
     @ObservedObject private var presentation: ActivityBarComponentPresentation
     let localization: PluginLocalization
     let onContentHeightChange: (CGFloat) -> Void
@@ -209,6 +208,12 @@ struct ActivityBarComponentView: View {
     }
 
     var body: some View {
+        PluginObservedContent(controller) { _ in
+            activityContent
+        }
+    }
+
+    private var activityContent: some View {
         VStack(spacing: 0) {
             headerBar
             todayStats

@@ -1,6 +1,6 @@
 # Plugin menu-bar icons
 
-Host 1.3.1 adds optional PluginKit v6 contracts for plugin-provided primary menu-bar artwork. The host keeps its existing status item, saved position, panel anchor, left/right click routing, accessibility, and automation badge. It does not add a host-side source picker. Plugins expose placement in their own settings.
+Host 1.3.1 adds optional PluginKit v7 contracts for plugin-provided primary menu-bar artwork. The host keeps its existing status item, saved position, panel anchor, left/right click routing, accessibility, and automation badge. It does not add a host-side source picker. Plugins expose placement in their own settings.
 
 ## Contracts
 
@@ -33,4 +33,4 @@ The host stops fallback icon animation while plugin artwork is selected and resu
 
 ## Validation
 
-Run focused `PluginMenuBarIconCoordinatorTests`, `DuoStatusPluginTests`, `DynamicPluginManagerTests`, `MenuBarStatusItemControllerTests`, and `MenuBarIconSettingsTests`. Include competing claims, rejected settings changes, startup reservations, missing owners, updates, stale callbacks, teardown ordering, appearance caches, original-icon restoration, and notification coalescing. Run `make script-tests`, the PluginKit v6 binary compatibility fixture, and `make ci` before publishing cross-module changes. New API symbols must be recorded in the minimum-host inventory and adopting plugins must require host 1.3.1 or later.
+Run focused `PluginMenuBarIconCoordinatorTests`, `DuoStatusPluginTests`, `DynamicPluginManagerTests`, `MenuBarStatusItemControllerTests`, and `MenuBarIconSettingsTests`. Include competing claims, rejected settings changes, startup reservations, missing owners, updates, stale callbacks, teardown ordering, appearance caches, original-icon restoration, and notification coalescing. Run `make script-tests`, the PluginKit v7 binary compatibility fixture, and `make ci` before publishing cross-module changes. New API symbols must be recorded in the minimum-host inventory and adopting plugins must require host 1.3.1 or later.

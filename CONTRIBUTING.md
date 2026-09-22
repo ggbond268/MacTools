@@ -1,148 +1,127 @@
 # Contributing to MacTools
 
-<a href="CONTRIBUTING.zh-CN.md">[中文]</a> [English]
+**English** · [简体中文](CONTRIBUTING.zh-CN.md)
 
-Thanks for your interest in MacTools. Please keep each contribution small and clear: explain the problem, provide verifiable changes, and avoid mixing unrelated refactors into the same pull request.
+Help improve a native, lightweight macOS utility collection. Bug fixes, plugins, translations, documentation, and focused UI improvements are welcome. Keep each pull request about one problem and verify the behavior you change.
 
-Unless a file is clearly identified as third-party material under separate terms, contributions accepted into MacTools are licensed under `GPL-3.0-only`, consistent with the repository's [licensing policy](LICENSING.md). By submitting a contribution, you confirm that you have the right to provide it under those terms.
+## Before you start
 
-## Ways to Contribute
-- Bug reports should include reproduction steps, expected behavior, actual behavior, macOS version, and relevant logs or screenshots.
-- Feature suggestions should describe the use case, target users, and expected interaction. For large plugins or interaction changes, open an issue first to align on scope.
-- Changes involving file deletion, system permissions, global shortcuts, display control, signing, or update flows should explain risks, safeguards, and rollback options.
+Search [existing issues](https://github.com/ggbond268/MacTools/issues) and pull requests first. Discuss new plugins, public PluginKit APIs, and substantial interaction changes in an issue before implementation. Describe the user need, proposed behavior, and tradeoffs. Prefer English for commit messages and PR titles; clear reports in Chinese are also welcome.
 
-## Development Environment
-- Xcode and `xcodegen` are required. The project supports macOS 14.0 and later.
-- First-time setup: run `make setup`, then edit `LocalConfig.xcconfig` and fill in `DEVELOPMENT_TEAM` and a stable, non-placeholder `BUNDLE_IDENTIFIER_PREFIX`. Debug builds fail early when either value is missing so macOS cannot register a malformed duplicate app identity.
-- Use `make run` for local app testing. It installs the canonical Debug app at `~/Applications/MacTools Dev.app` and unregisters other `MacTools Dev` build copies from LaunchServices.
-- Common commands: `make generate` generates the Xcode project, `make build` validates compilation, and `make run` installs the verified Debug bundle at `~/Applications/MacTools Dev.app` before running it locally.
-- Plugin development: `make run` incrementally builds the app and plugins, then syncs the latest Debug plugin packages to the local development marketplace. A full sync moves packages absent from the current checkout into the recoverable Debug quarantine; a filtered `PLUGIN=...` sync leaves unrelated packages untouched. `make sync-debug-plugins` only syncs already built plugins. `make build-plugin` is reserved for validating dynamic plugin packages or release flows; to build one plugin, run `make build-plugin PLUGIN=calendar`.
-- Do not commit local or generated files: `MacTools.xcodeproj`, `MacTools.xcworkspace`, `LocalConfig.xcconfig`, `build/`, or `scripts/release.local.env`.
+### Issue format
 
-## Project Structure
-- `Sources/App/`: app entry point, menu bar status item, settings pages, and window routing.
-- `Sources/Core/`: shared infrastructure such as the plugin host, dynamic plugin loading, shortcuts, permissions, logging, and updates.
-- `Sources/MacToolsPluginKit/`: plugin APIs, declarative UI models, and runtime context.
-- `Plugins/<PluginName>/`: plugin manifest, source code, bundle entry point, resources, and adjacent tests.
-- `Tests/`: XCTest coverage for shared App/Core logic. Plugin tests should live inside the corresponding plugin directory when possible.
-- `project.yml`: root XcodeGen project source, only for the App, PluginKit, and shared aggregate entry points. Plugin targets are generated automatically.
-- `Plugins/<PluginName>/project.yml`: optional per-plugin build overrides, only when a plugin needs extra frameworks, include paths, bundle resources, helper/tool targets, or target overrides.
-- `docs/plugins/`: plugin packages, catalogs, local debugging, and release flow documentation.
-- `docs/icon-gallery/`: checked-in menu-bar icon catalog, previews, animation frames, and archives; rendering-mode rules are documented in `docs/icon-gallery.md`.
-- `docs/superpowers/`: larger product, interaction, or implementation design documents.
+Use the [Bug report](.github/ISSUE_TEMPLATE/bug_report.yml) or [Feature request](.github/ISSUE_TEMPLATE/feature_request.yml) form. Give the title a concrete symptom or outcome, such as “Calendar panel does not refresh after wake.”
 
-## Development Guidelines
-- Add new plugins under `Plugins/<PluginName>/` with at least `plugin.json`, `Sources/`, and `Bundle/`.
-- Ordinary plugins only need to define `plugin.json`, source code, and a bundle entry point. `make generate` scans `Plugins/*/plugin.json` and generates local `Configs/GeneratedPlugins.yml`; do not edit generated files manually.
-- Features that require macOS app extensions, such as Finder Sync, must add the extension target to the root `project.yml` and embed it in the main app. Use the dynamic plugin only for the MacTools panel/settings surface.
-- Command workflows for adding and updating plugins are documented in the Development Steps section of `docs/plugins/local-native-plugins.md`.
-- Keep documentation short and task-focused. User-visible behavior changes should update `README.md` or the relevant file under `docs/`; plugin package, catalog, or release flow changes should update `docs/plugins/`.
-- Keep `CHANGELOG.md` as the canonical release history. Do not edit `Sources/Resources/ReleaseHistory.json` by hand; release preparation regenerates it, and `python3 scripts/changelog.py export-history` repairs it after intentional historical edits.
-- Icon gallery assets must explicitly declare `renderingMode`; use `template` only for black artwork on transparency, and use `original` for color or grayscale detail. Third-party static assets must pin their upstream revision and catalog mapping in `docs/icon-gallery/sources/manifest.json`, with the corresponding license under `Sources/Resources/ThirdPartyNotices/`. Run the gallery generation and related tests after catalog changes.
-- Plugins implement `MacToolsPlugin`; menu panel plugins implement `PluginPrimaryPanel`, and component panel plugins implement `PluginComponentPanel`.
-- Widgets can appear zero or many times and their views can be recycled. Keep tasks and durable presentation state in the plugin model, use panel lifecycle callbacks for foreground consumers, and follow [panel runtime ownership](docs/plugins/local-native-plugins.md#panel-widgets-and-runtime-ownership) for previews and background work.
-- `plugin.json.id` must be stable, readable, and exactly match the runtime `PluginMetadata.id`; each plugin package should return exactly one plugin instance.
-- Plugin data is preserved by default on uninstall. A plugin that stores sensitive payloads and must crypto-shred them should declare `uninstallDataPolicy: removePrivateData`, use `PluginPrivateDataKeychainIdentity` for its encryption key, and leave cleanup to the host; failed cleanup must finish before the same plugin can be reinstalled, and lifecycle changes must test both recovery failures and successful cleanup.
-- Floating palettes use `PluginPaletteSurface` as a non-interactive background. Let native glass follow system preferences; keep captured content, focus, window placement, and input handling in the owning host or plugin. See [palette appearance validation](docs/plugins/palette-appearance.md).
-- Register newly consumed PluginKit APIs in `scripts/tests/test_plugin_minimum_host_compatibility.py`, including optional protocols. The inventory retains API introduction versions for older ABI checks; current PluginKit v6 packages require MacTools 1.3.0 or later. Keeping an older protocol's witness table unchanged does not make new symbols loadable by older hosts.
-- Plugin display state should be expressed through `PluginPanelState`, `PluginPanelDetail`, `PluginPanelControl`, and related models. Do not bypass the existing panel framework.
-- Prefer `PluginSettingsPage.form` with declarative sections and typed controls. Use a custom form section for a complex region and `PluginSettingsPage.workspace` only for task-oriented managers or editors that need the full content area. Permissions, shortcuts, page chrome, search, validation, and backgrounds remain host-owned.
-- Publish executable plugin capabilities through stable `PluginActionProviding` definitions. Keep action discovery and execution in the host-owned registry/executor, and keep ordinary global bindings in `ShortcutAssignmentService`; workflows, Run Links, and Action Grid must reference those actions instead of defining parallel command, shortcut, or URL paths. The architecture and automated test matrix are documented in `docs/actions-automation.md`.
-- A plugin that composes an existing provider's canonical action may adopt `PluginActionExecutionHostContextConsuming`; do not call the provider implementation or duplicate its system write directly. Use its live lookup, guarded execution, and explicit provider-settings navigation so host availability, safety, confirmation, and diagnostics remain authoritative. Verify against fresh provider snapshots rather than debounced UI catalog state, and keep navigation user-initiated. Mac Settings is the reference implementation in `docs/plugins/mac-settings.md`.
-- The action-execution bridge follows the same ABI and minimum-host checks. Include every public bridge type in `scripts/tests/test_plugin_minimum_host_compatibility.py` when extending it, and keep consuming manifests on the first compatible host release.
-- Keep composed providers such as Mac Settings in the shared manifest/runtime action snapshot tests. Disclose setting-specific permissions in setup guidance when they are not a requirement for every action.
-- Preserve selected policies separately from their current effect: Appearance's `set-mode` action models Auto / Light / Dark, while the quick toggle describes the rendered dark state. Composed settings, profiles, and Undo must use the policy action. Optional System Settings links must use known pane/anchor pairs, not a generic app-opening fallback.
-- Mac Settings release scope is enforced in its catalog factory. Before restoring a deferred setting, complete its criteria in the [release scope and backlog](docs/superpowers/specs/2026-08-28-mac-settings-catalog-review.md), then update the scope tests and documentation together. Keep deferred definitions available for profile validation without exposing their adapters to execution.
-- A plugin may implement `PluginActionExposureProviding` to veto a canonical action on a host-owned system surface such as App Intents. Treat `.automatic` as delegation to the host's conservative eligibility policy, never as an allowlist override. Unknown surfaces and provider failures fail closed, and the executor rechecks the live policy immediately before starting the action. Run Link policy remains a separate contract.
-- When a plugin adopts an action-surface or other newly exported PluginKit type, set its `plugin.json.minHostVersion` to the first compatible app release. Compatibility metadata belongs in the source manifest. When local plugin validation requires that unreleased host version, `MARKETING_VERSION` may predeclare it; the app release helper treats a source version ahead of the latest app tag as the default release target and remains responsible for advancing `CURRENT_PROJECT_VERSION`. Release tooling owns plugin package version bumps.
-- If ordinary plugin resources rarely change, prefer bundling them into the executable. If extra bundle resources are needed, declare the smallest necessary differences in the plugin's own `project.yml`.
-- Custom plugin settings views must reuse `MacToolsPluginKit.PluginSettingsTheme` and `.pluginSettingsCardBackground(.standard/.recessed)`. Do not copy private plugin settings styles, and do not make plugins depend on `Sources/App/SettingsStyle.swift`.
-- Use `PluginSettingsItem` (host 1.3.1+) for custom rows that combine an icon, title, optional description, and trailing control. Keep row padding and separators in the containing form or section.
-- Call `onStateChange?()` after plugin state changes. Long-running scans, file system work, and system calls should not block the main thread for extended periods.
-- User-facing copy is primarily Chinese. Keep it concise, clear, and close to native macOS wording.
-- Localize user-facing copy with `.xcstrings`. App/Core copy belongs under `Sources/Resources/Localization`, PluginKit copy under `Sources/MacToolsPluginKit/Resources`, and plugin copy under `Plugins/<PluginName>/Resources`. Plugin `plugin.json` files should keep `displayName`/`summary` as fallbacks and add `localizedMetadata` for marketplace and unloaded-plugin presentation. Pre-install product, capability, privacy, setup, and relationship metadata belongs in the same `plugin.json`; follow `docs/plugins/plugin-manifest.schema.json`. Declare localized product copy once under the source-only `productStrings` table, using `@displayName`, `@summary`, `@localizable.<key>`, `@standardAction.<key>`, `@standardSetup.requirements.<key>`, or all 11 locale values, and make every localized product field reference `@productStrings.<key>`. Keep referenced screenshots under `MarketplaceAssets/`, and never add a parallel marketplace manifest or machine-local dynamic action entries.
-- Keep current `plugin.json` runtime envelopes complete. Generated package manifests must contain expanded localization values and match their source metadata; do not edit package copies independently. Legacy manifests must still include runtime-decodable `capabilities` and `permissions`; omitting newer product fields is supported only for PluginKit versions below 5 through the explicit local-debug compatibility flag and must never be used for release catalog generation.
-- When merging new plugins with product-metadata changes, register their factories in `PluginRuntimeActionSnapshotTests` and preserve independent runtime policies such as `uninstallDataPolicy` alongside the product fields.
-- New plugins should provide localization whenever practical, at minimum for panel copy, settings copy, permission text, and plugin metadata.
-- AI Usage provider changes should follow [the credential and refresh contract](docs/plugins/ai-usage.md), with fixture-based parser and lifecycle tests. Keep quota presentation in Dashboard and the optional menu bar. Tests must never query real accounts or read the developer's credentials.
-- Plugins that offer primary menu-bar icons must use the [exclusive icon placement contract](docs/plugins/menu-bar-icons.md), never mutate the host status item, and keep icon updates separate from general state changes. Follow [Duo Status](docs/plugins/duo-status.md) for cached artwork and lifecycle handling; tests must use synthetic readings and fake presenters.
-- Prefer Apple native frameworks. When adding system frameworks, private include paths, or helper executables inside a plugin bundle, declare the smallest necessary differences in the plugin's own `project.yml`. Bundle resource executables that need separate signing should be listed in `plugin.json.package.signPaths`.
-- System power and session-ending actions must use native macOS confirmation flows, remain foreground-only, and avoid immediate restart or shutdown events that can discard unsaved work.
-- Plugins that use private Apple frameworks must load them dynamically at runtime and validate the required classes and selectors. Do not statically link private frameworks, and surface unsupported-system errors instead of crashing.
-- Plugins that intercept pointer events must declare Accessibility permission, stop their event tap on deactivation, and re-enable a tap disabled by macOS.
-- Plugins that move or resize windows must use public Accessibility APIs for ordinary position and size writes, revalidate the focused window immediately before writing, calculate against the current display visible frame, and keep pure multi-display geometry independently testable. Capabilities unavailable through Accessibility may use a narrowly scoped, dynamically loaded, version-gated private API after review and must fail closed when unsupported.
+| Report | Include |
+| --- | --- |
+| Bug | Reproduction steps or observations, expected and actual behavior, frequency, app version/channel, plugin version, macOS version, and Mac chip. Add relevant displays, devices, permissions, or logs. |
+| UI issue | A screenshot showing the affected panel or window; a short recording for interaction problems. Include app language, appearance, and display scaling when relevant. |
+| Performance issue | The workload, whether the panel is open or closed, approximate duration, and CPU/memory/Energy Impact observations. Include a baseline when available. |
+| Feature or plugin | The problem and use case, proposed interaction, current workaround, alternatives, and required system access. |
 
-## Testing
-- Behavioral changes should add or update adjacent XCTest coverage. Test files should be named `<TypeName>Tests.swift`.
-- Screenshot changes should follow the [targeted validation and manual checks](docs/plugins/screenshot.md#development-and-validation), including permission denial, cancellation, late asynchronous results, multi-display capture, and exported-file retention. Native recording probes must capture only a synthetic fixture window and write to a temporary directory; validate both capture termination and file finalization. Its actions remain foreground interactive, unavailable to Run Links, and ineligible for automatic rules and App Intents.
-- Full test command: `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
-- Single test class: append `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
-- Async test waits must have a deadline and suspend between checks. `make ci` and the GitHub Build workflow cap each test at 120 seconds so a stalled test reports a failure instead of exhausting the job timeout.
-- The app-hosted XCTest bundle runs serially in CI because its AppKit tests share desktop focus and native event routing. Keep synthesized pointer sequences in the standalone interaction fixture instead of the shared test host.
-- Panel tests should focus on persisted entries, independent copies, drag/Undo state, viewport mounting, plugin lifecycle, and known popover crashes. Check cosmetic changes visually instead of asserting exact padding, colors, menu counts, or generating screenshots without comparisons.
-- Native drag acceptance is opt-in: run `make panel-layout-ui-tests` when changing drag routing or hit testing, or `python3 scripts/e2e/run_panel_layout_fixture.py --surface cross-panels` for one scenario. These cursor-driven checks require an active desktop session and are excluded from `make ci` and the default GitHub build workflow.
-- File system tests should use temporary directories or fake stores. Disk cleanup tests must not delete real user directories.
+Remove credentials, private content, and identifying account details from attachments. Report one problem per issue; link related reports instead of duplicating them.
 
-For Window Switcher changes, see the optional [isolated Chrome diagnostic](scripts/diagnostics/window-switcher/README.md). Keep automated results separate from physical IME, display/Space, and packaged-release acceptance.
+## Build and run
 
-## Pull Request Checklist
-- Keep the PR focused, and explain the purpose, verification, and user impact.
-- Prefer English for commit messages, pull request titles/descriptions, and issues.
-- Build or tests have passed. If they could not be run, explain why in the PR.
-- User-visible behavior changes are reflected in `README.md` or the relevant design documentation.
-- User-visible app or plugin changes include a concise English changelog fragment in `changes/unreleased/*.md`. Run `make validate-changelog` before committing or pushing fragment changes, including when using only focused XCTest. Entries have a 220-character and two-sentence limit; `make script-tests` and `make ci` also validate pending fragments.
-- Plugin manifest `capabilities.settings` (`none`, `form`, or `workspace`) matches the runtime `settingsPage` layout.
-- Rich manifest static and dynamic action descriptors match the runtime provider/action identity, risk, permissions, external policy, automation eligibility, and parameter portability.
-- Capture plugins preserve explicit foreground selection, release overlays and capture sessions when disabled, and never delete user-exported screenshots or recordings during private-data cleanup.
-- High-risk features cover safety checks, error states, and missing-permission cases.
-- The PR does not include unrelated formatting, generated files, local configuration, certificates, or release credentials.
-- New or updated third-party material is recorded in `Sources/Resources/ThirdPartyNotices/manifest.json` with an exact upstream revision, affected products, source paths, and retained license text.
+Use macOS, an Xcode toolchain supporting Swift 6, and XcodeGen. The app targets macOS 14+; individual APIs may require newer versions. The [Build workflow](.github/workflows/build.yml) defines the CI environment.
 
-## Release
+```bash
+brew install xcodegen
+make setup
+```
 
-Nightly isolation also covers Activity Bar sockets/hook registrations and CLI/broker service identities. Keep the stable identifiers unchanged, keep the hardware listener lock shared, and add cross-channel coexistence tests when introducing another process-global namespace.
+Fill in `DEVELOPMENT_TEAM` and a stable `BUNDLE_IDENTIFIER_PREFIX` in the generated `LocalConfig.xcconfig`, then run:
 
-- Releases are handled by maintainers. Do not create tags, publish GitHub Releases, or commit release artifacts in ordinary contributions.
-- For GitHub-based releases, prefer `Actions` -> `Prepare Release`. Enter `type`, target `version`, and whether to `release`; when `release` is enabled, the workflow continues to the actual release workflow after bumping, committing, and creating the tag.
-- For quick releases, prefer `make release`. The command interactively chooses `app` or `plugin`, analyzes the next `patch`/`minor`/`major` version, previews the bump, then only after confirmation runs `git pull --rebase`, lightweight checks, version updates, commit, tag creation, and tag push.
-- App releases update `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Configs/AppVersion.xcconfig`. The app and embedded extensions inherit this shared version config. After pushing a `v*.*.*` tag, the `Release` workflow builds, signs, notarizes, uploads the DMG, marks the stable App release as GitHub Latest, and updates the Appcast plus website download metadata.
-- App signing must sign the embedded `MacToolsCLIBroker` executable before the outer app. For an inline workflow-only fix, retry from `Actions` -> `Release` -> `Run workflow` on `main` with the existing tag; see [App release recovery](docs/github-actions.md#app-release-recovery). Re-running an old job does not pick up workflow fixes.
-- Public Nightly releases are maintainer-operated snapshots of `main`. They use a separate app identity, storage scope, privileged helper paths/signing identifiers, Keychain services, update feed, and complete same-commit plugin catalog. The optional Apple silicon CLI is signed, notarized, and published separately from the app with the same version and build; the release verifier requires the exact Nightly CLI identifier, signing team, `arm64` architecture, system-only dynamic dependencies, executable mode, archive contents including the unchanged root GPL license, checksum, and `version --json` metadata. Nightly plugin versions are generated as `source-major.run.attempt`; feature contributions must not bump source manifests for Nightly. After two successful manual update runs, maintainers may enable the daily schedule with `ENABLE_NIGHTLY_RELEASES=true`. The build job skips unchanged scheduled runs by comparing against the deployed appcast's source, excluding generated `docs/nightly/**`; manual runs always publish. Publishable runs then pass one immutable artifact through a credential-free CLI verification job before the separate publication job receives repository write access. Partial retries reuse the producing build's artifact ID and version metadata; see [Nightly recovery](docs/github-actions.md) for when a full rebuild is required. Rollback refs must be ancestors of `main` and support the workflow's current Nightly release interface and CLI testing guide. Missing or indeterminate previous metadata does not prevent publication. Failed draft releases are removed by the creating run, and the next successful run also removes abandoned drafts in the workflow-owned `nightly-<run>-<attempt>` namespace. Preserve existing stable names when adding channel-specific storage or helpers.
-- Plugin releases push a `plugins-*` batch tag. The default `auto` mode uses the production catalog to find new plugins, already bumped plugins, and package-related plugin changes; it updates `plugin.json.version` when needed, then the `Plugin Release` workflow builds plugins and merges the signed catalog. Plugin batch releases are never marked as GitHub Latest. Catalog signing uses the same Foundation canonicalization as runtime verification, and the workflow validates the configured Ed25519 key pair before building. When a batch raises individual plugins' `minHostVersion`, publish and verify the signed plugin catalog before releasing that host version; the catalog keeps its oldest schema-compatible host floor and older apps leave newer entries unavailable.
-- On first launch, a new app version checks installed plugins and automatically updates them from the signed production catalog. It does not normally install plugins the user has not installed. The only exception is a host-declared feature-extraction migration: when an installed source plugin still owns a legacy preference, the host may runtime-validate the replacement package and update the source as one rollback-protected operation. Manually installing that replacement also coordinates retirement of an older source package, even before the legacy preference has been written.
-- Non-interactive examples: `make release ARGS="--type app --version 1.0.7 --yes"` or `make release ARGS="--type plugin --version 1.0.10 --plugin-mode selected --plugin calendar --yes"`.
-- Add `--dry-run` to preview the steps. The working tree must be clean before a real release.
-- Before local release builds, copy `scripts/release.local.env.sample` to `scripts/release.local.env` and fill in at least `DEVELOPER_ID_APPLICATION`.
-- If Apple notarization is needed, store credentials first with `xcrun notarytool store-credentials`.
-- Version numbers default to `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Configs/AppVersion.xcconfig`.
-- Local production builds can still use the lower-level script: `./scripts/release-local.sh`; before publishing to GitHub Releases, run `gh auth login`, then `./scripts/release-local.sh --publish`.
-- Plugin library releases are triggered by `plugins-*` batch tags through the `Plugin Release` workflow. Within one PluginKit ABI and catalog-schema compatibility line, plugins with bumped versions are built and uploaded, then merged into that line's catalog. Changes under `Sources/MacToolsPluginKit/` require rebuilding and bumping every plugin so the catalog cannot retain binaries linked against an older shared framework. The standard `make release` flow performs these manifest bumps in the release commit; feature PRs should not pre-bump unrelated plugins. The first release of a new ABI or schema line also rebuilds every plugin and writes a separate catalog. MacTools through 1.1.6 keeps reading the immutable PluginKit v4 catalog at `docs/plugins/v4/catalog.json`; MacTools 1.2.0 keeps reading PluginKit v5 schema 2 at `docs/plugins/v5/catalog.json`; MacTools 1.3.0 and later use PluginKit v6/schema 3 at `docs/plugins/v6/catalog.json`. Publish the compatible plugin batch and catalog first, wait for Pages to serve the committed signed catalog, and only then prepare or publish the corresponding app. The app release helper and final release workflow fail closed unless that deployed catalog exactly matches the committed catalog and has a valid signature. The catalog private key, Developer ID certificate, and GitHub token must come from CI secrets or local environment variables.
-- GitHub Actions build and release configuration is documented in `docs/github-actions.md`; plugin catalog, package structure, and batch release flows are documented in `docs/plugins/plugin-catalog.md`.
+```bash
+make run
+```
 
-- Clipboard backup changes must preserve the separate content-backup boundary and pass the synthetic archive, cancellation, atomicity, private-copy and paste-queue suspension, and bounded-memory checks described in [Clipboard backup verification](docs/plugins/clipboard-backup.md).
+This builds the app and plugins, syncs the Debug catalog, and installs `~/Applications/MacTools Dev.app`. A full Debug sync moves packages absent from the checkout into a recoverable quarantine; a filtered sync preserves unrelated packages.
 
-For the PluginKit v6 migration, source manifests declare `pluginKitVersion: 6` and `minHostVersion: "1.3.0"`. Leave plugin package versions, `Configs/AppVersion.xcconfig`, signed catalogs, and compiled release notes to `make release`; do not pre-bump them in the ABI migration change. Run `make release` for plugins first (auto selects all plugins), wait for the v6 catalog commit and Pages deployment, then run the app release. CI and `make ci` check the frozen v6 client, including settings row, option, and control layouts.
+| Command | Purpose |
+| --- | --- |
+| `make generate` | Generate plugin targets and the Xcode project. Use this instead of bare `xcodegen generate`. |
+| `make build` | Compile the app and its plugin targets. |
+| `make sync-debug-plugins PLUGIN=calendar` | Build the app targets, then sync only the selected Debug plugin without launching the app. |
+| `make build-plugin PLUGIN=calendar` | Validate a standalone plugin package and its Debug catalog. |
 
-### Actions that accept palette text
+Keep local configuration, credentials, generated projects, and build products out of commits. See [local plugin development](docs/plugins/local-native-plugins.md) for package setup and debugging.
 
-Input actions use the optional `PluginActionInputProviding` contract in MacTools 1.3.1. Keep incomplete input descriptors separate from canonical executable references, mark user text sensitive and local-only, and preserve the existing 4 KiB per-string limit. Selected input actions support Tab completion when they declare an unambiguous alias. Aliases are defaults supplied by the plugin; the host stores user overrides and validates conflicts. Providers still receive their original input descriptors. Add alias/input-session tests, minimum-host inventory entries, and real interaction evidence for app automation. The [Siri plugin documentation](docs/plugins/siri.md) describes the first integration and its current compatibility boundary.
+## Where changes belong
 
-Declared `requirements.minimumMacOSVersion` and `requirements.applications` are enforced by the shared host checker at catalog installation, manual package installation, and activation. Keep required applications accurate: missing requirements disable installation or loading, while permissions remain setup guidance. Legacy packages without requirements retain their existing behavior.
+| Path | Responsibility |
+| --- | --- |
+| `Sources/App/` | Menu-bar panels, settings, windows, and app routing. |
+| `Sources/Core/` | Plugin hosting, actions, permissions, shortcuts, storage, and updates. |
+| `Sources/MacToolsPluginKit/` | Shared plugin protocols, declarative UI, and runtime context. |
+| `Plugins/<PluginName>/` | `plugin.json`, `Sources/`, `Bundle/`, resources, and adjacent `Tests/`. |
+| `Tests/` | Shared App/Core tests. |
+| `docs/plugins/` | Feature contracts and plugin development guides. |
 
-Plugins may adopt `PluginActionInputPresentationRequesting` to request the host composer for one of their registered input actions. The host validates provider ownership and routes presentation; plugins must not create their own palette windows or execute merely to open input. This opt-in API requires MacTools 1.3.1.
+Ordinary plugins do not need root `project.yml` edits. Put necessary build overrides in the plugin's own `project.yml`; app extensions such as Finder Sync must be embedded by the host.
 
-### Managed Nightly CLI distribution
+## Development standards
 
-Nightly release interface v4 packages the signed arm64 CLI once, generates `cli-install.json` with `scripts/cli-install-manifest.py`, embeds it in the app resources, and then signs the outer app. Publish that same ZIP and JSON only after both notarization submissions pass. The app trusts the resource seal, never a downloaded unsigned manifest. Personal publishers must use the same ordering with an immutable `/releases/<build>` URL. See [managed CLI distribution](docs/plugins/managed-cli-distribution.md) for the contract, ownership layout, and release acceptance gates.
+Follow the [plugin development standards](docs/plugins/development-guidelines.md) and the adjacent implementation. The common requirements are:
 
-Centered window guide changes should follow the [Window Layouts interaction and manual acceptance contract](docs/plugins/window-layouts.md#centered-window-guides), reuse the existing listen-only event tap, and keep plugin minimum-host declarations aligned with the shared snap APIs.
+- **Respect the host contract.** Implement `MacToolsPlugin`, publish stable `panelItems`, and keep manifest capabilities, action policies, permissions, and minimum-host requirements consistent with runtime behavior. Reuse host actions and shortcuts.
+- **Match the product.** Use declarative settings and host renderers, `PluginSettingsTheme`, and `PluginComponentTheme`. Follow the [shared palette appearance](docs/plugins/palette-appearance.md) for floating search headers and icon controls. Keep typography, spacing, controls, focus behavior, and error states consistent. Localize user-facing copy and verify long labels.
+- **Build reusable widgets.** Support zero or multiple placements, isolated previews, view recycling, and independent per-placement presentation state. See [panel items](docs/plugins/panel-items.md).
+- **Keep background work economical.** Use cached snapshots, event-driven updates, bounded asynchronous work, and visibility-aware presentation. Preserve intentional monitoring while hidden; stop owned work on deactivation. See [performance requirements](docs/plugins/development-guidelines.md#performance-and-energy).
+- **Preserve user control.** Handle denied permissions, cancellation, unsupported hardware, and system changes. Keep existing confirmations, recovery paths, and destructive-operation safeguards.
 
-Window Switcher’s own centered drag guides consume `PluginWindowSnapCoordinator` and require host 1.3.1. Preserve visible-item shortcut numbering across scrolling/filtering and keep delayed preview feedback covered by native chooser tests; see [Window Switcher development](docs/plugins/window-switcher.md). `make script-tests` and `make ci` also check generated website plugin data; regenerate it with `python3 scripts/plugins/generate_website_plugin_data.py` after changing plugin actions or metadata.
+Shared filesystem metadata code lives in `Sources/MacToolsFileSystem`. Disk Clean and Storage Explorer link this static module into their bundles; their core targets use it as a build dependency. Keep cleanup policy in the owning plugin and run both plugins' filesystem tests after changing the shared parser.
 
 ## App Uninstaller safety
 
 App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
 
-## Stable CLI candidates
+## Validation
 
-The optional stable CLI uses the existing host-owned commands and separate signed download. Publication remains disabled until signed acceptance is complete. See [CLI candidate packaging and release gates](docs/plugins/cli-release.md) before changing release metadata or enabling distribution. Run the installer/channel tests, `make script-tests`, and `make ci` for changes across installer and release infrastructure. Never use a successful unsigned test run as evidence of signed stable acceptance.
+Keep a compact suite covering the main user flow and consequential boundaries such as data loss, permission checks, cancellation, or compatibility. Reuse existing coverage across layers. A past bug alone does not require a permanent test; omit unlikely combinations in settled code unless their recurrence would have a significant impact. See the [core test scope](docs/testing/core-tests.md).
+
+There is no per-PR test-count or coverage-percentage target. Do not add tests that merely repeat the implementation, assert private call sequences, or check fixed wording, colors, and spacing. Choose checks by their distinct behavior and risk, not their UI/unit/integration label. Use manual review for appearance and keep desktop-dependent evidence checks on demand; retain automated integration checks when they establish a critical outcome that cheaper tests cannot cover.
+
+Run the smallest relevant test class or method. For example:
+
+```bash
+make test TEST_FILTER=ActionExecutorTests
+```
+
+Use `TEST_FILTER=ClassName/testMethod` for one method, or `make test` for all retained XCTest cases. The target regenerates the project and uses serial execution with per-test timeouts. `make script-tests` validates tooling separately; `make ci` also checks frozen-client binary compatibility. Use temporary directories, fixtures, and fake services rather than real user data or accounts. Broaden validation only for failures, shared contracts, or other affected behavior.
+
+Unsigned XCTest builds use `build/DerivedDataTests` by default, separate from the signed app used by `make run`. Override `TEST_DERIVED_DATA` when needed, keeping it separate from `DERIVED_DATA` to avoid leaving a test bundle inside the installed app.
+
+| Change | Verification scope |
+| --- | --- |
+| App or plugin behavior | Compile and run relevant existing tests. Add coverage only for missing core behavior or a regression; manually check hardware/system integration where needed. |
+| UI or widgets | Attach the UI evidence below. Check affected interactions; add logic tests only when state, actions, or lifecycle change. |
+| PluginKit API/ABI or cross-module behavior | `make ci` before pushing these code changes; it includes script tests, XCTest, and frozen-client compatibility. Register newly introduced APIs in `scripts/tests/test_plugin_minimum_host_compatibility.py`; consumers of already listed APIs need a compatible `minHostVersion`, not another inventory entry. |
+| Scripts, manifests, or catalogs | Focused script tests for isolated logic; `make script-tests` for package/schema/compatibility changes or new public API consumers. Regenerate website data with `python3 scripts/plugins/generate_website_plugin_data.py` after metadata/action changes. |
+| Panel drag routing or hit testing | Run the relevant layout state tests, then manually check the affected [panel interactions](docs/testing/panel-layout-editing.md). |
+| Changelog fragments | `make validate-changelog` before committing or pushing. |
+| Documentation only | Check changed links, examples, formatting, and rendered layout; no app build is needed. |
+
+## Submit a pull request
+
+Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md). Explain the problem, resulting behavior, verification, and relevant limitations. Link the issue and keep unrelated refactoring or formatting out of the diff. Contributors remain responsible for understanding and testing all submitted code, including assisted code.
+
+**UI changes require before/after screenshots.** For a new surface, provide the resulting UI and describe its entry point. Include light and dark appearances for visual changes and a representative custom theme when theme behavior changes. Use a short recording for dragging, focus, keyboard navigation, or other behavior a still image cannot demonstrate. Show enough of the surrounding window to assess layout; remove private content.
+
+Check the interactions, states, translations, and window sizes affected by the change; this is not an exhaustive checklist for every PR. Include a comparable before/after observation when changing background workload, sampling frequency, large-data rendering, or claiming a performance improvement; routine UI edits do not need profiling. See the [measurement guide](docs/plugins/development-guidelines.md#performance-and-energy).
+
+Before requesting review:
+
+- [ ] Relevant checks pass; the PR lists commands, results, and any checks that could not run.
+- [ ] UI evidence is attached when applicable, and the design follows shared components and themes.
+- [ ] User-visible changes update the README or feature guide and include an English fragment in `changes/unreleased/`.
+- [ ] Manifest metadata, API compatibility, permissions, and action policies match the implementation.
+- [ ] Third-party sources and licenses are recorded; no secrets, local configuration, or unrelated generated files are included.
+
+Changelog fragments use `release: app` or `release: plugin` and a supported `type`. Keep each entry within 220 characters and two sentences. If both channels are affected, explain each impact separately. Documentation-only changes do not need a release fragment. See [changelog instructions](changes/README.md).
+
+## Licensing and releases
+
+Contributions must follow [LICENSE](LICENSE) and [LICENSING.md]. Project-authored app, CLI, PluginKit, official plugins, tooling, and documentation use **GPL-3.0-only**. Submit only material you have the right to contribute under the applicable terms. Third-party material retains its own notices; record its source, exact revision, affected products, source paths, and license text in [ThirdPartyNotices](Sources/Resources/ThirdPartyNotices/manifest.json). Plugins accepted into the official catalog must use GPLv3-compatible terms unless the licensing policy documents an exception. Icon contributions also follow the [asset catalog rules](docs/icon-gallery.md).
+
+Releases are maintainer-owned. Feature PRs should not pre-bump plugin versions, change signed catalogs, or regenerate release history. Follow the [release workflow](docs/github-actions.md), [plugin catalog](docs/plugins/plugin-catalog.md), and [CLI release gates](docs/plugins/cli-release.md) for release work.

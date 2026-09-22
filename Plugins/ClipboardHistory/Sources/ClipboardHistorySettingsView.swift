@@ -108,13 +108,16 @@ struct ClipboardHistorySettingsView: View {
     let savedLibraryController: ClipboardSavedLibraryController
     @ObservedObject private var settings: ClipboardHistorySettingsStore
     @StateObject private var presentation: ClipboardHistorySettingsPresentationModel
+    @ObservedObject private var itemShortcutStore: ClipboardItemShortcutStore
     private let localization: PluginLocalization
     private let settingsContext: PluginSettingsContext?
     private let contentSections: Set<ClipboardHistorySettingsContentSection>
     private let onManageSnippets: (() -> Void)?
+    private let onRemoveItemShortcut: (UUID, ClipboardItemShortcutStore.PasteFormat) -> Void
     private let backupService: (() -> ClipboardBackupService?)?
     private let onBackupSuspend: () -> Void
     private let onBackupResume: (Bool) -> Void
+    private let provisionalSavedMetadataForBackup: () -> [UUID: ClipboardHistorySavedMetadata]
     @State private var clearRequest: ClipboardHistorySettingsClearRequest?
     @State private var setupDestination: ClipboardHistorySetupDestination?
     @State private var isHistoryAdvancedExpanded = false
@@ -137,9 +140,12 @@ struct ClipboardHistorySettingsView: View {
             .data,
         ],
         onManageSnippets: (() -> Void)? = nil,
+        itemShortcutStore: ClipboardItemShortcutStore,
+        onRemoveItemShortcut: @escaping (UUID, ClipboardItemShortcutStore.PasteFormat) -> Void = { _, _ in },
         backupService: (() -> ClipboardBackupService?)? = nil,
         onBackupSuspend: @escaping () -> Void = {},
-        onBackupResume: @escaping (Bool) -> Void = { _ in }
+        onBackupResume: @escaping (Bool) -> Void = { _ in },
+        provisionalSavedMetadataForBackup: @escaping () -> [UUID: ClipboardHistorySavedMetadata] = { [:] }
     ) {
         self.controller = controller
         self.savedLibraryController = savedLibraryController
@@ -147,9 +153,12 @@ struct ClipboardHistorySettingsView: View {
         self.settingsContext = settingsContext
         self.contentSections = contentSections
         self.onManageSnippets = onManageSnippets
+        self.itemShortcutStore = itemShortcutStore
+        self.onRemoveItemShortcut = onRemoveItemShortcut
         self.backupService = backupService
         self.onBackupSuspend = onBackupSuspend
         self.onBackupResume = onBackupResume
+        self.provisionalSavedMetadataForBackup = provisionalSavedMetadataForBackup
         _settings = ObservedObject(wrappedValue: controller.settings)
         _presentation = StateObject(wrappedValue: ClipboardHistorySettingsPresentationModel(
             controller: controller,
@@ -330,6 +339,43 @@ struct ClipboardHistorySettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var itemShortcutRows: some View {
+        if itemShortcutStore.assignments.isEmpty {
+            PluginSettingsListDivider()
+            PluginSettingsItem(
+                title: localization.string("itemShortcut.settings.title", defaultValue: "Item Shortcuts"),
+                description: localization.string(
+                    "itemShortcut.settings.empty",
+                    defaultValue: "Choose Assign Shortcut from an item's Actions menu."
+                ),
+                systemImage: "keyboard"
+            ) { EmptyView() }
+            .pluginSettingsListRowPadding(interactive: false)
+        }
+        ForEach(itemShortcutStore.assignments) { assignment in
+            PluginSettingsListDivider()
+            VStack(alignment: .leading, spacing: 4) {
+                pluginShortcutRow(assignment.definitionID)
+                HStack {
+                    Text(assignment.expiresAt.map {
+                        localization.format("settings.quickPaste.until", defaultValue: "Until %@",
+                                            $0.formatted(date: .abbreviated, time: .shortened))
+                    } ?? localization.string("settings.quickPaste.noExpiry", defaultValue: "Until removed"))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(localization.string("settings.quickPaste.remove", defaultValue: "Remove Shortcut")) {
+                        onRemoveItemShortcut(assignment.itemID, assignment.pasteFormat)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
+            }
+        }
+    }
+
     private var historySection: some View {
         VStack(spacing: 0) {
             privacyAndStorageOverview
@@ -340,6 +386,7 @@ struct ClipboardHistorySettingsView: View {
                 actionShortcutRow(ClipboardHistoryPlugin.ActionID.openHistory, systemImage: "clipboard")
                 PluginSettingsListDivider()
                 pluginShortcutRow(ClipboardHistoryPlugin.ShortcutID.pastePlainText)
+                itemShortcutRows
             }
             .pluginSettingsSearchAnchor(
                 pluginID: ClipboardHistoryPlugin.pluginID,
@@ -915,10 +962,10 @@ struct ClipboardHistorySettingsView: View {
             }
             PluginSettingsListDivider()
             settingPickerRow(
-                title: localization.string("settings.retention.expiration.title", defaultValue: "自动过期"),
+                title: localization.string("settings.retention.expiration.title", defaultValue: "闲置过期时间"),
                 description: localization.string(
                     "settings.retention.expiration.description",
-                    defaultValue: "“永不”仅关闭按时间过期；容量规则仍会移除最早的历史记录。"
+                    defaultValue: "按最后使用时间计算；未使用过的记录按添加时间计算。"
                 ),
                 selection: $settings.expiration
             ) {
@@ -1075,7 +1122,8 @@ struct ClipboardHistorySettingsView: View {
                     controller: controller,
                     makeService: backupService,
                     suspend: onBackupSuspend,
-                    resume: onBackupResume
+                    resume: onBackupResume,
+                    provisionalSavedMetadata: provisionalSavedMetadataForBackup
                 )
             }
             if let errorMessage = presentation.snapshot.historyErrorMessage {

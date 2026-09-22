@@ -4,6 +4,7 @@ import SQLite3
 
 /// Private staging databases contain only destination-key-encrypted persistent rows.
 final class ClipboardBackupDatabase {
+    enum Schema: String { case main, recovery }
     let handle: OpaquePointer
     let key: SymmetricKey
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -109,15 +110,17 @@ final class ClipboardBackupDatabase {
         return try open(table: table, id: id, metadata: column(statement, 0), payload: column(statement, 1))
     }
 
-    func put(_ record: ClipboardBackupRecord) throws {
+    func put(_ record: ClipboardBackupRecord, into schema: Schema = .main) throws {
         let prefix = record.table == .items ? "MTH" : "MTS"
         try putRaw(table: record.table, id: record.id,
                    metadata: encrypt(record.metadata, magic: prefix + "M1", id: record.id),
-                   payload: encrypt(record.payload, magic: prefix + "P1", id: record.id))
+                   payload: encrypt(record.payload, magic: prefix + "P1", id: record.id),
+                   into: schema)
     }
 
-    func putRaw(table: ClipboardBackupRecord.Table, id: UUID, metadata: Data, payload: Data) throws {
-        let statement = try statement("INSERT INTO \(table.rawValue) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata, payload=excluded.payload")
+    func putRaw(table: ClipboardBackupRecord.Table, id: UUID, metadata: Data, payload: Data,
+                into schema: Schema = .main) throws {
+        let statement = try statement("INSERT INTO \(schema.rawValue).\(table.rawValue) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata, payload=excluded.payload")
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_text(statement, 1, id.uuidString, -1, Self.transient)
         try bind(metadata, at: 2, to: statement)
@@ -125,8 +128,8 @@ final class ClipboardBackupDatabase {
         guard sqlite3_step(statement) == SQLITE_DONE else { throw ClipboardBackupError.storage }
     }
 
-    func remove(_ record: ClipboardBackupRecord) throws {
-        try execute("DELETE FROM \(record.table.rawValue) WHERE id=?1", text: record.id.uuidString)
+    func remove(_ record: ClipboardBackupRecord, from schema: Schema = .main) throws {
+        try execute("DELETE FROM \(schema.rawValue).\(record.table.rawValue) WHERE id=?1", text: record.id.uuidString)
     }
 
     func fingerprint() throws -> Data {

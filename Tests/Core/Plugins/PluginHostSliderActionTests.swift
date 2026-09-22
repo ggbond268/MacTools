@@ -20,7 +20,7 @@ final class PluginHostSliderActionTests: XCTestCase {
         host.setPanelSliderValue(
             0.78,
             controlID: "display.2.brightness",
-            for: plugin.metadata.id,
+            for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id,
             phase: .ended
         )
 
@@ -39,7 +39,7 @@ final class PluginHostSliderActionTests: XCTestCase {
         host.setPanelSliderValue(
             0.42,
             controlID: "display.2.brightness",
-            for: plugin.metadata.id,
+            for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id,
             phase: .changed
         )
 
@@ -59,7 +59,7 @@ final class PluginHostSliderActionTests: XCTestCase {
         host.setPanelSliderValue(
             0.42,
             controlID: "display.2.brightness",
-            for: plugin.metadata.id,
+            for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id,
             phase: .ended
         )
 
@@ -113,7 +113,7 @@ final class PluginHostSliderActionTests: XCTestCase {
         return PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager()
         )
@@ -121,7 +121,15 @@ final class PluginHostSliderActionTests: XCTestCase {
 }
 
 @MainActor
-private final class MockSliderPlugin: MacToolsPlugin, PluginPrimaryPanel {
+private final class MockSliderPlugin: MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     let metadata = PluginMetadata(
         id: "mock-slider",
         title: "Mock Slider",
@@ -131,7 +139,7 @@ private final class MockSliderPlugin: MacToolsPlugin, PluginPrimaryPanel {
         defaultDescription: "Mock slider plugin"
     )
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -143,14 +151,13 @@ private final class MockSliderPlugin: MacToolsPlugin, PluginPrimaryPanel {
     var receivedSettingsActions: [PluginSettingsAction] = []
     var primaryPanelStateReadCount = 0
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         primaryPanelStateReadCount += 1
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: "Mock",
             isOn: false,
-            isExpanded: true,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: PluginPanelDetail(primaryControls: [], secondaryPanel: nil),
             errorMessage: nil
         )

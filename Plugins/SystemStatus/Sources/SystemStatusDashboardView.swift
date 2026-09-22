@@ -2052,12 +2052,14 @@ struct SystemStatusMetricDetailView: View {
         let chartData = chartStore.chartCache.data(for: selectedRange)
         let axisLabels = chartStore.axisLabelsByRange[selectedRange] ?? ["—"]
 
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(currentValue)
                     .font(SystemStatusHUDFont.mono(20, .semibold))
                     .foregroundStyle(theme.text.primary)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
 
                 Spacer(minLength: 8)
 
@@ -2087,7 +2089,6 @@ struct SystemStatusMetricDetailView: View {
                     ForEach(Array(axisLabels.enumerated()), id: \.offset) { index, label in
                         Text(label)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.75)
                             .frame(
                                 maxWidth: .infinity,
                                 alignment: index == 0
@@ -2096,8 +2097,8 @@ struct SystemStatusMetricDetailView: View {
                             )
                     }
                 }
-                .font(SystemStatusHUDFont.mono(8.5, .medium))
-                .foregroundStyle(theme.text.tertiary)
+                .font(.caption2.monospaced())
+                .foregroundStyle(theme.text.secondary)
                 .monospacedDigit()
             }
             .padding(.horizontal, 7)
@@ -2128,7 +2129,8 @@ struct SystemStatusMetricDetailView: View {
 
             if !supportingDetails.isEmpty {
                 Text(supportingDetails.joined(separator: " · "))
-                    .font(SystemStatusHUDFont.mono(9))
+                    .font(.subheadline)
+                    .monospacedDigit()
                     .foregroundStyle(theme.text.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2201,8 +2203,8 @@ struct SystemStatusMetricDetailView: View {
     private func statistic(title: String, value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(SystemStatusHUDFont.sans(8.5, .medium))
-                .foregroundStyle(theme.text.tertiary)
+                .font(.caption)
+                .foregroundStyle(theme.text.secondary)
             Text(value.map(statisticFormatter) ?? "—")
                 .font(SystemStatusHUDFont.mono(10, .medium))
                 .foregroundStyle(theme.text.primary)
@@ -2250,7 +2252,7 @@ struct SystemStatusMetricDetailView: View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(label)
-                .font(SystemStatusHUDFont.sans(8.5, .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(theme.text.secondary)
         }
     }

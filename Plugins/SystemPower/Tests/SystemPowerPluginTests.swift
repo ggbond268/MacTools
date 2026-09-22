@@ -14,40 +14,6 @@ final class SystemPowerPluginTests: XCTestCase {
         )
     }
 
-    func testPluginContractAndPanelControls() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.metadata.id, "system-power")
-        XCTAssertEqual(plugin.metadata.order, 99)
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .disclosure)
-        XCTAssertFalse(plugin.primaryPanelState.isExpanded)
-        XCTAssertEqual(
-            plugin.primaryPanelState.detail?.primaryControls.map(\.id),
-            ["sleep", "log-out", "restart", "shut-down"]
-        )
-        XCTAssertTrue(
-            plugin.primaryPanelState.detail?.primaryControls.allSatisfy {
-                switch $0.actionBehavior {
-                case .dismissBeforeHandling:
-                    true
-                case .keepPresented:
-                    false
-                }
-            } == true
-        )
-    }
-
-    func testDisclosureStateNotifiesTheHost() {
-        let plugin = makePlugin()
-        var stateChangeCount = 0
-        plugin.onStateChange = { stateChangeCount += 1 }
-
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        XCTAssertTrue(plugin.primaryPanelState.isExpanded)
-        XCTAssertEqual(stateChangeCount, 1)
-    }
-
     func testCanonicalActionsAreForegroundOnlyAndUnavailableToRunLinks() {
         let plugin = makePlugin()
 
@@ -118,7 +84,7 @@ final class SystemPowerPluginTests: XCTestCase {
         guard case .failed = result else {
             return XCTFail("Expected the operation to fail, got \(result)")
         }
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testSuccessfulRetryClearsPanelErrorAndNotifiesTheHost() async throws {
@@ -138,12 +104,12 @@ final class SystemPowerPluginTests: XCTestCase {
         guard case .failed = failure else {
             return XCTFail("Expected the first operation to fail, got \(failure)")
         }
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertEqual(stateChangeCount, 1)
 
         let success = try await plugin.beginAction(invocation).result()
         XCTAssertEqual(success, .succeeded())
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
         XCTAssertEqual(stateChangeCount, 2)
     }
 
@@ -174,14 +140,14 @@ final class SystemPowerPluginTests: XCTestCase {
         XCTAssertEqual(requestedPermissionID, "automation")
         XCTAssertFalse(plugin.permissionState(for: "automation").isGranted)
         XCTAssertNotNil(plugin.permissionState(for: "automation").footnote)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertEqual(stateChangeCount, 1)
 
         let retryResult = try await plugin.beginAction(invocation).result()
 
         XCTAssertEqual(retryResult, .succeeded())
         XCTAssertTrue(plugin.permissionState(for: "automation").isGranted)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
         XCTAssertEqual(stateChangeCount, 2)
     }
 

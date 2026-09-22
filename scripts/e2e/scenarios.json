@@ -157,7 +157,7 @@
         "localization-chinese",
         "localization-arabic-rtl",
         "command-k-appearance-roundtrip",
-        "command-k-plugin-visibility-roundtrip"
+        "command-k-excludes-component-layout-commands"
       ]
     },
     {

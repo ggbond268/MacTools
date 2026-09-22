@@ -21,11 +21,15 @@ private struct SystemPowerPluginProvider: PluginProvider {
 
 @MainActor
 final class SystemPowerPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginActionProviding,
-    PluginActionPermissionProviding
-{
+    MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     static let pluginID = "system-power"
 
     private enum PermissionID {
@@ -33,7 +37,7 @@ final class SystemPowerPlugin:
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -73,19 +77,18 @@ final class SystemPowerPlugin:
                 defaultValue: "让 Mac 睡眠、退出登录、重新启动或关机"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .disclosure,
             menuActionBehavior: .keepPresented
         )
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: panelDetail,
             errorMessage: lastErrorMessage
         )

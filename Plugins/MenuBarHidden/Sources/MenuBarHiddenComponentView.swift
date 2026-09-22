@@ -8,7 +8,7 @@ import MacToolsPluginKit
 
 struct MenuBarHiddenComponentView: View {
     @ObservedObject var controller: MenuBarHiddenController
-    let context: PluginComponentContext
+    let context: PluginPanelWidgetContext
 
     @Environment(\.pluginComponentTheme) private var theme
 
@@ -80,7 +80,7 @@ enum MenuBarHiddenComponentIconLayout {
     static let horizontalItemSpacing: CGFloat = 4
     static let minimumVerticalSpacing: CGFloat = 4
     static let horizontalPadding: CGFloat = 7
-    static let cardCornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius
+    static let cardCornerRadius: CGFloat = PluginPanelWidgetLayoutMetrics.cardCornerRadius
     static let itemCornerRadius: CGFloat = 7
 
     static func naturalContentHeight(forRowHeights rowHeights: [CGFloat]) -> CGFloat {
@@ -115,7 +115,7 @@ enum MenuBarHiddenComponentIconLayout {
     static func rowCount(
         forItems items: [MenuBarItem],
         iconCache: MenuBarHiddenIconCache,
-        availableWidth: CGFloat = PluginComponentPanelLayoutMetrics.default.gridWidth
+        availableWidth: CGFloat = PluginPanelWidgetLayoutMetrics.default.gridWidth
     ) -> Int {
         let contentWidth = max(0, availableWidth - horizontalPadding * 2)
         guard !items.isEmpty, contentWidth > 0 else {
@@ -146,12 +146,12 @@ enum MenuBarHiddenComponentIconLayout {
     static func spanHeight(
         forItems items: [MenuBarItem],
         iconCache: MenuBarHiddenIconCache,
-        metrics: PluginComponentPanelLayoutMetrics = .default
+        metrics: PluginPanelWidgetLayoutMetrics = .default
     ) -> Int {
         let rows = rowCount(
             forItems: items,
             iconCache: iconCache,
-            availableWidth: metrics.itemWidth(forSpanWidth: PluginComponentSpan.maximumWidth)
+            availableWidth: metrics.itemWidth(forSpanWidth: PluginPanelWidgetSpan.maximumWidth)
         )
         return rows * 4 + 1
     }

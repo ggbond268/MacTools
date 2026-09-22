@@ -1,10 +1,12 @@
 # Window Switcher development
 
-The redesign uses per-process Accessibility workers and a native, nonactivating searchable chooser. Activation targets use live AX identity; capture metadata never determines the action destination. Screen Recording permission is optional for core switching.
+The redesign uses per-process Accessibility workers and a native, nonactivating searchable chooser. Activation targets use live AX identity and the WindowServer owner pid, so helper-owned Chrome/Electron windows and multiple windows of one app switch to the selected surface. Capture metadata never determines the action destination. Screen Recording permission is optional for core switching.
+
+Plugin settings control selected-window preview and whether minimized, other-desktop, or fullscreen-Space windows are listed. New installations enable preview; existing profiles keep their saved preview choice. Each Finder or Safari window remains a separate row. Browser-tab search stays out of this window-level pass, matching the [redesign roadmap](https://github.com/ggbond268/MacTools/issues/414).
 
 See the [interaction contract and acceptance record](../superpowers/specs/2026-09-10-window-switcher-redesign.md) and [isolated Chrome diagnostic](../../scripts/diagnostics/window-switcher/README.md). The diagnostic runs against a temporary profile, fails on unexpected native outcomes, and does not install a packaged plugin.
 
-The plugin manifest targets PluginKit v6 and publishes both All Windows and Current App Windows actions. The host shortcut-resolution change and plugin listener should be reviewed and released together. Existing custom or cleared shortcuts remain authoritative, and selecting the companion preset changes inherited defaults. Do not claim release readiness from model tests alone; record physical IME, fullscreen, Spaces, displays, and save-dialog acceptance separately.
+The plugin manifest targets PluginKit v7 and publishes both All Windows and Current App Windows actions. The host shortcut-resolution change and plugin listener should be reviewed and released together. Existing custom or cleared shortcuts remain authoritative, and selecting the companion preset changes inherited defaults. Do not claim release readiness from model tests alone; record physical IME, fullscreen, Spaces, displays, and save-dialog acceptance separately.
 
 The chooser now consumes `PluginWindowSnapCoordinator` for its own drag handle, so its minimum host is 1.3.1. This is independent of Window Layouts' external-window centered guides. Capture inventory is retained only for two seconds and reused only with exact window IDs; failed/missing matches invalidate it, and permission checks gate captures and display.
 
@@ -65,3 +67,11 @@ Offscreen previews can use the optional `CGSHWCaptureWindowList` bridge when Scr
 An isolated executable, relinked against the production plugin core, exercised cold discovery from the real chooser on macOS 27.0. Both selected Chrome windows were absent from the initial AX list. The desktop target was revealed on its existing Space with its exact focused ID in 505 ms; the fullscreen target passed the same checks in 461 ms. Their previews loaded before activation in 103 ms and 96 ms respectively. Both physical and combined mouse-button states were released after each handoff. No previews were written to disk.
 
 These are two native cases, not a completed platform matrix. Physical macOS 26, multiple displays, Split View, fullscreen-to-desktop, Mission Control preferences, and user-interrupted transitions remain acceptance checks. Subsequent minimized-restore guards have regression coverage but have not been exercised in a native minimized cross-Space case. The combined Debug app was subsequently installed with matching host/plugin hashes, and the user confirmed that the fix works in the installed app. This confirms that local smoke test; it does not complete the remaining platform matrix. Hosted PR checks remain separate.
+
+## Discovery lifecycle and ownership
+
+After every asynchronous helper scan, the catalog checks its running state and the host and helper worker identities before publishing results. A scan from a stopped or replaced worker cannot update the current session. AX records retain their source worker independently of the WindowServer owner PID, including when host and helper scans expose the same window number. Inventory classification shares one display/Space topology snapshot per scan and reloads it on the next scan; unavailable metadata remains unknown.
+
+## Panel activation
+
+The chooser is constructed as a nonactivating panel in both cycling and persistent search modes, including when preview is visible. Presentation, dismissal, and compatibility focus restoration share the [PluginKit panel contract](global-panel-presentation.md). Only deliberate interaction with the preview requests host activation for native gesture compatibility. Cancellation restores the original application only if MacTools acquired foreground ownership; committing a selection or losing focus to another window does not restore it. The 140 ms cycling delay still suppresses the chooser for a quick release.

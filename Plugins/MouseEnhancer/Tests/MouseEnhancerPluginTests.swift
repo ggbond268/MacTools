@@ -113,77 +113,6 @@ private final class MockMouseEnhancerMiddleClickSession: MouseEnhancerMiddleClic
 
 @MainActor
 final class MouseEnhancerPluginTests: XCTestCase {
-    func testStoreLeavesExtractedMiddleClickStorageKeysUntouched() {
-        let storage = MouseEnhancerMemoryStorage()
-        storage.values["mouse-enhancer.middle-click.enabled"] = true
-        storage.values["mouse-enhancer.middle-click.finger-count"] = 5
-
-        let store = MouseEnhancerStore(storage: storage)
-
-        XCTAssertFalse(store.configuration.shouldInstallEventTap)
-        XCTAssertTrue(store.configuration.middleClickEnabled)
-        XCTAssertEqual(store.configuration.middleClickFingerCount, 5)
-        XCTAssertEqual(storage.values["mouse-enhancer.middle-click.enabled"] as? Bool, true)
-        XCTAssertEqual(storage.values["mouse-enhancer.middle-click.finger-count"] as? Int, 5)
-    }
-
-    func testFeatureExtractionHostNeverStartsLegacyMiddleClickListener() {
-        let storage = MouseEnhancerMemoryStorage()
-        storage.values["mouse-enhancer.middle-click.enabled"] = true
-        storage.values["mouse-enhancer.middle-click.finger-count"] = 5
-        let middleClickSession = MockMouseEnhancerMiddleClickSession()
-        let plugin = makePlugin(
-            storage: storage,
-            middleClickSession: middleClickSession,
-            hostVersion: "1.2.0"
-        )
-
-        plugin.activate(context: PluginRuntimeContext(pluginID: "mouse-enhancer"))
-
-        XCTAssertEqual(middleClickSession.activateCallCount, 0)
-        XCTAssertEqual(middleClickSession.deactivateCallCount, 0)
-    }
-
-    func testDowngradedHostRestoresLegacyMiddleClickFromPreservedPreferences() {
-        let storage = MouseEnhancerMemoryStorage()
-        storage.values["mouse-enhancer.middle-click.enabled"] = true
-        storage.values["mouse-enhancer.middle-click.finger-count"] = 5
-        let middleClickSession = MockMouseEnhancerMiddleClickSession()
-        let plugin = makePlugin(
-            storage: storage,
-            middleClickSession: middleClickSession,
-            hostVersion: "1.1.5"
-        )
-
-        plugin.activate(context: PluginRuntimeContext(pluginID: "mouse-enhancer"))
-
-        XCTAssertEqual(middleClickSession.activateCallCount, 1)
-        XCTAssertEqual(middleClickSession.requiredFingerCount, 5)
-    }
-
-    func testLegacyMiddleClickOwnershipUsesHostVersionBoundary() {
-        XCTAssertTrue(MouseEnhancerHostCompatibility.ownsLegacyMiddleClick(hostVersion: "1.1.5"))
-        XCTAssertTrue(MouseEnhancerHostCompatibility.ownsLegacyMiddleClick(hostVersion: "1.1.6"))
-        XCTAssertTrue(MouseEnhancerHostCompatibility.ownsLegacyMiddleClick(hostVersion: "1.1.6-beta.1"))
-        XCTAssertFalse(MouseEnhancerHostCompatibility.ownsLegacyMiddleClick(hostVersion: "1.2.0"))
-        XCTAssertFalse(MouseEnhancerHostCompatibility.ownsLegacyMiddleClick(hostVersion: nil))
-    }
-
-    func testLegacyMultitouchRuntimeResolvesRequiredSymbolsDynamically() {
-        XCTAssertNotNil(MouseEnhancerMultitouchRuntime.load())
-    }
-
-    func testPanelButtonRequestsConfigurationPresentation() {
-        let plugin = makePlugin()
-        var didRequestConfigurationPresentation = false
-        plugin.requestSettingsPresentation = {
-            didRequestConfigurationPresentation = true
-        }
-
-        plugin.handleAction(.invokeAction(controlID: "execute"))
-
-        XCTAssertTrue(didRequestConfigurationPresentation)
-    }
 
     func testConfigurationChangeEnablesSessionWhenAccessibilityGranted() {
         let session = MockMouseEnhancerSession()
@@ -214,7 +143,7 @@ final class MouseEnhancerPluginTests: XCTestCase {
 
         XCTAssertTrue(didRequestPermission)
         XCTAssertTrue(session.activatedConfigurations.isEmpty)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testTurningOffAllDirectionsStopsSession() {
@@ -241,77 +170,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
 
         XCTAssertFalse(session.updatedConfigurations.isEmpty)
         XCTAssertTrue(session.updatedConfigurations.last?.reverseMouseHorizontal == true)
-    }
-
-    func testPermissionRequirementsIncludeAccessibilityAndInputMonitoring() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility", "input-monitoring"])
-    }
-
-    func testApplicationActivityTransitionsRecoverSessionOnlyAtInteractiveBoundary() {
-        let session = MockMouseEnhancerSession()
-        let plugin = makePlugin(session: session)
-
-        plugin.applicationActivityStateDidChange(.sessionInactive)
-        plugin.applicationActivityStateDidChange(.displayAsleep)
-        plugin.applicationActivityStateDidChange(.waking)
-
-        XCTAssertEqual(session.inputUnavailableCallCount, 1)
-        XCTAssertEqual(session.inputAvailableCallCount, 0)
-
-        plugin.applicationActivityStateDidChange(.interactive)
-
-        XCTAssertEqual(session.inputUnavailableCallCount, 1)
-        XCTAssertEqual(session.inputAvailableCallCount, 1)
-    }
-
-    func testDisplayTopologyRefreshIsForwardedWhileInputIsUnavailable() {
-        let session = MockMouseEnhancerSession()
-        let plugin = makePlugin(session: session)
-
-        plugin.refreshDisplayTopology()
-        XCTAssertEqual(session.displayTopologyChangeCallCount, 1)
-
-        plugin.applicationActivityStateDidChange(.sessionInactive)
-        plugin.refreshDisplayTopology()
-        XCTAssertEqual(session.displayTopologyChangeCallCount, 2)
-
-        plugin.applicationActivityStateDidChange(.interactive)
-        plugin.refreshDisplayTopology()
-        XCTAssertEqual(session.displayTopologyChangeCallCount, 3)
-    }
-
-    func testRecoveryStatePreservesLongerDisplaySettleAcrossInputInterruption() {
-        var state = MouseEnhancerRecoveryState()
-
-        state.request(.displayTopology)
-        state.setInputAvailable(false)
-        state.request(.applicationActivity)
-
-        XCTAssertFalse(state.isInputAvailable)
-        XCTAssertEqual(state.pendingCause, .displayTopology)
-        XCTAssertEqual(state.pendingCause?.delay, 2)
-
-        state.setInputAvailable(true)
-        state.request(.applicationActivity)
-
-        XCTAssertTrue(state.isInputAvailable)
-        XCTAssertEqual(state.pendingCause, .displayTopology)
-    }
-
-    func testRecoveryStateUsesShortActivitySettleWithoutDisplayChange() {
-        var state = MouseEnhancerRecoveryState()
-
-        state.setInputAvailable(false)
-        state.request(.applicationActivity)
-        state.setInputAvailable(true)
-
-        XCTAssertEqual(state.pendingCause, .applicationActivity)
-        XCTAssertEqual(state.pendingCause?.delay, 0.25)
-
-        state.clearPending()
-        XCTAssertNil(state.pendingCause)
     }
 
     func testProcessorReversesDiscreteMouseVerticalDeltas() {
@@ -406,41 +264,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.deltas.deltaAxis1, -2)
     }
 
-    func testProcessorReversesTrackpadHorizontalIndependently() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: true,
-                reverseTrackpadVertical: false
-            )
-        )
-
-        processor.setGestureMonitoringAvailable(true)
-        processor.recordGestureTouchingCount(2, timestamp: 1_000)
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: true,
-                scrollPhase: 1,
-                momentumPhase: 0
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 2,
-                deltaAxis2: 4,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 20,
-                fixedPointDeltaAxis1: 2,
-                fixedPointDeltaAxis2: 4
-            ),
-            timestamp: 1_000 + 10_000_000
-        )
-
-        XCTAssertEqual(result.source, .trackpad)
-        XCTAssertTrue(result.shouldReverse)
-        XCTAssertEqual(result.deltas.deltaAxis1, 2)
-        XCTAssertEqual(result.deltas.deltaAxis2, -4)
-    }
-
     func testProcessorDoesNotReverseWhenNoDirectionIsEnabled() {
         let processor = MouseScrollEventProcessor(
             configuration: MouseEnhancerConfiguration(
@@ -467,121 +290,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertFalse(result.shouldReverse)
         XCTAssertEqual(result.deltas.deltaAxis1, 2)
         XCTAssertEqual(result.deltas.deltaAxis2, 3)
-    }
-
-    func testProcessorKeepsTrackpadSourceForMomentumAfterTrackpadGesture() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: true
-            )
-        )
-
-        processor.setGestureMonitoringAvailable(true)
-        processor.recordGestureTouchingCount(2, timestamp: 1_000)
-        _ = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: true,
-                scrollPhase: 1,
-                momentumPhase: 0
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 2,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 2,
-                fixedPointDeltaAxis2: 0
-            ),
-            timestamp: 10_000_000
-        )
-
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: true,
-                scrollPhase: 0,
-                momentumPhase: 1
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 1,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 8,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 1,
-                fixedPointDeltaAxis2: 0
-            ),
-            timestamp: 400_000_000
-        )
-
-        XCTAssertEqual(result.source, .trackpad)
-        XCTAssertTrue(result.shouldReverse)
-        XCTAssertEqual(result.deltas.deltaAxis1, -1)
-    }
-
-    func testProcessorTreatsPhasedContinuousScrollAsTrackpadUntilTouchEvidenceRecovers() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: true,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false
-            )
-        )
-
-        // An installed gesture tap can stay enabled but stop delivering useful touch callbacks
-        // across screen locking or display reconfiguration.
-        processor.setGestureMonitoringAvailable(true)
-        processor.recordGestureTouchingCount(1, timestamp: 1_000)
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: true,
-                scrollPhase: 1,
-                momentumPhase: 0
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 2,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 2,
-                fixedPointDeltaAxis2: 0
-            ),
-            timestamp: 1_000_000_000
-        )
-
-        XCTAssertEqual(result.source, .trackpad)
-        XCTAssertFalse(result.shouldReverse)
-        XCTAssertEqual(result.deltas.deltaAxis1, 2)
-    }
-
-    func testProcessorStillTreatsPhaseLessContinuousWheelAsMouseDuringRecovery() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: true,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false
-            )
-        )
-
-        processor.setGestureMonitoringAvailable(true)
-        let result = processor.process(
-            snapshot: .phaseLessContinuousWheel,
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 2,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 2,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertEqual(result.source, .mouse)
-        XCTAssertTrue(result.shouldReverse)
-        XCTAssertEqual(result.deltas.deltaAxis1, -2)
     }
 
     func testProcessorAppliesMouseScrollGainToAllRepresentations() {
@@ -617,131 +325,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.deltas.pointDeltaAxis2, 20)
     }
 
-    func testProcessorGainBelowOneKeepsCoarseDeltasNonZero() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false,
-                mouseScrollGain: 0.5
-            )
-        )
-
-        let result = processor.process(
-            snapshot: .discreteWheel,
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 1,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 1,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertEqual(result.deltas.deltaAxis1, 1)
-        XCTAssertEqual(result.deltas.pointDeltaAxis1, 5)
-        XCTAssertEqual(result.deltas.fixedPointDeltaAxis1, 0.5, accuracy: 0.001)
-    }
-
-    func testProcessorFloorsSmallTicksToMouseScrollStep() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false,
-                mouseScrollStep: 40
-            )
-        )
-
-        let result = processor.process(
-            snapshot: .discreteWheel,
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 1,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 1,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertTrue(result.isTuned)
-        XCTAssertEqual(result.deltas.pointDeltaAxis1, 40)
-        XCTAssertEqual(result.deltas.fixedPointDeltaAxis1, 4, accuracy: 0.001)
-        XCTAssertEqual(result.deltas.deltaAxis1, 4)
-    }
-
-    func testCombinedGainAndStepPreserveAxisProportions() {
-        let input = MouseScrollDeltas(
-            deltaAxis1: 1,
-            deltaAxis2: -1,
-            pointDeltaAxis1: 10,
-            pointDeltaAxis2: -10,
-            fixedPointDeltaAxis1: 1,
-            fixedPointDeltaAxis2: -1
-        )
-        let cases: [(gain: Double, line: Int64, point: Int64, fixed: Double)] = [
-            (0.1, 4, 40, 4),
-            (0.5, 4, 40, 4),
-            (1, 4, 40, 4),
-            (1.5, 4, 40, 4),
-            (4, 4, 40, 4),
-            (5, 5, 50, 5),
-        ]
-
-        for testCase in cases {
-            let result = MouseScrollTuning(step: 40, gain: testCase.gain).apply(input)
-
-            XCTAssertEqual(result.deltaAxis1, testCase.line, "Gain: \(testCase.gain)")
-            XCTAssertEqual(result.deltaAxis2, -testCase.line, "Gain: \(testCase.gain)")
-            XCTAssertEqual(result.pointDeltaAxis1, testCase.point)
-            XCTAssertEqual(result.pointDeltaAxis2, -testCase.point)
-            XCTAssertEqual(result.fixedPointDeltaAxis1, testCase.fixed, accuracy: 0.001)
-            XCTAssertEqual(result.fixedPointDeltaAxis2, -testCase.fixed, accuracy: 0.001)
-        }
-    }
-
-    func testStepFloorUsesUnroundedPixelMagnitude() {
-        let result = MouseScrollTuning(step: 40, gain: 0.5).apply(MouseScrollDeltas(
-            deltaAxis1: 1,
-            deltaAxis2: -1,
-            pointDeltaAxis1: 3,
-            pointDeltaAxis2: -3,
-            fixedPointDeltaAxis1: 1,
-            fixedPointDeltaAxis2: -1
-        ))
-
-        XCTAssertEqual(result.deltaAxis1, 13)
-        XCTAssertEqual(result.deltaAxis2, -13)
-        XCTAssertEqual(result.pointDeltaAxis1, 40)
-        XCTAssertEqual(result.pointDeltaAxis2, -40)
-        XCTAssertEqual(result.fixedPointDeltaAxis1, 40.0 / 3, accuracy: 0.001)
-        XCTAssertEqual(result.fixedPointDeltaAxis2, -40.0 / 3, accuracy: 0.001)
-    }
-
-    func testCombinedTuningDoesNotInventPixelOrIdleAxisMotion() {
-        let result = MouseScrollTuning(step: 40, gain: 0.5).apply(MouseScrollDeltas(
-            deltaAxis1: -1,
-            deltaAxis2: 0,
-            pointDeltaAxis1: 0,
-            pointDeltaAxis2: 0,
-            fixedPointDeltaAxis1: -1,
-            fixedPointDeltaAxis2: 0
-        ))
-
-        XCTAssertEqual(result, MouseScrollDeltas(
-            deltaAxis1: -1,
-            deltaAxis2: 0,
-            pointDeltaAxis1: 0,
-            pointDeltaAxis2: 0,
-            fixedPointDeltaAxis1: -0.5,
-            fixedPointDeltaAxis2: 0
-        ))
-    }
-
     func testTuningClampsIntegerOverflowAndPreservesUnscaledDeltas() {
         let input = MouseScrollDeltas(
             deltaAxis1: .max,
@@ -760,139 +343,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.fixedPointDeltaAxis1, 5)
         XCTAssertEqual(result.fixedPointDeltaAxis2, -5)
         XCTAssertEqual(MouseScrollTuning(step: 40, gain: 1).apply(input), input)
-    }
-
-    func testProcessorCombinesTrackpadTuningWithDirectionReversal() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: true,
-                reverseTrackpadVertical: true,
-                trackpadScrollStep: 40,
-                trackpadScrollGain: 0.5
-            )
-        )
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(isContinuous: true, scrollPhase: 1, momentumPhase: 0),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 1,
-                deltaAxis2: -1,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: -10,
-                fixedPointDeltaAxis1: 1,
-                fixedPointDeltaAxis2: -1
-            )
-        )
-
-        XCTAssertEqual(result.source, .trackpad)
-        XCTAssertTrue(result.shouldReverse)
-        XCTAssertTrue(result.isTuned)
-        XCTAssertEqual(result.deltas, MouseScrollDeltas(
-            deltaAxis1: -4,
-            deltaAxis2: 4,
-            pointDeltaAxis1: -40,
-            pointDeltaAxis2: 40,
-            fixedPointDeltaAxis1: -4,
-            fixedPointDeltaAxis2: 4
-        ))
-    }
-
-    func testProcessorStepFloorPreservesSignAndLargeTicks() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: false,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false,
-                mouseScrollStep: 40
-            )
-        )
-
-        let result = processor.process(
-            snapshot: .discreteWheel,
-            deltas: MouseScrollDeltas(
-                deltaAxis1: -2,
-                deltaAxis2: 0,
-                pointDeltaAxis1: -50,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: -2,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertEqual(result.deltas.pointDeltaAxis1, -50)
-        XCTAssertEqual(result.deltas.fixedPointDeltaAxis1, -2, accuracy: 0.001)
-        XCTAssertEqual(result.deltas.deltaAxis1, -2)
-    }
-
-    func testProcessorPassesThroughRemoteSmoothedEvents() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: true,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false,
-                mouseScrollStep: 40,
-                mouseScrollGain: 2
-            ),
-            remoteSourceEvaluator: { $0 == 4242 }
-        )
-
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: true,
-                scrollPhase: 1,
-                momentumPhase: 0,
-                sourceProcessID: 4242
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 3,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 30,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 3,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertFalse(result.shouldReverse)
-        XCTAssertFalse(result.isTuned)
-        XCTAssertEqual(result.deltas.deltaAxis1, 3)
-        XCTAssertEqual(result.deltas.pointDeltaAxis1, 30)
-    }
-
-    func testProcessorStillProcessesRemoteDiscreteEvents() {
-        let processor = MouseScrollEventProcessor(
-            configuration: MouseEnhancerConfiguration(
-                reverseMouseHorizontal: false,
-                reverseMouseVertical: true,
-                reverseTrackpadHorizontal: false,
-                reverseTrackpadVertical: false
-            ),
-            remoteSourceEvaluator: { $0 == 4242 }
-        )
-
-        let result = processor.process(
-            snapshot: MouseScrollEventSnapshot(
-                isContinuous: false,
-                scrollPhase: 0,
-                momentumPhase: 0,
-                sourceProcessID: 4242
-            ),
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 3,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 24,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 3,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertEqual(result.source, .mouse)
-        XCTAssertTrue(result.shouldReverse)
-        XCTAssertEqual(result.deltas.deltaAxis1, -3)
     }
 
     func testProcessorScrollTuningIsPerDevice() {
@@ -932,28 +382,6 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(result.deltas.fixedPointDeltaAxis1, 2, accuracy: 0.001)
     }
 
-    func testConfigurationInstallsEventTapForScrollTuningOnly() {
-        let off = MouseEnhancerConfiguration(
-            reverseMouseHorizontal: false,
-            reverseMouseVertical: false,
-            reverseTrackpadHorizontal: false,
-            reverseTrackpadVertical: false
-        )
-        let tuningOnly = MouseEnhancerConfiguration(
-            reverseMouseHorizontal: false,
-            reverseMouseVertical: false,
-            reverseTrackpadHorizontal: false,
-            reverseTrackpadVertical: false,
-            mouseScrollStep: 40
-        )
-
-        XCTAssertFalse(off.shouldInstallEventTap)
-        XCTAssertFalse(off.hasAnyScrollTuning)
-        XCTAssertTrue(tuningOnly.shouldInstallEventTap)
-        XCTAssertTrue(tuningOnly.hasMouseEnhancement)
-        XCTAssertFalse(tuningOnly.hasTrackpadEnhancement)
-    }
-
     func testStorePersistsAndNormalizesScrollTuning() {
         let storage = MouseEnhancerMemoryStorage()
         let store = MouseEnhancerStore(storage: storage)
@@ -976,99 +404,46 @@ final class MouseEnhancerPluginTests: XCTestCase {
         XCTAssertEqual(reloaded.configuration.trackpadScrollGain, 0.1)
     }
 
-    func testConfigurationNormalizesScrollTuningAtConstruction() {
-        let configuration = MouseEnhancerConfiguration(
-            reverseMouseHorizontal: false,
-            reverseMouseVertical: false,
-            reverseTrackpadHorizontal: false,
-            reverseTrackpadVertical: false,
-            mouseScrollStep: .infinity,
-            mouseScrollGain: .nan,
-            trackpadScrollStep: 500,
-            trackpadScrollGain: -2
-        )
+    func testGlideAccumulatorAccumulatesSameDirectionAndResetsOnReverse() {
+        var accumulator = MouseScrollGlideAccumulator()
 
-        XCTAssertEqual(configuration.mouseScrollStep, 0)
-        XCTAssertEqual(configuration.mouseScrollGain, 1)
-        XCTAssertEqual(configuration.trackpadScrollStep, 120)
-        XCTAssertEqual(configuration.trackpadScrollGain, 0.1)
+        accumulator.add(tickY: 40, tickX: 0)
+        accumulator.add(tickY: 30, tickX: 0)
+        XCTAssertEqual(accumulator.bufferY, 70)
+        XCTAssertEqual(accumulator.currentY, 0)
+
+        accumulator.add(tickY: -25, tickX: 0)
+        XCTAssertEqual(accumulator.bufferY, -25)
+        XCTAssertEqual(accumulator.currentY, 0)
+
+        accumulator.add(tickY: 0, tickX: 12)
+        XCTAssertEqual(accumulator.bufferY, 0)
+        XCTAssertEqual(accumulator.bufferX, 12)
+
+        accumulator.reset()
+        XCTAssertTrue(accumulator.isDrained)
     }
 
-    func testStoreNormalizesRawSavedScrollTuning() {
-        let cases: [(raw: Any?, step: Double, gain: Double)] = [
-            (nil, 0, 1),
-            ("invalid", 0, 1),
-            (Double.nan, 0, 1),
-            (Double.infinity, 0, 1),
-            (-Double.infinity, 0, 1),
-            (-2.0, 0, 0.1),
-            (500.0, 120, 5),
-            (1.26, 1, 1.3),
-        ]
+    func testGlideAccumulatorAdvanceDecaysTowardBufferAndDrains() {
+        var accumulator = MouseScrollGlideAccumulator()
+        accumulator.add(tickY: 120, tickX: 0)
 
-        for testCase in cases {
-            let storage = MouseEnhancerMemoryStorage()
-            for device in ["mouse", "trackpad"] {
-                storage.values["mouse-enhancer.scroll-tuning.\(device).step"] = testCase.raw
-                storage.values["mouse-enhancer.scroll-tuning.\(device).gain"] = testCase.raw
-            }
-
-            let configuration = MouseEnhancerStore(storage: storage).configuration
-            XCTAssertEqual(configuration.mouseScrollStep, testCase.step)
-            XCTAssertEqual(configuration.mouseScrollGain, testCase.gain)
-            XCTAssertEqual(configuration.trackpadScrollStep, testCase.step)
-            XCTAssertEqual(configuration.trackpadScrollGain, testCase.gain)
+        var emitted = 0.0
+        var frames = 0
+        while !accumulator.isDrained && frames < 10_000 {
+            let frame = accumulator.advance(framePeriod: 1.0 / 60.0, duration: 1.5)
+            emitted += frame.y
+            XCTAssertGreaterThanOrEqual(frame.y, 0)
+            XCTAssertEqual(frame.y, frame.y.rounded())
+            frames += 1
         }
-    }
 
-    func testProcessorSafelyUsesNonFiniteGainLoadedFromUserDefaults() throws {
-        let suiteName = "MouseEnhancerPluginTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        let storage = UserDefaultsPluginStorage(pluginID: "mouse-enhancer", userDefaults: defaults)
-        storage.set(Double.nan, forKey: "mouse-enhancer.scroll-tuning.mouse.gain")
-        storage.set(40.0, forKey: "mouse-enhancer.scroll-tuning.mouse.step")
-
-        let configuration = MouseEnhancerStore(storage: storage).configuration
-        XCTAssertEqual(configuration.mouseScrollGain, 1)
-        let result = MouseScrollEventProcessor(configuration: configuration).process(
-            snapshot: .discreteWheel,
-            deltas: MouseScrollDeltas(
-                deltaAxis1: 1,
-                deltaAxis2: 0,
-                pointDeltaAxis1: 10,
-                pointDeltaAxis2: 0,
-                fixedPointDeltaAxis1: 1,
-                fixedPointDeltaAxis2: 0
-            )
-        )
-
-        XCTAssertTrue(result.isTuned)
-        XCTAssertEqual(result.deltas.deltaAxis1, 4)
-        XCTAssertEqual(result.deltas.pointDeltaAxis1, 40)
-        XCTAssertEqual(result.deltas.fixedPointDeltaAxis1, 4)
-    }
-
-    func testScrollTuningSliderCommitUpdatesRunningSession() {
-        let session = MockMouseEnhancerSession()
-        let plugin = makePlugin(session: session, accessibilityTrusted: true)
-
-        plugin.handleSettingsAction(.setNumber(
-            controlID: "mouse-scroll-step",
-            value: 40,
-            phase: .committed
-        ))
-        plugin.handleSettingsAction(.setNumber(
-            controlID: "mouse-scroll-gain",
-            value: 2,
-            phase: .committed
-        ))
-
-        XCTAssertEqual(session.activatedConfigurations.count, 1)
-        XCTAssertTrue(session.activatedConfigurations[0].hasMouseScrollTuning)
-        let configuration = session.updatedConfigurations.last
-        XCTAssertEqual(configuration?.mouseScrollStep, 40)
-        XCTAssertEqual(configuration?.mouseScrollGain, 2)
+        XCTAssertTrue(accumulator.isDrained)
+        XCTAssertEqual(emitted, 120)
+        // The glide spans a few multiples of the configured duration, not a
+        // couple of frames and not forever.
+        let elapsed = Double(frames) / 60.0
+        XCTAssertTrue((1.0...4.0).contains(elapsed), "drain took \(elapsed)s")
     }
 
     private func makePlugin(

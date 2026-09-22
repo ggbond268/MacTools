@@ -163,7 +163,7 @@ enum SystemStatusComponentRow: Equatable, Sendable {
 }
 
 enum SystemStatusComponentLayout {
-    static let cardCornerRadius = PluginComponentPanelLayoutMetrics.cardCornerRadius
+    static let cardCornerRadius = PluginPanelWidgetLayoutMetrics.cardCornerRadius
     static let cardSpacing: CGFloat = 6
     static let cardContentPadding: CGFloat = 8
     static let columns = 2

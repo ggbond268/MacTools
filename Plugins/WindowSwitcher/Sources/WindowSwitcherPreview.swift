@@ -257,10 +257,10 @@ final class WindowSwitcherPreview {
     static func matchingIndex(for entry: WindowSwitcherAppEntry, candidates: [WindowSwitcherPreviewCandidate]) -> Int? {
         if let number = entry.windowNumber {
             let exact = candidates.indices.filter {
-                candidates[$0].windowID == number && candidates[$0].processID == entry.processIdentifier && candidates[$0].layer == 0
+                candidates[$0].windowID == number && candidates[$0].layer == 0
             }
-            // A missing exact ID means the target disappeared; never preview a
-            // different window that happens to occupy its former position.
+            // Window IDs are unique. Helper-owned Chrome windows keep this ID
+            // even when the switcher row is attributed to the host app.
             return exact.count == 1 ? exact[0] : nil
         }
         // Chrome can expose different AX and capture titles. A unique process
@@ -268,7 +268,8 @@ final class WindowSwitcherPreview {
         // windows only when exactly one matches. Never pick by array position.
         let geometry = candidates.indices.filter { index in
             let candidate = candidates[index]
-            return candidate.processID == entry.processIdentifier && candidate.layer == 0 &&
+            let sameProcess = candidate.processID == entry.processIdentifier || candidate.processID == entry.owningProcessIdentifier
+            return sameProcess && candidate.layer == 0 &&
                 abs(candidate.frame.minX - entry.bounds.minX) < 2 && abs(candidate.frame.minY - entry.bounds.minY) < 2 &&
                 abs(candidate.frame.width - entry.bounds.width) < 2 && abs(candidate.frame.height - entry.bounds.height) < 2
         }
@@ -359,7 +360,7 @@ final class WindowSwitcherSystemPreviewCapture {
     private func fallbackCapture(_ entry: WindowSwitcherAppEntry, detail: Bool) async -> NSImage? {
         guard let number = entry.windowNumber, hasPermission(), !Task.isCancelled else { return nil }
         let size = WindowSwitcherPreview.captureSize(for: entry.bounds, detail: detail)
-        guard let image = await fallback(number, entry.processIdentifier, size),
+        guard let image = await fallback(number, entry.owningProcessIdentifier, size),
               hasPermission(), !Task.isCancelled else { return nil }
         if let launchDate = entry.applicationLaunchDate,
            NSRunningApplication(processIdentifier: entry.processIdentifier)?.launchDate != launchDate { return nil }

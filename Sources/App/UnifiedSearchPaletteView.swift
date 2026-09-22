@@ -326,6 +326,7 @@ struct UnifiedSearchPaletteActions {
     let consumeQuickSelection: (UnifiedSearchQuickSelectionRequest) -> Bool
     let setPendingExecutionCancellation: ((() -> Void)?) -> Void
     var resetCommandPalettePosition: (() -> Void)? = nil
+    var setDismissalSuspended: (Bool) -> Void = { _ in }
 }
 
 private struct UnifiedSearchPaletteShadowModifier: ViewModifier {
@@ -392,6 +393,7 @@ struct UnifiedSearchPaletteView: View {
     let actions: UnifiedSearchPaletteActions
     let dragCoordinator: WindowSnapCoordinator?
     @Environment(\.accessibilityReduceTransparency) private var accessibilityReduceTransparency
+    @Environment(\.colorSchemeContrast) private var searchContrast
     @StateObject private var model: UnifiedSearchPaletteModel
     @StateObject private var inputModel = CommandPaletteInputModel()
     @State private var inlineMatch: CommandPaletteAliasMatch?
@@ -401,6 +403,7 @@ struct UnifiedSearchPaletteView: View {
     @StateObject private var searchInputState = CommandPaletteSearchInputState()
     @State private var selectedResultID: String?
     @State private var pendingAlert: PendingAlert?
+    @State private var isRecordingShortcut = false
     @State private var executionFeedback: String?
     @State private var executionTask: Task<Void, Never>?
     @State private var executionGeneration: UInt = 0
@@ -522,6 +525,9 @@ struct UnifiedSearchPaletteView: View {
             inputDraft = nil
             updateInputQuery("")
             inlineMatch = nil
+        }
+        .onChange(of: isRecordingShortcut || pendingAlert != nil || inputModel.confirmationRequested) { _, suspended in
+            actions.setDismissalSuspended(suspended)
         }
         .onExitCommand { leaveInputOrDismiss() }
         .alert(inputModel.item?.definition.confirmation?.title ?? "", isPresented: $inputModel.confirmationRequested) {
@@ -722,18 +728,18 @@ struct UnifiedSearchPaletteView: View {
                 if !model.query.isEmpty {
                     Button { updateInputQuery("") } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(PluginPaletteToolbarControlStyle(size: CGSize(width: 24, height: 24)))
+                        .help(AppL10n.search("search.clear", defaultValue: "清除搜索"))
                         .accessibilityLabel(AppL10n.search("search.clear", defaultValue: "清除搜索"))
                 }
             }
-            .padding(.horizontal, PluginPaletteMetrics.searchHorizontalPadding)
-            .frame(height: PluginPaletteMetrics.toolbarControlSize.height)
-            .background(RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius)
-                .fill(PluginSettingsTheme.Palette.fieldBackground))
-            .overlay(RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius)
-                .strokeBorder(PluginSettingsTheme.Palette.cardBorder, lineWidth: 1))
+            .modifier(PluginPaletteSearchChrome(
+                accessibilityIdentifier: "mactools.unified-search.field",
+                increasedContrast: searchContrast == .increased
+            ))
             Button { actions.dismiss() } label: { Image(systemName: "xmark") }
                 .buttonStyle(PluginPaletteToolbarControlStyle())
+                .help(AppL10n.search("search.close", defaultValue: "关闭搜索"))
                 .accessibilityLabel(AppL10n.search("search.close", defaultValue: "关闭搜索"))
         }
     }
@@ -1042,7 +1048,12 @@ struct UnifiedSearchPaletteView: View {
                     case let .failure(error):
                         return .rejected(error.localizedDescription)
                     }
-                }
+                },
+                onBeginRecording: {
+                    isRecordingShortcut = true
+                    actions.setDismissalSuspended(true)
+                },
+                onEndRecording: { isRecordingShortcut = false }
             )
             .controlSize(.mini)
             .fixedSize(horizontal: true, vertical: false)

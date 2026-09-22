@@ -63,7 +63,8 @@ enum CalendarEventGrouper {
             startDate: event.startDate,
             endDate: normalizedEndDate(for: event, calendar: calendar),
             isAllDay: event.isAllDay,
-            color: event.color
+            color: event.color,
+            calendarTitle: event.calendarTitle
         )
     }
 

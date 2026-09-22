@@ -141,6 +141,9 @@ class GeneratePluginCatalogTests(unittest.TestCase):
     def test_nightly_catalog_accepts_only_the_expected_generated_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = pathlib.Path(temporary_directory)
+            source = PLUGINS_ROOT / "FanControl/plugin.json"
+            source_version = json.loads(source.read_text(encoding="utf-8"))["version"]
+            expected_version = f"{source_version.split('.', 1)[0]}.512.3"
             package = root / "fan-control.mactoolsplugin"
             package.mkdir()
             subprocess.run(
@@ -148,7 +151,7 @@ class GeneratePluginCatalogTests(unittest.TestCase):
                     sys.executable,
                     str(COPY_MANIFEST),
                     "copy",
-                    "--source", str(PLUGINS_ROOT / "FanControl/plugin.json"),
+                    "--source", str(source),
                     "--destination", str(package / "plugin.json"),
                     "--configuration", "Nightly",
                     "--app-version-config", str(REPO_ROOT / "Configs/AppVersion.xcconfig"),
@@ -175,7 +178,7 @@ class GeneratePluginCatalogTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
-            self.assertEqual(catalog["plugins"][0]["version"], "1.512.3")
+            self.assertEqual(catalog["plugins"][0]["version"], expected_version)
             setup = catalog["plugins"][0]["setup"]["steps"]
             helper = next(step for step in setup if step["id"] == "install-privileged-helper")
             self.assertTrue(all(

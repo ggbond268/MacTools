@@ -156,11 +156,11 @@ class NightlyReleaseTests(unittest.TestCase):
             f"build/nightly/nightly-512-3/mactools-cli-{version}-512.3-macos-arm64.zip.sha256",
         )
         self.assertNotIn("PROJECT_NAME", metadata)
-        self.assertEqual(metadata["PLUGIN_KIT_VERSION"], "6")
+        self.assertEqual(metadata["PLUGIN_KIT_VERSION"], "7")
         self.assertNotIn("PLUGIN_CATALOG_MINIMUM_HOST_VERSION", metadata)
         self.assertEqual(
             metadata["NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH"],
-            "docs/nightly/plugins/v6/catalog.json",
+            "docs/nightly/plugins/v7/catalog.json",
         )
 
     def test_release_warning_is_first(self) -> None:

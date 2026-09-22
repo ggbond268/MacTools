@@ -65,9 +65,9 @@
       "zh-Hant": "在「系統設定 > 一般 > 登入項目與延伸功能 > Finder 延伸功能」中啟用 MacTools 右鍵工具。"
     }
   },
-  "version": "1.2.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "version": "2.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "RightClick.bundle",
   "factoryClass": "RightClickPlugin.RightClickPluginFactory",
   "build": {
@@ -75,8 +75,7 @@
     "scheme": "RightClickPlugin"
   },
   "capabilities": {
-    "primaryPanel": false,
-    "componentPanel": false,
+    "panelItems": [],
     "settings": "form"
   },
   "permissions": [],

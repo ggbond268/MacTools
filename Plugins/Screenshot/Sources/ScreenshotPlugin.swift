@@ -18,10 +18,15 @@ private struct ScreenshotPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
-    PluginActionProviding, PluginActionPermissionProviding,
-    PluginActionShortcutSettingsProviding, PluginLegacyActionShortcutProviding, DisplayTopologyRefreshing
-{
+final class ScreenshotPlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding, PluginActionShortcutSettingsProviding, PluginLegacyActionShortcutProviding, DisplayTopologyRefreshing {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ID {
         static let plugin = "screenshot"
         static let capture = "capture"
@@ -80,8 +85,8 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         }
     }
 
-    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor {
-        PluginPrimaryPanelDescriptor(
+    var rowDescriptor: PluginPanelRowDescriptor {
+        PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitle: coordinator.isRecording
@@ -92,13 +97,12 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         )
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: coordinator.isBusy,
-            isExpanded: false,
             isEnabled: isActive && (!coordinator.isBusy || canFinishSession),
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastError
         )

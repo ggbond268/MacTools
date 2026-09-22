@@ -24,9 +24,28 @@ private struct ActivityBarPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel,
-    PluginActionProviding, PluginActionPermissionProviding, PluginPanelSurfaceLifecycleHandling
-{
+final class ActivityBarPlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("widget") }
+                    else { self?.panelItemDidBecomeHidden("widget") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let setTrackingEnabled = "set-tracking-enabled"
         static let resetToday = "reset-today"
@@ -50,24 +69,26 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
 
-    var descriptor: PluginComponentDescriptor {
-        PluginComponentDescriptor(
-            span: PluginComponentSpan(width: 4, height: dashboardSpanHeight)!
-        )
-    }
+    let descriptor = PluginPanelWidgetDescriptor(
+        span: PluginPanelWidgetSpan(width: 4, height: PluginPanelWidgetLayoutMetrics.default.heightSpan(
+            closestToOriginalSpanHeight: 9
+        ))!
+    )
 
     private let localization: PluginLocalization
     private let controller: ActivityBarController
-    private let componentPresentation = ActivityBarComponentPresentation()
+    private final class PresentationReference {
+        weak var value: ActivityBarComponentPresentation?
+        init(_ value: ActivityBarComponentPresentation) { self.value = value }
+    }
+    private var presentations: [UUID: PresentationReference] = [:]
+    private var visiblePanelItemIDs: Set<String> = []
     private var isExpanded = false
-    private var dashboardSpanHeight = PluginComponentPanelLayoutMetrics.default.heightSpan(
-        closestToOriginalSpanHeight: 9
-    )
 
     var onStateChange: (() -> Void)? {
         didSet {
@@ -95,26 +116,29 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
             )
         )
         self.controller = controller ?? ActivityBarController(context: context, localization: localization)
+        self.controller.onStatisticsChange = { [weak self] in
+            guard let self, !self.visiblePanelItemIDs.isEmpty else { return }
+            self.onStateChange?()
+        }
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: controller.panelSubtitle,
             isOn: controller.isTrackingEnabled,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? panelDetail : nil,
             errorMessage: controller.lastErrorMessage
         )
     }
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(
             subtitle: controller.componentSubtitle,
             isActive: controller.isTrackingEnabled || controller.isHookListenerRunning,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             errorMessage: controller.lastErrorMessage
         )
     }
@@ -244,6 +268,7 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
     }
 
     func deactivate(reason: PluginDeactivationReason) {
+        visiblePanelItemIDs.removeAll()
         controller.deactivate(reason: reason)
     }
 
@@ -266,38 +291,39 @@ final class ActivityBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginCompone
         }
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        if surface == .component { controller.refresh() }
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard visiblePanelItemIDs.insert(surface).inserted else { return }
+        if surface == "widget" {
+            controller.refresh()
+        } else {
+            // Primary rows need the latest count, not a synchronous persistence flush.
+            onStateChange?()
+        }
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
-        AnyView(
+    func panelItemDidBecomeHidden(_ surface: String) {
+        visiblePanelItemIDs.remove(surface)
+    }
+
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
+        let presentation = presentation(for: context.placementID)
+        return AnyView(
             ActivityBarComponentView(
                 controller: controller,
                 localization: localization,
-                presentation: context.isPanelVisible ? componentPresentation : ActivityBarComponentPresentation(),
-                onContentHeightChange: { [weak self] height in
-                    guard context.isPanelVisible else { return }
-                    self?.dashboardContentHeightDidChange(height)
-                }
+                presentation: presentation,
+                onContentHeightChange: context.reportContentHeight
             )
         )
     }
 
-    func dashboardContentHeightDidChange(_ contentHeight: CGFloat) {
-        guard contentHeight.isFinite, contentHeight > 0 else {
-            return
-        }
-
-        let resolvedSpanHeight = PluginComponentPanelLayoutMetrics.default.heightSpan(
-            fittingContentHeight: contentHeight
-        )
-        guard resolvedSpanHeight != dashboardSpanHeight else {
-            return
-        }
-
-        dashboardSpanHeight = resolvedSpanHeight
-        onStateChange?()
+    func presentation(for placementID: UUID?) -> ActivityBarComponentPresentation {
+        guard let placementID else { return ActivityBarComponentPresentation() }
+        presentations = presentations.filter { $0.value.value != nil }
+        if let existing = presentations[placementID]?.value { return existing }
+        let presentation = ActivityBarComponentPresentation()
+        presentations[placementID] = PresentationReference(presentation)
+        return presentation
     }
 
     func permissionState(for permissionID: String) -> PluginPermissionState {

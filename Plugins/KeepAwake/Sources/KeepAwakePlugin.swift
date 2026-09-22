@@ -42,13 +42,17 @@ private struct KeepAwakePluginProvider: PluginProvider {
 
 @MainActor
 final class KeepAwakePlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginPrimaryPanelCompactIndicatorProviding,
-    PluginSettingsSearchProviding,
-    DisplayTopologyRefreshing,
-    PluginActionProviding
-{
+    MacToolsPlugin, PluginSettingsSearchProviding, DisplayTopologyRefreshing, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        var state = rowState
+        state.compactIndicator = rowCompactIndicator
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     typealias SessionFactory = (
         PluginLocalization,
         @escaping (KeepAwakeSession.EndReason) -> Void
@@ -146,7 +150,7 @@ final class KeepAwakePlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -237,27 +241,26 @@ final class KeepAwakePlugin:
         }
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: session != nil,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: panelDetail,
             errorMessage: lastErrorMessage
         )
     }
 
-    var primaryPanelCompactIndicator: PluginPrimaryPanelCompactIndicator? {
+    var rowCompactIndicator: PluginPanelRowCompactIndicator? {
         guard session != nil else {
             return nil
         }
 
-        let icon: PluginPrimaryPanelIndicatorIcon
+        let icon: PluginPanelRowIndicatorIcon
         switch preferences.behavior {
         case .keepScreenBasedToolsWorking:
-            icon = PluginPrimaryPanelIndicatorIcon(
+            icon = PluginPanelRowIndicatorIcon(
                 systemImage: Symbol.screenTools,
                 label: localization.string(
                     "panel.screenTools.indicator",
@@ -269,7 +272,7 @@ final class KeepAwakePlugin:
                 )
             )
         case .keepDisplayOn:
-            icon = PluginPrimaryPanelIndicatorIcon(
+            icon = PluginPanelRowIndicatorIcon(
                 systemImage: "display",
                 label: localization.string(
                     "panel.display.indicator",
@@ -284,7 +287,7 @@ final class KeepAwakePlugin:
             return nil
         }
 
-        return PluginPrimaryPanelCompactIndicator(icons: [icon])
+        return PluginPanelRowCompactIndicator(icons: [icon])
     }
 
     var permissionRequirements: [PluginPermissionRequirement] { [] }

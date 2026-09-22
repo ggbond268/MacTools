@@ -258,6 +258,12 @@ struct ClipboardHistoryPayload: Codable, Equatable, Sendable {
 
     var plainText: String? { plainTexts.first }
 
+    var hasSinglePlainTextRepresentation: Bool {
+        pasteboardItems.count == 1
+            && pasteboardItems[0].representations.count == 1
+            && pasteboardItems[0].representations[0].typeIdentifier == ClipboardRepresentationType.plainText
+    }
+
     var fileURLs: [URL] {
         representations.compactMap { representation in
             guard representation.typeIdentifier == ClipboardRepresentationType.fileURL,
@@ -642,6 +648,8 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     let fileReferenceCount: Int
     let linkURLs: [URL]
     let representationTypeIdentifiers: [String]
+    let hasSinglePlainTextRepresentation: Bool?
+    var isPlainTextOnly: Bool { hasSinglePlainTextRepresentation == true }
     private(set) var semanticTraits: Set<ClipboardHistorySemanticTrait>
     let payloadDigest: Data
     let allowsRichTextImport: Bool
@@ -686,6 +694,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
+        hasSinglePlainTextRepresentation = payload.hasSinglePlainTextRepresentation
         payloadDigest = precomputedPayloadDigest ?? Self.digest(payload)
         allowsRichTextImport = ClipboardRichTextPreviewPolicy.allowsFormattedImport(payload)
         textCharacterCount = searchableText.count
@@ -776,6 +785,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount: Int? = nil,
         linkURLs: [URL] = [],
         representationTypeIdentifiers: [String],
+        hasSinglePlainTextRepresentation: Bool? = nil,
         semanticTraits: Set<ClipboardHistorySemanticTrait>? = nil,
         searchIndex: ClipboardHistorySearchIndex? = nil,
         payloadDigest: Data,
@@ -805,6 +815,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         self.fileReferenceCount = max(fileURLs.count, fileReferenceCount ?? fileURLs.count)
         self.linkURLs = linkURLs
         self.representationTypeIdentifiers = representationTypeIdentifiers
+        self.hasSinglePlainTextRepresentation = hasSinglePlainTextRepresentation
         let boundedImageSearchText = imageSearchText.map {
             String($0.prefix(Self.maximumSearchableCharacterCount))
         }
@@ -847,6 +858,11 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
     }
 
     var isSaved: Bool { savedMetadata != nil }
+
+    /// Latest capture or reuse, shared by presentation and inactivity expiration.
+    var lastActivityAt: Date {
+        max(capturedAt, lastUsedAt ?? capturedAt)
+    }
 
     var savedActivityAt: Date? {
         guard let savedMetadata else { return nil }
@@ -939,6 +955,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
         fileReferenceCount = completeFileURLs.count
         linkURLs = payload.metadataLinkURLs
         representationTypeIdentifiers = payload.metadataRepresentationTypeIdentifiers
+        hasSinglePlainTextRepresentation = payload.hasSinglePlainTextRepresentation
         imageSearchText = try container.decodeIfPresent(String.self, forKey: .imageSearchText).map {
             String($0.prefix(Self.maximumSearchableCharacterCount))
         }
@@ -1001,6 +1018,7 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
             && lhs.fileReferenceCount == rhs.fileReferenceCount
             && lhs.linkURLs == rhs.linkURLs
             && lhs.representationTypeIdentifiers == rhs.representationTypeIdentifiers
+            && lhs.hasSinglePlainTextRepresentation == rhs.hasSinglePlainTextRepresentation
             && lhs.semanticTraits == rhs.semanticTraits
             && lhs.payloadDigest == rhs.payloadDigest
             && lhs.allowsRichTextImport == rhs.allowsRichTextImport
@@ -1049,8 +1067,8 @@ enum ClipboardHistoryExpiration: Int, CaseIterable, Identifiable, Sendable {
 struct ClipboardHistorySettings: Equatable, Sendable {
     static let maximumSupportedItemCount = 10_000
     static let defaultMaximumItemCount = 500
-    static let defaultMaximumItemByteCount = 5 * 1_024 * 1_024
-    static let defaultMaximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+    static let defaultMaximumItemByteCount = 30 * 1_024 * 1_024
+    static let defaultMaximumTotalPayloadByteCount = 512 * 1_024 * 1_024
     static let maximumSupportedTotalPayloadByteCount = 5 * 1_024 * 1_024 * 1_024
 
     var isPaused: Bool
@@ -1236,20 +1254,22 @@ struct ClipboardRetentionResult: Equatable, Sendable {
 }
 
 enum ClipboardRetentionPolicy {
-    // Kept as the default and legacy single-file migration ceiling.
+    // Legacy single-file storage ceiling, independent of the configurable history capacity.
     static let maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
 
     static func prune(
         _ items: [ClipboardHistoryItem],
         settings: ClipboardHistorySettings,
         now: Date = Date(),
-        protectedItemIDs: Set<UUID> = []
+        protectedItemIDs: Set<UUID> = [],
+        shortcutRetainedItemIDs: Set<UUID> = []
     ) -> [ClipboardHistoryItem] {
         evaluate(
             items,
             settings: settings,
             now: now,
-            protectedItemIDs: protectedItemIDs
+            protectedItemIDs: protectedItemIDs,
+            shortcutRetainedItemIDs: shortcutRetainedItemIDs
         ).items
     }
 
@@ -1257,7 +1277,8 @@ enum ClipboardRetentionPolicy {
         _ items: [ClipboardHistoryItem],
         settings: ClipboardHistorySettings,
         now: Date = Date(),
-        protectedItemIDs: Set<UUID> = []
+        protectedItemIDs: Set<UUID> = [],
+        shortcutRetainedItemIDs: Set<UUID> = []
     ) -> ClipboardRetentionResult {
         let historyItems = items.filter(\.isInHistory)
         let newestFirstItems: [ClipboardHistoryItem]
@@ -1272,7 +1293,9 @@ enum ClipboardRetentionPolicy {
         if let interval = settings.expiration.interval {
             let cutoff = now.addingTimeInterval(-interval)
             unexpired = newestFirstItems.filter {
-                protectedItemIDs.contains($0.id) || $0.capturedAt >= cutoff
+                protectedItemIDs.contains($0.id)
+                    || shortcutRetainedItemIDs.contains($0.id)
+                    || $0.lastActivityAt >= cutoff
             }
         } else {
             unexpired = newestFirstItems
@@ -1280,18 +1303,23 @@ enum ClipboardRetentionPolicy {
         let queueProtected = unexpired.filter {
             protectedItemIDs.contains($0.id)
         }
+        // Shortcut-retained History remains available until its timer ends, but it does not
+        // consume the ordinary History count or payload budget used for new captures.
+        let shortcutRetained = unexpired.filter {
+            !protectedItemIDs.contains($0.id) && shortcutRetainedItemIDs.contains($0.id)
+        }
         let recent = unexpired.filter {
-            !protectedItemIDs.contains($0.id)
+            !protectedItemIDs.contains($0.id) && !shortcutRetainedItemIDs.contains($0.id)
         }
         let maximumItemCount = max(0, settings.maximumItemCount)
 
         // Active sequential queues protect their immutable snapshot until completion or
-        // cancellation. Every other History item remains subject to ordinary retention.
-        var retained = queueProtected
-        let protectedItemCount = retained.count
-        let protectedPayloadBytes = retained.reduce(0) { $0 + $1.payloadByteCount }
+        // cancellation. Shortcut-retained items are exempt from ordinary History retention.
+        var retained = queueProtected + shortcutRetained
+        let protectedItemCount = queueProtected.count
+        let protectedPayloadBytes = queueProtected.reduce(0) { $0 + $1.payloadByteCount }
         var retainedPayloadBytes = protectedPayloadBytes
-        let availableRecentCount = max(0, maximumItemCount - retained.count)
+        let availableRecentCount = max(0, maximumItemCount - queueProtected.count)
         var retainedRecentCount = 0
         for item in recent {
             if retainedRecentCount >= availableRecentCount {

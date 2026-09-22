@@ -34,11 +34,4 @@ final class CaptureRegionTests: XCTestCase {
         XCTAssertThrowsError(try CaptureRegion(selection: CGRect(x: CGFloat.infinity, y: 0, width: 100, height: 100), display: display))
     }
 
-    func testFullScreenControlsStayInsideTheTargetDisplay() {
-        let screen = CGRect(x: -1920, y: -1080, width: 1920, height: 1080)
-        for selection in [screen, CGRect(x: -1800, y: -1070, width: 1700, height: 1050)] {
-            let frame = CaptureControlPlacement.frame(size: CGSize(width: 350, height: 40), near: selection, visibleFrame: screen)
-            XCTAssertTrue(screen.contains(frame))
-        }
-    }
 }

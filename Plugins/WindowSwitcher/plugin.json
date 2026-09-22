@@ -180,9 +180,9 @@
       "ru": "Найдите и выберите окно текущего приложения."
     }
   },
-  "version": "1.2.0",
+  "version": "2.0.0",
   "minHostVersion": "1.3.1",
-  "pluginKitVersion": 6,
+  "pluginKitVersion": 7,
   "bundleRelativePath": "WindowSwitcher.bundle",
   "factoryClass": "WindowSwitcherPlugin.WindowSwitcherPluginFactory",
   "build": {
@@ -190,8 +190,7 @@
     "scheme": "WindowSwitcherPlugin"
   },
   "capabilities": {
-    "primaryPanel": false,
-    "componentPanel": false,
+    "panelItems": [],
     "settings": "form"
   },
   "permissions": [

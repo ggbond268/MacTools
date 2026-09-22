@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a problem with MacTools or a plugin.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before filing a new report. English and Chinese are welcome.
+        Remove credentials, account details, and private content from logs and attachments.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong?
+      description: Describe one problem and how often it happens.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce or observations
+      description: If the problem is intermittent, describe what you were doing and any pattern you noticed. Exact reproduction steps are not required.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include versions and relevant hardware. Mark unknown details as unknown.
+      placeholder: |
+        MacTools version and build:
+        Channel: Stable / Nightly / Dev
+        Affected plugin and version:
+        macOS version:
+        Mac model and chip:
+        Relevant displays, devices, or permissions:
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, recording, or logs
+      description: For UI issues, include the affected window and its language/theme. Use a short recording for interaction problems. Attach only relevant, redacted logs.
+  - type: textarea
+    id: performance
+    attributes:
+      label: Performance observations
+      description: If relevant, describe the workload, panel open/closed state, observation duration, and CPU/memory/Energy Impact. Include a comparison when available.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Related issues, a workaround, or whether an earlier version worked.

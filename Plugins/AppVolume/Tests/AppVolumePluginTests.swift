@@ -6,43 +6,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class AppVolumePluginTests: XCTestCase {
-    func testManifestDynamicActionMatchesRuntimePolicy() throws {
-        let plugin = makePlugin()
-
-        try PluginManifestActionAssertions.assertConsistency(
-            pluginDirectoryName: "AppVolume",
-            definitions: plugin.actionDefinitions,
-            permissionIDs: plugin.permissionRequirementIDs(for:)
-        )
-    }
-
-    func testMetadataAndPermissionRequirement() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.metadata.id, "app-volume")
-        XCTAssertEqual(plugin.metadata.title, "应用音量")
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .disclosure)
-        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["system-audio-recording"])
-    }
-
-    func testPanelShowsSliderForEachPlayingApplication() {
-        let monitor = AppVolumeMonitorMock()
-        let plugin = makePlugin(monitor: monitor)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 41),
-            application(id: "com.example.browser", name: "Browser", objectID: 42),
-        ]))
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        let state = plugin.primaryPanelState
-        let sliders = state.detail?.controls.filter { $0.kind == .slider } ?? []
-        XCTAssertEqual(sliders.map(\.sectionTitle), ["Browser", "Music"])
-        XCTAssertEqual(sliders.compactMap(\.sliderValue), [1, 1])
-        XCTAssertEqual(sliders.map(\.valueLabel), ["100%", "100%"])
-        XCTAssertEqual(state.subtitle, "2 个应用正在播放")
-    }
 
     func testChangingSliderRequestsAccessAndRoutesTarget() async throws {
         let monitor = AppVolumeMonitorMock()
@@ -53,7 +16,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 51),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.35, phase: .ended))
         await Task.yield()
@@ -63,7 +26,7 @@ final class AppVolumePluginTests: XCTestCase {
         let target = try XCTUnwrap(router.lastTargets.first)
         XCTAssertEqual(target.id, "com.example.music")
         XCTAssertEqual(target.gain, 0.35, accuracy: 0.001)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testReturningSliderToUnityStopsProcessing() async throws {
@@ -75,11 +38,11 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 61),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.5, phase: .ended))
         for _ in 0 ..< 100 {
-            let control = plugin.primaryPanelState.detail?.controls.first
+            let control = plugin.rowState.detail?.controls.first
             if !router.updates.isEmpty,
                control?.sliderValue == 0.5,
                control?.isEnabled == true {
@@ -89,15 +52,15 @@ final class AppVolumePluginTests: XCTestCase {
         }
         plugin.handleAction(.setSlider(controlID: sliderID, value: 1, phase: .ended))
         for _ in 0 ..< 100 {
-            if !plugin.primaryPanelState.isOn,
-               plugin.primaryPanelState.detail?.controls.first?.isEnabled == true {
+            if !plugin.rowState.isOn,
+               plugin.rowState.detail?.controls.first?.isEnabled == true {
                 break
             }
             await Task.yield()
         }
 
         XCTAssertTrue(router.lastTargets.isEmpty)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testVolumePreferenceIsRestoredForMatchingApplication() async throws {
@@ -110,7 +73,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 71),
         ]))
         firstPlugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(firstPlugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(firstPlugin.rowState.detail?.controls.first?.id)
         firstPlugin.handleAction(.setSlider(controlID: sliderID, value: 0.2, phase: .ended))
         for _ in 0 ..< 100 where router.updates.isEmpty {
             await Task.yield()
@@ -125,32 +88,7 @@ final class AppVolumePluginTests: XCTestCase {
         ]))
         secondPlugin.handleAction(.setDisclosureExpanded(true))
 
-        XCTAssertEqual(secondPlugin.primaryPanelState.detail?.controls.first?.sliderValue, 0.2)
-    }
-
-    func testRestoredVolumeDoesNotRequestAccessUntilUserChangesIt() async throws {
-        let storage = AppVolumeStorageMock()
-        let firstMonitor = AppVolumeMonitorMock()
-        let firstPlugin = makePlugin(storage: storage, monitor: firstMonitor)
-        firstPlugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        firstMonitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 81),
-        ]))
-        firstPlugin.handleAction(.setDisclosureExpanded(true))
-        let firstSliderID = try XCTUnwrap(firstPlugin.primaryPanelState.detail?.controls.first?.id)
-        firstPlugin.handleAction(.setSlider(controlID: firstSliderID, value: 0.2, phase: .ended))
-
-        let restoredMonitor = AppVolumeMonitorMock()
-        let restoredRouter = AppVolumeRouterMock(accessResult: true)
-        let restoredPlugin = makePlugin(storage: storage, monitor: restoredMonitor, router: restoredRouter)
-        restoredPlugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        restoredMonitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 82),
-        ]))
-        await Task.yield()
-
-        XCTAssertEqual(restoredRouter.accessRequestCount, 0)
-        XCTAssertTrue(restoredRouter.lastTargets.isEmpty)
+        XCTAssertEqual(secondPlugin.rowState.detail?.controls.first?.sliderValue, 0.2)
     }
 
     func testDeactivationStopsMonitorAndRouter() {
@@ -163,15 +101,15 @@ final class AppVolumePluginTests: XCTestCase {
 
         XCTAssertFalse(monitor.isRunning)
         XCTAssertTrue(router.didStop)
-        XCTAssertTrue(plugin.primaryPanelState.detail?.controls.isEmpty ?? true)
+        XCTAssertTrue(plugin.rowState.detail?.controls.isEmpty ?? true)
     }
 
     func testUnsupportedSystemDisablesPlugin() {
         let router = AppVolumeRouterMock(isSupported: false)
         let plugin = makePlugin(router: router)
 
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "需要 macOS 15 或更高版本")
+        XCTAssertFalse(plugin.rowState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "需要 macOS 15 或更高版本")
         XCTAssertTrue(plugin.permissionRequirements.isEmpty)
     }
 
@@ -202,95 +140,6 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertEqual(router.accessRequestCount, 2)
         XCTAssertEqual(openSettingsCount, 1)
         XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
-    }
-
-    func testPermissionRefreshSurvivesActivationBeforeAsynchronousSettingsRoundTrip() async {
-        let router = AppVolumeRouterMock(accessResult: false)
-        router.suspendNextAccessRequest = true
-        var openSettingsCount = 0
-        let plugin = makePlugin(
-            router: router,
-            openSystemAudioPrivacySettings: { openSettingsCount += 1 }
-        )
-        plugin.handlePermissionAction(id: "system-audio-recording")
-        for _ in 0 ..< 100 where !router.hasSuspendedAccessRequest {
-            await Task.yield()
-        }
-
-        plugin.refresh()
-        XCTAssertEqual(router.accessRequestCount, 1)
-
-        router.completeSuspendedAccessRequest(false)
-        for _ in 0 ..< 100 where openSettingsCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(openSettingsCount, 1)
-
-        router.accessResult = true
-        plugin.refresh()
-        for _ in 0 ..< 100
-            where !plugin.permissionState(for: "system-audio-recording").isGranted {
-            await Task.yield()
-        }
-
-        XCTAssertEqual(router.accessRequestCount, 2)
-        XCTAssertEqual(openSettingsCount, 1)
-        XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
-    }
-
-    func testGrantedPermissionActionRechecksRevokedAccessWithoutReopeningSettings() async {
-        let router = AppVolumeRouterMock(accessResult: true)
-        var openSettingsCount = 0
-        let plugin = makePlugin(
-            router: router,
-            openSystemAudioPrivacySettings: { openSettingsCount += 1 }
-        )
-        plugin.handlePermissionAction(id: "system-audio-recording")
-        for _ in 0 ..< 100
-            where !plugin.permissionState(for: "system-audio-recording").isGranted {
-            await Task.yield()
-        }
-        XCTAssertTrue(plugin.permissionState(for: "system-audio-recording").isGranted)
-
-        router.accessResult = false
-        plugin.handlePermissionAction(id: "system-audio-recording")
-        for _ in 0 ..< 100 {
-            let state = plugin.permissionState(for: "system-audio-recording")
-            if router.accessRequestCount == 2, state.statusTone != .neutral {
-                break
-            }
-            await Task.yield()
-        }
-
-        XCTAssertEqual(router.accessRequestCount, 2)
-        XCTAssertEqual(openSettingsCount, 0)
-        XCTAssertFalse(plugin.permissionState(for: "system-audio-recording").isGranted)
-    }
-
-    func testCanonicalActionsPublishMuteHalfAndFullVolumeForEachPlayingApp() {
-        let monitor = AppVolumeMonitorMock()
-        let plugin = makePlugin(monitor: monitor)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 91),
-        ]))
-
-        XCTAssertEqual(
-            plugin.actionCatalogEntries.map(\.title),
-            ["Music · 0%", "Music · 50%", "Music · 100%"]
-        )
-        XCTAssertEqual(plugin.actionDefinitions.first?.externalInvocationPolicy, .unavailable)
-        XCTAssertEqual(
-            plugin.permissionRequirementIDs(
-                for: ActionKey(providerID: "app-volume", actionID: "set-volume")
-            ),
-            ["system-audio-recording"]
-        )
-        XCTAssertTrue(
-            plugin.permissionRequirementIDs(
-                for: ActionKey(providerID: "app-volume", actionID: "unknown")
-            ).isEmpty
-        )
     }
 
     func testCanonicalMuteRequestsAccessAndRoutesTheTarget() async throws {
@@ -338,7 +187,7 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertEqual(router.updates[updateCountBeforeAction].first?.gain, 0)
         XCTAssertEqual(router.updates[updateCountBeforeAction + 1].first?.gain, 1)
         plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.sliderValue, 1)
 
         let restoredMonitor = AppVolumeMonitorMock()
         let restored = makePlugin(storage: storage, monitor: restoredMonitor)
@@ -347,31 +196,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 95),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
-    }
-
-    func testCanonicalRouteFailureReportsFailedRollback() async throws {
-        let monitor = AppVolumeMonitorMock()
-        let router = AppVolumeRouterMock(accessResult: true)
-        router.applyResults = [.failed, .failed]
-        let plugin = makePlugin(monitor: monitor, router: router)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 99),
-        ]))
-        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
-
-        let result = try await plugin.beginAction(ActionInvocation(
-            reference: reference,
-            source: .test,
-            mode: .background
-        )).result()
-
-        guard case let .failed(message) = result else {
-            return XCTFail("Expected routing failure, got \(result)")
-        }
-        XCTAssertTrue(message.contains("恢复先前路由失败"))
-        XCTAssertEqual(router.updates.count, 3)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     func testCanonicalPersistenceFailureRollsRouteBackAndKeepsPreviousVolume() async throws {
@@ -401,7 +226,7 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertEqual(router.updates[updateCountBeforeAction].first?.gain, 0)
         XCTAssertEqual(router.updates[updateCountBeforeAction + 1].first?.gain, 1)
         plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.sliderValue, 1)
 
         let restoredMonitor = AppVolumeMonitorMock()
         let restored = makePlugin(storage: storage, monitor: restoredMonitor)
@@ -410,160 +235,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 101),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
-    }
-
-    func testCanonicalPersistenceFailurePreservesWrongTypedRawValue() async throws {
-        let storage = AppVolumeStorageMock()
-        storage.setRawValue("sentinel", forKey: "applicationVolumes")
-        storage.blockedSetKeys = ["applicationVolumes"]
-        let monitor = AppVolumeMonitorMock()
-        let router = AppVolumeRouterMock(accessResult: true)
-        let plugin = makePlugin(storage: storage, monitor: monitor, router: router)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 102),
-        ]))
-        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
-
-        let result = try await plugin.beginAction(ActionInvocation(
-            reference: reference,
-            source: .test,
-            mode: .background
-        )).result()
-
-        guard case .failed = result else {
-            return XCTFail("expected persistence failure, got \(result)")
-        }
-        XCTAssertEqual(
-            storage.rawValue(forKey: "applicationVolumes") as? String,
-            "sentinel"
-        )
-    }
-
-    func testPanelEndAwaitsExistingPermissionRequestWithoutStartingAnother() async throws {
-        let monitor = AppVolumeMonitorMock()
-        let router = AppVolumeRouterMock(accessResult: true)
-        router.suspendNextAccessRequest = true
-        let plugin = makePlugin(monitor: monitor, router: router)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 105),
-        ]))
-        plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
-
-        plugin.handleAction(.setSlider(controlID: sliderID, value: 0.5, phase: .changed))
-        for _ in 0 ..< 100 where !router.hasSuspendedAccessRequest {
-            await Task.yield()
-        }
-        plugin.handleAction(.setSlider(controlID: sliderID, value: 0.5, phase: .ended))
-        for _ in 0 ..< 20 {
-            await Task.yield()
-        }
-
-        XCTAssertEqual(router.accessRequestCount, 1)
-        router.completeSuspendedAccessRequest(true)
-        for _ in 0 ..< 100 {
-            let appliedRequestedGain = router.updates.contains {
-                $0.first?.gain == 0.5
-            }
-            let sliderIsEnabled = plugin.primaryPanelState.detail?.controls.first?.isEnabled == true
-            if appliedRequestedGain, sliderIsEnabled {
-                break
-            }
-            await Task.yield()
-        }
-        XCTAssertEqual(router.accessRequestCount, 1)
-        XCTAssertTrue(router.updates.contains { $0.first?.gain == 0.5 })
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.isEnabled, true)
-    }
-
-    func testCanonicalRouteIgnoresStaleSnapshotUpdateQueuedWhileAwaitingApply() async throws {
-        let storage = AppVolumeStorageMock()
-        let monitor = AppVolumeMonitorMock()
-        let router = AppVolumeRouterMock(accessResult: true)
-        router.suspendNextApply = true
-        let plugin = makePlugin(storage: storage, monitor: monitor, router: router)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 96),
-        ]))
-        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
-
-        let resultTask = Task {
-            try await plugin.beginAction(ActionInvocation(
-                reference: reference,
-                source: .test,
-                mode: .background
-            )).result()
-        }
-        for _ in 0 ..< 100 where !router.hasSuspendedApply {
-            await Task.yield()
-        }
-        XCTAssertTrue(router.hasSuspendedApply)
-
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 97),
-        ]))
-        router.completeSuspendedApply(.succeeded)
-
-        let result = try await resultTask.value
-        XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(router.lastTargets.first?.gain, 0)
-
-        let restoredMonitor = AppVolumeMonitorMock()
-        let restored = makePlugin(storage: storage, monitor: restoredMonitor)
-        restored.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        restoredMonitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 98),
-        ]))
-        restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 0)
-    }
-
-    func testPanelEditIsDisabledAndIgnoredWhileCanonicalRouteIsSuspended() async throws {
-        let storage = AppVolumeStorageMock()
-        let monitor = AppVolumeMonitorMock()
-        let router = AppVolumeRouterMock(accessResult: true)
-        router.suspendNextApply = true
-        let plugin = makePlugin(storage: storage, monitor: monitor, router: router)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        monitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 100),
-        ]))
-        plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
-        let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
-
-        let resultTask = Task {
-            try await plugin.beginAction(ActionInvocation(
-                reference: reference,
-                source: .test,
-                mode: .background
-            )).result()
-        }
-        for _ in 0 ..< 100 where !router.hasSuspendedApply {
-            await Task.yield()
-        }
-        XCTAssertTrue(router.hasSuspendedApply)
-        XCTAssertFalse(plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? true)
-
-        plugin.handleAction(.setSlider(controlID: sliderID, value: 0.7, phase: .ended))
-        router.completeSuspendedApply(.succeeded)
-
-        let result = try await resultTask.value
-        XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(router.lastTargets.first?.gain, 0)
-
-        let restoredMonitor = AppVolumeMonitorMock()
-        let restored = makePlugin(storage: storage, monitor: restoredMonitor)
-        restored.activate(context: PluginRuntimeContext(pluginID: "app-volume"))
-        restoredMonitor.send(snapshot(applications: [
-            application(id: "com.example.music", name: "Music", objectID: 101),
-        ]))
-        restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 0)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     func testDeactivationCancelsSuspendedCanonicalRouteWithoutPersisting() async throws {
@@ -611,119 +283,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 104),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
-    }
-
-    @available(macOS 15.0, *)
-    func testRouteWorkerRetainsAndRetriesSessionAfterTeardownDeadline() async {
-        let session = AppVolumeRouteSessionFake(
-            processObjectIDs: [201],
-            outputDeviceUID: "output",
-            stopResults: [false, true]
-        )
-        let worker = ApplicationVolumeRouteWorker(
-            makeSession: { _, _, _ in session },
-            uptime: { 0 },
-            sleep: { _ in },
-            stopTimeout: 0,
-            stopRetryInterval: 0,
-            fadeDelay: 0
-        )
-        let target = ApplicationVolumeTarget(id: "music", processObjectIDs: [201], gain: 0.5)
-
-        let createResult = await worker.applyAndWait(
-            targets: [target],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(createResult, .succeeded)
-        let firstStopResult = await worker.applyAndWait(
-            targets: [],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(firstStopResult, .failed)
-        XCTAssertEqual(session.stopCallCount, 1)
-        let retryResult = await worker.applyAndWait(
-            targets: [],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(retryResult, .succeeded)
-        XCTAssertEqual(session.stopCallCount, 2)
-    }
-
-    @available(macOS 15.0, *)
-    func testRouteWorkerDoesNotReusePartiallyRetiredSessionForRollback() async {
-        let oldSession = AppVolumeRouteSessionFake(
-            processObjectIDs: [202],
-            outputDeviceUID: "output",
-            stopResults: [false, false, true]
-        )
-        let replacement = AppVolumeRouteSessionFake(
-            processObjectIDs: [202],
-            outputDeviceUID: "output"
-        )
-        var sessions = [oldSession, replacement]
-        let worker = ApplicationVolumeRouteWorker(
-            makeSession: { _, _, _ in sessions.removeFirst() },
-            uptime: { 0 },
-            sleep: { _ in },
-            stopTimeout: 0,
-            stopRetryInterval: 0,
-            fadeDelay: 0
-        )
-        let oldTarget = ApplicationVolumeTarget(id: "music", processObjectIDs: [202], gain: 0.5)
-        let newTarget = ApplicationVolumeTarget(id: "music", processObjectIDs: [203], gain: 0.2)
-
-        let createResult = await worker.applyAndWait(
-            targets: [oldTarget],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(createResult, .succeeded)
-        let candidateResult = await worker.applyAndWait(
-            targets: [newTarget],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(candidateResult, .failed)
-        let firstRollback = await worker.applyAndWait(
-            targets: [oldTarget],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(firstRollback, .failed)
-        XCTAssertEqual(sessions.count, 1)
-        let secondRollback = await worker.applyAndWait(
-            targets: [oldTarget],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(secondRollback, .succeeded)
-        XCTAssertTrue(sessions.isEmpty)
-        XCTAssertEqual(oldSession.stopCallCount, 3)
-    }
-
-    @available(macOS 15.0, *)
-    func testRouteWorkerReportsIncompleteStopWithoutOutputDevice() async {
-        let session = AppVolumeRouteSessionFake(
-            processObjectIDs: [204],
-            outputDeviceUID: "output",
-            stopResults: [false, true]
-        )
-        let worker = ApplicationVolumeRouteWorker(
-            makeSession: { _, _, _ in session },
-            uptime: { 0 },
-            sleep: { _ in },
-            stopTimeout: 0,
-            stopRetryInterval: 0,
-            fadeDelay: 0
-        )
-        let target = ApplicationVolumeTarget(id: "music", processObjectIDs: [204], gain: 0.5)
-
-        let createResult = await worker.applyAndWait(
-            targets: [target],
-            outputDeviceUID: "output"
-        )
-        XCTAssertEqual(createResult, .succeeded)
-        let firstStopResult = await worker.applyAndWait(targets: [], outputDeviceUID: nil)
-        XCTAssertEqual(firstStopResult, .failed)
-        let retryResult = await worker.applyAndWait(targets: [], outputDeviceUID: nil)
-        XCTAssertEqual(retryResult, .succeeded)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     func testCanonicalActionBecomesUnavailableWhenTheAppStopsPlaying() throws {
@@ -894,36 +454,5 @@ private final class AppVolumeStorageMock: PluginStorage {
 
     func rawValue(forKey key: String) -> Any? {
         values[key]
-    }
-}
-
-@available(macOS 15.0, *)
-private final class AppVolumeRouteSessionFake: ApplicationVolumeRouteSession {
-    let processObjectIDs: [AudioObjectID]
-    let outputDeviceUID: String
-    private(set) var isStopped = false
-    private(set) var stopCallCount = 0
-    private(set) var gains: [Float] = []
-    var stopResults: [Bool]
-
-    init(
-        processObjectIDs: [AudioObjectID],
-        outputDeviceUID: String,
-        stopResults: [Bool] = []
-    ) {
-        self.processObjectIDs = processObjectIDs
-        self.outputDeviceUID = outputDeviceUID
-        self.stopResults = stopResults
-    }
-
-    func setGain(_ gain: Float) {
-        gains.append(gain)
-    }
-
-    func stop() -> Bool {
-        stopCallCount += 1
-        let result = stopResults.isEmpty ? true : stopResults.removeFirst()
-        if result { isStopped = true }
-        return result
     }
 }

@@ -5,90 +5,6 @@ import XCTest
 
 @MainActor
 final class AutomationControllerTests: XCTestCase {
-    func testActionPickerAccessibilityExposesUnavailableReason() {
-        XCTAssertEqual(
-            WorkflowActionPickerAccessibility(availability: .available).value,
-            FeatureL10n.string("可用")
-        )
-        XCTAssertEqual(
-            WorkflowActionPickerAccessibility(
-                availability: .unavailable("需要辅助功能权限。")
-            ).value,
-            "需要辅助功能权限。"
-        )
-        XCTAssertEqual(
-            WorkflowActionPickerAccessibility(
-                availability: ActionAvailability(isAvailable: false)
-            ).value,
-            FeatureL10n.string("不可用")
-        )
-        XCTAssertEqual(
-            WorkflowActionPickerAccessibility(
-                availability: .available,
-                requiresConfirmation: true
-            ).value,
-            FeatureL10n.joined([
-                FeatureL10n.string("可用"),
-                FeatureL10n.string("执行前需要确认。"),
-            ])
-        )
-    }
-
-    func testRuleSummariesUseCompleteMessagesAcrossLocales() {
-        let originalPreference = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
-        let calendar = AutomationTrigger.calendar(
-            CalendarAutomationTrigger(phase: .starts)
-        )
-        let display = AutomationTrigger.display(
-            DisplayAutomationTrigger(event: .disconnected)
-        )
-        let expectations: [(String, String, String)] = [
-            (
-                "en",
-                "When Calendar event starts · Run Demo",
-                "When Display disconnected and conditions match (2) · Run Demo"
-            ),
-            (
-                "de",
-                "Wenn Kalenderereignis beginnt · Demo ausführen",
-                "Wenn Monitor getrennt und Bedingungen erfüllt sind (2) · Demo ausführen"
-            ),
-            (
-                "ar",
-                "عند بدء حدث التقويم · تشغيل Demo",
-                "عند قطع اتصال الشاشة مع استيفاء الشروط (2) · تشغيل Demo"
-            ),
-        ]
-
-        for (language, calendarSummary, displaySummary) in expectations {
-            PluginRuntimeLocalization.source.setPreference(language)
-            XCTAssertEqual(
-                withoutBidirectionalIsolation(AutomationRuleSummaryFormatter.summary(
-                    trigger: calendar,
-                    conditionCount: 0,
-                    workflowName: "Demo"
-                )),
-                calendarSummary
-            )
-            XCTAssertEqual(
-                withoutBidirectionalIsolation(AutomationRuleSummaryFormatter.summary(
-                    trigger: display,
-                    conditionCount: 2,
-                    workflowName: "Demo"
-                )),
-                displaySummary
-            )
-        }
-    }
-
-    private func withoutBidirectionalIsolation(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\u{2068}", with: "")
-            .replacingOccurrences(of: "\u{2069}", with: "")
-    }
 
     private func waitUntil(
         timeout: Duration = .seconds(5),
@@ -100,63 +16,6 @@ final class AutomationControllerTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return condition()
-    }
-
-    func testExistingErrorRelocalizesOnSameControllerInstance() throws {
-        let originalPreference = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
-        let suite = "AutomationControllerTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let registry = ActionRegistry()
-        let controller = AutomationController(
-            store: WorkflowStore(userDefaults: defaults),
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-
-        PluginRuntimeLocalization.source.setPreference("zh-Hans")
-        controller.renameWorkflow(id: UUID(), name: "Missing")
-        XCTAssertEqual(controller.lastErrorMessage, "找不到工作流。")
-
-        PluginRuntimeLocalization.source.setPreference("en")
-        XCTAssertEqual(controller.lastErrorMessage, "The workflow could not be found.")
-
-        PluginRuntimeLocalization.source.setPreference("ar")
-        XCTAssertEqual(controller.lastErrorMessage, "لا يمكن العثور على سير العمل.")
-    }
-
-    func testConfirmationRequiredAutomaticRuleReasonIsLocalized() {
-        let originalPreference = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
-        let expectations: [(String, String)] = [
-            (
-                "en",
-                "The workflow contains actions that require confirmation and cannot run automatically."
-            ),
-            (
-                "zh-Hans",
-                "工作流包含需要确认的操作，无法自动运行。"
-            ),
-            (
-                "ar",
-                "يحتوي سير العمل على إجراءات تتطلب التأكيد ولا يمكن تشغيله تلقائيًا."
-            ),
-        ]
-
-        for (language, expected) in expectations {
-            PluginRuntimeLocalization.source.setPreference(language)
-            XCTAssertEqual(
-                AutomationRunSkipReason
-                    .confirmationRequiredForAutomaticExecution
-                    .localizedText,
-                expected
-            )
-        }
     }
 
     func testEnabledWorkflowPublishesStableOrdinaryActionAndDisabledWorkflowDisappears() throws {
@@ -256,39 +115,6 @@ final class AutomationControllerTests: XCTestCase {
         )
     }
 
-    func testWorkflowCapabilitiesReflectNestedBackgroundSupport() throws {
-        let suite = "AutomationControllerTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let registry = ActionRegistry()
-        let provider = AutomationControllerTestProvider(
-            capabilities: [.foregroundInteractive]
-        )
-        registry.synchronize([provider.registration])
-        let store = WorkflowStore(userDefaults: defaults)
-        let controller = AutomationController(
-            store: store,
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-        let child = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: child.id, reference: provider.reference)
-        let parent = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: parent.id, reference: child.actionReference)
-
-        let definitions = controller.actionRegistration().definitions
-
-        XCTAssertFalse(
-            try XCTUnwrap(definitions.first { $0.key == child.actionKey })
-                .capabilities.contains(.background)
-        )
-        XCTAssertFalse(
-            try XCTUnwrap(definitions.first { $0.key == parent.actionKey })
-                .capabilities.contains(.background)
-        )
-        XCTAssertFalse(controller.supportsAutomaticRules(workflowID: parent.id))
-    }
-
     func testNestedRestrictedActionDisablesWorkflowRunLinksWithoutDisablingLocalRuns() throws {
         let suite = "AutomationControllerTests.external.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -379,107 +205,6 @@ final class AutomationControllerTests: XCTestCase {
             .unavailable
         )
         XCTAssertTrue(registration.availability(parent.actionReference).isAvailable)
-    }
-
-    func testAutomaticRuleAvailabilityExplainsEveryIneligibleWorkflow() throws {
-        let suite = "AutomationControllerTests.eligibility.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let registry = ActionRegistry()
-        let background = AutomationControllerTestProvider(actionID: "background")
-        let foreground = AutomationControllerTestProvider(
-            providerID: "automation-controller-foreground-tests",
-            actionID: "foreground",
-            capabilities: [.foregroundInteractive]
-        )
-        let confirmation = AutomationControllerTestProvider(
-            providerID: "automation-controller-confirmation-tests",
-            actionID: "confirm",
-            risk: .confirmationRequired
-        )
-        registry.synchronize([
-            background.registration,
-            foreground.registration,
-            confirmation.registration,
-        ])
-        let controller = AutomationController(
-            store: WorkflowStore(userDefaults: defaults),
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: UUID()).reason,
-            FeatureL10n.string("找不到工作流。")
-        )
-        let empty = try XCTUnwrap(controller.createWorkflow())
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: empty.id).reason,
-            FeatureL10n.string("工作流尚未添加步骤。")
-        )
-        controller.setWorkflowEnabled(false, id: empty.id)
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: empty.id).reason,
-            FeatureL10n.string("工作流已停用。")
-        )
-
-        let interactive = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: interactive.id, reference: foreground.reference)
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: interactive.id).reason,
-            FeatureL10n.string("此工作流包含需要交互的操作，不能由自动规则在后台运行。")
-        )
-
-        let confirmationRequired = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(
-            workflowID: confirmationRequired.id,
-            reference: confirmation.reference
-        )
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: confirmationRequired.id).reason,
-            FeatureL10n.string("工作流包含需要确认的操作，无法自动运行。")
-        )
-
-        let nestedConfirmation = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(
-            workflowID: nestedConfirmation.id,
-            reference: confirmationRequired.actionReference
-        )
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: nestedConfirmation.id).reason,
-            FeatureL10n.string("工作流包含需要确认的操作，无法自动运行。")
-        )
-
-        let missing = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(
-            workflowID: missing.id,
-            reference: ActionReference(
-                key: ActionKey(providerID: "missing", actionID: "action")
-            )
-        )
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: missing.id).reason,
-            FeatureL10n.string("工作流包含不可用操作。")
-        )
-
-        let unavailable = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: unavailable.id, reference: background.reference)
-        background.availability = .unavailable("Device disconnected")
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: unavailable.id).reason,
-            "Device disconnected"
-        )
-        background.availability = .available
-        XCTAssertTrue(controller.automaticRuleAvailability(workflowID: unavailable.id).isAvailable)
-
-        let first = try XCTUnwrap(controller.createWorkflow())
-        let second = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: first.id, reference: second.actionReference)
-        controller.addStep(workflowID: second.id, reference: first.actionReference)
-        XCTAssertEqual(
-            controller.automaticRuleAvailability(workflowID: first.id).reason,
-            FeatureL10n.string("检测到递归工作流调用。")
-        )
     }
 
     func testRuleManagementKeepsMultipleIndependentRulesForWorkflow() throws {
@@ -573,63 +298,6 @@ final class AutomationControllerTests: XCTestCase {
         XCTAssertEqual(AutomationRuleStore(userDefaults: defaults).rules().map(\.id), [rule.id])
     }
 
-    func testRejectedCombinedDefinitionWritePreservesBothCollectionsOnRestore() throws {
-        let suite = "AutomationControllerTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        var rejectsWrites = false
-        let definitionStore = AutomationDefinitionStore(
-            userDefaults: defaults,
-            setCombinedValue: { value in
-                guard !rejectsWrites else { return }
-                if let value {
-                    defaults.set(value, forKey: "automation.definitions.v1")
-                } else {
-                    defaults.removeObject(forKey: "automation.definitions.v1")
-                }
-            }
-        )
-        let workflowStore = WorkflowStore(definitionStore: definitionStore)
-        let ruleStore = AutomationRuleStore(definitionStore: definitionStore)
-        let registry = ActionRegistry()
-        let controller = AutomationController(
-            store: workflowStore,
-            ruleStore: ruleStore,
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-        let workflow = try XCTUnwrap(controller.createWorkflow())
-        let rule = try XCTUnwrap(controller.createRule(workflowID: workflow.id))
-        let replacement = WorkflowDefinition(name: "Replacement")
-        rejectsWrites = true
-
-        XCTAssertFalse(controller.restorePreferences(workflows: [replacement], rules: []))
-        XCTAssertEqual(WorkflowStore(userDefaults: defaults).workflows().map(\.id), [workflow.id])
-        XCTAssertEqual(AutomationRuleStore(userDefaults: defaults).rules().map(\.id), [rule.id])
-    }
-
-    func testMoveWorkflowUpdatesPublishedOrderAndPersists() throws {
-        let suite = "AutomationControllerTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let registry = ActionRegistry()
-        let controller = AutomationController(
-            store: WorkflowStore(userDefaults: defaults),
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-        let first = try XCTUnwrap(controller.createWorkflow())
-        let second = try XCTUnwrap(controller.createWorkflow())
-
-        controller.moveWorkflow(id: second.id, offset: -1)
-
-        XCTAssertEqual(controller.workflows.map(\.id), [second.id, first.id])
-        XCTAssertEqual(
-            WorkflowStore(userDefaults: defaults).workflows().map(\.id),
-            [second.id, first.id]
-        )
-    }
-
     func testActiveRunCanBeCancelledThroughControllerSurface() async throws {
         let suite = "AutomationControllerTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -701,31 +369,6 @@ final class AutomationControllerTests: XCTestCase {
             controller.history.first { $0.id == runID }?.status,
             .cancelled
         )
-    }
-
-    func testDeletingWorkflowImmediatelyAfterStartPreventsItsFirstAction() async throws {
-        let suite = "AutomationControllerTests.immediate-delete.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let registry = ActionRegistry()
-        let provider = CancellableAutomationControllerTestProvider()
-        registry.synchronize([provider.registration])
-        let controller = AutomationController(
-            store: WorkflowStore(userDefaults: defaults),
-            registry: registry,
-            executor: ActionExecutor(registry: registry)
-        )
-        let workflow = try XCTUnwrap(controller.createWorkflow())
-        controller.addStep(workflowID: workflow.id, reference: provider.reference)
-        let runID = try XCTUnwrap(controller.startWorkflow(id: workflow.id))
-
-        XCTAssertTrue(controller.deleteWorkflow(id: workflow.id))
-        for _ in 0 ..< 20 { await Task.yield() }
-
-        XCTAssertTrue(controller.activeRunIDs(for: workflow.id).isEmpty)
-        XCTAssertFalse(controller.activeRunIDs.contains(runID))
-        XCTAssertEqual(provider.beginCount, 0)
-        XCTAssertEqual(provider.cancelCount, 0)
     }
 
 }

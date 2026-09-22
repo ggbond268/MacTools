@@ -29,7 +29,7 @@ struct MenuBarPanelRemovalConfirmation: View {
     let onCancel: () -> Void
     let onConfirm: () -> String?
     @State private var errorMessage: String?
-    @State private var presentationFocus = MenuBarPanelConfirmationFocus()
+    @State private var presentationFocus = MenuBarPanelPopoverFocus()
     @Environment(\.menuBarPanelTheme) private var theme
 
     var body: some View {
@@ -77,16 +77,16 @@ struct MenuBarPanelRemovalConfirmation: View {
         .padding(14)
         .frame(width: 264)
         .background(theme.surfaces.panel)
-        .background(MenuBarPanelConfirmationFocusLifecycle(focus: presentationFocus).allowsHitTesting(false))
+        .background(MenuBarPanelPopoverFocusLifecycle(focus: presentationFocus).allowsHitTesting(false))
         .foregroundStyle(theme.text.primary)
         .accessibilityIdentifier("\(identifier).confirmation")
     }
 }
 
-/// End focus while the confirmation's SwiftUI responder proxies are still alive.
+/// End focus while the popover's SwiftUI responder proxies are still alive.
 /// AppKit can retain a popover's key view in its parent window's responder chain.
 @MainActor
-private final class MenuBarPanelConfirmationFocus {
+final class MenuBarPanelPopoverFocus {
     weak var window: NSWindow?
 
     func end() {
@@ -98,19 +98,19 @@ private final class MenuBarPanelConfirmationFocus {
     }
 }
 
-private struct MenuBarPanelConfirmationFocusLifecycle: NSViewRepresentable {
-    let focus: MenuBarPanelConfirmationFocus
-    func makeNSView(context: Context) -> ConfirmationView { ConfirmationView(focus: focus) }
-    func updateNSView(_ view: ConfirmationView, context: Context) {}
+struct MenuBarPanelPopoverFocusLifecycle: NSViewRepresentable {
+    let focus: MenuBarPanelPopoverFocus
+    func makeNSView(context: Context) -> FocusView { FocusView(focus: focus) }
+    func updateNSView(_ view: FocusView, context: Context) {}
 
-    static func dismantleNSView(_ view: ConfirmationView, coordinator: ()) {
+    static func dismantleNSView(_ view: FocusView, coordinator: ()) {
         view.focus.end()
     }
 
-    final class ConfirmationView: NSView {
-        let focus: MenuBarPanelConfirmationFocus
+    final class FocusView: NSView {
+        let focus: MenuBarPanelPopoverFocus
 
-        init(focus: MenuBarPanelConfirmationFocus) {
+        init(focus: MenuBarPanelPopoverFocus) {
             self.focus = focus
             super.init(frame: .zero)
             NotificationCenter.default.addObserver(self, selector: #selector(popoverWillClose(_:)),
@@ -176,6 +176,7 @@ struct MenuBarPanelTabs: NSViewRepresentable {
     @Environment(\.menuBarPanelTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
+    @EnvironmentObject private var menuPresenter: MenuBarPanelMenuPresenter
 
     func makeNSView(context: Context) -> MenuBarPanelTabNavigationView {
         MenuBarPanelTabNavigationView()
@@ -190,6 +191,7 @@ struct MenuBarPanelTabs: NSViewRepresentable {
 
     func updateNSView(_ view: MenuBarPanelTabNavigationView, context: Context) {
         let strip = view.strip
+        strip.menuPresenter = menuPresenter
         strip.onSelect = onSelect
         strip.onMove = onMove
         strip.onChangeIcon = onChangeIcon
@@ -355,6 +357,8 @@ final class MenuBarPanelTabStripView: NSView, NSDraggingSource {
     var onSelect: (String) -> Void = { _ in }
     var onMove: (String, Int) -> Void = { _, _ in }
     var onChangeIcon: (String) -> Void = { _ in }
+
+    weak var menuPresenter: MenuBarPanelMenuPresenter?
 
     weak var itemDragSession: PanelLayoutEditingSession? {
         didSet { if itemDragSession?.token == nil { springLoader.cancel() } }
@@ -645,6 +649,7 @@ final class MenuBarPanelTabStripView: NSView, NSDraggingSource {
 /// for normal tabs, editing tabs, and the add button.
 @MainActor
 class MenuBarPanelIconControl: NSControl {
+    weak var menuPresenter: MenuBarPanelMenuPresenter?
     private let imageView = NSImageView()
     private var symbolName: String?
     private var symbolPointSize: CGFloat?
@@ -728,6 +733,7 @@ class MenuBarPanelIconControl: NSControl {
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if window !== newWindow { menuPresenter?.cancel(from: self) }
         // Release focus while the old responder chain is still attached.
         if let window, window !== newWindow, window.firstResponder === self {
             window.makeFirstResponder(nil)
@@ -776,8 +782,9 @@ class MenuBarPanelIconControl: NSControl {
 
     override func rightMouseDown(with event: NSEvent) {
         pressedAt = nil
-        guard let menu = menu(for: event) else { return }
-        NSMenu.popUpContextMenu(menu, with: event, for: self)
+        guard let menuPresenter, let menu = menu(for: event), !menu.items.isEmpty else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        menuPresenter.present(from: self, at: point) { menu }
     }
 
     override func keyDown(with event: NSEvent) {
@@ -832,6 +839,7 @@ private final class MenuBarPanelTabCell: NSView {
         selectionButton.setAccessibilityHelp(canEditIcon ? FeatureL10n.string("更换图标") : "")
         selectionButton.alphaValue = panel.isHidden && !selected ? 0.5 : 1
         if let strip {
+            selectionButton.menuPresenter = strip.menuPresenter
             selectionButton.configureColors(selection: strip.selectionColor, hover: strip.hoverColor,
                                             primary: strip.primaryColor, secondary: strip.secondaryColor)
         }

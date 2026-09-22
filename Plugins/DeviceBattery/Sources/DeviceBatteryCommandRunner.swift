@@ -391,7 +391,8 @@ private final class DeviceBatteryCommandExecution: @unchecked Sendable {
     }
 }
 
-private final class DeviceBatteryCommandOutputAccumulator: @unchecked Sendable {
+// Internal so byte-boundary behavior can be tested without subprocess scheduling.
+final class DeviceBatteryCommandOutputAccumulator: @unchecked Sendable {
     private let lock = NSLock()
     private let lineFilter: ((String) -> Bool)?
     private var bufferedOutput = ""

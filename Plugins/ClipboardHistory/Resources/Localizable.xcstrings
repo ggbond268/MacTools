@@ -10504,67 +10504,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعطّل «أبدًا» انتهاء السجل حسب العمر؛ وقد تزيل حدود السعة أقدم عناصر السجل. ولا تتأثر العناصر المحفوظة."
+            "value": "تُحسب المدة من آخر استخدام، أو من وقت الإضافة للعناصر التي لم تُستخدم بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "„Nie“ deaktiviert den zeitbasierten Ablauf. Kapazitätsgrenzen können den ältesten Verlauf entfernen; gespeicherte Elemente bleiben erhalten."
+            "value": "Ab der letzten Verwendung; noch nie verwendete Einträge zählen ab dem Hinzufügen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Never disables age-based expiration; capacity limits may still remove the oldest History items. Saved items are unaffected."
+            "value": "Count from the last use, or from when the item was added if it has never been used."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nunca desactiva la caducidad por antigüedad; los límites de capacidad aún pueden eliminar el historial más antiguo. Los elementos guardados no se ven afectados."
+            "value": "Se cuenta desde el último uso, o desde que se añadió el elemento si nunca se ha usado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jamais désactive l’expiration selon l’âge ; les limites de capacité peuvent encore supprimer l’historique le plus ancien. Les éléments enregistrés ne sont pas affectés."
+            "value": "À partir de la dernière utilisation, ou de l’ajout si l’élément n’a jamais été utilisé."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "「しない」は期間による期限切れを無効にします。容量上限により古い履歴が削除される場合があります。保存済み項目には影響しません。"
+            "value": "最後に使用した時点から計算します。未使用の項目は追加時点から計算します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "안 함은 기간에 따른 만료를 끕니다. 용량 한도에 따라 오래된 기록은 삭제될 수 있으며 저장된 항목에는 영향을 주지 않습니다."
+            "value": "마지막 사용 시점부터 계산하며, 사용한 적이 없는 항목은 추가 시점부터 계산합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nunca desativa a expiração por idade; os limites de capacidade ainda podem remover o histórico mais antigo. Os itens salvos não são afetados."
+            "value": "Conta a partir do último uso, ou da adição do item se ele nunca foi usado."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "«Никогда» отключает удаление по возрасту; лимиты ёмкости всё ещё могут удалить самую старую историю. Сохранённые элементы не затрагиваются."
+            "value": "Отсчитывается с последнего использования, а для неиспользованных элементов — с момента добавления."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "“永不”会关闭按时间过期；容量上限仍可能移除最早的历史。已存项目不受影响。"
+            "value": "按最后使用时间计算；未使用过的记录按添加时间计算。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "「永不」會關閉按時間到期；容量上限仍可能移除最早的記錄。已儲存項目不受影響。"
+            "value": "按最後使用時間計算；未使用過的記錄按加入時間計算。"
           }
         }
       }
@@ -10854,67 +10854,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انتهاء تلقائي"
+            "value": "مدة انتهاء الصلاحية عند عدم الاستخدام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatisch ablaufen"
+            "value": "Ablauf bei Inaktivität"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatic Expiration"
+            "value": "Inactivity Expiration"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Caducidad automática"
+            "value": "Caducidad por inactividad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expiration automatique"
+            "value": "Expiration après inactivité"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "自動期限切れ"
+            "value": "未使用時の保持期間"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "자동 만료"
+            "value": "미사용 만료 기간"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expiração automática"
+            "value": "Expiração por inatividade"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Автоудаление"
+            "value": "Срок хранения без использования"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自动过期"
+            "value": "闲置过期时间"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "自動過期"
+            "value": "閒置到期時間"
           }
         }
       }
@@ -15415,7 +15415,40 @@
           }
         }
       }
-    }
+    },
+    "hud.quickPaste.accessibilityRequired": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Quick Paste requires Accessibility permission"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "快捷粘贴需要辅助功能权限"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "快速貼上需要輔助使用權限"}}, "ja": {"stringUnit": {"state": "translated", "value": "クイックペーストにはアクセシビリティの許可が必要です"}}, "ko": {"stringUnit": {"state": "translated", "value": "빠른 붙여넣기에 손쉬운 사용 권한이 필요합니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Schnelleinfügen benötigt Bedienungshilfen-Zugriff"}}, "fr": {"stringUnit": {"state": "translated", "value": "Le collage rapide nécessite l’accès Accessibilité"}}, "es": {"stringUnit": {"state": "translated", "value": "Pegado rápido requiere permiso de Accesibilidad"}}, "pt": {"stringUnit": {"state": "translated", "value": "Colagem rápida requer permissão de Acessibilidade"}}, "ru": {"stringUnit": {"state": "translated", "value": "Для быстрой вставки нужен доступ к Универсальному доступу"}}, "ar": {"stringUnit": {"state": "translated", "value": "يتطلب اللصق السريع إذن تسهيلات الاستخدام"}}}},
+    "hud.quickPaste.failed": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Couldn’t paste Quick Paste item"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "无法粘贴快捷粘贴项目"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "無法貼上快速貼上項目"}}, "ja": {"stringUnit": {"state": "translated", "value": "クイックペーストの項目をペーストできませんでした"}}, "ko": {"stringUnit": {"state": "translated", "value": "빠른 붙여넣기 항목을 붙여넣지 못했습니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Schnelleinfügen fehlgeschlagen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Impossible de coller l’élément"}}, "es": {"stringUnit": {"state": "translated", "value": "No se pudo pegar el elemento"}}, "pt": {"stringUnit": {"state": "translated", "value": "Não foi possível colar o item"}}, "ru": {"stringUnit": {"state": "translated", "value": "Не удалось вставить элемент"}}, "ar": {"stringUnit": {"state": "translated", "value": "تعذر لصق العنصر"}}}},
+    "hud.quickPaste.unavailable": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Quick Paste item is unavailable"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "快捷粘贴项目不可用"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "快速貼上項目無法使用"}}, "ja": {"stringUnit": {"state": "translated", "value": "クイックペーストの項目は利用できません"}}, "ko": {"stringUnit": {"state": "translated", "value": "빠른 붙여넣기 항목을 사용할 수 없습니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Schnelleinfügen-Eintrag nicht verfügbar"}}, "fr": {"stringUnit": {"state": "translated", "value": "Élément de collage rapide indisponible"}}, "es": {"stringUnit": {"state": "translated", "value": "Elemento de pegado rápido no disponible"}}, "pt": {"stringUnit": {"state": "translated", "value": "Item da colagem rápida indisponível"}}, "ru": {"stringUnit": {"state": "translated", "value": "Элемент быстрой вставки недоступен"}}, "ar": {"stringUnit": {"state": "translated", "value": "عنصر اللصق السريع غير متاح"}}}},
+    "itemShortcut.assign.action": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Assign Shortcut"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "分配快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "設定快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "ショートカットを割り当て"}}, "ko": {"stringUnit": {"state": "translated", "value": "단축키 지정"}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehl zuweisen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Attribuer un raccourci"}}, "es": {"stringUnit": {"state": "translated", "value": "Asignar atajo"}}, "pt": {"stringUnit": {"state": "translated", "value": "Atribuir atalho"}}, "ru": {"stringUnit": {"state": "translated", "value": "Назначить сочетание"}}, "ar": {"stringUnit": {"state": "translated", "value": "تعيين اختصار"}}}},
+    "itemShortcut.assigned": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Item shortcut assigned"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "已分配项目快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "已設定項目快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "項目のショートカットを設定しました"}}, "ko": {"stringUnit": {"state": "translated", "value": "항목 단축키가 지정되었습니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehl für Element zugewiesen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Raccourci attribué à l’élément"}}, "es": {"stringUnit": {"state": "translated", "value": "Atajo asignado al elemento"}}, "pt": {"stringUnit": {"state": "translated", "value": "Atalho atribuído ao item"}}, "ru": {"stringUnit": {"state": "translated", "value": "Сочетание для элемента назначено"}}, "ar": {"stringUnit": {"state": "translated", "value": "تم تعيين اختصار للعنصر"}}}},
+    "itemShortcut.busy": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Clipboard is busy"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "剪贴板正忙"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "剪貼簿忙碌中"}}, "ja": {"stringUnit": {"state": "translated", "value": "クリップボードは使用中です"}}, "ko": {"stringUnit": {"state": "translated", "value": "클립보드가 사용 중입니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Zwischenablage ist beschäftigt"}}, "fr": {"stringUnit": {"state": "translated", "value": "Le presse-papiers est occupé"}}, "es": {"stringUnit": {"state": "translated", "value": "El portapapeles está ocupado"}}, "pt": {"stringUnit": {"state": "translated", "value": "A área de transferência está ocupada"}}, "ru": {"stringUnit": {"state": "translated", "value": "Буфер обмена занят"}}, "ar": {"stringUnit": {"state": "translated", "value": "الحافظة مشغولة"}}}},
+    "itemShortcut.edit.action": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Edit Shortcut"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "编辑快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "編輯快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "ショートカットを編集"}}, "ko": {"stringUnit": {"state": "translated", "value": "단축키 편집"}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehl bearbeiten"}}, "fr": {"stringUnit": {"state": "translated", "value": "Modifier le raccourci"}}, "es": {"stringUnit": {"state": "translated", "value": "Editar atajo"}}, "pt": {"stringUnit": {"state": "translated", "value": "Editar atalho"}}, "ru": {"stringUnit": {"state": "translated", "value": "Изменить сочетание"}}, "ar": {"stringUnit": {"state": "translated", "value": "تعديل الاختصار"}}}},
+    "itemShortcut.recordFirst": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Record a shortcut first."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "请先录入快捷键。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "請先錄入快捷鍵。"}}, "ja": {"stringUnit": {"state": "translated", "value": "先にショートカットを記録してください。"}}, "ko": {"stringUnit": {"state": "translated", "value": "먼저 단축키를 입력하세요."}}, "de": {"stringUnit": {"state": "translated", "value": "Nimm zuerst einen Kurzbefehl auf."}}, "fr": {"stringUnit": {"state": "translated", "value": "Enregistrez d’abord un raccourci."}}, "es": {"stringUnit": {"state": "translated", "value": "Graba primero un atajo."}}, "pt": {"stringUnit": {"state": "translated", "value": "Grave primeiro um atalho."}}, "ru": {"stringUnit": {"state": "translated", "value": "Сначала запишите сочетание клавиш."}}, "ar": {"stringUnit": {"state": "translated", "value": "سجّل اختصارًا أولاً."}}}},
+    "itemShortcut.recordUnavailable": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Shortcut settings are unavailable."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "快捷键设置不可用。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "快捷鍵設定無法使用。"}}, "ja": {"stringUnit": {"state": "translated", "value": "ショートカット設定を使用できません。"}}, "ko": {"stringUnit": {"state": "translated", "value": "단축키 설정을 사용할 수 없습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehleinstellungen sind nicht verfügbar."}}, "fr": {"stringUnit": {"state": "translated", "value": "Les réglages des raccourcis sont indisponibles."}}, "es": {"stringUnit": {"state": "translated", "value": "Los ajustes de atajos no están disponibles."}}, "pt": {"stringUnit": {"state": "translated", "value": "As definições de atalhos estão indisponíveis."}}, "ru": {"stringUnit": {"state": "translated", "value": "Настройки сочетаний недоступны."}}, "ar": {"stringUnit": {"state": "translated", "value": "إعدادات الاختصارات غير متاحة."}}}},
+    "itemShortcut.removed": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Item shortcut removed"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "已移除项目快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "已移除項目快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "項目のショートカットを削除しました"}}, "ko": {"stringUnit": {"state": "translated", "value": "항목 단축키가 제거되었습니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehl für Element entfernt"}}, "fr": {"stringUnit": {"state": "translated", "value": "Raccourci de l’élément supprimé"}}, "es": {"stringUnit": {"state": "translated", "value": "Atajo del elemento eliminado"}}, "pt": {"stringUnit": {"state": "translated", "value": "Atalho do item removido"}}, "ru": {"stringUnit": {"state": "translated", "value": "Сочетание для элемента удалено"}}, "ar": {"stringUnit": {"state": "translated", "value": "تمت إزالة اختصار العنصر"}}}},
+    "itemShortcut.format.original": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Paste Original"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "粘贴原始内容"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "貼上原始內容"}}, "ja": {"stringUnit": {"state": "translated", "value": "元の形式でペースト"}}, "ko": {"stringUnit": {"state": "translated", "value": "원본 형식으로 붙여넣기"}}, "de": {"stringUnit": {"state": "translated", "value": "Original einfügen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Coller le contenu original"}}, "es": {"stringUnit": {"state": "translated", "value": "Pegar contenido original"}}, "pt": {"stringUnit": {"state": "translated", "value": "Colar conteúdo original"}}, "ru": {"stringUnit": {"state": "translated", "value": "Вставить оригинал"}}, "ar": {"stringUnit": {"state": "translated", "value": "لصق المحتوى الأصلي"}}}},
+    "itemShortcut.format.plainText": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Paste as Plain Text"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "粘贴为纯文本"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "貼上為純文字"}}, "ja": {"stringUnit": {"state": "translated", "value": "プレーンテキストでペースト"}}, "ko": {"stringUnit": {"state": "translated", "value": "일반 텍스트로 붙여넣기"}}, "de": {"stringUnit": {"state": "translated", "value": "Als reinen Text einfügen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Coller en texte brut"}}, "es": {"stringUnit": {"state": "translated", "value": "Pegar como texto sin formato"}}, "pt": {"stringUnit": {"state": "translated", "value": "Colar como texto simples"}}, "ru": {"stringUnit": {"state": "translated", "value": "Вставить как обычный текст"}}, "ar": {"stringUnit": {"state": "translated", "value": "لصق كنص عادي"}}}},
+    "itemShortcut.plainTextUnavailable": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "This item has no plain text to paste."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "此项目没有可粘贴的纯文本。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "此項目沒有可貼上的純文字。"}}, "ja": {"stringUnit": {"state": "translated", "value": "この項目にはペーストできるテキストがありません。"}}, "ko": {"stringUnit": {"state": "translated", "value": "이 항목에는 붙여넣을 일반 텍스트가 없습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Dieses Element enthält keinen einfügbaren Text."}}, "fr": {"stringUnit": {"state": "translated", "value": "Cet élément ne contient aucun texte brut à coller."}}, "es": {"stringUnit": {"state": "translated", "value": "Este elemento no tiene texto sin formato para pegar."}}, "pt": {"stringUnit": {"state": "translated", "value": "Este item não tem texto simples para colar."}}, "ru": {"stringUnit": {"state": "translated", "value": "В этом элементе нет обычного текста для вставки."}}, "ar": {"stringUnit": {"state": "translated", "value": "لا يحتوي هذا العنصر على نص عادي للصق."}}}},
+    "itemShortcut.format.textOnly": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Paste Text"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "粘贴文本"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "貼上文字"}}, "ja": {"stringUnit": {"state": "translated", "value": "テキストをペースト"}}, "ko": {"stringUnit": {"state": "translated", "value": "텍스트 붙여넣기"}}, "de": {"stringUnit": {"state": "translated", "value": "Text einfügen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Coller le texte"}}, "es": {"stringUnit": {"state": "translated", "value": "Pegar texto"}}, "pt": {"stringUnit": {"state": "translated", "value": "Colar texto"}}, "ru": {"stringUnit": {"state": "translated", "value": "Вставить текст"}}, "ar": {"stringUnit": {"state": "translated", "value": "لصق النص"}}}},
+    "itemShortcut.format.original.description": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Preserves formatting and other original clipboard data."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "保留原始格式及其他剪贴板数据。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "保留原始格式及其他剪貼簿資料。"}}, "ja": {"stringUnit": {"state": "translated", "value": "元の書式とクリップボードのその他のデータを保持します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "원본 서식과 기타 클립보드 데이터를 유지합니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Behält Formatierung und weitere ursprüngliche Zwischenablagedaten bei."}}, "fr": {"stringUnit": {"state": "translated", "value": "Conserve la mise en forme et les autres données d’origine du presse-papiers."}}, "es": {"stringUnit": {"state": "translated", "value": "Conserva el formato y otros datos originales del portapapeles."}}, "pt": {"stringUnit": {"state": "translated", "value": "Preserva a formatação e outros dados originais da área de transferência."}}, "ru": {"stringUnit": {"state": "translated", "value": "Сохраняет форматирование и другие исходные данные буфера обмена."}}, "ar": {"stringUnit": {"state": "translated", "value": "يحافظ على التنسيق وبيانات الحافظة الأصلية الأخرى."}}}},
+    "itemShortcut.format.plainText.description": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Pastes text only, without formatting or other data. Images use recognized text; files use paths."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "仅粘贴文字，不含格式或其他数据。图片使用识别文字；文件使用路径。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "僅貼上文字，不含格式或其他資料。圖片使用辨識文字；檔案使用路徑。"}}, "ja": {"stringUnit": {"state": "translated", "value": "書式やその他のデータを除き、テキストのみをペーストします。画像は認識した文字、ファイルはパスを使用します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "서식이나 다른 데이터 없이 텍스트만 붙여넣습니다. 이미지는 인식된 텍스트, 파일은 경로를 사용합니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Fügt nur Text ohne Formatierung oder andere Daten ein. Bei Bildern wird erkannter Text, bei Dateien der Pfad verwendet."}}, "fr": {"stringUnit": {"state": "translated", "value": "Colle uniquement le texte, sans mise en forme ni autres données. Les images utilisent le texte reconnu et les fichiers leur chemin."}}, "es": {"stringUnit": {"state": "translated", "value": "Pega solo texto, sin formato ni otros datos. Las imágenes usan el texto reconocido y los archivos, sus rutas."}}, "pt": {"stringUnit": {"state": "translated", "value": "Cola apenas texto, sem formatação ou outros dados. Imagens usam texto reconhecido; arquivos usam caminhos."}}, "ru": {"stringUnit": {"state": "translated", "value": "Вставляет только текст без форматирования и других данных. Для изображений используется распознанный текст, для файлов — пути."}}, "ar": {"stringUnit": {"state": "translated", "value": "يلصق النص فقط دون تنسيق أو بيانات أخرى. تُستخدم النصوص المتعرّف عليها للصور ومسارات الملفات للملفات."}}}},
+    "itemShortcut.textOnly.description": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "This item contains only plain text, so one shortcut covers both paste styles."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "此项目只有纯文本，两种粘贴方式结果相同，只需一个快捷键。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "此項目只有純文字，兩種貼上方式結果相同，只需一個快捷鍵。"}}, "ja": {"stringUnit": {"state": "translated", "value": "この項目はプレーンテキストのみです。どちらの貼り付け方も同じなので、ショートカットは1つで十分です。"}}, "ko": {"stringUnit": {"state": "translated", "value": "이 항목은 일반 텍스트만 포함하므로 두 붙여넣기 방식에 단축키 하나면 충분합니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Dieses Element enthält nur reinen Text. Ein Kurzbefehl genügt für beide Einfügearten."}}, "fr": {"stringUnit": {"state": "translated", "value": "Cet élément ne contient que du texte brut : un seul raccourci suffit pour les deux modes de collage."}}, "es": {"stringUnit": {"state": "translated", "value": "Este elemento solo contiene texto sin formato; un atajo sirve para ambos modos de pegado."}}, "pt": {"stringUnit": {"state": "translated", "value": "Este item contém apenas texto simples; um atalho serve para os dois modos de colagem."}}, "ru": {"stringUnit": {"state": "translated", "value": "Этот элемент содержит только обычный текст, поэтому одного сочетания достаточно для обоих способов вставки."}}, "ar": {"stringUnit": {"state": "translated", "value": "يحتوي هذا العنصر على نص عادي فقط، لذا يكفي اختصار واحد لطريقتَي اللصق."}}}},
+    "itemShortcut.textOnly.existingPlain": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "This existing shortcut pastes the same text. You can keep or remove it."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "此现有快捷键粘贴相同文本；可保留或移除。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "此現有快捷鍵貼上相同文字；可保留或移除。"}}, "ja": {"stringUnit": {"state": "translated", "value": "この既存のショートカットも同じテキストをペーストします。残すか削除できます。"}}, "ko": {"stringUnit": {"state": "translated", "value": "기존 단축키도 같은 텍스트를 붙여넣습니다. 유지하거나 제거할 수 있습니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Dieser vorhandene Kurzbefehl fügt denselben Text ein. Sie können ihn behalten oder entfernen."}}, "fr": {"stringUnit": {"state": "translated", "value": "Ce raccourci existant colle le même texte. Vous pouvez le conserver ou le supprimer."}}, "es": {"stringUnit": {"state": "translated", "value": "Este atajo existente pega el mismo texto. Puedes conservarlo o eliminarlo."}}, "pt": {"stringUnit": {"state": "translated", "value": "Este atalho existente cola o mesmo texto. Você pode mantê-lo ou removê-lo."}}, "ru": {"stringUnit": {"state": "translated", "value": "Это существующее сочетание вставляет тот же текст. Его можно оставить или удалить."}}, "ar": {"stringUnit": {"state": "translated", "value": "يلصق هذا الاختصار الحالي النص نفسه. يمكنك الإبقاء عليه أو إزالته."}}}},
+    "itemShortcut.settings.empty": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Choose Assign Shortcut from an item's Actions menu."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "在项目的“操作”菜单中选择“分配快捷键”。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "在項目的「動作」選單中選擇「設定快捷鍵」。"}}, "ja": {"stringUnit": {"state": "translated", "value": "項目のアクションメニューから「ショートカットを割り当て」を選びます。"}}, "ko": {"stringUnit": {"state": "translated", "value": "항목의 동작 메뉴에서 단축키 지정을 선택하세요."}}, "de": {"stringUnit": {"state": "translated", "value": "Wähle „Kurzbefehl zuweisen“ im Aktionsmenü eines Elements."}}, "fr": {"stringUnit": {"state": "translated", "value": "Choisissez « Attribuer un raccourci » dans le menu Actions d’un élément."}}, "es": {"stringUnit": {"state": "translated", "value": "Elige « Asignar atajo » en el menú Acciones de un elemento."}}, "pt": {"stringUnit": {"state": "translated", "value": "Escolha « Atribuir atalho » no menu Ações de um item."}}, "ru": {"stringUnit": {"state": "translated", "value": "Выберите «Назначить сочетание» в меню действий элемента."}}, "ar": {"stringUnit": {"state": "translated", "value": "اختر «تعيين اختصار» من قائمة إجراءات العنصر."}}}},
+    "itemShortcut.openSettings": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Open Actions & Shortcuts…"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "打开“操作与快捷键”…"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "開啟「操作與快捷鍵」…"}}, "ja": {"stringUnit": {"state": "translated", "value": "「アクションとショートカット」を開く…"}}, "ko": {"stringUnit": {"state": "translated", "value": "동작 및 단축키 열기…"}}, "de": {"stringUnit": {"state": "translated", "value": "Aktionen & Kurzbefehle öffnen…"}}, "fr": {"stringUnit": {"state": "translated", "value": "Ouvrir Actions et raccourcis…"}}, "es": {"stringUnit": {"state": "translated", "value": "Abrir Acciones y atajos…"}}, "pt": {"stringUnit": {"state": "translated", "value": "Abrir Ações e Atalhos…"}}, "ru": {"stringUnit": {"state": "translated", "value": "Открыть «Действия и сочетания»…"}}, "ar": {"stringUnit": {"state": "translated", "value": "فتح الإجراءات والاختصارات…"}}}},
+    "itemShortcut.settings.title": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Item Shortcuts"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "项目快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "項目快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "項目のショートカット"}}, "ko": {"stringUnit": {"state": "translated", "value": "항목 단축키"}}, "de": {"stringUnit": {"state": "translated", "value": "Element-Kurzbefehle"}}, "fr": {"stringUnit": {"state": "translated", "value": "Raccourcis des éléments"}}, "es": {"stringUnit": {"state": "translated", "value": "Atajos de elementos"}}, "pt": {"stringUnit": {"state": "translated", "value": "Atalhos dos itens"}}, "ru": {"stringUnit": {"state": "translated", "value": "Сочетания для элементов"}}, "ar": {"stringUnit": {"state": "translated", "value": "اختصارات العناصر"}}}},
+    "itemShortcut.unavailable": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "This item is unavailable"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "此项目不可用"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "此項目無法使用"}}, "ja": {"stringUnit": {"state": "translated", "value": "この項目は使用できません"}}, "ko": {"stringUnit": {"state": "translated", "value": "이 항목을 사용할 수 없습니다"}}, "de": {"stringUnit": {"state": "translated", "value": "Dieses Element ist nicht verfügbar"}}, "fr": {"stringUnit": {"state": "translated", "value": "Cet élément est indisponible"}}, "es": {"stringUnit": {"state": "translated", "value": "Este elemento no está disponible"}}, "pt": {"stringUnit": {"state": "translated", "value": "Este item não está disponível"}}, "ru": {"stringUnit": {"state": "translated", "value": "Элемент недоступен"}}, "ar": {"stringUnit": {"state": "translated", "value": "هذا العنصر غير متاح"}}}},
+    "quickPaste.duration.fiveMinutes": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "5 minutes"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "5 分钟"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "5 分鐘"}}, "ja": {"stringUnit": {"state": "translated", "value": "5 分"}}, "ko": {"stringUnit": {"state": "translated", "value": "5분"}}, "de": {"stringUnit": {"state": "translated", "value": "5 Minuten"}}, "fr": {"stringUnit": {"state": "translated", "value": "5 minutes"}}, "es": {"stringUnit": {"state": "translated", "value": "5 minutos"}}, "pt": {"stringUnit": {"state": "translated", "value": "5 minutos"}}, "ru": {"stringUnit": {"state": "translated", "value": "5 мин"}}, "ar": {"stringUnit": {"state": "translated", "value": "5 دقائق"}}}},
+    "quickPaste.duration.oneDay": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "1 day"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "1 天"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "1 天"}}, "ja": {"stringUnit": {"state": "translated", "value": "1日"}}, "ko": {"stringUnit": {"state": "translated", "value": "1일"}}, "de": {"stringUnit": {"state": "translated", "value": "1 Tag"}}, "fr": {"stringUnit": {"state": "translated", "value": "1 jour"}}, "es": {"stringUnit": {"state": "translated", "value": "1 día"}}, "pt": {"stringUnit": {"state": "translated", "value": "1 dia"}}, "ru": {"stringUnit": {"state": "translated", "value": "1 день"}}, "ar": {"stringUnit": {"state": "translated", "value": "يوم واحد"}}}},
+    "quickPaste.duration.oneHour": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "1 hour"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "1 小时"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "1 小時"}}, "ja": {"stringUnit": {"state": "translated", "value": "1時間"}}, "ko": {"stringUnit": {"state": "translated", "value": "1시간"}}, "de": {"stringUnit": {"state": "translated", "value": "1 Stunde"}}, "fr": {"stringUnit": {"state": "translated", "value": "1 heure"}}, "es": {"stringUnit": {"state": "translated", "value": "1 hora"}}, "pt": {"stringUnit": {"state": "translated", "value": "1 hora"}}, "ru": {"stringUnit": {"state": "translated", "value": "1 час"}}, "ar": {"stringUnit": {"state": "translated", "value": "ساعة واحدة"}}}},
+    "quickPaste.historyItem": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "History item"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "历史记录项目"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "記錄項目"}}, "ja": {"stringUnit": {"state": "translated", "value": "履歴の項目"}}, "ko": {"stringUnit": {"state": "translated", "value": "기록 항목"}}, "de": {"stringUnit": {"state": "translated", "value": "Verlaufseintrag"}}, "fr": {"stringUnit": {"state": "translated", "value": "Élément de l’historique"}}, "es": {"stringUnit": {"state": "translated", "value": "Elemento del historial"}}, "pt": {"stringUnit": {"state": "translated", "value": "Item do histórico"}}, "ru": {"stringUnit": {"state": "translated", "value": "Элемент истории"}}, "ar": {"stringUnit": {"state": "translated", "value": "عنصر من السجل"}}}},
+    "quickPaste.sheet.duration": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Duration"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "有效期"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "有效期"}}, "ja": {"stringUnit": {"state": "translated", "value": "有効期間"}}, "ko": {"stringUnit": {"state": "translated", "value": "유효 기간"}}, "de": {"stringUnit": {"state": "translated", "value": "Dauer"}}, "fr": {"stringUnit": {"state": "translated", "value": "Durée"}}, "es": {"stringUnit": {"state": "translated", "value": "Duración"}}, "pt": {"stringUnit": {"state": "translated", "value": "Duração"}}, "ru": {"stringUnit": {"state": "translated", "value": "Срок действия"}}, "ar": {"stringUnit": {"state": "translated", "value": "المدة"}}}},
+    "quickPaste.sheet.keepExpiry": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Keep current expiration"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "保留当前到期时间"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "保留目前到期時間"}}, "ja": {"stringUnit": {"state": "translated", "value": "現在の期限を維持"}}, "ko": {"stringUnit": {"state": "translated", "value": "현재 만료 시간 유지"}}, "de": {"stringUnit": {"state": "translated", "value": "Bisheriges Ablaufdatum beibehalten"}}, "fr": {"stringUnit": {"state": "translated", "value": "Conserver l’expiration actuelle"}}, "es": {"stringUnit": {"state": "translated", "value": "Mantener vencimiento actual"}}, "pt": {"stringUnit": {"state": "translated", "value": "Manter validade atual"}}, "ru": {"stringUnit": {"state": "translated", "value": "Оставить текущий срок"}}, "ar": {"stringUnit": {"state": "translated", "value": "الإبقاء على وقت الانتهاء الحالي"}}}},
+    "quickPaste.sheet.savesHistoryItem": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Choosing Until removed saves this History item."}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "选择“直到移除”会保存此历史项目。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "選擇「直到移除」會儲存此歷史項目。"}}, "ja": {"stringUnit": {"state": "translated", "value": "「削除するまで」を選ぶと、この履歴項目が保存されます。"}}, "ko": {"stringUnit": {"state": "translated", "value": "“제거할 때까지”를 선택하면 이 기록 항목이 저장됩니다."}}, "de": {"stringUnit": {"state": "translated", "value": "„Bis zum Entfernen“ speichert diesen Verlaufseintrag."}}, "fr": {"stringUnit": {"state": "translated", "value": "« Jusqu’à suppression » enregistre cet élément de l’historique."}}, "es": {"stringUnit": {"state": "translated", "value": "«Hasta eliminarlo» guarda este elemento del historial."}}, "pt": {"stringUnit": {"state": "translated", "value": "“Até ser removido” salva este item do histórico."}}, "ru": {"stringUnit": {"state": "translated", "value": "При выборе «До удаления» этот элемент истории сохранится."}}, "ar": {"stringUnit": {"state": "translated", "value": "اختيار «حتى الإزالة» يحفظ عنصر السجل هذا."}}}},
+    "quickPaste.sheet.title": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Item Shortcut"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "项目快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "項目快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "項目のショートカット"}}, "ko": {"stringUnit": {"state": "translated", "value": "항목 단축키"}}, "de": {"stringUnit": {"state": "translated", "value": "Element-Kurzbefehl"}}, "fr": {"stringUnit": {"state": "translated", "value": "Raccourci de l’élément"}}, "es": {"stringUnit": {"state": "translated", "value": "Atajo del elemento"}}, "pt": {"stringUnit": {"state": "translated", "value": "Atalho do item"}}, "ru": {"stringUnit": {"state": "translated", "value": "Сочетание для элемента"}}, "ar": {"stringUnit": {"state": "translated", "value": "اختصار العنصر"}}}},
+    "settings.quickPaste.noExpiry": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Until removed"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "直到移除"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "直到移除"}}, "ja": {"stringUnit": {"state": "translated", "value": "削除するまで"}}, "ko": {"stringUnit": {"state": "translated", "value": "제거할 때까지"}}, "de": {"stringUnit": {"state": "translated", "value": "Bis zum Entfernen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Jusqu’à suppression"}}, "es": {"stringUnit": {"state": "translated", "value": "Hasta eliminarlo"}}, "pt": {"stringUnit": {"state": "translated", "value": "Até ser removido"}}, "ru": {"stringUnit": {"state": "translated", "value": "До удаления"}}, "ar": {"stringUnit": {"state": "translated", "value": "حتى الإزالة"}}}},
+    "settings.quickPaste.remove": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Remove Shortcut"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "移除快捷键"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "移除快捷鍵"}}, "ja": {"stringUnit": {"state": "translated", "value": "ショートカットを削除"}}, "ko": {"stringUnit": {"state": "translated", "value": "단축키 제거"}}, "de": {"stringUnit": {"state": "translated", "value": "Kurzbefehl entfernen"}}, "fr": {"stringUnit": {"state": "translated", "value": "Supprimer le raccourci"}}, "es": {"stringUnit": {"state": "translated", "value": "Eliminar atajo"}}, "pt": {"stringUnit": {"state": "translated", "value": "Remover atalho"}}, "ru": {"stringUnit": {"state": "translated", "value": "Удалить сочетание"}}, "ar": {"stringUnit": {"state": "translated", "value": "إزالة الاختصار"}}}},
+    "settings.quickPaste.until": {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Until %@"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "截止至 %@"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "直到 %@"}}, "ja": {"stringUnit": {"state": "translated", "value": "%@まで"}}, "ko": {"stringUnit": {"state": "translated", "value": "%@까지"}}, "de": {"stringUnit": {"state": "translated", "value": "Bis %@"}}, "fr": {"stringUnit": {"state": "translated", "value": "Jusqu’au %@"}}, "es": {"stringUnit": {"state": "translated", "value": "Hasta %@"}}, "pt": {"stringUnit": {"state": "translated", "value": "Até %@"}}, "ru": {"stringUnit": {"state": "translated", "value": "До %@"}}, "ar": {"stringUnit": {"state": "translated", "value": "حتى %@"}}}}
   },
   "version": "1.0"
 }

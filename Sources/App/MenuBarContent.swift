@@ -22,7 +22,8 @@ enum MenuBarPanelLayout {
     static let panelTopPadding: CGFloat = 4
     static let contentTopPadding: CGFloat = 4
     static let contentBottomPadding: CGFloat = 2
-    static let panelBottomPadding: CGFloat = 2
+    static let panelBottomPadding: CGFloat = outerPadding - contentBottomPadding
+    static let editingPanelBottomPadding: CGFloat = 2
     static let rootSpacing: CGFloat = 0
     static let tabIconSize: CGFloat = 12
     static let tabItemHeight: CGFloat = 26
@@ -67,6 +68,10 @@ enum MenuBarPanelLayout {
         contentTopPadding + contentBottomPadding
     }
 
+    static var editingPanelChromeHeight: CGFloat {
+        panelChromeHeight - panelBottomPadding + editingPanelBottomPadding
+    }
+
     static func contentBodyHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
         max(0, contentHeight - contentVerticalPadding)
     }
@@ -86,27 +91,27 @@ enum MenuBarPanelLayout {
         forContentHeight contentHeight: CGFloat,
         showsEditingActionBar: Bool = false
     ) -> CGFloat {
-        panelChromeHeight
+        (showsEditingActionBar ? editingPanelChromeHeight : panelChromeHeight)
             + contentHeight
             + (showsEditingActionBar ? editingActionBarHeight : 0)
     }
 
-    static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func width(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         baseWidth
     }
 
-    static func contentSize(for panelItems: [PluginPanelItem]) -> NSSize {
+    static func contentSize(for panelItems: [PluginPanelRowSnapshot]) -> NSSize {
         NSSize(
             width: width(for: panelItems),
             height: preferredPanelHeight(for: panelItems, screen: nil)
         )
     }
 
-    static func height(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func height(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         preferredPanelHeight(for: panelItems, screen: nil)
     }
 
-    static func featureContentHeight(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func featureContentHeight(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         let rowContentHeight = panelItems.reduce(CGFloat(0)) { partialResult, item in
             partialResult + rowHeight(for: item)
         }
@@ -120,20 +125,20 @@ enum MenuBarPanelLayout {
         max(0, panelHeight - panelChromeHeight - contentVerticalPadding)
     }
 
-    static func preferredPanelHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func preferredPanelHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         panelHeight(
             forContentHeight: preferredFeatureContentHeight(for: panelItems, screen: screen)
         )
     }
 
-    static func preferredFeatureContentHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func preferredFeatureContentHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         max(
             featureListHeight(for: panelItems, screen: screen) + contentVerticalPadding,
             minimumContentHeight
         )
     }
 
-    static func featureListHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func featureListHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         min(featureContentHeight(for: panelItems), maximumFeatureListHeight(for: screen))
     }
 
@@ -193,7 +198,7 @@ enum MenuBarPanelLayout {
         return max(minimumPanelHeight, visibleFrameHeight * featurePanelScreenHeightRatio)
     }
 
-    static func rowHeight(for item: PluginPanelItem) -> CGFloat {
+    static func rowHeight(for item: PluginPanelRowSnapshot) -> CGFloat {
         guard let detail = displayedDetail(for: item) else {
             return rowHeaderHeight + rowVerticalPadding
         }
@@ -204,7 +209,7 @@ enum MenuBarPanelLayout {
             + rowVerticalPadding
     }
 
-    private static func displayedDetail(for item: PluginPanelItem) -> PluginPanelDetail? {
+    private static func displayedDetail(for item: PluginPanelRowSnapshot) -> PluginPanelDetail? {
         guard let detail = item.detail else {
             return nil
         }
@@ -369,10 +374,9 @@ private enum MenuBarHoverStyle {
 @MainActor
 final class HoverSecondaryPanelCoordinator: ObservableObject {
     struct Activation: Equatable, Hashable {
-        let pluginID: String
+        let placementID: String
         let controlID: String
         let optionID: String
-        var instanceID: String? = nil
     }
 
     @Published private(set) var activeActivation: Activation?
@@ -398,15 +402,14 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func hoverBegan(
-        pluginID: String,
+        placementID: String,
         controlID: String,
-        optionID: String,
-        instanceID: String? = nil
+        optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
-            optionID: optionID, instanceID: instanceID
+            optionID: optionID
         )
 
         cancelDismissal()
@@ -440,15 +443,14 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func pin(
-        pluginID: String,
+        placementID: String,
         controlID: String,
-        optionID: String,
-        instanceID: String? = nil
+        optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
-            optionID: optionID, instanceID: instanceID
+            optionID: optionID
         )
 
         cancelPendingActivation()
@@ -466,15 +468,14 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func hoverEnded(
-        pluginID: String,
+        placementID: String,
         controlID: String,
-        optionID: String,
-        instanceID: String? = nil
+        optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
-            optionID: optionID, instanceID: instanceID
+            optionID: optionID
         )
 
         if pendingActivation == activation {
@@ -585,8 +586,6 @@ struct MenuBarContent: View {
     static let launchControlOpenManagerActionID = "launch-control-open-manager"
     static let fanControlPluginID = "fan-control"
     static let fanControlManagePresetsActionID = "fan-add-preset"
-    static let zshConfigPluginID = "zsh-config"
-    static let zshConfigOpenSettingsActionID = "execute"
     static let batteryChargeLimitPluginID = "battery-charge-limit"
     static let batteryChargeLimitManageSettingsActionID = "battery-manage-settings"
 
@@ -595,7 +594,8 @@ struct MenuBarContent: View {
     @StateObject private var deferredActionDispatcher = DeferredPanelActionDispatcher()
     @Environment(\.menuBarPanelTheme) private var theme
 
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    @EnvironmentObject private var presentation: MenuBarPanelPresentationModel
     let contentBodyHeight: CGFloat
     let maximumFeatureListHeight: CGFloat
     let isPanelVisible: Bool
@@ -603,15 +603,15 @@ struct MenuBarContent: View {
     let onOpenSettings: () -> Void
     let onPresentDiskCleanConfiguration: () -> Void
     let onPresentLaunchControlConfiguration: () -> Void
-    var suppliedItems: [PluginPanelItem]? = nil
-    var suppliedEntries: [MenuBarPanelEntry]? = nil
+    var suppliedItems: [PluginPanelRowSnapshot]? = nil
     var embedded = false
     var suppliedRowOffsets: [String: CGFloat]? = nil
     var onInlinePresentationChange: (Bool) -> Void = { _ in }
 
-    private var items: [PluginPanelItem] { suppliedItems ?? pluginHost.panelItems }
+    private var items: [PluginPanelRowSnapshot] { suppliedItems ?? pluginHost.panelItems }
 
     var body: some View {
+        let _ = presentation.revision
         content
         .background(
             MenuWindowAccessor { window in
@@ -626,7 +626,7 @@ struct MenuBarContent: View {
             hoverCoordinator.onDismissRequest = { activation in
                 pluginHost.clearPanelNavigationSelection(
                     controlID: activation.controlID,
-                    for: activation.pluginID
+                    for: activation.placementID
                 )
             }
 
@@ -776,9 +776,7 @@ struct MenuBarContent: View {
 
     private var featureContentHeight: CGFloat {
         guard suppliedRowOffsets == nil else { return contentBodyHeight }
-        guard let suppliedEntries else { return MenuBarPanelLayout.featureContentHeight(for: items) }
-        let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-        return MenuBarPanelLayout.featureContentHeight(for: suppliedEntries.compactMap { templates[$0.pluginID] })
+        return MenuBarPanelLayout.featureContentHeight(for: items)
     }
 
     private func presentSettings() {
@@ -786,14 +784,14 @@ struct MenuBarContent: View {
         onDismiss()
     }
 
-    private func handlePanelSwitchChange(_ newValue: Bool, for item: PluginPanelItem) -> Bool {
+    private func handlePanelSwitchChange(_ newValue: Bool, for item: PluginPanelRowSnapshot) -> Bool {
         switch item.menuActionBehavior {
         case .keepPresented:
             pluginHost.setSwitchValue(newValue, for: item.id)
             return pluginHost.isSwitchOn(for: item.id)
         case .dismissBeforeHandling:
             deferredActionDispatcher.deferPanelSwitch(
-                pluginID: item.id,
+                placementID: item.id,
                 isOn: newValue
             )
             onDismiss()
@@ -804,29 +802,23 @@ struct MenuBarContent: View {
 
     private func handleActionInvoke(
         controlID: String,
-        for item: PluginPanelItem,
+        for item: PluginPanelRowSnapshot,
         behavior: PluginMenuActionBehavior
     ) {
-        if isDiskCleanOpenDetailsAction(pluginID: item.id, controlID: controlID) {
+        if isDiskCleanOpenDetailsAction(pluginID: item.pluginID, controlID: controlID) {
             presentDiskCleanDetails()
             onDismiss()
             return
         }
 
-        if isLaunchControlOpenManagerAction(pluginID: item.id, controlID: controlID) {
+        if isLaunchControlOpenManagerAction(pluginID: item.pluginID, controlID: controlID) {
             presentLaunchControlManager()
             onDismiss()
             return
         }
 
-        if isFanControlManagePresetsAction(pluginID: item.id, controlID: controlID) {
+        if isFanControlManagePresetsAction(pluginID: item.pluginID, controlID: controlID) {
             pluginHost.presentPluginSettings(pluginID: Self.fanControlPluginID)
-            onDismiss()
-            return
-        }
-
-        if isZshConfigOpenSettingsAction(pluginID: item.id, controlID: controlID) {
-            pluginHost.presentPluginSettings(pluginID: Self.zshConfigPluginID)
             onDismiss()
             return
         }
@@ -837,7 +829,8 @@ struct MenuBarContent: View {
         case .dismissBeforeHandling:
             // Dismiss the popover before running actions that may open a new window.
             deferredActionDispatcher.deferActionInvocation(
-                pluginID: item.id,
+                placementID: item.id,
+                pluginID: item.pluginID,
                 controlID: controlID
             )
             onDismiss()
@@ -862,7 +855,7 @@ struct MenuBarContent: View {
     private func performDeferredPanelSwitchAction(_ action: DeferredPanelActionDispatcher.PanelSwitchAction) {
         pluginHost.setSwitchValue(
             action.isOn,
-            for: action.pluginID
+            for: action.placementID
         )
     }
 
@@ -882,11 +875,6 @@ struct MenuBarContent: View {
             return
         }
 
-        if isZshConfigOpenSettingsAction(pluginID: action.pluginID, controlID: action.controlID) {
-            pluginHost.presentPluginSettings(pluginID: Self.zshConfigPluginID)
-            return
-        }
-
         if isBatteryChargeLimitManageSettingsAction(pluginID: action.pluginID, controlID: action.controlID) {
             pluginHost.presentPluginSettings(pluginID: Self.batteryChargeLimitPluginID)
             return
@@ -894,7 +882,7 @@ struct MenuBarContent: View {
 
         pluginHost.invokePanelAction(
             controlID: action.controlID,
-            for: action.pluginID
+            for: action.placementID
         )
     }
 
@@ -908,10 +896,6 @@ struct MenuBarContent: View {
 
     private func isFanControlManagePresetsAction(pluginID: String, controlID: String) -> Bool {
         pluginID == Self.fanControlPluginID && controlID == Self.fanControlManagePresetsActionID
-    }
-
-    private func isZshConfigOpenSettingsAction(pluginID: String, controlID: String) -> Bool {
-        pluginID == Self.zshConfigPluginID && controlID == Self.zshConfigOpenSettingsActionID
     }
 
     private func isBatteryChargeLimitManageSettingsAction(pluginID: String, controlID: String) -> Bool {
@@ -971,9 +955,9 @@ struct MenuBarContent: View {
                     optionID: optionID
                 ) != nil {
                     hoverCoordinator.pin(
-                        pluginID: activeSecondaryPanel.item.id,
+                        placementID: activeSecondaryPanel.item.id,
                         controlID: controlID,
-                        optionID: optionID, instanceID: activeSecondaryPanel.activation.instanceID
+                        optionID: optionID
                     )
                 } else {
                     hoverCoordinator.dismissImmediately()
@@ -1007,22 +991,21 @@ struct MenuBarContent: View {
         pluginID: String,
         controlID: String,
         optionID: String,
-        isHovering: Bool,
-        instanceID: String? = nil
+        isHovering: Bool
     ) {
         if isHovering {
             hoverCoordinator.hoverBegan(
-                pluginID: pluginID,
+                placementID: pluginID,
                 controlID: controlID,
-                optionID: optionID, instanceID: instanceID
+                optionID: optionID
             )
             return
         }
 
         hoverCoordinator.hoverEnded(
-            pluginID: pluginID,
+            placementID: pluginID,
             controlID: controlID,
-            optionID: optionID, instanceID: instanceID
+            optionID: optionID
         )
     }
 
@@ -1036,13 +1019,13 @@ struct MenuBarContent: View {
         }
 
         let controlIDs = activeSecondaryPanel.panel.controls.map(\.id).joined(separator: ",")
-        return "\(activeSecondaryPanel.activation.pluginID)|\(activeSecondaryPanel.activation.optionID)|\(activeSecondaryPanel.panel.title)|\(controlIDs)"
+        return "\(activeSecondaryPanel.activation.placementID)|\(activeSecondaryPanel.activation.optionID)|\(activeSecondaryPanel.panel.title)|\(controlIDs)"
     }
 
     private var activeSecondaryPanel: ActiveSecondaryPanel? {
         guard
             let activation = hoverCoordinator.activeActivation,
-            let item = items.first(where: { $0.id == activation.pluginID }),
+            let item = items.first(where: { $0.id == activation.placementID }),
             let panel = item.detail?.secondaryPanel(
                 controlID: activation.controlID,
                 optionID: activation.optionID
@@ -1060,24 +1043,19 @@ struct MenuBarContent: View {
 
     private struct ActiveSecondaryPanel {
         let activation: HoverSecondaryPanelCoordinator.Activation
-        let item: PluginPanelItem
+        let item: PluginPanelRowSnapshot
         let panel: PluginPanelSecondaryPanel
     }
 
     @ViewBuilder
     private var featureCards: some View {
         let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-        let entries = suppliedEntries ?? items.map { MenuBarPanelEntry(pluginID: $0.id, surface: .featurePanel) }
-        let lookup = Dictionary(uniqueKeysWithValues: entries.map { ($0.presentationID, $0) })
-        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: items)
+        let placement = ConfiguredMenuBarPanelLayout.placement(features: items)
         let offsets = suppliedRowOffsets ?? placement.featureOffsets
-        let retainedIDs = Set(hoverCoordinator.activeActivation.map {
-            [MenuBarPanelEntry(pluginID: $0.pluginID, surface: .featurePanel,
-                               instanceID: $0.instanceID).presentationID]
-        } ?? [])
-        let frames = entries.compactMap { entry -> PanelItemFrame? in
-            guard let y = offsets[entry.presentationID], let item = templates[entry.pluginID] else { return nil }
-            return PanelItemFrame(id: entry.presentationID,
+        let retainedIDs = Set(hoverCoordinator.activeActivation.map { [$0.placementID] } ?? [])
+        let frames = items.compactMap { item -> PanelItemFrame? in
+            guard let y = offsets[item.id] else { return nil }
+            return PanelItemFrame(id: item.id,
                 frame: CGRect(x: 0, y: y, width: MenuBarPanelLayout.surfaceWidth,
                               height: MenuBarPanelLayout.rowHeight(for: item)))
         }
@@ -1088,11 +1066,11 @@ struct MenuBarContent: View {
             PanelViewportStack(frames: frames, width: MenuBarPanelLayout.surfaceWidth,
                                height: suppliedRowOffsets == nil ? placement.height : contentBodyHeight,
                                retainedIDs: retainedIDs) { id in
-                if let entry = lookup[id], let item = templates[entry.pluginID] {
+                if let item = templates[id] {
                     FeatureRowView(
                         item: item,
-                        indicator: pluginHost.primaryPanelIndicatorsByID[item.id],
-                        compactIndicator: pluginHost.primaryPanelCompactIndicatorsByID[item.id],
+                        indicator: pluginHost.rowIndicator(for: item.id),
+                        compactIndicator: pluginHost.rowCompactIndicator(for: item.id),
                         onDisclosureToggle: { isExpanded in
                             pluginHost.setDisclosureExpanded(isExpanded, for: item.id)
                         },
@@ -1112,9 +1090,9 @@ struct MenuBarContent: View {
 
                             if item.detail?.secondaryPanel(controlID: controlID, optionID: optionID) != nil {
                                 hoverCoordinator.pin(
-                                    pluginID: item.id,
+                                    placementID: item.id,
                                     controlID: controlID,
-                                    optionID: optionID, instanceID: entry.instanceID
+                                    optionID: optionID
                                 )
                             } else {
                                 hoverCoordinator.dismissImmediately()
@@ -1126,16 +1104,16 @@ struct MenuBarContent: View {
                                 pluginID: item.id,
                                 controlID: controlID,
                                 optionID: optionID,
-                                isHovering: isHovering, instanceID: entry.instanceID
+                                isHovering: isHovering
                             )
                         },
                         onNavigationRowFrameChange: { controlID, optionID, frame in
                             hoverCoordinator.updateRowFrame(
                                 frame,
                                 for: HoverSecondaryPanelCoordinator.Activation(
-                                    pluginID: item.id,
+                                    placementID: item.id,
                                     controlID: controlID,
-                                    optionID: optionID, instanceID: entry.instanceID
+                                    optionID: optionID
                                 )
                             )
                         },
@@ -1171,11 +1149,12 @@ struct MenuBarContent: View {
 @MainActor
 final class DeferredPanelActionDispatcher: ObservableObject {
     struct PanelSwitchAction: Equatable {
-        let pluginID: String
+        let placementID: String
         let isOn: Bool
     }
 
     struct ActionInvocation: Equatable {
+        let placementID: String
         let pluginID: String
         let controlID: String
     }
@@ -1184,12 +1163,12 @@ final class DeferredPanelActionDispatcher: ObservableObject {
     private(set) var pendingActionInvocation: ActionInvocation?
     private var flushTask: Task<Void, Never>?
 
-    func deferPanelSwitch(pluginID: String, isOn: Bool) {
-        pendingPanelSwitchAction = PanelSwitchAction(pluginID: pluginID, isOn: isOn)
+    func deferPanelSwitch(placementID: String, isOn: Bool) {
+        pendingPanelSwitchAction = PanelSwitchAction(placementID: placementID, isOn: isOn)
     }
 
-    func deferActionInvocation(pluginID: String, controlID: String) {
-        pendingActionInvocation = ActionInvocation(pluginID: pluginID, controlID: controlID)
+    func deferActionInvocation(placementID: String, pluginID: String, controlID: String) {
+        pendingActionInvocation = ActionInvocation(placementID: placementID, pluginID: pluginID, controlID: controlID)
     }
 
     func flushAfterDismiss(
@@ -1294,9 +1273,9 @@ private struct MenuBarPanelSwitchControl: View {
 }
 
 struct FeatureRowView: View {
-    let item: PluginPanelItem
-    let indicator: PluginPrimaryPanelIndicator?
-    let compactIndicator: PluginPrimaryPanelCompactIndicator?
+    let item: PluginPanelRowSnapshot
+    let indicator: PluginPanelRowIndicator?
+    let compactIndicator: PluginPanelRowCompactIndicator?
     let onDisclosureToggle: (Bool) -> Void
     let onSelectionChange: (String, String) -> Void
     let onNavigationSelectionChange: (String, String) -> Void
@@ -1533,7 +1512,7 @@ struct FeatureRowView: View {
         }
     }
 
-    private func primaryPanelIndicator(_ indicator: PluginPrimaryPanelIndicator) -> some View {
+    private func primaryPanelIndicator(_ indicator: PluginPanelRowIndicator) -> some View {
         HStack(spacing: 3) {
             if indicator.systemImage == "progress.indicator" {
                 ProgressView()
@@ -1553,7 +1532,7 @@ struct FeatureRowView: View {
     }
 
     private func primaryPanelCompactIndicator(
-        _ indicator: PluginPrimaryPanelCompactIndicator
+        _ indicator: PluginPanelRowCompactIndicator
     ) -> some View {
         HStack(spacing: 4) {
             ForEach(indicator.icons.indices, id: \.self) { index in
@@ -1897,9 +1876,9 @@ private extension View {
 }
 
 enum IPOverviewFeatureRowModel {
-    static func values(for item: PluginPanelItem) -> [IPOverviewFeatureRowValue] {
+    static func values(for item: PluginPanelRowSnapshot) -> [IPOverviewFeatureRowValue] {
         guard
-            item.id == IPOverviewFeatureRowContract.pluginID,
+            item.pluginID == IPOverviewFeatureRowContract.pluginID,
             let controls = item.detail?.primaryControls
         else {
             return []
@@ -2142,6 +2121,7 @@ private struct PluginPanelSegmentedControl: NSViewRepresentable {
         return CGSize(width: proposedWidth.isFinite ? max(0, proposedWidth) : intrinsicWidth, height: 24)
     }
 
+    @MainActor
     final class Coordinator: NSObject {
         var parent: PluginPanelSegmentedControl
 
@@ -2700,23 +2680,9 @@ final class SecondaryPanelWindow: NSPanel {
 
 @MainActor
 final class SecondaryPanelController: ObservableObject {
-    // The secondary panel must remain a sibling of the MenuBarExtra popover, not a child window.
-    //
-    // Background: `NSWindow.addChildWindow(_:, ordered:)` binds parent and child key status into the
-    // same focus group, so the parent window does not receive `didResignKeyNotification` when the
-    // user clicks outside. `MenuBarExtra(.window)` dismissal, implemented by SwiftUI's private
-    // `WindowMenuBarExtraBehavior`, relies on the popover's `didResignKey` notification. Once this
-    // panel is attached as a child window, the popover never closes itself.
-    //
-    // Solution: keep it as an independent sibling NSPanel and never call `addChildWindow`. Its
-    // placement is computed from `anchorRect` and the anchor screen's visible frame; when neither
-    // side has enough room, MenuBarContent renders the same panel as an in-place drill-in view.
-    //
-    // References:
-    // - MenuBarExtraAccess source, which observes `didResignKey` on `MenuBarExtraWindow`
-    //   https://github.com/orchetect/MenuBarExtraAccess
-    // - Apple Feedback FB11984872: window-style MenuBarExtra cannot be closed programmatically
-    // - CocoaDev "HowCanChildWindowBeKey": https://cocoadev.github.io/HowCanChildWindowBeKey/
+    // Detail panels remain non-key siblings. Their lifetime follows the host popover's visibility,
+    // not key-window changes: native menus and child popovers can temporarily own keyboard focus.
+    // MenuBarStatusItemController owns outside-click/application-switch dismissal for the group.
 
     private weak var hostWindow: NSWindow?
     private var panelWindow: SecondaryPanelWindow?
@@ -2852,7 +2818,7 @@ final class SecondaryPanelController: ObservableObject {
             setPresentingInline(false)
             panelWindow.setFrame(frame, display: true)
             // Align the panel level to `hostWindow.level + 1` at runtime so it stays above the popover.
-            // The MenuBarExtra popover level is a private SwiftUI implementation detail.
+            // The native popover window level is an AppKit implementation detail.
             panelWindow.level = NSWindow.Level(rawValue: hostWindow.level.rawValue + 1)
             PluginPresentationSafety.prepareForWindowOrdering(panelWindow)
             panelWindow.orderFrontRegardless()
@@ -2916,7 +2882,7 @@ final class SecondaryPanelController: ObservableObject {
         panel.isFloatingPanel = true
         MenuBarPanelWindowRegistry.markSecondaryPanel(panel)
         // Keep this false. For an LSUIElement menu-bar app, the app is often inactive while
-        // MenuBarExtra is open, but the menu remains interactive. If `hidesOnDeactivate` is enabled,
+        // the popover is open, but the menu remains interactive. If `hidesOnDeactivate` is enabled,
         // the panel hides immediately after showing, or can end up with `isVisible == true` while no
         // pixels are on screen. Panel lifetime is driven by MenuBarContent's `onDisappear` and
         // `syncSecondaryPanelWindow`.
@@ -2938,23 +2904,14 @@ final class SecondaryPanelController: ObservableObject {
         let notificationCenter = NotificationCenter.default
         hostWindowObservers = [
             notificationCenter.addObserver(
-                forName: NSWindow.didResignKeyNotification,
-                object: hostWindow,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.hide()
-                    self?.onHostWindowDismissRequest?()
-                }
-            },
-            notificationCenter.addObserver(
                 forName: NSWindow.willCloseNotification,
                 object: hostWindow,
                 queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.hide()
-                    self?.onHostWindowDismissRequest?()
+            ) { [weak self, weak hostWindow] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let hostWindow, self.hostWindow === hostWindow else { return }
+                    self.hide()
+                    self.onHostWindowDismissRequest?()
                 }
             }
         ]

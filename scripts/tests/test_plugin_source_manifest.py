@@ -415,7 +415,7 @@ class PluginSourceManifestTests(unittest.TestCase):
         capabilities = definitions["capabilities"]
         self.assertEqual(
             set(capabilities["required"]),
-            {"primaryPanel", "componentPanel", "settings"},
+            {"panelItems", "settings"},
         )
         self.assertFalse(capabilities["additionalProperties"])
         self.assertEqual(

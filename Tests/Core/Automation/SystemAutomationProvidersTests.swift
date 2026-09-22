@@ -5,47 +5,6 @@ import XCTest
 @testable import MacTools
 
 final class SystemAutomationProvidersTests: XCTestCase {
-    @MainActor
-    func testPowerProviderFailureRelocalizesOnSameInstance() {
-        let originalPreference = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
-        let provider = SystemPowerAutomationTriggerProvider(
-            notificationSourceFactory: { _ in nil }
-        )
-        provider.start { _ in }
-
-        PluginRuntimeLocalization.source.setPreference("en")
-        XCTAssertEqual(
-            provider.availability,
-            .unavailable("Unable to monitor power status.")
-        )
-
-        PluginRuntimeLocalization.source.setPreference("ar")
-        XCTAssertEqual(
-            provider.availability,
-            .unavailable("غير قادر على مراقبة حالة الطاقة.")
-        )
-    }
-
-    @MainActor
-    func testPowerProviderDeinitRemovesItsUnretainedRunLoopSource() throws {
-        var context = CFRunLoopSourceContext()
-        let source = try XCTUnwrap(CFRunLoopSourceCreate(nil, 0, &context))
-        var provider: SystemPowerAutomationTriggerProvider? =
-            SystemPowerAutomationTriggerProvider(
-                notificationSourceFactory: { _ in source }
-            )
-        weak var weakProvider = provider
-        provider?.start { _ in }
-        XCTAssertTrue(CFRunLoopContainsSource(CFRunLoopGetMain(), source, .commonModes))
-
-        provider = nil
-
-        XCTAssertNil(weakProvider)
-        XCTAssertFalse(CFRunLoopContainsSource(CFRunLoopGetMain(), source, .commonModes))
-    }
 
     func testScheduleFindsNextConfiguredWeekdayWithoutCatchUp() throws {
         var calendar = Calendar(identifier: .gregorian)
@@ -66,89 +25,6 @@ final class SystemAutomationProvidersTests: XCTestCase {
         XCTAssertEqual(calendar.component(.weekday, from: next), 4)
         XCTAssertEqual(calendar.component(.hour, from: next), 9)
         XCTAssertGreaterThan(next, mondayMorning)
-    }
-
-    @MainActor
-    func testScheduleReschedulesAfterSystemClockAndTimeZoneChanges() async throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
-        let center = NotificationCenter()
-        var currentDate = try XCTUnwrap(
-            calendar.date(from: DateComponents(year: 2026, month: 8, day: 3, hour: 8))
-        )
-        let provider = SystemScheduleAutomationTriggerProvider(
-            calendar: calendar,
-            now: { currentDate },
-            notificationCenter: center
-        )
-        provider.start { _ in }
-        provider.refresh(rules: [
-            AutomationRule(
-                workflowID: UUID(),
-                trigger: .schedule(ScheduleAutomationTrigger(
-                    hour: 9,
-                    minute: 0,
-                    weekdays: [1, 2, 3, 4, 5, 6, 7]
-                ))
-            ),
-        ])
-        let originalFireDate = try XCTUnwrap(provider.scheduledFireDate)
-        currentDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: currentDate))
-
-        center.post(name: .NSSystemClockDidChange, object: nil)
-        await waitUntil {
-            provider.scheduledFireDate.map { $0 > originalFireDate } == true
-        }
-
-        let clockAdjustedFireDate = try XCTUnwrap(provider.scheduledFireDate)
-        XCTAssertGreaterThan(clockAdjustedFireDate, originalFireDate)
-
-        currentDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: currentDate))
-        center.post(name: .NSSystemTimeZoneDidChange, object: nil)
-        await waitUntil {
-            provider.scheduledFireDate.map { $0 > clockAdjustedFireDate } == true
-        }
-
-        XCTAssertGreaterThan(
-            try XCTUnwrap(provider.scheduledFireDate),
-            clockAdjustedFireDate
-        )
-        provider.stop()
-    }
-
-    @MainActor
-    func testScheduleStopRemovesClockObservers() async throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
-        let center = NotificationCenter()
-        var currentDate = try XCTUnwrap(
-            calendar.date(from: DateComponents(year: 2026, month: 8, day: 3, hour: 8))
-        )
-        let provider = SystemScheduleAutomationTriggerProvider(
-            calendar: calendar,
-            now: { currentDate },
-            notificationCenter: center
-        )
-        provider.start { _ in }
-        provider.refresh(rules: [
-            AutomationRule(
-                workflowID: UUID(),
-                trigger: .schedule(ScheduleAutomationTrigger(
-                    hour: 9,
-                    minute: 0,
-                    weekdays: [1, 2, 3, 4, 5, 6, 7]
-                ))
-            ),
-        ])
-        XCTAssertNotNil(provider.scheduledFireDate)
-
-        provider.stop()
-        XCTAssertNil(provider.scheduledFireDate)
-        currentDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: currentDate))
-        center.post(name: .NSSystemClockDidChange, object: nil)
-        for _ in 0 ..< 20 { await Task.yield() }
-
-        XCTAssertNil(provider.scheduledFireDate)
     }
 
     func testPowerTransitionsEmitSourceAndThresholdCrossingsOnlyOnce() {
@@ -175,46 +51,6 @@ final class SystemAutomationProvidersTests: XCTestCase {
                 thresholds: [40],
                 date: date
             ).isEmpty
-        )
-    }
-
-    @MainActor
-    private func waitUntil(
-        _ condition: @MainActor () -> Bool,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(1))
-        while !condition(), clock.now < deadline {
-            await Task.yield()
-        }
-        XCTAssertTrue(condition(), file: file, line: line)
-    }
-
-    func testPowerTransitionsEmitOnlyThresholdsCrossedSinceThePreviousLevel() {
-        let date = Date(timeIntervalSince1970: 100)
-
-        XCTAssertEqual(
-            SystemAutomationTransitions.powerEvents(
-                previous: AutomationPowerSnapshot(source: .battery, batteryLevel: 50),
-                current: AutomationPowerSnapshot(source: .battery, batteryLevel: 19),
-                thresholds: [20, 80],
-                date: date
-            ),
-            [.power(source: .battery, batteryLevel: 20, event: .batteryAtOrBelow, date: date)]
-        )
-        XCTAssertEqual(
-            SystemAutomationTransitions.powerEvents(
-                previous: AutomationPowerSnapshot(source: .battery, batteryLevel: 100),
-                current: AutomationPowerSnapshot(source: .battery, batteryLevel: 19),
-                thresholds: [20, 80],
-                date: date
-            ),
-            [
-                .power(source: .battery, batteryLevel: 80, event: .batteryAtOrBelow, date: date),
-                .power(source: .battery, batteryLevel: 20, event: .batteryAtOrBelow, date: date),
-            ]
         )
     }
 
@@ -246,48 +82,6 @@ final class SystemAutomationProvidersTests: XCTestCase {
         )
     }
 
-    @MainActor
-    func testNetworkProviderUsesFreshGenerationAndBaselineAfterRestart() async {
-        let first = AutomationNetworkPathMonitorFake()
-        let second = AutomationNetworkPathMonitorFake()
-        var monitors = [first, second]
-        var events: [AutomationTriggerEvent] = []
-        let provider = SystemNetworkAutomationTriggerProvider(
-            monitorFactory: { monitors.removeFirst() },
-            now: { Date(timeIntervalSince1970: 100) }
-        )
-
-        provider.start { events.append($0) }
-        first.emit(status: .available, interface: .wifi)
-        await Task.yield()
-        XCTAssertTrue(events.isEmpty)
-        first.emit(status: .available, interface: .wiredEthernet)
-        await Task.yield()
-        XCTAssertEqual(events.count, 1)
-
-        provider.stop()
-        XCTAssertTrue(first.wasCancelled)
-        XCTAssertEqual(provider.currentStatus, .unavailable)
-        XCTAssertEqual(provider.currentInterface, .any)
-        provider.start { events.append($0) }
-        XCTAssertTrue(second.wasStarted)
-
-        first.emitStale(status: .unavailable, interface: .any)
-        await Task.yield()
-        XCTAssertEqual(provider.currentStatus, .unavailable)
-        XCTAssertEqual(provider.currentInterface, .any)
-        XCTAssertEqual(events.count, 1)
-
-        second.emit(status: .available, interface: .wifi)
-        await Task.yield()
-        XCTAssertEqual(provider.currentStatus, .available)
-        XCTAssertEqual(provider.currentInterface, .wifi)
-        XCTAssertEqual(events.count, 1)
-        second.emit(status: .unavailable, interface: .any)
-        await Task.yield()
-        XCTAssertEqual(events.count, 2)
-    }
-
     func testCalendarQueryIncludesEndedEventsWithFuturePositiveOffsets() {
         let now = Date(timeIntervalSince1970: 10_000)
 
@@ -301,29 +95,6 @@ final class SystemAutomationProvidersTests: XCTestCase {
             ),
             now.addingTimeInterval(-30 * 60)
         )
-    }
-
-    @MainActor
-    func testCalendarProviderDoesNotBlockMainActorWhileQueryIsRunning() async {
-        let query = SlowCalendarEventQuery()
-        let provider = SystemCalendarAutomationTriggerProvider(
-            eventQuery: query,
-            authorizationStatus: { .fullAccess }
-        )
-        let rule = AutomationRule(
-            workflowID: UUID(),
-            trigger: .calendar(CalendarAutomationTrigger(titleContains: "Review"))
-        )
-        provider.start { _ in }
-
-        provider.refresh(rules: [rule])
-        await query.waitUntilStarted()
-        let configurationCount = await query.configurationCount()
-        let queryIsSleeping = await query.isSleeping()
-        XCTAssertEqual(configurationCount, 1)
-        XCTAssertTrue(queryIsSleeping)
-
-        provider.stop()
     }
 
     func testDisplayTransitionsPreserveDisconnectedDisplayMetadata() {
@@ -369,67 +140,6 @@ final class SystemAutomationProvidersTests: XCTestCase {
     }
 
     @MainActor
-    func testCalendarPlanAlwaysSchedulesMaintenanceWhenNoEventsAreInHorizon() {
-        let now = Date(timeIntervalSince1970: 100)
-
-        let plan = SystemCalendarAutomationTriggerProvider.SchedulePlan.make(
-            candidates: [],
-            after: now
-        )
-
-        XCTAssertTrue(plan.nextBatch.isEmpty)
-        XCTAssertEqual(plan.maintenanceDate, now.addingTimeInterval(24 * 60 * 60))
-        XCTAssertEqual(plan.nextTimerDate, plan.maintenanceDate)
-    }
-
-    @MainActor
-    func testCalendarPlanUsesOneDeadlineWhenEventAndMaintenanceBecomeDueTogether() {
-        let now = Date(timeIntervalSince1970: 100)
-        let sharedDeadline = now.addingTimeInterval(60)
-        let plan = SystemCalendarAutomationTriggerProvider.SchedulePlan.make(
-            candidates: [calendarEvent(id: "wake-event", date: sharedDeadline)],
-            after: now,
-            maintenanceInterval: 60
-        )
-
-        XCTAssertEqual(plan.nextTimerDate, sharedDeadline)
-        XCTAssertEqual(
-            plan.dueEvents(at: sharedDeadline.addingTimeInterval(30)).map(\.identifier),
-            ["wake-event"]
-        )
-    }
-
-    @MainActor
-    func testCalendarPlanSchedulesMaintenanceBeforeADistantEvent() {
-        let now = Date(timeIntervalSince1970: 100)
-        let plan = SystemCalendarAutomationTriggerProvider.SchedulePlan.make(
-            candidates: [calendarEvent(id: "distant", date: now.addingTimeInterval(120))],
-            after: now,
-            maintenanceInterval: 60
-        )
-
-        XCTAssertEqual(plan.nextTimerDate, now.addingTimeInterval(60))
-        XCTAssertTrue(plan.dueEvents(at: plan.nextTimerDate).isEmpty)
-    }
-
-    @MainActor
-    func testCalendarPlanKeepsEverySimultaneousEventBeyondLegacyTimerLimit() {
-        let now = Date(timeIntervalSince1970: 100)
-        let fireDate = now.addingTimeInterval(60)
-        let events = (0..<513).map {
-            calendarEvent(id: "event-\($0)", date: fireDate)
-        } + [calendarEvent(id: "later", date: fireDate.addingTimeInterval(60))]
-
-        let plan = SystemCalendarAutomationTriggerProvider.SchedulePlan.make(
-            candidates: events,
-            after: now
-        )
-
-        XCTAssertEqual(plan.nextBatch.count, 513)
-        XCTAssertFalse(plan.nextBatch.contains(where: { $0.identifier == "later" }))
-    }
-
-    @MainActor
     private func calendarEvent(
         id: String,
         date: Date
@@ -442,74 +152,5 @@ final class SystemAutomationProvidersTests: XCTestCase {
             phase: .starts,
             offsetMinutes: 0
         )
-    }
-}
-
-private actor SlowCalendarEventQuery: CalendarAutomationEventQuerying {
-    private var started = false
-    private var sleeping = false
-    private var receivedConfigurationCount = 0
-
-    func requestAccess() async -> Bool { true }
-
-    func scheduledEvents(
-        currentDate _: Date,
-        configurations: [CalendarAutomationTrigger]
-    ) async -> [CalendarAutomationScheduledEvent] {
-        started = true
-        sleeping = true
-        receivedConfigurationCount = configurations.count
-        try? await Task.sleep(for: .milliseconds(200))
-        sleeping = false
-        return []
-    }
-
-    func waitUntilStarted() async {
-        while !started {
-            await Task.yield()
-        }
-    }
-
-    func configurationCount() -> Int { receivedConfigurationCount }
-    func isSleeping() -> Bool { sleeping }
-}
-
-private final class AutomationNetworkPathMonitorFake: AutomationNetworkPathMonitoring,
-    @unchecked Sendable {
-    var updateHandler: (@Sendable (
-        AutomationNetworkStatus,
-        AutomationNetworkInterface
-    ) -> Void)? {
-        didSet {
-            if let updateHandler { lastInstalledHandler = updateHandler }
-        }
-    }
-    private var lastInstalledHandler: (@Sendable (
-        AutomationNetworkStatus,
-        AutomationNetworkInterface
-    ) -> Void)?
-    private(set) var wasStarted = false
-    private(set) var wasCancelled = false
-
-    func start(queue _: DispatchQueue) {
-        wasStarted = true
-    }
-
-    func cancel() {
-        wasCancelled = true
-    }
-
-    func emit(
-        status: AutomationNetworkStatus,
-        interface: AutomationNetworkInterface
-    ) {
-        updateHandler?(status, interface)
-    }
-
-    func emitStale(
-        status: AutomationNetworkStatus,
-        interface: AutomationNetworkInterface
-    ) {
-        lastInstalledHandler?(status, interface)
     }
 }

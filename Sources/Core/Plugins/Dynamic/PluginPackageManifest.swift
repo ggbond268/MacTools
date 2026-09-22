@@ -25,21 +25,19 @@ struct PluginPackageManifest: Codable, Equatable {
             }
         }
 
-        let primaryPanel: Bool
-        let componentPanel: Bool
+        let panelItems: [PluginPanelItemKind]
         let settings: Settings
 
         init(
-            primaryPanel: Bool = false,
-            componentPanel: Bool = false,
+            panelItems: [PluginPanelItemKind] = [],
             settings: Settings = .none
         ) {
-            self.primaryPanel = primaryPanel
-            self.componentPanel = componentPanel
+            self.panelItems = panelItems
             self.settings = settings
         }
 
         private enum CodingKeys: String, CodingKey {
+            case panelItems
             case primaryPanel
             case componentPanel
             case settings
@@ -48,8 +46,15 @@ struct PluginPackageManifest: Codable, Equatable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            primaryPanel = try container.decodeIfPresent(Bool.self, forKey: .primaryPanel) ?? false
-            componentPanel = try container.decodeIfPresent(Bool.self, forKey: .componentPanel) ?? false
+            if let kinds = try container.decodeIfPresent([PluginPanelItemKind].self, forKey: .panelItems) {
+                panelItems = kinds
+            } else {
+                // Decode retired envelopes so incompatible installed packages can be updated.
+                var kinds: [PluginPanelItemKind] = []
+                if try container.decodeIfPresent(Bool.self, forKey: .primaryPanel) == true { kinds.append(.row) }
+                if try container.decodeIfPresent(Bool.self, forKey: .componentPanel) == true { kinds.append(.widget) }
+                panelItems = kinds
+            }
             if let settings = try container.decodeIfPresent(Settings.self, forKey: .settings) {
                 self.settings = settings
             } else {
@@ -66,8 +71,7 @@ struct PluginPackageManifest: Codable, Equatable {
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(primaryPanel, forKey: .primaryPanel)
-            try container.encode(componentPanel, forKey: .componentPanel)
+            try container.encode(panelItems, forKey: .panelItems)
             try container.encode(settings, forKey: .settings)
         }
     }

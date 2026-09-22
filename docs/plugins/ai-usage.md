@@ -1,6 +1,6 @@
 # AI Usage
 
-AI Usage (`ai-usage`) is a PluginKit v6 plugin for MacTools 1.3.1 or later. It provides a Dashboard component and a declarative settings form, with no Feature Panel entry. The first version supports one current Codex login and one current Claude Code login.
+AI Usage (`ai-usage`) is a PluginKit v7 plugin for MacTools 1.3.1 or later. It provides a Dashboard component and a declarative settings form, with no Feature Panel entry. The first version supports one current Codex login and one current Claude Code login.
 
 ## Setup
 

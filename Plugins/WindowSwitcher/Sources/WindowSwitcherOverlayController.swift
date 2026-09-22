@@ -22,10 +22,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private(set) var session: WindowSwitcherSession?
 
     private final class Panel: NSPanel {
+        var searchShortcutHandler: ((NSEvent) -> Bool)?
         var shortcutHandler: ((NSEvent) -> Bool)?
         var searchEventFilter: ((NSEvent) -> NSEvent)?
         var searchTransitionHandler: ((NSEvent) -> Bool)?
         override func sendEvent(_ event: NSEvent) {
+            if searchShortcutHandler?(event) == true { return }
             let filtered = searchEventFilter?(event) ?? event
             if filtered.type == .keyDown {
                 if shortcutHandler?(filtered) == true || searchTransitionHandler?(filtered) == true { return }
@@ -35,6 +37,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            if searchShortcutHandler?(event) == true { return true }
             let filtered = searchEventFilter?(event) ?? event
             if filtered.modifierFlags != event.modifierFlags {
                 // Consume the original chord so AppKit cannot retry menus with
@@ -62,10 +65,11 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
     private let chooserFocus: WindowSwitcherChooserFocus
     private var isAcquiringChooserFocus = false
-    private let panel = Panel(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+    private let dismissalMonitor = PluginPanelDismissalMonitor()
+    private let panel = Panel(contentRect: .zero, styleMask: PluginPanelPresentation.styleMask, backing: .buffered, defer: false)
     private let table = Table()
     private let cards = WindowSwitcherCardCollection()
-    private let cardScroll = WindowSwitcherCardScrollView()
+    private let cardScroll = NSScrollView()
     private let listScroll = NSScrollView()
     private let layoutPicker = NSSegmentedControl(labels: ["", ""], trackingMode: .selectOne, target: nil, action: nil)
     var onLayoutChange: ((WindowSwitcherLayout) -> Void)?
@@ -100,11 +104,21 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
     private let search = SearchField()
     private let scope = WindowSwitcherScopeControl()
+    private var minimumScopeWidth: NSLayoutConstraint!
     private let display = NSPopUpButton()
     private let modeIcon = NSImageView()
     private let modeTitle = NSTextField(labelWithString: "")
     private let modeHint = NSTextField(labelWithString: "")
-    private let enterSearchButton = NSButton(title: "", target: nil, action: nil)
+    private let enterSearchButton = WindowSwitcherToolbarButton(title: "", target: nil, action: nil)
+    private let searchHeader = NSStackView()
+    private let inlineSearch = NSView()
+    private var inlineSearchWidth: NSLayoutConstraint!
+    private var inlineSearchMinimumWidth: NSLayoutConstraint!
+    private var searchSurfaceHeight: NSLayoutConstraint!
+    private var searchLeading: NSLayoutConstraint!
+    private var usesInlineSearch = false
+    private var isInlineSearchExpanded = false
+    private var modeBeforeSearch: (isPersistent: Bool, usesDirectKeys: Bool)?
     private let previewDivider = NSBox()
     private let count = NSTextField(labelWithString: "")
     private let footer = NSTextField(wrappingLabelWithString: "")
@@ -129,10 +143,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private let searchSurface = WindowSwitcherHeaderSurface()
     private let searchIcon = NSImageView()
     private let clearSearchButton = WindowSwitcherToolbarButton()
-    private let recordingTitle = NSTextField(labelWithString: "")
-    private let recordingHint = NSTextField(wrappingLabelWithString: "")
     private let recordingCancel = NSButton(title: "", target: nil, action: nil)
-    private let recordingBanner = NSStackView()
     private var rows: [WindowSwitcherAppEntry] = []
     private var currentPID: pid_t?
     private var acceptsSearchFocus = false
@@ -216,16 +227,31 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         search.stringValue = session.query
         clearSearchButton.isHidden = session.query.isEmpty
         searchSurface.isFocused = false
+        configureSearchPresentation(inline: !session.isPersistent || session.usesDirectKeys)
         actionMessage = nil
         previewedEntry = nil; previewedPermission = nil
         render()
         layoutPanel()
         render()
-        // Capture the origin before activation. A normally activating panel
-        // receives native gestures without a separate preview click.
-        acquireChooserFocus()
-        panel.makeFirstResponder(usesList ? table : cards)
+        chooserFocus.prepare()
+        dismissalMonitor.start(
+            for: panel,
+            isSuspended: { [weak self] in
+                guard let self else { return true }
+                return closing || isAcquiringChooserFocus || isPresentingMenu
+            },
+            onDismiss: { [weak self] in
+                self?.chooserFocus.release(restoring: false)
+                self?.onCancel?()
+            }
+        )
+        PluginPanelPresentation.present(panel)
         acceptsSearchFocus = true
+        if session.isPersistent && !session.usesDirectKeys {
+            panel.makeFirstResponder(search)
+        } else {
+            panel.makeFirstResponder(usesList ? table : cards)
+        }
         noteCyclingInput()
     }
 
@@ -235,6 +261,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     func hide(restoringFocus: Bool = true) {
+        dismissalMonitor.stop()
         acceptsSearchFocus = false
         menuGeneration += 1
         isPresentingMenu = false
@@ -247,6 +274,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         chooserFocus.release(restoring: restoringFocus)
         closing = false
         session = nil
+        modeBeforeSearch = nil
         renderedSession = nil
         searchHeldModifiers = []
         previewedEntry = nil; previewedPermission = nil
@@ -258,19 +286,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     func showMessage(_ message: String) {
         actionMessage = message
-        updateRecordingBanner()
+        updateModeIndicator()
+        updateShortcutBadges()
         footer.stringValue = "⚠︎ " + message
         footer.isHidden = recordingEntryID != nil
     }
 
-    private func updateRecordingBanner() {
-        let target = session?.entries.first { $0.id == recordingEntryID }
-        recordingBanner.isHidden = target == nil
-        recordingTitle.stringValue = target.map {
-            localization.string("chooser.changeKey", defaultValue: "更改按键…") + " · " + $0.localizedDisplayName(using: localization)
-        } ?? ""
-        recordingHint.stringValue = actionMessage ?? ""
-        recordingCancel.title = localization.string("chooser.cancel", defaultValue: "取消")
+    private var shortcutRecordingHelp: String {
+        localization.string("chooser.recordAssignedHelp", defaultValue: "使用字母或数字，可组合 ⌘。按 ⌫ 恢复自动分配，Esc 取消。")
     }
 
     @objc private func cancelShortcutRecording() {
@@ -350,6 +373,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     private func buildPanel() {
         panel.identifier = NSUserInterfaceItemIdentifier("WindowSwitcherChooser")
+        panel.searchShortcutHandler = { [weak self] event in self?.handleSearchShortcut(event) ?? false }
         panel.searchEventFilter = { [weak self] event in self?.filterSearchEvent(event) ?? event }
         panel.searchTransitionHandler = { [weak self] event in
             guard let self, let session, !session.isPersistent,
@@ -361,8 +385,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         panel.shortcutHandler = { [weak self] event in self?.handleChooserShortcut(event) ?? false }
         panel.level = .popUpMenu
         panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.hidesOnDeactivate = false; panel.isReleasedWhenClosed = false; panel.delegate = self
+        PluginPanelPresentation.configure(panel)
+        panel.delegate = self
         let effect = WindowSwitcherPaletteSurface()
         panel.contentView = effect
         snapCoordinator.attach(to: panel)
@@ -388,7 +412,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         search.identifier = NSUserInterfaceItemIdentifier("window-switcher-search")
         search.setAccessibilitySubrole(.searchField)
         search.setAccessibilityLabel(localization.string("chooser.search", defaultValue: "搜索窗口标题或应用"))
-        search.font = .systemFont(ofSize: 15, weight: .medium)
+        search.font = .systemFont(ofSize: NSFont.systemFontSize)
         search.controlSize = .regular
         search.cell?.usesSingleLineMode = true
         search.cell?.isScrollable = true
@@ -396,8 +420,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         searchIcon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
         searchIcon.contentTintColor = .secondaryLabelColor
         searchIcon.setAccessibilityElement(false)
+        searchLeading = search.leadingAnchor.constraint(equalTo: searchSurface.leadingAnchor,
+            constant: PluginPaletteMetrics.searchHorizontalPadding + 26)
         clearSearchButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: nil)
-        clearSearchButton.isBordered = false
         clearSearchButton.contentTintColor = .secondaryLabelColor
         clearSearchButton.target = self; clearSearchButton.action = #selector(clearSearch)
         clearSearchButton.identifier = NSUserInterfaceItemIdentifier("window-switcher-clear-search")
@@ -412,7 +437,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             searchIcon.widthAnchor.constraint(equalToConstant: 18),
             searchIcon.heightAnchor.constraint(equalToConstant: 18),
             searchIcon.centerYAnchor.constraint(equalTo: searchSurface.centerYAnchor),
-            search.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 8),
+            searchLeading,
             search.trailingAnchor.constraint(equalTo: clearSearchButton.leadingAnchor, constant: -8),
             search.centerYAnchor.constraint(equalTo: searchSurface.centerYAnchor),
             clearSearchButton.trailingAnchor.constraint(equalTo: searchSurface.trailingAnchor, constant: -8),
@@ -428,22 +453,29 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         count.font = .systemFont(ofSize: 12); count.textColor = .secondaryLabelColor
         previewButton.target = self; previewButton.action = #selector(previewChanged)
         more.identifier = NSUserInterfaceItemIdentifier("window-switcher-options")
-        more.controlSize = .regular
+        more.controlSize = .small
         more.target = self; more.action = #selector(showOptions)
-        more.bezelStyle = .texturedRounded
-        more.isBordered = false; more.contentTintColor = .secondaryLabelColor
+        more.contentTintColor = .secondaryLabelColor
         more.imagePosition = .imageOnly
         more.setAccessibilityLabel(localization.string("chooser.more", defaultValue: "更多选项"))
-        let header = NSStackView(views: [searchSurface])
-        header.spacing = PluginPaletteMetrics.searchToolbarSpacing
+        searchHeader.addArrangedSubview(searchSurface)
+        searchHeader.orientation = .horizontal; searchHeader.alignment = .centerY
         layoutPicker.target = self; layoutPicker.action = #selector(layoutChanged)
-        layoutPicker.setImage(NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil), forSegment: 0)
-        layoutPicker.setImage(NSImage(systemSymbolName: "list.bullet", accessibilityDescription: nil), forSegment: 1)
-        let filters = NSStackView(views: [scope, display, NSView(), count, layoutPicker, more])
-        header.orientation = .horizontal; header.alignment = .centerY; filters.orientation = .horizontal
+        layoutPicker.identifier = NSUserInterfaceItemIdentifier("window-switcher-layout")
+        layoutPicker.controlSize = .small
+        let toolbarSymbols = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        layoutPicker.setImage(NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)?
+            .withSymbolConfiguration(toolbarSymbols), forSegment: 0)
+        layoutPicker.setImage(NSImage(systemSymbolName: "list.bullet", accessibilityDescription: nil)?
+            .withSymbolConfiguration(toolbarSymbols), forSegment: 1)
+        let filters = NSStackView(views: [scope, display, NSView(), count, inlineSearch, enterSearchButton, more, layoutPicker])
+        filters.orientation = .horizontal; filters.alignment = .centerY
         filters.spacing = 8
+        filters.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        scope.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        scope.setContentHuggingPriority(.required, for: .horizontal)
         let scroll = listScroll
-        scroll.hasVerticalScroller = true; scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
         table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("window")))
         table.headerView = nil; table.rowHeight = 54; table.intercellSpacing = NSSize(width: 0, height: 2)
         table.backgroundColor = .clear; table.selectionHighlightStyle = .regular
@@ -455,7 +487,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         table.contextMenuForRow = { [weak self] row in self?.contextMenu(forRow: row) }
         table.keyHandler = { [weak self] event in self?.handleKey(event) ?? false }
         scroll.documentView = table
-        cardScroll.hasVerticalScroller = true; cardScroll.drawsBackground = false
+        cardScroll.hasVerticalScroller = true; cardScroll.autohidesScrollers = true; cardScroll.drawsBackground = false
         let flow = NSCollectionViewFlowLayout()
         flow.itemSize = NSSize(width: 132, height: 88)
         flow.minimumInteritemSpacing = 8; flow.minimumLineSpacing = 8
@@ -509,47 +541,62 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         modeHint.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode-hint")
         modeHint.lineBreakMode = .byTruncatingTail
         modeHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        modeTitle.lineBreakMode = .byTruncatingTail
+        modeTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         enterSearchButton.controlSize = .small
-        enterSearchButton.bezelStyle = .rounded
-        enterSearchButton.target = self; enterSearchButton.action = #selector(enterSearch)
+        enterSearchButton.imagePosition = .imageOnly
+        enterSearchButton.contentTintColor = .secondaryLabelColor
+        enterSearchButton.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        enterSearchButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        more.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        enterSearchButton.target = self; enterSearchButton.action = #selector(toggleInlineSearch)
         enterSearchButton.identifier = NSUserInterfaceItemIdentifier("window-switcher-enter-search")
-        let modeRow = NSStackView(views: [modeIcon, modeTitle, modeHint, NSView(), enterSearchButton])
-        modeRow.orientation = .horizontal; modeRow.spacing = 8
-        modeRow.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        inlineSearch.wantsLayer = true
+        inlineSearch.layer?.masksToBounds = true
+        inlineSearchWidth = inlineSearch.widthAnchor.constraint(equalToConstant: 0)
+        inlineSearchWidth.priority = NSLayoutConstraint.Priority(500)
+        inlineSearchMinimumWidth = inlineSearch.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+        inlineSearchMinimumWidth.priority = .defaultHigh
+        minimumScopeWidth = scope.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+        minimumScopeWidth.priority = .defaultHigh
+        let minimumDisplayWidth = display.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
+        minimumDisplayWidth.priority = .defaultHigh
+        let modeRow = NSStackView(views: [modeIcon, modeTitle, modeHint, NSView(), recordingCancel])
+        modeRow.orientation = .horizontal; modeRow.alignment = .centerY; modeRow.spacing = 8
+        modeRow.heightAnchor.constraint(equalToConstant: 32).isActive = true
         modeIcon.widthAnchor.constraint(equalToConstant: 14).isActive = true
         modeIcon.heightAnchor.constraint(equalToConstant: 14).isActive = true
-        recordingTitle.font = .systemFont(ofSize: 13, weight: .semibold)
-        recordingTitle.lineBreakMode = .byTruncatingMiddle
-        recordingHint.font = .systemFont(ofSize: 12); recordingHint.textColor = .secondaryLabelColor
-        recordingHint.maximumNumberOfLines = 3
-        let recordingLabels = NSStackView(views: [recordingTitle, recordingHint])
-        recordingLabels.orientation = .vertical; recordingLabels.alignment = .leading
         recordingCancel.target = self; recordingCancel.action = #selector(cancelShortcutRecording)
         recordingCancel.bezelStyle = .rounded; recordingCancel.controlSize = .small
-        recordingBanner.addArrangedSubview(recordingLabels)
-        recordingBanner.addArrangedSubview(NSView())
-        recordingBanner.addArrangedSubview(recordingCancel)
-        recordingBanner.orientation = .horizontal; recordingBanner.spacing = 10
-        recordingBanner.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-        recordingBanner.identifier = NSUserInterfaceItemIdentifier("window-shortcut-recording")
-        let stack = NSStackView(views: [header, filters, modeRow, recordingBanner, body, empty, footer])
+        recordingCancel.identifier = NSUserInterfaceItemIdentifier("window-shortcut-recording-cancel")
+        recordingCancel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let stack = NSStackView(views: [searchHeader, filters, modeRow, body, empty, footer])
         stack.orientation = .vertical; stack.distribution = .fill; stack.alignment = .leading; stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         effect.contentContainer.addSubview(stack)
         dragBar.translatesAutoresizingMaskIntoConstraints = false
         effect.contentContainer.addSubview(dragBar)
+        searchSurfaceHeight = searchSurface.heightAnchor.constraint(equalToConstant: PluginPaletteMetrics.toolbarControlSize.height)
         NSLayoutConstraint.activate([
             dragBar.topAnchor.constraint(equalTo: effect.topAnchor),
             dragBar.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
             dragBar.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
             dragBar.heightAnchor.constraint(equalToConstant: 15),
-            searchSurface.heightAnchor.constraint(equalToConstant: PluginPaletteMetrics.toolbarControlSize.height),
+            searchSurfaceHeight,
+            inlineSearchWidth,
+            inlineSearchMinimumWidth,
+            minimumScopeWidth,
+            minimumDisplayWidth,
+            inlineSearch.widthAnchor.constraint(greaterThanOrEqualToConstant: 0),
+            inlineSearch.heightAnchor.constraint(equalToConstant: 32),
+            enterSearchButton.widthAnchor.constraint(equalToConstant: 28),
+            enterSearchButton.heightAnchor.constraint(equalToConstant: 28),
             dragHandle.widthAnchor.constraint(equalToConstant: 72),
             dragHandle.heightAnchor.constraint(equalToConstant: 15),
             dragHandle.centerXAnchor.constraint(equalTo: dragBar.centerXAnchor),
             dragHandle.centerYAnchor.constraint(equalTo: dragBar.centerYAnchor),
-            more.widthAnchor.constraint(equalToConstant: 24),
-            more.heightAnchor.constraint(equalToConstant: 24),
+            more.widthAnchor.constraint(equalToConstant: 28),
+            more.heightAnchor.constraint(equalToConstant: 28),
             stack.leadingAnchor.constraint(equalTo: effect.leadingAnchor, constant: 14),
             stack.trailingAnchor.constraint(equalTo: effect.trailingAnchor, constant: -14),
             stack.topAnchor.constraint(equalTo: effect.topAnchor, constant: 14),
@@ -569,7 +616,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             scroll.widthAnchor.constraint(equalTo: body.widthAnchor),
             cardScroll.widthAnchor.constraint(equalTo: body.widthAnchor),
         ])
-        for view in [header, filters, modeRow, recordingBanner, body, empty, footer] {
+        for view in [searchHeader, filters, modeRow, body, empty, footer] {
             view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
         body.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -580,18 +627,103 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         for clip in [cardScroll.contentView, listScroll.contentView] {
             clip.postsBoundsChangedNotifications = true
             scrollObservers.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
-                object: clip, queue: .main) { [weak self] _ in
+                object: clip, queue: .main) { [weak self, weak clip] _ in
                     MainActor.assumeIsolated {
-                        self?.updateViewportLayout()
-                        self?.updateShortcutBadges()
+                        guard let self else { return }
+                        self.updateViewportLayout()
+                        guard let clip,
+                              clip === (self.usesList ? self.listScroll : self.cardScroll).contentView else { return }
+                        self.updateShortcutBadges()
                     }
                 })
         }
     }
 
+    private func configureSearchPresentation(inline: Bool) {
+        usesInlineSearch = inline
+        isInlineSearchExpanded = false
+        modeBeforeSearch = nil
+        searchSurface.removeFromSuperview()
+        searchHeader.isHidden = inline
+        inlineSearch.isHidden = !inline
+        enterSearchButton.isHidden = !inline
+        searchIcon.isHidden = inline
+        search.font = .systemFont(ofSize: NSFont.systemFontSize)
+        searchLeading.constant = inline ? 10 : PluginPaletteMetrics.searchHorizontalPadding + 26
+        searchSurfaceHeight.constant = inline ? 32 : PluginPaletteMetrics.toolbarControlSize.height
+        searchSurface.isHidden = inline
+        inlineSearchWidth.constant = 0
+        inlineSearchMinimumWidth.constant = 0
+        if inline {
+            inlineSearch.addSubview(searchSurface)
+            searchSurface.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                searchSurface.leadingAnchor.constraint(equalTo: inlineSearch.leadingAnchor),
+                searchSurface.trailingAnchor.constraint(equalTo: inlineSearch.trailingAnchor),
+                searchSurface.centerYAnchor.constraint(equalTo: inlineSearch.centerYAnchor)
+            ])
+        } else {
+            searchHeader.addArrangedSubview(searchSurface)
+        }
+    }
+
+    private func expandInlineSearch() {
+        guard usesInlineSearch, !isInlineSearchExpanded else { return }
+        isInlineSearchExpanded = true
+        panel.contentView?.layoutSubtreeIfNeeded()
+        searchSurface.isHidden = false
+        inlineSearchMinimumWidth.constant = 150
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+            context.allowsImplicitAnimation = true
+            inlineSearchWidth.constant = 240
+            panel.contentView?.layoutSubtreeIfNeeded()
+        }
+    }
+
+    @objc private func toggleInlineSearch() {
+        guard usesInlineSearch, isInlineSearchExpanded else { enterSearch(); return }
+        // End composition before clearing the query so the field editor cannot
+        // publish a final text update and reopen the collapsed field.
+        panel.makeFirstResponder(usesList ? table : cards)
+        isInlineSearchExpanded = false
+        searchSurface.isHidden = true
+        search.stringValue = ""
+        clearSearchButton.isHidden = true
+        searchHeldModifiers = []
+        searchTransitionTask?.cancel()
+        showsSearchTransition = false
+        inlineSearchMinimumWidth.constant = 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+            context.allowsImplicitAnimation = true
+            inlineSearchWidth.constant = 0
+            panel.contentView?.layoutSubtreeIfNeeded()
+        }
+        guard var session else { return }
+        session.query = ""
+        if let modeBeforeSearch {
+            session.isPersistent = modeBeforeSearch.isPersistent
+            session.usesDirectKeys = modeBeforeSearch.usesDirectKeys
+        }
+        modeBeforeSearch = nil
+        session.normalizeSelection()
+        self.session = session
+        actionMessage = nil
+        onSessionChange?(session)
+        render()
+    }
+
+    private func updateSearchButton() {
+        let expanded = usesInlineSearch && isInlineSearchExpanded
+        enterSearchButton.image = NSImage(systemSymbolName: expanded ? "xmark" : "magnifyingglass", accessibilityDescription: nil)
+        let label = expanded ? localization.string("chooser.closeSearch", defaultValue: "关闭搜索")
+            : localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
+        enterSearchButton.toolTip = expanded ? label : search.toolTip
+        enterSearchButton.setAccessibilityLabel(label)
+    }
+
     private func localizeControls() {
-        cardScroll.setOverflowLabels(above: localization.string("chooser.moreAbove", defaultValue: "向上查看更多窗口"),
-            below: localization.string("chooser.moreBelow", defaultValue: "向下查看更多窗口"))
         layoutPicker.setToolTip(localization.string("chooser.cards", defaultValue: "卡片视图") + " · ⌘⌥1", forSegment: 0)
         layoutPicker.setToolTip(localization.string("chooser.list", defaultValue: "窗口列表") + " · ⌘⌥2", forSegment: 1)
         layoutPicker.setAccessibilityLabel(localization.string("chooser.layout", defaultValue: "窗口视图"))
@@ -602,6 +734,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let segmentCount = showsAppScope ? 2 : 1
         if scope.segmentCount != segmentCount { scope.segmentCount = segmentCount }
         scope.setLabel(localization.string("chooser.all", defaultValue: "全部窗口"), forSegment: 0)
+        minimumScopeWidth.constant = scope.minimumContentWidth
         let scopeApp = session?.entries.first { $0.processIdentifier == session?.scopeTargetPID }?.appName
         if showsAppScope {
             scope.setLabel(scopeApp.map { localization.format("chooser.appWindows", defaultValue: "%@ 的窗口", $0) }
@@ -639,7 +772,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             more.menu?.addItem(item)
         }
         if session?.usesDirectKeys == true {
-            let edit = NSMenuItem(title: localization.string("chooser.editAssigned", defaultValue: "修改所选窗口按键…"), action: #selector(editSelectedShortcut), keyEquivalent: "")
+            let edit = NSMenuItem(title: localization.string("chooser.editAssigned", defaultValue: "修改所选快捷键…"), action: #selector(editSelectedShortcut), keyEquivalent: "")
             edit.target = self
             more.menu?.addItem(edit)
         }
@@ -665,9 +798,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             ("chooser.open", "打开窗口", "Return"), ("chooser.cancel", "取消", "Esc"),
             ("chooser.close", "关闭窗口", "⌘W"), ("chooser.quit", "退出应用", "⌘Q"),
             ("chooser.contextActions", "窗口操作", "⇧F10"),
-            ("chooser.focusNext", "下一个控件", "Tab / ⇧Tab")
+            (session?.usesDirectKeys == true ? "chooser.selectWindow" : "chooser.focusNext",
+             session?.usesDirectKeys == true ? "选择窗口" : "下一个控件", "Tab / ⇧Tab")
         ] {
-            if session?.usesDirectKeys == true && chord.hasPrefix("⌘") { continue }
+            if session?.usesDirectKeys == true && chord.hasPrefix("⌘") && chord != "⌘F" { continue }
             if ["⌘W", "⌘Q"].contains(chord), session?.protectedCommandKeys.contains(chord == "⌘W" ? "w" : "q") == true { continue }
             let item = NSMenuItem(title: localization.string(key, defaultValue: fallback) + "   " + chord, action: nil, keyEquivalent: "")
             item.isEnabled = false
@@ -688,7 +822,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         if showsAppScope { scope.setToolTip("\(scope.label(forSegment: 1) ?? "") · ⌘⇧2", forSegment: 1) }
         display.toolTip = "\(localization.string("chooser.displayFilter", defaultValue: "显示器筛选")) · ⌘D"
         previewButton.title += " ⌘P"
-        search.toolTip = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用") + (session?.usesDirectKeys == true ? "" : " · ⌘F")
+        search.toolTip = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用") + " · ⌘F"
+        updateSearchButton()
         if session?.usesDirectKeys == true {
             scope.setToolTip(scope.label(forSegment: 0), forSegment: 0)
             if showsAppScope { scope.setToolTip(scope.label(forSegment: 1), forSegment: 1) }
@@ -700,11 +835,16 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     private func render() {
         guard var session else { return }
+        if let recordingEntryID, !session.entries.contains(where: { $0.id == recordingEntryID }) || !session.usesDirectKeys {
+            self.recordingEntryID = nil
+            actionMessage = nil
+        }
         localizeControls()
         updateModeIndicator()
         session.normalizeSelection(); self.session = session
         dragBar.isHidden = !session.isPersistent
         if session.isPersistent, !panel.styleMask.contains(.resizable) { panel.styleMask.insert(.resizable) }
+        else if !session.isPersistent, panel.styleMask.contains(.resizable) { panel.styleMask.remove(.resizable) }
         let revealSelection = renderedSession == nil || renderedSession?.selectedID != session.selectedID
             || renderedSession?.query != session.query || renderedSession?.scope != session.scope
             || renderedSession?.display != session.display
@@ -745,7 +885,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         count.isHidden = true
         display.isHidden = session.displays.count < 2 && session.display == nil
         count.stringValue = localization.format("chooser.count", defaultValue: "%d 个窗口", rows.count)
-        cardScroll.updateOverflow()
         scope.selectedSegment = session.scope == .all ? 0 : 1
         display.removeAllItems(); display.addItem(withTitle: localization.string("chooser.allDisplays", defaultValue: "所有显示器"))
         for screen in session.displays {
@@ -771,7 +910,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         empty.isHidden = !rows.isEmpty
         footer.stringValue = actionMessage.map { "⚠︎ " + $0 } ?? ""
         footer.isHidden = actionMessage == nil || recordingEntryID != nil
-        updateRecordingBanner()
         updating = false
         updateShortcutBadges()
         if showsPreview && !previewPane.isHidden, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
@@ -810,6 +948,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                            appName: entry.appName)
             item.onOpen = { [weak self] in self?.onSelect?(entry) }
             item.assignedShortcut = session?.usesDirectKeys == true ? entry.shortcutDisplay : nil
+            item.isRecordingShortcut = entry.id == recordingEntryID
+            item.shortcutHelp = entry.id == recordingEntryID ? shortcutRecordingHelp
+                : localization.string("chooser.changeKey", defaultValue: "修改快捷键…")
             item.onEditShortcut = { [weak self] in self?.beginShortcutRecording(entry.id) }
         }
         return item
@@ -836,14 +977,17 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         title.font = .systemFont(ofSize: 13, weight: .medium); title.lineBreakMode = .byTruncatingMiddle
         title.attributedStringValue = highlighted(displayName, query: session?.query ?? "")
         let parts = [displayName.caseInsensitiveCompare(entry.appName) == .orderedSame ? nil : entry.appName, entry.displayNameContext,
-                     entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil, entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
+                     entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil,
+                     entry.isOnOtherDesktop ? localization.string("window.otherDesktop", defaultValue: "其他桌面") : nil,
+                     entry.isOnFullscreenSpace ? localization.string("window.fullscreen", defaultValue: "全屏") : nil,
+                     entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
                      entry.metadataUnavailable ? localization.string("window.unavailable", defaultValue: "暂时无法更新") : nil, entry.isWindowEntry ? nil : localization.string("window.none", defaultValue: "无可用窗口")]
         let subtitle = NSTextField(labelWithString: parts.compactMap { $0 }.joined(separator: " · "))
         subtitle.font = .systemFont(ofSize: 11); subtitle.textColor = .secondaryLabelColor; subtitle.lineBreakMode = .byTruncatingTail
         subtitle.attributedStringValue = highlighted(subtitle.stringValue, query: session?.query ?? "")
         let labels = NSStackView(views: [title, subtitle])
         labels.orientation = .vertical; labels.alignment = .leading; labels.spacing = 3
-        let badge = NSButton(title: "", target: self, action: #selector(editListShortcut(_:)))
+        let badge = WindowSwitcherShortcutBadge(title: "", target: self, action: #selector(editListShortcut(_:)))
         badge.isBordered = session?.usesDirectKeys == true
         badge.bezelStyle = .texturedRounded
         badge.controlSize = .small
@@ -852,6 +996,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         badge.identifier = NSUserInterfaceItemIdentifier("window-shortcut-badge")
         badge.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
         badge.contentTintColor = .labelColor
+        badge.isRecording = entry.id == recordingEntryID
+        badge.toolTip = badge.isRecording ? shortcutRecordingHelp
+            : localization.string("chooser.changeKey", defaultValue: "修改快捷键…")
         badge.widthAnchor.constraint(equalToConstant: 40).isActive = true
         badge.heightAnchor.constraint(equalToConstant: 24).isActive = true
         let cell = NSStackView(views: [icon, labels, NSView(), badge])
@@ -894,7 +1041,11 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     private func beginSearch() {
         guard var session else { return }
-        let needsRender = !session.isPersistent || session.usesDirectKeys
+        let needsRender = !session.isPersistent || session.usesDirectKeys || (usesInlineSearch && !isInlineSearchExpanded)
+        if usesInlineSearch, !isInlineSearchExpanded {
+            modeBeforeSearch = (session.isPersistent, session.usesDirectKeys)
+        }
+        expandInlineSearch()
         if !session.isPersistent {
             showsSearchTransition = true
             searchTransitionTask?.cancel()
@@ -912,7 +1063,15 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     @objc private func enterSearch() {
-        searchHeldModifiers = (session?.invocationModifiers ?? []).intersection(NSEvent.modifierFlags)
+        enterSearch(holding: NSEvent.modifierFlags)
+    }
+
+    private func enterSearch(holding modifiers: NSEvent.ModifierFlags) {
+        if let session, !session.isPersistent {
+            searchHeldModifiers = session.invocationModifiers.intersection(modifiers)
+        } else {
+            searchHeldModifiers.formIntersection(modifiers)
+        }
         beginSearch()
         panel.makeFirstResponder(search)
     }
@@ -935,13 +1094,25 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
         modeIcon.image = NSImage(systemSymbolName: session.isPersistent ? "magnifyingglass" : "arrow.2.circlepath",
                                  accessibilityDescription: modeTitle.stringValue)
-        enterSearchButton.title = localization.string("chooser.enterSearch", defaultValue: "搜索…")
         if session.usesDirectKeys {
             modeTitle.stringValue = localization.string("settings.mode.legacy", defaultValue: "按键直达")
-            modeHint.stringValue = localization.string("chooser.legacyHint", defaultValue: "按分配的按键打开 · 点击标记修改")
+            modeHint.stringValue = localization.string("chooser.legacyHint", defaultValue: "按快捷键切换 · 点击按键修改")
             modeIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: modeTitle.stringValue)
         }
-        enterSearchButton.isHidden = session.isPersistent && !session.usesDirectKeys
+        let isRecording = recordingEntryID != nil
+        if isRecording {
+            modeHint.stringValue = actionMessage ?? localization.string("chooser.recordAssigned", defaultValue: "按下新快捷键 · ⌫ 恢复自动")
+        }
+        modeHint.isHidden = false
+        modeHint.toolTip = isRecording ? shortcutRecordingHelp : nil
+        modeHint.setAccessibilityHelp(modeHint.toolTip)
+        modeTitle.toolTip = modeHint.stringValue
+        recordingCancel.title = localization.string("chooser.cancel", defaultValue: "取消")
+        recordingCancel.isHidden = !isRecording
+        inlineSearch.isHidden = isRecording || !usesInlineSearch
+        enterSearchButton.isHidden = isRecording || !usesInlineSearch
+        more.isHidden = isRecording
+        layoutPicker.isHidden = isRecording
         search.placeholderString = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
     }
 
@@ -976,12 +1147,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     @discardableResult
     func handleChooserShortcut(_ event: NSEvent) -> Bool {
+        if handleSearchShortcut(event) { return true }
         if event.keyCode == UInt16(kVK_F10),
            event.modifierFlags.intersection([.command, .option, .control, .shift]) == .shift {
             showSelectedContextMenu()
             return true
         }
         if recordingEntryID != nil { return recordShortcut(event) }
+        if handleDirectTabNavigation(event) { return true }
         if session?.usesDirectKeys == true { return handleDirectKey(event) }
         guard session != nil, var key = event.charactersIgnoringModifiers?.lowercased() else { return false }
         // Shift-number characters are punctuation on many layouts. Match the
@@ -994,7 +1167,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         let digit = Int(key).flatMap { (1...9).contains($0) ? $0 : nil }
         let zoomKey = (modifiers == .command && ["+", "=", "-", "0"].contains(key)) ||
             (modifiers == [.command, .shift] && ["+", "="].contains(key))
-        let recognized = zoomKey || (modifiers == .command && (digit != nil || ["d", "p", "f", "w", "q", "k"].contains(key)))
+        let recognized = zoomKey || (modifiers == .command && (digit != nil || ["d", "p", "w", "q", "k"].contains(key)))
             || ((modifiers == [.command, .option] || modifiers == [.command, .shift]) && ["1", "2"].contains(key))
         guard recognized else { return false }
         if let editor = search.currentEditor() as? NSTextView, editor.hasMarkedText() { return true }
@@ -1017,13 +1190,34 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             switch key {
             case "d": display.performClick(nil)
             case "p": previewButton.state = showsPreview ? .off : .on; previewChanged()
-            case "f": enterSearch()
             case "k": more.performClick(nil)
             case "w": closeSelected()
             case "q": quitSelected()
             default: return false
             }
         }
+        return true
+    }
+
+    private func handleSearchShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, let session, recordingEntryID == nil,
+              event.charactersIgnoringModifiers?.lowercased() == "f" else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        let heldModifiers = session.isPersistent ? searchHeldModifiers : session.invocationModifiers
+        let shortcutModifiers = modifiers.subtracting(heldModifiers.subtracting(.command))
+        guard shortcutModifiers == .command else { return false }
+        // Consume Find before modifier filtering can turn Command-F into text.
+        if (search.currentEditor() as? NSTextView)?.hasMarkedText() != true {
+            enterSearch(holding: event.modifierFlags)
+        }
+        return true
+    }
+
+    private func handleDirectTabNavigation(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, event.keyCode == UInt16(kVK_Tab),
+              session?.usesDirectKeys == true, recordingEntryID == nil,
+              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
+        move(event.modifierFlags.contains(.shift) ? -1 : 1)
         return true
     }
 
@@ -1057,6 +1251,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private func beginShortcutRecording(_ id: String) {
         guard session?.usesDirectKeys == true, session?.entries.contains(where: { $0.id == id }) == true else { return }
         recordingEntryID = id
+        actionMessage = nil
         session?.selectedID = id
         if let session { onSessionChange?(session) }
         render()
@@ -1064,15 +1259,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         // Keep key input in the chooser after a badge or menu click, rather
         // than leaving focus on the button or a previously active editor.
         panel.makeFirstResponder(usesList ? table : cards)
-        showMessage(localization.string("chooser.recordAssigned", defaultValue: "按字母或数字（可加 Command）。退格恢复自动分配，Esc 取消。"))
     }
 
     private func recordShortcut(_ event: NSEvent) -> Bool {
         if event.keyCode == UInt16(kVK_Escape) {
-            recordingEntryID = nil; actionMessage = nil; render(); return true
+            cancelShortcutRecording(); return true
         }
         guard let id = recordingEntryID, let entry = session?.entries.first(where: { $0.id == id }) else {
-            recordingEntryID = nil; return true
+            cancelShortcutRecording(); return true
         }
         let clear = [UInt16(kVK_Delete), UInt16(kVK_ForwardDelete)].contains(event.keyCode)
         let token = directToken(event)
@@ -1083,17 +1277,18 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             session?.entries = entries
             onSessionChange?(session!); renderedSession = nil; render()
         case .conflict:
-            showMessage(localization.string("chooser.assignedConflict", defaultValue: "按键已被占用，请选择其他按键。"))
+            showMessage(localization.string("chooser.assignedConflict", defaultValue: "快捷键已占用，请重新输入"))
         case .unavailable:
             recordingEntryID = nil
-            showMessage(localization.string("chooser.assignedUnavailable", defaultValue: "无法修改此窗口的按键。"))
+            showMessage(localization.string("chooser.assignedUnavailable", defaultValue: "无法修改此窗口的快捷键"))
         }
         return true
     }
 
     func visibleShortcutRows() -> [Int] {
         if usesList {
-            return Array(rows.indices.filter { table.visibleRect.contains(table.rect(ofRow: $0)) }.prefix(9))
+            let loadedRows = 0..<min(rows.count, table.numberOfRows)
+            return Array(loadedRows.filter { table.visibleRect.contains(table.rect(ofRow: $0)) }.prefix(9))
         }
         guard let layout = cards.collectionViewLayout else { return [] }
         return Array(layout.layoutAttributesForElements(in: cards.visibleRect)
@@ -1113,31 +1308,40 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     private func updateShortcutBadges() {
-        guard !updating else { return }
+        guard !updating, !applyingPanelLayout, !updatingViewport else { return }
         let visible = session?.isPersistent == true ? visibleShortcutRows() : []
         if usesList {
-            for row in rows.indices {
+            // The hidden table may still hold an older snapshot until render reloads it.
+            for row in 0..<min(rows.count, table.numberOfRows) {
                 guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) else { continue }
-                func findBadge(_ view: NSView) -> NSButton? {
-                    if view.identifier?.rawValue == "window-shortcut-badge" { return view as? NSButton }
+                func findBadge(_ view: NSView) -> WindowSwitcherShortcutBadge? {
+                    if view.identifier?.rawValue == "window-shortcut-badge" { return view as? WindowSwitcherShortcutBadge }
                     return view.subviews.lazy.compactMap(findBadge).first
                 }
                 let badge = findBadge(cell)
                 badge?.title = session?.usesDirectKeys == true ? (rows[row].shortcutDisplay ?? "") : (visible.firstIndex(of: row).map { "⌘\($0 + 1)" } ?? "")
                 badge?.refusesFirstResponder = session?.usesDirectKeys != true
+                badge?.isRecording = rows[row].id == recordingEntryID
+                badge?.toolTip = badge?.isRecording == true ? shortcutRecordingHelp
+                    : localization.string("chooser.changeKey", defaultValue: "修改快捷键…")
             }
         } else {
             for item in cards.visibleItems() {
                 guard let card = item as? WindowSwitcherCardItem, let path = cards.indexPath(for: item), rows.indices.contains(path.item) else { continue }
                 card.assignedShortcut = session?.usesDirectKeys == true ? rows[path.item].shortcutDisplay : nil
+                card.isRecordingShortcut = rows[path.item].id == recordingEntryID
+                card.shortcutHelp = card.isRecordingShortcut ? shortcutRecordingHelp
+                    : localization.string("chooser.changeKey", defaultValue: "修改快捷键…")
                 card.shortcutNumber = session?.usesDirectKeys == true ? nil : visible.firstIndex(of: path.item).map { $0 + 1 }
             }
         }
     }
 
     private func handleKey(_ original: NSEvent) -> Bool {
+        if handleSearchShortcut(original) { return true }
         var event = original
         if recordingEntryID != nil { return recordShortcut(event) }
+        if handleDirectTabNavigation(event) { return true }
         if session?.usesDirectKeys == true, handleDirectKey(event) { return true }
         switch Int(event.keyCode) {
         case kVK_Tab:
@@ -1159,7 +1363,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             }
             let command = event.modifierFlags.contains(.command)
             let key = event.charactersIgnoringModifiers?.lowercased()
-            if command && key != "f" && key != "v" { return false }
+            if command && key != "v" { return false }
             guard let text = event.charactersIgnoringModifiers, !text.isEmpty,
                   !text.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return false }
             beginSearch()
@@ -1231,7 +1435,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
         if session?.usesDirectKeys == true {
             menu.addItem(.separator())
-            let edit = NSMenuItem(title: localization.string("chooser.changeKey", defaultValue: "更改按键…"), action: #selector(contextEditKey(_:)), keyEquivalent: "")
+            let edit = NSMenuItem(title: localization.string("chooser.changeKey", defaultValue: "修改快捷键…"), action: #selector(contextEditKey(_:)), keyEquivalent: "")
             edit.target = self; edit.representedObject = entry
             menu.addItem(edit)
         }
@@ -1382,22 +1586,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         render()
     }
 
-    private func acquireChooserFocus() {
-        guard session != nil else { return }
-        isAcquiringChooserFocus = true
-        defer { isAcquiringChooserFocus = false }
-        // Capture the origin before ordering, then activate the app and make
-        // the chooser key. Ordering alone leaves a background panel inactive.
-        chooserFocus.prepare()
-        PluginPresentationSafety.prepareForWindowOrdering(panel)
-        panel.orderFront(nil)
-        chooserFocus.acquire()
-        panel.makeKeyAndOrderFront(nil)
-    }
-
     private func focusPreviewNow() {
         guard panel.isVisible, !previewPane.isHidden else { return }
-        acquireChooserFocus()
+        // Ordinary presentation stays nonactivating. A deliberate preview click
+        // retains the foreground compatibility path needed by native gestures.
+        isAcquiringChooserFocus = true
+        defer { isAcquiringChooserFocus = false }
+        chooserFocus.acquire()
+        panel.makeKey()
     }
 
     @objc private func previewChanged() {
@@ -1406,13 +1602,5 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
         layoutPanel(preservePosition: true, resizeToContent: true); render()
-    }
-    func windowDidResignKey(_ notification: Notification) {
-        if !closing, !isAcquiringChooserFocus, !isPresentingMenu, session != nil {
-            // Another window now owns focus. Dismiss without restoring the
-            // origin, even when the user chose another MacTools window.
-            chooserFocus.release(restoring: false)
-            onCancel?()
-        }
     }
 }

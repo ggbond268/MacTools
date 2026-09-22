@@ -44,9 +44,15 @@ struct WorkspaceDisplaySystemSettingsLauncher: DisplaySystemSettingsLauncher {
 }
 
 @MainActor
-final class DisplayResolutionPlugin: MacToolsPlugin, PluginPrimaryPanel, DisplayTopologyRefreshing,
-    PluginActionProviding
-{
+final class DisplayResolutionPlugin: MacToolsPlugin, DisplayTopologyRefreshing, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private static let openSystemSettingsIcon = "gearshape"
 
     private enum ActionID {
@@ -64,7 +70,7 @@ final class DisplayResolutionPlugin: MacToolsPlugin, PluginPrimaryPanel, Display
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -109,7 +115,7 @@ final class DisplayResolutionPlugin: MacToolsPlugin, PluginPrimaryPanel, Display
         refreshSnapshot()
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         let displays = snapshot.displays
         let panelDisplays = displays.filter { !$0.modes.isEmpty }
 
@@ -119,12 +125,11 @@ final class DisplayResolutionPlugin: MacToolsPlugin, PluginPrimaryPanel, Display
 
         guard !displays.isEmpty else {
             selectedDisplayID = nil
-            return PluginPanelState(
+            return PluginPanelRowState(
                 subtitle: localization.string("panel.subtitle.noDisplays", defaultValue: "未检测到可用显示器"),
                 isOn: false,
-                isExpanded: false,
                 isEnabled: false,
-                isVisible: true,
+                isAvailable: true,
                 detail: nil,
                 errorMessage: nil
             )
@@ -132,23 +137,21 @@ final class DisplayResolutionPlugin: MacToolsPlugin, PluginPrimaryPanel, Display
 
         guard !panelDisplays.isEmpty else {
             selectedDisplayID = nil
-            return PluginPanelState(
+            return PluginPanelRowState(
                 subtitle: localization.string("panel.subtitle.noModes", defaultValue: "未检测到可用分辨率"),
                 isOn: false,
-                isExpanded: false,
                 isEnabled: false,
-                isVisible: true,
+                isAvailable: true,
                 detail: nil,
                 errorMessage: nil
             )
         }
 
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: subtitleForRowState(panelDisplays),
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? buildDetail(for: panelDisplays) : nil,
             errorMessage: lastErrorMessage
         )

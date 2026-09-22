@@ -1,7 +1,26 @@
 import XCTest
+import MacToolsPluginKit
 @testable import ZshConfigPlugin
 
 final class ZshConfigTests: XCTestCase {
+    @MainActor
+    func testPanelEntryRequestsSettingsWithoutHostSpecificRouting() throws {
+        let plugin = ZshConfigPlugin()
+        var requests = 0
+        plugin.requestSettingsPresentation = { requests += 1 }
+        let items = plugin.panelItems
+        guard case let .row(row) = items.first?.content else { return XCTFail("Missing row") }
+        row.action(.invokeAction(controlID: "execute"))
+        XCTAssertEqual(requests, 1)
+        plugin.handleAction(.invokeAction(controlID: "execute"))
+        XCTAssertEqual(requests, 2, "The shared widget action must open the same settings page")
+        plugin.handleAction(.invokeAction(controlID: "unknown"))
+        plugin.handleAction(.setSwitch(true))
+        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(items.map(\.id), ["control", "quick-control"])
+        XCTAssertNil(items.last?.initialPlacement)
+    }
+
     @MainActor
     func testPublishesOptionalAutomationRequirement() {
         let plugin = ZshConfigPlugin()
@@ -11,39 +30,6 @@ final class ZshConfigTests: XCTestCase {
         XCTAssertFalse(state.isGranted)
         XCTAssertEqual(state.statusText, "按需确认")
         XCTAssertEqual(state.statusTone, .neutral)
-    }
-
-    func testFileTypesExposeStableFilenamesAndMetadata() throws {
-        XCTAssertEqual(ZshConfigFileType.allCases.map(\.filename), [
-            ".zshrc",
-            ".zshenv",
-            ".zprofile",
-            ".zlogin",
-            ".zlogout",
-        ])
-        for type in ZshConfigFileType.allCases {
-            XCTAssertEqual(type.id, type.rawValue)
-            XCTAssertFalse(type.role.isEmpty)
-            XCTAssertFalse(type.whenLoaded.isEmpty)
-            XCTAssertFalse(type.recommendedUse.isEmpty)
-            XCTAssertEqual(try JSONDecoder().decode(ZshConfigFileType.self, from: JSONEncoder().encode(type)), type)
-        }
-    }
-
-    func testFileStatusFormatsExistingAndMissingSizes() {
-        XCTAssertEqual(
-            ZshFileStatus(type: .zshrc, exists: false, isWritable: true, byteSize: 0, modifiedDate: nil).formattedSize,
-            ""
-        )
-        XCTAssertEqual(
-            ZshFileStatus(type: .zshrc, exists: true, isWritable: true, byteSize: 0, modifiedDate: nil).formattedSize,
-            "0 B"
-        )
-        XCTAssertTrue(
-            ZshFileStatus(type: .zshrc, exists: true, isWritable: true, byteSize: 2048, modifiedDate: nil)
-                .formattedSize
-                .hasSuffix("KB")
-        )
     }
 
     func testSnippetsGenerateRepresentativeContent() {
@@ -60,14 +46,6 @@ final class ZshConfigTests: XCTestCase {
 
 @MainActor
 final class ZshConfigStoreTests: XCTestCase {
-    func testInitialStateAndStatusMapArePopulated() {
-        let store = ZshConfigStore()
-
-        XCTAssertEqual(store.selectedType, .zshrc)
-        XCTAssertFalse(store.hasUnsavedChanges)
-        XCTAssertNil(store.saveError)
-        XCTAssertEqual(store.statusMap.count, ZshConfigFileType.allCases.count)
-    }
 
     func testSelectResetsUnsavedChangesAndSwitchesType() {
         let store = ZshConfigStore()

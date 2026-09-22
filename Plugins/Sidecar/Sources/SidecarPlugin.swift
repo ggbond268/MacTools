@@ -71,14 +71,21 @@ private struct SidecarSwitchRequest {
 }
 
 @MainActor
-final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
-    PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
-    PluginPersistentPreferencesChangeSignaling,
-    PluginShortcutBindingChangeHandling, PluginActionProviding,
-    PluginLegacyActionShortcutProviding, PluginPortablePreferencesActionReferencesProviding,
-    PluginActionReferenceBackupProviding {
+final class SidecarPlugin: MacToolsPlugin, PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting, PluginPersistentPreferencesChangeSignaling, PluginShortcutBindingChangeHandling, PluginActionProviding, PluginLegacyActionShortcutProviding, PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+        ]
+    }
+
     let metadata: PluginMetadata
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -167,7 +174,6 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
             self?.refreshDevices(notify: true)
         }
         refreshDevices(notify: false)
-        isExpanded = !devices.isEmpty
         if self.preferences.didPersistPortablePreferencesDuringInitialization {
             persistentPreferencesChanges.didPersist()
         }
@@ -181,25 +187,23 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
         operationRecoveryTask?.cancel()
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         switch service.availability {
         case let .unsupported(reason):
-            return PluginPanelState(
+            return PluginPanelRowState(
                 subtitle: localization.string("panel.subtitle.unsupported", defaultValue: "此系统不支持 Sidecar 控制"),
                 isOn: false,
-                isExpanded: false,
                 isEnabled: false,
-                isVisible: true,
+                isAvailable: true,
                 detail: nil,
                 errorMessage: unsupportedMessage(for: reason)
             )
         case .available:
-            return PluginPanelState(
+            return PluginPanelRowState(
                 subtitle: subtitle,
                 isOn: false,
-                isExpanded: isExpanded,
                 isEnabled: true,
-                isVisible: true,
+                isAvailable: true,
                 detail: isExpanded ? buildDetail() : nil,
                 errorMessage: operationErrorMessage
             )
@@ -537,8 +541,8 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
         }
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .primary else { return }
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "control" else { return }
         isPrimaryPanelVisible = true
         clearExpiredTerminalFeedbackIfNeeded()
         guard isActive else { return }
@@ -546,8 +550,8 @@ final class SidecarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfac
         scheduleDeviceRefreshIfNeeded()
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .primary else { return }
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard surface == "control" else { return }
         isPrimaryPanelVisible = false
         cancelDeviceRefresh()
         clearTerminalFeedback()

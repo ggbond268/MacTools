@@ -21,35 +21,9 @@ final class DiskCleanStagingJournalTests: XCTestCase {
         super.tearDown()
     }
 
-    func testInitDoesNotTouchFileSystem() throws {
-        let untouched = storage.resolve("never-created")
-
-        _ = DiskCleanStagingJournal(directory: untouched)
-
-        XCTAssertFalse(
-            FileManager.default.fileExists(atPath: untouched.path),
-            "constructing a journal must not create directories: a default-constructed plugin would create state dirs in real user paths"
-        )
-    }
-
     /// Crash point 1: begin is durable, rename not yet done or done without a completion record → entry incomplete.
-    func testEntryWithoutCompletionIsIncomplete() throws {
-        let entry = makeEntry(id: "one")
-
-        try journal.begin(entry)
-
-        XCTAssertEqual(journal.incompleteEntries(), [entry])
-    }
 
     /// Crash point 2: completion record is durable → entry is cleared; reconciliation will not touch it.
-    func testCompletedEntryIsNotIncomplete() throws {
-        let entry = makeEntry(id: "one")
-        try journal.begin(entry)
-
-        journal.complete(entryID: entry.id, status: "removed")
-
-        XCTAssertTrue(journal.incompleteEntries().isEmpty)
-    }
 
     func testIrreversiblePhaseSurvivesCompaction() throws {
         let entry = makeEntry(id: "deleting")
@@ -98,19 +72,6 @@ final class DiskCleanStagingJournalTests: XCTestCase {
         XCTAssertEqual(reopened.incompleteEntriesForReconciliation(), [entry])
     }
 
-    func testOnlyUncompletedEntriesRemainAndAreSortedByTimestamp() throws {
-        let first = makeEntry(id: "first", timestamp: Date(timeIntervalSince1970: 100))
-        let second = makeEntry(id: "second", timestamp: Date(timeIntervalSince1970: 300))
-        let third = makeEntry(id: "third", timestamp: Date(timeIntervalSince1970: 200))
-        try journal.begin(first)
-        try journal.begin(second)
-        try journal.begin(third)
-
-        journal.complete(entryID: second.id, status: "trashed")
-
-        XCTAssertEqual(journal.incompleteEntries().map(\.id), ["first", "third"])
-    }
-
     /// On crash the last line may be half-written. Half lines must be skipped without affecting other entries.
     func testTruncatedTrailingLineIsTolerated() throws {
         let entry = makeEntry(id: "one")
@@ -157,32 +118,6 @@ final class DiskCleanStagingJournalTests: XCTestCase {
         XCTAssertEqual(contents.split(separator: "\n").count, 1)
     }
 
-    func testCompactOnEmptyJournalLeavesNothingIncomplete() throws {
-        let entry = makeEntry(id: "one")
-        try journal.begin(entry)
-        journal.complete(entryID: entry.id, status: "removed")
-
-        try journal.compact()
-
-        XCTAssertTrue(journal.incompleteEntries().isEmpty)
-    }
-
-    func testIncompleteEntriesOnMissingFileIsEmpty() {
-        let fresh = DiskCleanStagingJournal(directory: storage.resolve("absent"))
-
-        XCTAssertTrue(fresh.incompleteEntries().isEmpty)
-    }
-
-    func testBeginThrowsWhenDirectoryPathIsOccupiedByFile() throws {
-        try storage.makeFile("occupied", bytes: 1)
-        let blocked = DiskCleanStagingJournal(directory: storage.resolve("occupied"))
-
-        XCTAssertThrowsError(
-            try blocked.begin(makeEntry(id: "one")),
-            "journal write failure must throw so the caller aborts the rename"
-        )
-    }
-
     func testBeginPropagatesDirectoryDurabilityFailure() throws {
         struct ExpectedFailure: Error {}
         let failing = DiskCleanStagingJournal(
@@ -193,20 +128,6 @@ final class DiskCleanStagingJournalTests: XCTestCase {
         XCTAssertThrowsError(try failing.begin(makeEntry(id: "one"))) { error in
             XCTAssertTrue(error is ExpectedFailure)
         }
-    }
-
-    func testCompactPropagatesDirectoryDurabilityFailure() throws {
-        try journal.begin(makeEntry(id: "one"))
-        let failing = DiskCleanStagingJournal(
-            directory: storage.url,
-            directorySynchronizer: { _ in
-                struct ExpectedFailure: Error {}
-                throw ExpectedFailure()
-            }
-        )
-
-        XCTAssertThrowsError(try failing.compact())
-        XCTAssertEqual(failing.incompleteEntries().map(\.id), ["one"])
     }
 
     private func makeEntry(

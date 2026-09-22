@@ -73,51 +73,19 @@ final class AppHostCommandTests: XCTestCase {
         XCTAssertEqual(launchTargets(in: context), [false])
     }
 
-    func testVisibilityCatalogGeneratesOneInverseCommandPerSupportedSurface() {
+    func testPanelEditingDoesNotContributeHostCommands() throws {
         let defaults = makeDefaults()
-        let service = CommandTestLaunchAtLoginService(initialRegistered: false)
         let plugin = CommandTestCombinedPlugin()
         let host = makePluginHostForTests(plugins: [plugin])
-        let context = AppHostCommandContext(
-            pluginHost: host,
-            launchAtLoginController: LaunchAtLoginController(service: service),
-            appearanceUserDefaults: defaults
-        )
-
-        XCTAssertEqual(
-            visibilityTargets(pluginID: plugin.metadata.id, in: context),
-            [
-                VisibilityTarget(surface: .dashboard, isVisible: false),
-                VisibilityTarget(surface: .featurePanel, isVisible: false),
-            ]
-        )
-
-        host.setPluginVisible(false, id: plugin.metadata.id, on: .dashboard)
-
-        XCTAssertEqual(
-            visibilityTargets(pluginID: plugin.metadata.id, in: context),
-            [
-                VisibilityTarget(surface: .dashboard, isVisible: true),
-                VisibilityTarget(surface: .featurePanel, isVisible: false),
-            ]
-        )
-    }
-
-    func testVisibilityCatalogDoesNotGenerateUnsupportedSurface() {
-        let defaults = makeDefaults()
-        let plugin = CommandTestFeatureOnlyPlugin()
-        let context = AppHostCommandContext(
-            pluginHost: makePluginHostForTests(plugins: [plugin]),
-            launchAtLoginController: LaunchAtLoginController(
-                service: CommandTestLaunchAtLoginService(initialRegistered: false)
-            ),
-            appearanceUserDefaults: defaults
-        )
-
-        XCTAssertEqual(
-            visibilityTargets(pluginID: plugin.metadata.id, in: context),
-            [VisibilityTarget(surface: .featurePanel, isVisible: false)]
-        )
+        let context = AppHostCommandContext(pluginHost: host,
+            launchAtLoginController: LaunchAtLoginController(service: CommandTestLaunchAtLoginService(initialRegistered: false)),
+            appearanceUserDefaults: defaults)
+        let definitions = AppHostCommandCatalog.applicableDefinitions(in: context)
+        XCTAssertTrue(definitions.allSatisfy { $0.id.hasPrefix("app-command.") })
+        let row = try XCTUnwrap(host.panelEntries(in: "features").first)
+        XCTAssertTrue(host.addPanelItem(row.key, to: "features"))
+        XCTAssertTrue(host.removePanelEntry(row, from: "features"))
+        XCTAssertEqual(AppHostCommandCatalog.applicableDefinitions(in: context), definitions)
     }
 
     func testLaunchAtLoginExecutionUsesControllerAndSurfacesFailure() throws {
@@ -183,60 +151,7 @@ final class AppHostCommandTests: XCTestCase {
         XCTAssertEqual(service.registerCallCount, 0)
     }
 
-    func testVisibilityExecutionChangesOnlyRequestedSurfaceAndRejectsStaleResult() throws {
-        let defaults = makeDefaults()
-        let plugin = CommandTestCombinedPlugin()
-        let host = makePluginHostForTests(plugins: [plugin])
-        let context = AppHostCommandContext(
-            pluginHost: host,
-            launchAtLoginController: LaunchAtLoginController(
-                service: CommandTestLaunchAtLoginService(initialRegistered: false)
-            ),
-            appearanceUserDefaults: defaults
-        )
-        let hideDashboard = try XCTUnwrap(
-            AppHostCommandCatalog.applicableDefinitions(in: context).first {
-                $0.action == .setPluginVisibility(
-                    pluginID: plugin.metadata.id,
-                    surface: .dashboard,
-                    isVisible: false
-                )
-            }
-        )
-
-        XCTAssertEqual(
-            AppHostCommandExecutor.perform(
-                expectedDefinition: hideDashboard,
-                context: context
-            ),
-            .performed(.refreshIndex)
-        )
-        XCTAssertEqual(
-            AppHostCommandCatalog.pluginVisibility(
-                pluginID: plugin.metadata.id,
-                surface: .dashboard,
-                pluginHost: host
-            ),
-            false
-        )
-        XCTAssertEqual(
-            AppHostCommandCatalog.pluginVisibility(
-                pluginID: plugin.metadata.id,
-                surface: .featurePanel,
-                pluginHost: host
-            ),
-            true
-        )
-        XCTAssertEqual(
-            AppHostCommandExecutor.perform(
-                expectedDefinition: hideDashboard,
-                context: context
-            ),
-            .unavailable
-        )
-    }
-
-    func testRelocalizedDefinitionIsRejectedWithoutChangingVisibility() throws {
+    func testRelocalizedDefinitionIsRejectedWithoutChangingLaunchAtLogin() throws {
         let defaults = makeDefaults()
         let plugin = CommandTestCombinedPlugin()
         let host = makePluginHostForTests(plugins: [plugin])
@@ -249,11 +164,7 @@ final class AppHostCommandTests: XCTestCase {
         )
         let current = try XCTUnwrap(
             AppHostCommandCatalog.applicableDefinitions(in: context).first {
-                $0.action == .setPluginVisibility(
-                    pluginID: plugin.metadata.id,
-                    surface: .dashboard,
-                    isVisible: false
-                )
+                $0.action == .setLaunchAtLogin(true)
             }
         )
         let stale = AppHostCommandDefinition(
@@ -273,14 +184,7 @@ final class AppHostCommandTests: XCTestCase {
             ),
             .unavailable
         )
-        XCTAssertEqual(
-            AppHostCommandCatalog.pluginVisibility(
-                pluginID: plugin.metadata.id,
-                surface: .dashboard,
-                pluginHost: host
-            ),
-            true
-        )
+        XCTAssertFalse(context.launchAtLoginController.isEnabled)
     }
 
     func testPresentationCommandUsesExistingRoutingAndDismissesPalette() throws {
@@ -394,24 +298,6 @@ final class AppHostCommandTests: XCTestCase {
         }
     }
 
-    private func visibilityTargets(
-        pluginID: String,
-        in context: AppHostCommandContext
-    ) -> [VisibilityTarget] {
-        AppHostCommandCatalog.applicableDefinitions(in: context).compactMap { definition in
-            guard case let .setPluginVisibility(id, surface, isVisible) = definition.action,
-                  id == pluginID
-            else {
-                return nil
-            }
-            return VisibilityTarget(surface: surface, isVisible: isVisible)
-        }
-    }
-}
-
-private struct VisibilityTarget: Equatable {
-    let surface: PluginDisplaySurface
-    let isVisible: Bool
 }
 
 @MainActor
@@ -450,7 +336,20 @@ private enum CommandTestError: Error {
 }
 
 @MainActor
-private final class CommandTestCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel {
+private final class CommandTestCombinedPlugin: MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    }),
+        ]
+    }
+
     let metadata = PluginMetadata(
         id: "command-test-combined",
         title: "组合插件",
@@ -459,73 +358,39 @@ private final class CommandTestCombinedPlugin: MacToolsPlugin, PluginPrimaryPane
         order: 1,
         defaultDescription: "同时支持仪表盘和功能面板"
     )
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
-    let descriptor = PluginComponentDescriptor(span: .oneByOne)
+    let descriptor = PluginPanelWidgetDescriptor(span: .oneByOne)
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
     }
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(
             subtitle: metadata.defaultDescription,
             isActive: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             errorMessage: nil
         )
     }
 
     func handleAction(_ action: PluginPanelAction) {}
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(Text(context.pluginID))
     }
-}
-
-@MainActor
-private final class CommandTestFeatureOnlyPlugin: MacToolsPlugin, PluginPrimaryPanel {
-    let metadata = PluginMetadata(
-        id: "command-test-feature-only",
-        title: "功能插件",
-        iconName: "switch.2",
-        iconTint: .purple,
-        order: 2,
-        defaultDescription: "仅支持功能面板"
-    )
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
-        controlStyle: .button,
-        menuActionBehavior: .keepPresented
-    )
-    var onStateChange: (() -> Void)?
-    var requestPermissionGuidance: ((String) -> Void)?
-    var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
-
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
-            subtitle: metadata.defaultDescription,
-            isOn: false,
-            isExpanded: false,
-            isEnabled: true,
-            isVisible: true,
-            detail: nil,
-            errorMessage: nil
-        )
-    }
-
-    func handleAction(_ action: PluginPanelAction) {}
 }

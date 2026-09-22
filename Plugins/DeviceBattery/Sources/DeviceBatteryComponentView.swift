@@ -3,13 +3,19 @@ import SwiftUI
 import MacToolsPluginKit
 
 struct DeviceBatteryComponentView: View {
-    @ObservedObject var viewModel: DeviceBatteryViewModel
+    let viewModel: DeviceBatteryViewModel
     @ObservedObject var store: DeviceBatteryStore
     let localization: PluginLocalization
     let openSettings: () -> Void
     @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
+        PluginObservedContent(viewModel) { _ in
+            batteryContent
+        }
+    }
+
+    private var batteryContent: some View {
         Group {
             if visibleItems.isEmpty {
                 emptyState
@@ -80,11 +86,11 @@ struct DeviceBatteryComponentView: View {
         switch viewModel.snapshot.accessState {
         case .permissionDenied:
             return localization.string("empty.title.permissionDenied", defaultValue: "需要输入监控权限")
-        case .scanning:
+        case .idle, .scanning:
             return localization.string("empty.title.scanning", defaultValue: "正在读取电量")
         case .failed:
             return localization.string("empty.title.failed", defaultValue: "读取失败")
-        case .idle, .ready, .noDevices:
+        case .ready, .noDevices:
             return localization.string("empty.title.noDevices", defaultValue: "暂无设备电量")
         }
     }
@@ -95,9 +101,9 @@ struct DeviceBatteryComponentView: View {
             return localization.string("empty.subtitle.permissionDenied", defaultValue: "授权后可读取厂商 HID 鼠标")
         case .failed(let message):
             return message
-        case .scanning:
+        case .idle, .scanning:
             return localization.string("empty.subtitle.scanning", defaultValue: "正在查询系统电源与蓝牙设备")
-        case .idle, .ready, .noDevices:
+        case .ready, .noDevices:
             return localization.string("empty.subtitle.noDevices", defaultValue: "连接蓝牙设备或厂商 HID 鼠标")
         }
     }
@@ -105,7 +111,7 @@ struct DeviceBatteryComponentView: View {
 
 enum DeviceBatteryComponentLayout {
     static let width = 4
-    static let cornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius
+    static let cornerRadius: CGFloat = PluginPanelWidgetLayoutMetrics.cardCornerRadius
     static let horizontalPadding: CGFloat = 12
     static let rowHeight: CGFloat = 34
     static let rowIconWidth: CGFloat = 26
@@ -135,7 +141,7 @@ enum DeviceBatteryComponentLayout {
     static func spanHeight(
         mode: DeviceBatteryLayoutMode,
         visibleItemCount: Int,
-        metrics: PluginComponentPanelLayoutMetrics = .default
+        metrics: PluginPanelWidgetLayoutMetrics = .default
     ) -> Int {
         metrics.heightSpan(
             fittingContentHeight: contentHeight(
@@ -687,6 +693,9 @@ private func deviceDetailText(
 }
 
 func deviceSymbolName(for item: DeviceBatteryItem) -> String {
+    if item.source == "JBLExcelPoint" {
+        return item.componentIdentity?.role == .chargingCase ? "bolt.circle" : "headphones"
+    }
     let haystack = [
         item.name,
         item.model,

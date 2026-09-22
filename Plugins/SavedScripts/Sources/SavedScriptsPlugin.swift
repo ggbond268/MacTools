@@ -21,26 +21,24 @@ private struct SavedScriptsPluginProvider: PluginProvider {
 
 @MainActor
 final class SavedScriptsPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginActionProviding,
-    PluginActionExecutionRevisionProviding,
-    PluginSettingsPresenting,
-    PluginSettingsSearchFocusing,
-    PluginPrimaryPanelIndicatorProviding,
-    PluginPortablePreferencesProviding,
-    PluginPersistentPreferencesChangeSignaling,
-    PluginPortablePreferencesRestorationReporting,
-    PluginPortablePreferencesActionReferencesProviding,
-    PluginActionReferenceBackupProviding
-{
+    MacToolsPlugin, PluginActionProviding, PluginActionExecutionRevisionProviding, PluginSettingsPresenting, PluginSettingsSearchFocusing, PluginPortablePreferencesProviding, PluginPersistentPreferencesChangeSignaling, PluginPortablePreferencesRestorationReporting, PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding {
+    var panelItems: [PluginPanelItem] {
+        var state = rowState
+        state.indicator = rowIndicator
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ControlID {
         static let openManager = "open-manager"
         static let runPrefix = "run."
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
     let store: SavedScriptsStore
     let executionStore = SavedScriptsExecutionStore()
 
@@ -99,7 +97,7 @@ final class SavedScriptsPlugin:
                 defaultValue: "保存并运行 AppleScript 和 Shell 脚本"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .disclosure,
             menuActionBehavior: .keepPresented
         )
@@ -132,13 +130,12 @@ final class SavedScriptsPlugin:
         settingsSearchFocusController.requestFocus()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? panelDetail : nil,
             errorMessage: store.loadError.map { error in
                 error == "invalid-saved-scripts-library"
@@ -151,29 +148,29 @@ final class SavedScriptsPlugin:
         )
     }
 
-    var primaryPanelIndicator: PluginPrimaryPanelIndicator? {
+    var rowIndicator: PluginPanelRowIndicator? {
         guard let record = executionStore.mostRecentRecord else { return nil }
         switch record.status {
         case .running:
-            return PluginPrimaryPanelIndicator(
+            return PluginPanelRowIndicator(
                 text: localization.string("run.status.running", defaultValue: "运行中"),
                 systemImage: "progress.indicator"
             )
         case .succeeded:
             guard showsCompletedIndicator(record) else { return nil }
-            return PluginPrimaryPanelIndicator(
+            return PluginPanelRowIndicator(
                 text: localization.string("run.status.succeeded", defaultValue: "已完成"),
                 systemImage: "checkmark.circle.fill"
             )
         case .failed:
             guard showsCompletedIndicator(record) else { return nil }
-            return PluginPrimaryPanelIndicator(
+            return PluginPanelRowIndicator(
                 text: localization.string("run.status.failed", defaultValue: "失败"),
                 systemImage: "exclamationmark.triangle.fill"
             )
         case .cancelled:
             guard showsCompletedIndicator(record) else { return nil }
-            return PluginPrimaryPanelIndicator(
+            return PluginPanelRowIndicator(
                 text: localization.string("run.status.cancelled", defaultValue: "已取消"),
                 systemImage: "xmark.circle.fill"
             )

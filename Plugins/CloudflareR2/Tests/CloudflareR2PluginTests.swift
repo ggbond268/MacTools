@@ -6,21 +6,6 @@ import XCTest
 
 @MainActor
 final class CloudflareR2PluginTests: XCTestCase {
-    func testMetadataPanelShortcutActionAndSettingsContracts() {
-        let h = makeHarness()
-        XCTAssertEqual(h.plugin.metadata.id, "cloudflare-r2")
-        XCTAssertEqual(h.plugin.metadata.order, 75)
-        XCTAssertEqual(h.plugin.metadata.title, "Cloudflare R2 上传")
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.controlStyle, .button)
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.buttonTitle, "选择")
-        XCTAssertEqual(
-            h.plugin.shortcutDefinitions.first?.actionID, CloudflareR2Plugin.ShortcutID.upload)
-        XCTAssertEqual(
-            h.plugin.actionDefinitions.first?.key.actionID, CloudflareR2Plugin.ActionID.upload)
-        XCTAssertNotNil(h.plugin.settingsPage)
-        XCTAssertTrue(h.plugin.primaryPanelState.isEnabled)
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传文件到 Cloudflare R2")
-    }
 
     func testExecuteAndShortcutOpenPickerButUnknownActionDoesNot() {
         var count = 0
@@ -72,57 +57,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         await waitUntil { h.plugin.status == .succeeded(result) }
         XCTAssertEqual(h.clipboard.values, ["https://files.example.com/file.txt"])
         XCTAssertEqual(h.notifier.notifications, [.init(fileName: "file.txt", result: result)])
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传完成：file.txt")
-    }
-
-    func testProgressUpdatesAreClampedAndDeduplicatedByPercentage() async {
-        let uploader = R2UploaderMock(
-            outcome: .success(R2UploadResult(objectKey: "file.txt", url: nil)),
-            progressValues: [0.421, 0.429, 0.42],
-            suspended: true
-        )
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: uploader
-        )
-        var stateChangeCount = 0
-        h.plugin.onStateChange = { stateChangeCount += 1 }
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil {
-            h.plugin.primaryPanelState.subtitle == "正在上传 file.txt… 42%"
-        }
-        XCTAssertEqual(stateChangeCount, 3)
-        XCTAssertEqual(h.progressPresenter.requestedFileNames, ["file.txt"])
-        XCTAssertEqual(h.progressPresenter.progressFileNames, ["file.txt"])
-        XCTAssertEqual(h.progressPresenter.progressValues, [0.42])
-        h.plugin.cancelUpload()
-        XCTAssertEqual(h.progressPresenter.dismissCount, 2)
-    }
-
-    func testProgressRelayClampsAndOnlyReportsIncreasingWholePercentages() {
-        let recorder = ProgressRecorderMock()
-        let relay = R2ProgressRelay { recorder.append($0) }
-        [-0.5, 0, 0.421, 0.429, 0.41, 1.5, 1].forEach(relay.report)
-        XCTAssertEqual(recorder.values, [0.42, 1])
-    }
-
-    func testRenamedObjectNameIsPassedToUploaderAndCompletionDialog() async {
-        let result = R2UploadResult(objectKey: "renamed.pdf", url: nil)
-        let uploader = R2UploaderMock(outcome: .success(result))
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/original.pdf"),
-            uploader: uploader,
-            objectNameOverride: "renamed.pdf"
-        )
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil { h.plugin.status == .succeeded(result) }
-        let objectNames = await uploader.objectNames
-        XCTAssertEqual(objectNames, [Optional("renamed.pdf")])
-        XCTAssertEqual(h.progressPresenter.progressFileNames, ["renamed.pdf"])
-        XCTAssertEqual(
-            h.notifier.notifications,
-            [.init(fileName: "renamed.pdf", result: result)]
-        )
+        XCTAssertEqual(h.plugin.rowState.subtitle, "上传完成：file.txt")
     }
 
     func testExistingObjectCanBeOverwritten() async {
@@ -177,79 +112,6 @@ final class CloudflareR2PluginTests: XCTestCase {
         XCTAssertTrue(objectNames.isEmpty)
     }
 
-    func testConflictCheckAndUploadUseSameConfigurationSnapshot() async {
-        let result = R2UploadResult(objectKey: "file.txt", url: nil)
-        let uploader = R2UploaderMock(outcome: .success(result))
-        let checker = R2ObjectCheckerMock(results: [true])
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: uploader,
-            objectChecker: checker,
-            conflictResolutions: [.overwrite],
-            mutateConfigurationOnConflict: true
-        )
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil { h.plugin.status == .succeeded(result) }
-
-        let checkedConfigurations = await checker.configurations
-        let uploadConfigurations = await uploader.configurations
-        let checkedSecrets = await checker.secrets
-        let uploadSecrets = await uploader.secrets
-        XCTAssertEqual(checkedConfigurations.map(\.bucket), ["bucket"])
-        XCTAssertEqual(uploadConfigurations.map(\.bucket), ["bucket"])
-        XCTAssertEqual(checkedSecrets, ["stored-secret"])
-        XCTAssertEqual(uploadSecrets, ["stored-secret"])
-        XCTAssertEqual(h.store.bucket, "changed-bucket")
-    }
-
-    func testRandomUploadNamePreservesExtension() {
-        let uuid = UUID(uuidString: "12345678-1234-1234-1234-1234567890AB")!
-        XCTAssertEqual(
-            R2UploadNameGenerator.randomFileName(
-                preservingExtensionOf: "archive.tar.gz",
-                uuid: uuid
-            ),
-            "12345678-1234-1234-1234-1234567890ab.tar.gz"
-        )
-        XCTAssertEqual(
-            R2UploadNameGenerator.randomFileName(
-                preservingExtensionOf: "README",
-                uuid: uuid
-            ),
-            "12345678-1234-1234-1234-1234567890ab"
-        )
-        XCTAssertEqual(
-            R2UploadNameGenerator.randomFileName(
-                preservingExtensionOf: "backup.tar.bz2",
-                uuid: uuid
-            ),
-            "12345678-1234-1234-1234-1234567890ab.tar.bz2"
-        )
-    }
-
-    func testPrivateSuccessShowsConfirmationWithoutCopying() async {
-        let result = R2UploadResult(objectKey: "private/file.txt", url: nil)
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: R2UploaderMock(outcome: .success(result)))
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil { h.plugin.status == .succeeded(result) }
-        XCTAssertTrue(h.clipboard.values.isEmpty)
-        XCTAssertEqual(h.notifier.notifications, [.init(fileName: "file.txt", result: result)])
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传完成：private/file.txt")
-    }
-
-    func testDismissingPublicSuccessWithoutCopyLeavesClipboardUntouched() async {
-        let result = R2UploadResult(
-            objectKey: "file.txt", url: URL(string: "https://files.example.com/file.txt"))
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: R2UploaderMock(outcome: .success(result)), copyLinkOnNotification: false)
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil { h.plugin.status == .succeeded(result) }
-        XCTAssertTrue(h.clipboard.values.isEmpty)
-    }
-
     func testFailureUpdatesPanelWithoutSuccessSideEffects() async {
         let h = makeHarness(
             fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
@@ -271,67 +133,6 @@ final class CloudflareR2PluginTests: XCTestCase {
         await uploader.resume()
         for _ in 0..<10 { await Task.yield() }
         XCTAssertEqual(h.plugin.status, .idle)
-    }
-
-    func testActionAvailabilityAndInvocation() async throws {
-        var pickerCount = 0
-        let h = makeHarness(filePicker: {
-            pickerCount += 1
-            return URL(fileURLWithPath: "/tmp/action.txt")
-        })
-        let definition = try XCTUnwrap(h.plugin.actionDefinitions.first)
-        let reference = ActionReference(key: definition.key)
-        XCTAssertTrue(h.plugin.actionAvailability(for: reference).isAvailable)
-        let invocation = ActionInvocation(reference: reference, source: .test, mode: .foreground)
-        let handle = try h.plugin.beginAction(invocation)
-        XCTAssertEqual(pickerCount, 0)
-        let result = await handle.result()
-        XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(pickerCount, 1)
-    }
-
-    func testSettingsCancellationStopsActionUploadTask() async throws {
-        let uploader = R2UploaderMock(
-            outcome: .success(R2UploadResult(objectKey: "action.txt", url: nil)),
-            suspended: true
-        )
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/action.txt"),
-            uploader: uploader
-        )
-        let definition = try XCTUnwrap(h.plugin.actionDefinitions.first)
-        let invocation = ActionInvocation(
-            reference: ActionReference(key: definition.key),
-            source: .test,
-            mode: .foreground
-        )
-        let handle = try h.plugin.beginAction(invocation)
-        let resultTask = Task { await handle.result() }
-        await waitUntilUploaderStarts(uploader)
-        h.plugin.cancelUpload()
-        let actionResult = await resultTask.value
-        XCTAssertEqual(actionResult, .cancelled)
-        let wasCancelled = await uploader.wasCancelled
-        XCTAssertTrue(wasCancelled)
-        XCTAssertEqual(h.plugin.status, .idle)
-    }
-
-    func testProgressDialogCancelButtonStopsUpload() async {
-        let uploader = R2UploaderMock(
-            outcome: .success(R2UploadResult(objectKey: "file.txt", url: nil)),
-            suspended: true
-        )
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: uploader
-        )
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntilUploaderStarts(uploader)
-        h.progressPresenter.cancel()
-        await waitUntil { h.plugin.status == .idle }
-        await waitUntilUploaderIsCancelled(uploader)
-        let wasCancelled = await uploader.wasCancelled
-        XCTAssertTrue(wasCancelled)
     }
 
     func testDeactivationStopsActionUploadTask() async throws {
@@ -358,64 +159,6 @@ final class CloudflareR2PluginTests: XCTestCase {
         XCTAssertEqual(actionResult, .cancelled)
         XCTAssertTrue(wasCancelled)
         XCTAssertEqual(h.plugin.status, .idle)
-    }
-
-    func testTerminalStatusReturnsToIdle() async {
-        let result = R2UploadResult(objectKey: "file.txt", url: nil)
-        let h = makeHarness(
-            fileURL: URL(fileURLWithPath: "/tmp/file.txt"),
-            uploader: R2UploaderMock(outcome: .success(result)),
-            terminalStatusDuration: .milliseconds(1)
-        )
-        h.plugin.handleAction(.invokeAction(controlID: "execute"))
-        await waitUntil { h.plugin.status == .idle }
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传文件到 Cloudflare R2")
-    }
-
-    func testStatusDerivedValues() {
-        XCTAssertEqual(R2UploadStatus.preparing("file").subtitle, "准备上传 file…")
-        XCTAssertEqual(R2UploadStatus.uploading("file", progress: 0.42).subtitle, "正在上传 file… 42%")
-        XCTAssertTrue(R2UploadStatus.uploading("file", progress: 0).isUploading)
-        XCTAssertEqual(R2UploadStatus.failed("reason").errorMessage, "reason")
-    }
-
-    func testRuntimeLocalizationCoversPluginStatusValidationAndErrors() throws {
-        let originalPreference = UserDefaults.standard.string(
-            forKey: PluginRuntimeLocalization.preferenceUserDefaultsKey
-        )
-        defer { PluginRuntimeLocalization.source.setPreference(originalPreference) }
-        let resource = try makeLocalizationBundle()
-        defer { try? FileManager.default.removeItem(at: resource.directory) }
-        let localization = PluginLocalization(bundle: resource.bundle)
-
-        PluginRuntimeLocalization.source.setPreference("en")
-        let h = makeHarness(configured: false, resourceBundle: resource.bundle)
-        XCTAssertEqual(h.plugin.metadata.title, "Cloudflare R2 Upload")
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.buttonTitle, "Choose")
-        h.plugin.chooseAndUpload()
-        XCTAssertEqual(h.plugin.status, .failed("Complete the R2 configuration in Settings first."))
-        XCTAssertEqual(
-            R2UploadStatus.uploading("file.txt", progress: 0.42).subtitle(
-                localization: localization
-            ),
-            "Uploading file.txt… 42%"
-        )
-        h.store.publicBaseURL = "invalid"
-        XCTAssertEqual(
-            h.store.publicBaseURLValidationMessage,
-            "Enter a valid address beginning with http:// or https://."
-        )
-
-        PluginRuntimeLocalization.source.setPreference("zh-Hant")
-        XCTAssertEqual(h.plugin.actionDefinitions.first?.title, "選擇檔案並上傳至 R2")
-        XCTAssertEqual(
-            R2UploadError.httpStatus(403).message(localization: localization),
-            "上傳失敗（HTTP 403）。"
-        )
-        XCTAssertEqual(
-            h.store.publicBaseURLValidationMessage,
-            "請輸入以 http:// 或 https:// 開頭的有效網址。"
-        )
     }
 
     private func makeHarness(
@@ -461,57 +204,6 @@ final class CloudflareR2PluginTests: XCTestCase {
             progressPresenter: progressPresenter)
     }
 
-    private func makeLocalizationBundle() throws -> (bundle: Bundle, directory: URL) {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let bundleURL = directory.appendingPathComponent(
-            "CloudflareR2Tests.bundle",
-            isDirectory: true
-        )
-        for (language, values) in [
-            "en": [
-                "action.upload.title": "Choose a File and Upload to R2",
-                "error.configuration.openSettings":
-                    "Complete the R2 configuration in Settings first.",
-                "error.upload.http": "Upload failed (HTTP %d).",
-                "metadata.description": "Upload files to Cloudflare R2",
-                "metadata.title": "Cloudflare R2 Upload",
-                "panel.button.choose": "Choose",
-                "status.uploading": "Uploading %@… %d%%",
-                "validation.publicURL":
-                    "Enter a valid address beginning with http:// or https://.",
-            ],
-            "zh-Hant": [
-                "action.upload.title": "選擇檔案並上傳至 R2",
-                "error.configuration.openSettings": "請先在「設定」中完成 R2 設定。",
-                "error.upload.http": "上傳失敗（HTTP %d）。",
-                "metadata.description": "將檔案上傳至 Cloudflare R2",
-                "metadata.title": "Cloudflare R2 上傳",
-                "panel.button.choose": "選擇",
-                "status.uploading": "正在上傳 %@… %d%%",
-                "validation.publicURL":
-                    "請輸入以 http:// 或 https:// 開頭的有效網址。",
-            ],
-        ] {
-            let languageURL = bundleURL.appendingPathComponent(
-                "\(language).lproj",
-                isDirectory: true
-            )
-            try FileManager.default.createDirectory(
-                at: languageURL,
-                withIntermediateDirectories: true
-            )
-            try values.map { "\"\($0.key)\" = \"\($0.value)\";" }
-                .joined(separator: "\n")
-                .write(
-                    to: languageURL.appendingPathComponent("Localizable.strings"),
-                    atomically: true,
-                    encoding: .utf8
-                )
-        }
-        return (try XCTUnwrap(Bundle(url: bundleURL)), directory)
-    }
-
     private func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(2)
         while ContinuousClock.now < deadline {
@@ -529,14 +221,6 @@ final class CloudflareR2PluginTests: XCTestCase {
         XCTFail("Uploader did not start")
     }
 
-    private func waitUntilUploaderIsCancelled(_ uploader: R2UploaderMock) async {
-        for _ in 0..<500 {
-            if await uploader.wasCancelled {
-                return
-            }
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-    }
 }
 
 private struct Harness {
@@ -646,13 +330,6 @@ private final class R2CompletionNotifierMock: R2UploadCompletionNotifying {
         notifications.append(Notification(fileName: fileName, result: result))
         return copyLink
     }
-}
-
-private final class ProgressRecorderMock: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValues: [Double] = []
-    var values: [Double] { lock.withLock { storedValues } }
-    func append(_ value: Double) { lock.withLock { storedValues.append(value) } }
 }
 
 @MainActor

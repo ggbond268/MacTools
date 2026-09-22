@@ -62,33 +62,80 @@ class WindowSwitcherAppearanceView: NSView {
 /// Match the command palette's shared field and toolbar geometry without
 /// replacing the switcher's native search responder and input-method handling.
 @MainActor
-private func drawPaletteField(in bounds: NSRect) {
-    let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                            xRadius: PluginPaletteMetrics.searchCornerRadius,
-                            yRadius: PluginPaletteMetrics.searchCornerRadius)
-    NSColor.textBackgroundColor.setFill(); path.fill()
-    NSColor.separatorColor.setStroke(); path.lineWidth = 1; path.stroke()
-}
-
-@MainActor
-final class WindowSwitcherHeaderSurface: NSView {
+final class WindowSwitcherHeaderSurface: WindowSwitcherAppearanceView {
     var isFocused = false { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        drawPaletteField(in: bounds)
-        if isFocused {
-            let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1),
-                                   xRadius: PluginPaletteMetrics.searchCornerRadius,
-                                   yRadius: PluginPaletteMetrics.searchCornerRadius)
-            NSColor.keyboardFocusIndicatorColor.setStroke()
-            ring.lineWidth = 2; ring.stroke()
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                 xRadius: PluginPaletteMetrics.searchCornerRadius,
+                                 yRadius: PluginPaletteMetrics.searchCornerRadius)
+        PluginPaletteChrome.searchBackground(isFocused: isFocused).setFill()
+        shape.fill()
+        if WindowSwitcherAppearance.increasedContrast(effectiveAppearance) {
+            NSColor.labelColor.withAlphaComponent(0.7).setStroke()
+            shape.lineWidth = 1
+            shape.stroke()
         }
     }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 }
 
 @MainActor
 final class WindowSwitcherToolbarButton: NSButton {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureAppearance()
+    }
+
+    private func configureAppearance() {
+        bezelStyle = .inline
+        isBordered = true
+        showsBorderOnlyWhileMouseInside = true
+        imagePosition = .imageOnly
+        contentTintColor = .secondaryLabelColor
+    }
+
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
+}
+
+/// Keep the recording target visible independently of window selection.
+@MainActor
+final class WindowSwitcherShortcutBadge: NSButton {
+    var editable = true
+    var isRecording = false {
+        didSet {
+            guard oldValue != isRecording else { return }
+            setAccessibilityValue(isRecording ? 1 : 0)
+            needsDisplay = true
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { editable ? super.hitTest(point) : nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard isRecording else { super.draw(dirtyRect); return }
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let shape = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        NSColor.selectedContentBackgroundColor.setFill()
+        shape.fill()
+        NSColor.keyboardFocusIndicatorColor.setStroke()
+        shape.lineWidth = 2
+        shape.stroke()
+        let text = NSAttributedString(string: title, attributes: [
+            .font: font ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: NSColor.alternateSelectedControlTextColor
+        ])
+        let size = text.size()
+        text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
 /// Match Clipboard History's flat scope treatment with one rendering path.
@@ -147,6 +194,7 @@ final class WindowSwitcherScopeControl: NSControl {
     override var intrinsicContentSize: NSSize {
         NSSize(width: model.width, height: 24)
     }
+    var minimumContentWidth: CGFloat { model.width(forSegment: 0) }
     func selectScope(at index: Int) {
         guard (0..<model.count).contains(index), model.enabled[index] else { return }
         selectedSegment = index
@@ -163,10 +211,11 @@ private final class WindowSwitcherScopePickerModel: ObservableObject {
     @Published var selection = 0
     var onSelection: ((Int) -> Void)?
     var width: CGFloat {
+        (0..<count).reduce(CGFloat.zero) { $0 + width(forSegment: $1) }
+    }
+    func width(forSegment index: Int) -> CGFloat {
         let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        return titles.prefix(count).reduce(CGFloat.zero) {
-            $0 + ceil(($1 as NSString).size(withAttributes: [.font: font]).width) + 24
-        }
+        return ceil((titles[index] as NSString).size(withAttributes: [.font: font]).width) + 24
     }
 }
 
@@ -187,13 +236,15 @@ private struct WindowSwitcherScopePicker: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .layoutPriority(index == 0 ? 1 : 0)
                 .help(model.help[index] ?? model.titles[index])
                 .disabled(!model.enabled[index])
                 .accessibilityAddTraits(model.selection == index ? [.isSelected] : [])
             }
         }
         .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-        .frame(width: model.width, height: 24, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 24)
         .accessibilityIdentifier("window-switcher-scope-picker")
     }
 }

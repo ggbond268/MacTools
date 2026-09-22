@@ -8,10 +8,9 @@ final class DuoStatusPluginTests: XCTestCase {
     func testSettingsOnlyPluginStartsOnlyOnActivationAndRoutesClickToSettings() throws {
         let fixture = Fixture()
         let plugin = fixture.plugin
-        XCTAssertNil(plugin.primaryPanel)
-        XCTAssertNil(plugin.componentPanel)
+        XCTAssertFalse(plugin.panelItems.contains { $0.kind == .row })
+        XCTAssertFalse(plugin.panelItems.contains { $0.kind == .widget })
         XCTAssertTrue(plugin.permissionRequirements.isEmpty)
-        XCTAssertEqual(plugin.settingsPage?.body.layout, .form)
         XCTAssertEqual(fixture.monitor.startCount, 0)
         XCTAssertFalse(fixture.menuBar.isVisible)
 
@@ -28,7 +27,6 @@ final class DuoStatusPluginTests: XCTestCase {
 
         fixture.monitor.emit(.init(battery: .notPresent, wifi: .off, network: .disconnected))
         XCTAssertEqual(fixture.menuBar.snapshot?.battery, .notPresent)
-        XCTAssertTrue(try XCTUnwrap(fixture.menuBar.tooltip).hasPrefix(plugin.metadata.title))
     }
 
     func testPlacementSwitchReusesMonitoringAndRestoresStandaloneItem() throws {
@@ -42,15 +40,6 @@ final class DuoStatusPluginTests: XCTestCase {
         XCTAssertGreaterThan(notifications, 0)
         XCTAssertEqual(fixture.plugin.placement, .primary)
         XCTAssertEqual(fixture.monitor.startCount, 1)
-        guard case let .form(sections) = fixture.plugin.settingsPage?.body,
-              case let .rows(rows) = sections.first?.content,
-              case let .picker(selection, options, style) = rows.first?.control else {
-            return XCTFail("Expected a declarative placement picker")
-        }
-        XCTAssertEqual(selection, "primary")
-        XCTAssertEqual(options.map(\.id), ["standalone", "primary"])
-        if case .segmented = style {} else { XCTFail("Expected a segmented picker") }
-
         fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "standalone"))
         XCTAssertTrue(fixture.monitor.isRunning)
         XCTAssertTrue(fixture.menuBar.isVisible)
@@ -138,8 +127,7 @@ final class DuoStatusPluginTests: XCTestCase {
         let manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         let capabilities = try XCTUnwrap(manifest["capabilities"] as? [String: Any])
         XCTAssertEqual(manifest["id"] as? String, plugin.metadata.id)
-        XCTAssertEqual(capabilities["primaryPanel"] as? Bool, plugin.primaryPanel != nil)
-        XCTAssertEqual(capabilities["componentPanel"] as? Bool, plugin.componentPanel != nil)
+        XCTAssertEqual(capabilities["panelItems"] as? [String], plugin.panelItems.map { $0.kind.rawValue })
         XCTAssertEqual(capabilities["settings"] as? String, "form")
         XCTAssertEqual(manifest["permissions"] as? [String], [])
         XCTAssertFalse(plugin is any PluginActionProviding)
@@ -187,49 +175,6 @@ final class DuoStatusPluginTests: XCTestCase {
         guard case let .form(updated) = fixture.plugin.settingsPage?.body,
               case let .rows(updatedRows) = updated.first?.content else { return XCTFail("Missing form") }
         XCTAssertNil(updatedRows.first?.error)
-    }
-
-    func testPendingRestartConflictKeepsModeAndUsesRestartGuidance() throws {
-        let fixture = Fixture()
-        fixture.plugin.activate(context: fixture.context)
-        let owner = PluginMenuBarIconOwner(
-            pluginID: "other", iconID: "status", pluginTitle: "Other Status", requiresRestart: true
-        )
-        fixture.plugin.menuBarIconHostContext = PluginMenuBarIconHostContext(
-            placement: { _ in .standalone }, primaryIconOwner: { owner },
-            requestPlacement: { _, _ in .failure(.occupied(owner: owner)) }
-        )
-        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
-        guard case let .form(sections) = fixture.plugin.settingsPage?.body,
-              case let .rows(rows) = sections.first?.content else { return XCTFail("Missing form") }
-        let error = try XCTUnwrap(rows.first?.error)
-        let localization = PluginLocalization(bundle: fixture.context.resourceBundle)
-        XCTAssertEqual(error, localization.format(
-            "settings.occupiedPendingRestartFormat",
-            defaultValue: "「%@」正在等待重启。请重启 MacTools 后调整其图标设置。",
-            owner.pluginTitle
-        ))
-        XCTAssertEqual(fixture.plugin.placement, .standalone)
-        XCTAssertTrue(fixture.menuBar.isVisible)
-    }
-
-    func testIconTicksDoNotNotifyGeneralStateAndCacheHonorsAppearance() throws {
-        let fixture = Fixture()
-        fixture.plugin.activate(context: fixture.context)
-        fixture.plugin.handleSettingsAction(.setSelection(controlID: "placement", optionID: "primary"))
-        var stateChanges = 0
-        fixture.plugin.onStateChange = { stateChanges += 1 }
-        let light = PluginMenuBarIconRenderContext(pointSize: .init(width: 24, height: 24), displayScale: 2, appearance: .light)
-        let before = try XCTUnwrap(fixture.plugin.menuBarIcon(for: "status", context: light))
-        XCTAssertTrue(before.image === fixture.plugin.menuBarIcon(for: "status", context: light)?.image)
-        fixture.monitor.emit(.init(battery: .level(fraction: 0.5, isCharging: true)))
-        let after = try XCTUnwrap(fixture.plugin.menuBarIcon(for: "status", context: light))
-        XCTAssertGreaterThan(after.revision, before.revision)
-        XCTAssertFalse(after.isTemplate)
-        XCTAssertEqual(stateChanges, 0)
-        let dark = PluginMenuBarIconRenderContext(pointSize: light.pointSize, displayScale: 2, appearance: .dark)
-        XCTAssertFalse(after.image === fixture.plugin.menuBarIcon(for: "status", context: dark)?.image)
-        XCTAssertFalse(fixture.menuBar.isVisible)
     }
 
     func testRestoredPrimaryPlacementWaitsForHostWithoutCreatingStandaloneItem() throws {

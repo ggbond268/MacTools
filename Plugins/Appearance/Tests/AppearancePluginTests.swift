@@ -24,7 +24,7 @@ final class AppearancePluginTests: XCTestCase {
         ])
         XCTAssertEqual(
             plugin.actionCatalogEntries.first?.presentationState,
-            plugin.primaryPanelState.isOn ? .active : .inactive
+            plugin.rowState.isOn ? .active : .inactive
         )
         XCTAssertTrue(
             plugin.actionDefinitions[0].capabilities.contains(.background)

@@ -17,9 +17,21 @@ private struct AIUsagePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel,
-    PluginSettingsPresenting, PluginDashboardPresenting, PluginPanelSurfaceLifecycleHandling,
-    PluginApplicationActivityStateHandling {
+final class AIUsagePlugin: MacToolsPlugin, PluginSettingsPresenting, PluginDashboardPresenting, PluginApplicationActivityStateHandling {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("widget") }
+                    else { self?.panelItemDidBecomeHidden("widget") }
+                },
+        ]
+    }
+
     enum ControlID {
         static let access = "credential-access"
         static let keychain = "authorize-claude-keychain"
@@ -60,7 +72,7 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel,
                        defaultDescription: strings.text("metadata.description", "查看 Codex 与 Claude Code 订阅额度和重置时间"))
     }
 
-    var descriptor: PluginComponentDescriptor {
+    var descriptor: PluginPanelWidgetDescriptor {
         let providers = model.preferences.enabledProviders
         let height: Int
         if providers.isEmpty {
@@ -71,16 +83,16 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel,
             }
             height = Int(ceil(Double(28 + content + max(0, providers.count - 1) * 25) / 8))
         }
-        return PluginComponentDescriptor(span: PluginComponentSpan(width: 4, height: height)!)
+        return PluginPanelWidgetDescriptor(span: PluginPanelWidgetSpan(width: 4, height: height)!)
     }
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(subtitle: metadata.defaultDescription,
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(subtitle: metadata.defaultDescription,
                              isActive: model.states.values.contains { $0.snapshot != nil },
-                             isEnabled: true, isVisible: true, errorMessage: nil)
+                             isEnabled: true, isAvailable: true, errorMessage: nil)
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(AIUsageComponentView(model: model, strings: strings, assets: assets) { [weak self] in
             context.dismiss()
             self?.requestSettingsPresentation?()
@@ -91,12 +103,12 @@ final class AIUsagePlugin: MacToolsPlugin, PluginComponentPanel,
     func deactivate(reason: PluginDeactivationReason) { active = false; model.stop(); menuBar.remove() }
     func refresh() { model.refresh(); updateMenuBar() }
     func applicationActivityStateDidChange(_ state: PluginApplicationActivityState) { model.setActivity(state) }
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        if surface == .component { model.panelVisible = true }
+    func panelItemDidBecomeVisible(_ surface: String) {
+        if surface == "widget" { model.panelVisible = true }
         model.refresh()
     }
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        if surface == .component { model.panelVisible = false }
+    func panelItemDidBecomeHidden(_ surface: String) {
+        if surface == "widget" { model.panelVisible = false }
     }
 
     func updateMenuBar() {

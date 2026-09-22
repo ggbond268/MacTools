@@ -10,8 +10,8 @@ final class AutoHideDockPluginTests: XCTestCase {
             stateReader: { true }
         )
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "已开启")
     }
 
     func testAutomationPermissionIsReportedAsOnDemand() {
@@ -32,8 +32,8 @@ final class AutoHideDockPluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(true))
 
         XCTAssertEqual(runner.calls, [true])
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testSwitchFailureKeepsStateAndReportsError() {
@@ -42,8 +42,8 @@ final class AutoHideDockPluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testActionExecutesThroughSameDockMutation() async throws {

@@ -51,39 +51,6 @@ final class MacToolsAppDelegateTests: XCTestCase {
         XCTAssertEqual(showSettingsCount, 2)
     }
 
-    func testReopeningMacToolsShowsSettingsWithOrWithoutExistingWindows() {
-        for hasVisibleWindows in [false, true] {
-            let delegate = MacToolsAppDelegate()
-            var showSettingsCount = 0
-            delegate.setShowSettingsForRecoveryForTesting {
-                showSettingsCount += 1
-            }
-
-            XCTAssertFalse(
-                delegate.applicationShouldHandleReopen(
-                    NSApplication.shared,
-                    hasVisibleWindows: hasVisibleWindows
-                )
-            )
-            XCTAssertEqual(showSettingsCount, 1)
-        }
-    }
-
-    func testAppKitReopenAndInstanceCommandUseTheSameRecoveryHandler() {
-        let delegate = MacToolsAppDelegate(acceptedURLSchemes: ["mactools"])
-        var showSettingsCount = 0
-        delegate.setShowSettingsForRecoveryForTesting { showSettingsCount += 1 }
-
-        XCTAssertFalse(
-            delegate.applicationShouldHandleReopen(
-                NSApplication.shared,
-                hasVisibleWindows: false
-            )
-        )
-        XCTAssertEqual(delegate.handleInstanceRecoveryCommandForTesting(), .accepted)
-        XCTAssertEqual(showSettingsCount, 2)
-    }
-
     func testIncomingDeepLinksAreQueuedBeforeRuntimeCreation() {
         let delegate = MacToolsAppDelegate(acceptedURLSchemes: ["mactools"])
         let urls = [

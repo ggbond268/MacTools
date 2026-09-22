@@ -11,13 +11,22 @@ final class CaptureOverlayPool {
 
     func prepare() {
         let current = CaptureDisplay.current()
-        guard topology != current else { return }
-        release()
+        if topology != current {
+            release()
+            topology = current
+        }
         for screen in NSScreen.screens {
             guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { continue }
-            windows[id.uint32Value] = OverlayWindow(screen: screen, environment: environment)
+            let displayID = id.uint32Value
+            // Hidden panels can remain attached to an inactive full-screen Space
+            // without any display geometry changing. Only replace stale surfaces.
+            if let window = windows[displayID] {
+                guard !window.isOnActiveSpace else { continue }
+                window.dismiss()
+                window.close()
+            }
+            windows[displayID] = OverlayWindow(screen: screen, environment: environment)
         }
-        topology = current
     }
 
     func window(for display: CaptureDisplay) -> OverlayWindow? { windows[display.id] }

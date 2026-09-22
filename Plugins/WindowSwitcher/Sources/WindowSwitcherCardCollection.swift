@@ -34,13 +34,11 @@ final class WindowSwitcherCardItem: NSCollectionViewItem {
     }
     var onOpen: (() -> Void)?
     private let selectionMark = NSImageView()
-    private final class Badge: NSButton {
-        var editable = false
-        override func hitTest(_ point: NSPoint) -> NSView? { editable ? super.hitTest(point) : nil }
-    }
-    private let badge = Badge(title: "", target: nil, action: nil)
+    private let badge = WindowSwitcherShortcutBadge(title: "", target: nil, action: nil)
     var onEditShortcut: (() -> Void)?
     var assignedShortcut: String? { didSet { updateBadge() } }
+    var isRecordingShortcut = false { didSet { badge.isRecording = isRecordingShortcut } }
+    var shortcutHelp: String? { didSet { badge.toolTip = shortcutHelp } }
     var shortcutNumber: Int? {
         didSet { updateBadge() }
     }
@@ -139,68 +137,5 @@ final class WindowSwitcherCardItem: NSCollectionViewItem {
         view.toolTip = "\(title.string) — \(appName)"
         view.setAccessibilityLabel("\(title.string), \(appName)")
         updateSelection()
-    }
-}
-
-/// Directional buttons reveal overflow even when macOS hides scrollbars.
-@MainActor
-final class WindowSwitcherCardScrollView: NSScrollView {
-    private let topIndicator = NSButton(title: "", target: nil, action: nil)
-    private let bottomIndicator = NSButton(title: "", target: nil, action: nil)
-    private(set) var hasContentAbove = false
-    private(set) var hasContentBelow = false
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        for (button, symbol, action) in [(topIndicator, "chevron.up", #selector(scrollUp)), (bottomIndicator, "chevron.down", #selector(scrollDown))] {
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-            button.bezelStyle = .texturedRounded
-            button.controlSize = .small
-            button.contentTintColor = .labelColor
-            button.target = self; button.action = action
-            button.identifier = NSUserInterfaceItemIdentifier(symbol == "chevron.up" ? "window-grid-more-above" : "window-grid-more-below")
-            addSubview(button)
-        }
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func setOverflowLabels(above: String, below: String) {
-        for (button, label) in [(topIndicator, above), (bottomIndicator, below)] {
-            button.toolTip = label
-            button.setAccessibilityLabel(label)
-        }
-    }
-    override func reflectScrolledClipView(_ clipView: NSClipView) {
-        super.reflectScrolledClipView(clipView)
-        updateOverflow()
-    }
-    override func layout() { super.layout(); updateOverflow() }
-    @objc private func scrollUp() { scrollPage(-1) }
-    @objc private func scrollDown() { scrollPage(1) }
-    private func scrollPage(_ direction: CGFloat) {
-        guard let documentView else { return }
-        let visible = documentVisibleRect
-        let delta = max(88, visible.height * 0.75) * direction * (documentView.isFlipped ? 1 : -1)
-        let y = min(max(documentView.bounds.minY, visible.minY + delta), max(documentView.bounds.minY, documentView.bounds.maxY - visible.height))
-        contentView.scroll(to: NSPoint(x: visible.minX, y: y))
-        reflectScrolledClipView(contentView)
-    }
-    func updateOverflow() {
-        guard let documentView else { return }
-        let visible = documentVisibleRect
-        let before = visible.minY > documentView.bounds.minY + 1
-        let after = visible.maxY < documentView.bounds.maxY - 1
-        hasContentAbove = documentView.isFlipped ? before : after
-        hasContentBelow = documentView.isFlipped ? after : before
-        topIndicator.isHidden = !hasContentAbove
-        topIndicator.setAccessibilityHidden(!hasContentAbove)
-        topIndicator.isEnabled = hasContentAbove
-        bottomIndicator.isHidden = !hasContentBelow
-        bottomIndicator.setAccessibilityHidden(!hasContentBelow)
-        bottomIndicator.isEnabled = hasContentBelow
-        let rect = convert(contentView.bounds, from: contentView)
-        let height = min(18, rect.height)
-        topIndicator.frame = NSRect(x: rect.midX - 32, y: isFlipped ? rect.minY : rect.maxY - height, width: 64, height: height)
-        bottomIndicator.frame = NSRect(x: rect.midX - 32, y: isFlipped ? rect.maxY - height : rect.minY, width: 64, height: height)
     }
 }

@@ -84,7 +84,25 @@ struct CoreAudioMicrophoneController: MicrophoneControlling {
 }
 
 @MainActor
-final class MicrophoneMutePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding {
+final class MicrophoneMutePlugin: MacToolsPlugin, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: rowDescriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let toggle = "toggle"
@@ -97,7 +115,7 @@ final class MicrophoneMutePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActi
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -146,15 +164,14 @@ final class MicrophoneMutePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActi
         self.isMuted = controller.readMuteState()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: isMuted
                 ? localization.string("panel.subtitle.muted", defaultValue: "已静音")
                 : localization.string("panel.subtitle.unmuted", defaultValue: "未静音"),
             isOn: isMuted,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

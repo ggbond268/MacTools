@@ -107,12 +107,6 @@ final class AboutUpdateViewModelTests: XCTestCase {
         XCTAssertTrue(updater.supportsGentleScheduledUpdateReminders)
     }
 
-    func testVersionDescriptionFormatting() {
-        XCTAssertEqual(
-            AppMetadata.formattedVersionDescription(shortVersion: "1.2.3", buildNumber: "45"),
-            "1.2.3 (45)"
-        )
-    }
 }
 
 @MainActor

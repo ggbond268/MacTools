@@ -67,7 +67,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Raise the app version to 1.3.0", result.stderr)
 
-    def test_current_source_requires_plugin_kit6_catalog(self) -> None:
+    def test_current_source_requires_plugin_kit7_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             plugin = root / "Plugins/Demo"
@@ -75,12 +75,12 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
             source = next((ROOT_DIR / "Plugins").glob("*/plugin.json"))
             (plugin / "plugin.json").write_bytes(source.read_bytes())
             result = subprocess.run(
-                [str(self.executable), "--app-version", "1.3.0",
+                [str(self.executable), "--app-version", "1.3.1",
                  "--public-key-base64", TEST_PUBLIC_KEY_BASE64],
                 cwd=root, text=True, capture_output=True,
             )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("docs/plugins/v6/catalog.json", result.stderr)
+        self.assertIn("docs/plugins/v7/catalog.json", result.stderr)
 
     def test_matching_committed_and_deployed_signed_catalog_passes(self) -> None:
         result = self.run_preflight(
@@ -201,7 +201,7 @@ class AppPluginCatalogPreflightTests(unittest.TestCase):
                         [
                             str(self.executable),
                             "--required-plugin-kit-version", str(version),
-                            "--app-version", "1.3.0",
+                            "--app-version", "1.3.1",
                             "--public-key-base64", TEST_PUBLIC_KEY_BASE64,
                         ],
                         cwd=directory,

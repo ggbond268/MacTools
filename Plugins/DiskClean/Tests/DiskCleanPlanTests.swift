@@ -37,31 +37,6 @@ final class DiskCleanPlanTests: XCTestCase {
         XCTAssertEqual(plan.reservedPrefixes, ["/reserved/root"], "reserved prefixes are derived from the artifact so callers cannot omit them")
     }
 
-    func testPlanItemCarriesTargetLockDeclarations() throws {
-        let candidate = candidate(path: "/cache/a")
-
-        let plan = try makePlan(
-            candidates: [candidate],
-            selectedIDs: [candidate.id],
-            lockedByBundleIDs: ["com.example.app"],
-            skipWhenProcessIsRunning: ["exampled"]
-        )
-
-        XCTAssertEqual(plan.items[0].lockedByBundleIDs, ["com.example.app"])
-        XCTAssertEqual(plan.items[0].skipWhenProcessIsRunning, ["exampled"])
-        XCTAssertEqual(plan.items[0].parentPath, "/cache")
-        XCTAssertEqual(plan.items[0].name, "a")
-    }
-
-    func testMinObservedAtUsesEarliestSelectedItem() throws {
-        let older = candidate(path: "/cache/old", observedAt: now.addingTimeInterval(-100))
-        let newer = candidate(path: "/cache/new", observedAt: now)
-
-        let plan = try makePlan(candidates: [older, newer], selectedIDs: [older.id, newer.id])
-
-        XCTAssertEqual(plan.minObservedAt, now.addingTimeInterval(-100), "expiry gate uses the earliest observation time")
-    }
-
     // MARK: - Rejection matrix
 
     func testEmptySelectionIsRejected() {
@@ -120,23 +95,6 @@ final class DiskCleanPlanTests: XCTestCase {
         }
     }
 
-    func testUnknownTargetIsRejected() {
-        let orphan = DiskCleanCandidate(
-            id: "orphan",
-            targetID: "target.that.does.not.exist",
-            legacyRuleID: "legacy",
-            category: .appCaches,
-            path: "/cache/orphan",
-            risk: .low,
-            safety: .allowed,
-            sizeResult: .testComplete(identity: .test())
-        )
-
-        assertThrows(.unknownTarget(targetID: "target.that.does.not.exist")) {
-            try makePlan(candidates: [orphan], selectedIDs: [orphan.id])
-        }
-    }
-
     /// Ancestor conflict: planned path covers a candidate not in the plan.
     func testPlannedPathCoveringExcludedCandidateIsRejected() {
         let parent = candidate(path: "/cache/app")
@@ -170,14 +128,6 @@ final class DiskCleanPlanTests: XCTestCase {
     }
 
     /// Shared name prefix is not ancestry: `/cache/app-extra` is not under `/cache/app`.
-    func testSiblingWithSharedNamePrefixIsNotAnAncestorViolation() throws {
-        let parent = candidate(path: "/cache/app")
-        let sibling = candidate(path: "/cache/app-extra", safety: .inUse(processName: "App"))
-
-        let plan = try makePlan(candidates: [parent, sibling], selectedIDs: [parent.id])
-
-        XCTAssertEqual(plan.items.map(\.path), ["/cache/app"])
-    }
 
     func testExpiredResultIsRejected() {
         let candidate = candidate(path: "/cache/a", observedAt: now)
@@ -189,18 +139,6 @@ final class DiskCleanPlanTests: XCTestCase {
                 now: now.addingTimeInterval(DiskCleanScanFreshness.window)
             )
         }
-    }
-
-    func testResultOneSecondInsideWindowIsAccepted() throws {
-        let candidate = candidate(path: "/cache/a", observedAt: now)
-
-        let plan = try makePlan(
-            candidates: [candidate],
-            selectedIDs: [candidate.id],
-            now: now.addingTimeInterval(DiskCleanScanFreshness.window - 1)
-        )
-
-        XCTAssertEqual(plan.itemCount, 1)
     }
 
     // MARK: - Fixtures

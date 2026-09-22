@@ -57,9 +57,9 @@
     "action.reset-today.title": "@localizable.panel.action.resetToday",
     "action.reset-today.description": "@localizable.panel.action.resetToday"
   },
-  "version": "1.2.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "version": "2.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "ActivityBar.bundle",
   "factoryClass": "ActivityBarPlugin.ActivityBarPluginFactory",
   "build": {
@@ -67,8 +67,10 @@
     "scheme": "ActivityBarPlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": true,
+    "panelItems": [
+      "row",
+      "widget"
+    ],
     "settings": "form"
   },
   "permissions": [

@@ -14,6 +14,8 @@ struct WindowSwitcherWindowRecord: Equatable, Sendable {
     let bounds: CGRect
     var hasSpace: Bool? = nil
     var titleIsAvailable = true
+    var isOnActiveSpace: Bool? = nil
+    var isOnFullscreenSpace: Bool? = nil
 
     static func parse(_ windowInfo: [[String: Any]]) -> [Self] {
         var seenWindowNumbers = Set<CGWindowID>()
@@ -141,18 +143,15 @@ final class WindowSwitcherWindowRecords {
     private var windowRecords: [WindowSwitcherWindowRecord] = []
     private var windowRecordRefreshTask: Task<[WindowSwitcherWindowRecord]?, Never>?
     private var windowRecordRefreshGeneration: UInt64 = 0
-    private var windowRecordRefreshLastCompletedGeneration: UInt64?
     private var windowRecordRefreshInFlightCount = 0
+    private var timeoutTask: Task<Void, Never>?
+    private var waiters: [UUID: CheckedContinuation<WindowSwitcherWindowRecordSnapshot, Never>] = [:]
 
     init(windowRecordRefreshTimeout: TimeInterval = 0.75,
          windowRecordProvider: @escaping @Sendable () -> [WindowSwitcherWindowRecord]? = {
              guard let info = CGWindowListCopyWindowInfo(
                  [.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
-             return WindowSwitcherWindowRecord.parse(info).map { record in
-                 var record = record
-                 if record.isOnScreen != true { record.hasSpace = WindowSwitcherSpaceMembership.hasSpace(record.windowNumber) }
-                 return record
-             }
+             return WindowSwitcherSpaceMembership.classify(records: WindowSwitcherWindowRecord.parse(info))
          }) {
         self.windowRecordRefreshTimeout = windowRecordRefreshTimeout.isFinite ? max(0, windowRecordRefreshTimeout) : 0.75
         self.windowRecordProvider = windowRecordProvider
@@ -162,8 +161,10 @@ final class WindowSwitcherWindowRecords {
         windowRecordRefreshGeneration &+= 1
         windowRecordRefreshTask?.cancel()
         windowRecordRefreshTask = nil
-        windowRecordRefreshLastCompletedGeneration = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
         windowRecords.removeAll()
+        finishWaiters(isFresh: false)
     }
 
     func windowRecordsSnapshot() async -> [WindowSwitcherWindowRecord] {
@@ -188,9 +189,10 @@ final class WindowSwitcherWindowRecords {
               entry.bounds.width > 0, entry.bounds.height > 0,
               let record = records.first(where: {
                   $0.windowNumber == windowNumber
-                      && $0.processIdentifier == entry.processIdentifier
+                      && ($0.processIdentifier == entry.processIdentifier
+                          || $0.processIdentifier == entry.owningProcessIdentifier)
               }),
-              record.bounds == entry.bounds
+              WindowSwitcherAppCatalog.sameBounds(record.bounds, entry.bounds)
         else {
             return nil
         }
@@ -226,6 +228,11 @@ final class WindowSwitcherWindowRecords {
             provider()
         }
         windowRecordRefreshTask = task
+        let timeout = windowRecordRefreshTimeout
+        timeoutTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(timeout)) } catch { return }
+            self?.abandonWindowRecordRefresh(generation: generation)
+        }
 
         Task { @MainActor [weak self] in
             let records = await task.value
@@ -245,14 +252,14 @@ final class WindowSwitcherWindowRecords {
             }
 
             self.windowRecordRefreshTask = nil
+            self.timeoutTask?.cancel()
+            self.timeoutTask = nil
             // Failure is not a successful empty scan. Retain the last snapshot
             // for presentation, but never mark it fresh enough for an action.
             if let records {
-                self.windowRecordRefreshLastCompletedGeneration = generation
                 self.windowRecords = records
-            } else {
-                self.windowRecordRefreshLastCompletedGeneration = nil
             }
+            self.finishWaiters(isFresh: records != nil)
         }
     }
 
@@ -261,29 +268,26 @@ final class WindowSwitcherWindowRecords {
     }
 
     func freshWindowRecordSnapshot() async -> WindowSwitcherWindowRecordSnapshot {
+        guard !Task.isCancelled else { return .init(records: windowRecords, isFresh: false) }
         refreshWindowRecords()
         guard windowRecordRefreshTask != nil else {
             return WindowSwitcherWindowRecordSnapshot(records: windowRecords, isFresh: false)
         }
-        let generation = windowRecordRefreshGeneration
-        let refreshDeadline = ContinuousClock.now + .seconds(windowRecordRefreshTimeout)
-
-        while windowRecordRefreshTask != nil,
-              windowRecordRefreshGeneration == generation {
-            guard !Task.isCancelled,
-                  ContinuousClock.now < refreshDeadline
-            else {
-                abandonWindowRecordRefresh(generation: generation)
-                return WindowSwitcherWindowRecordSnapshot(records: windowRecords, isFresh: false)
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(returning: .init(records: windowRecords, isFresh: false))
+                    return
+                }
+                waiters[id] = continuation
             }
-
-            try? await Task.sleep(nanoseconds: 10_000_000)
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                waiters.removeValue(forKey: id)?.resume(returning: .init(records: windowRecords, isFresh: false))
+            }
         }
-
-        return WindowSwitcherWindowRecordSnapshot(
-            records: windowRecords,
-            isFresh: windowRecordRefreshLastCompletedGeneration == generation
-        )
     }
 
     private func abandonWindowRecordRefresh(generation: UInt64) {
@@ -294,8 +298,17 @@ final class WindowSwitcherWindowRecords {
         windowRecordRefreshTask?.cancel()
         windowRecordRefreshTask = nil
         windowRecordRefreshGeneration &+= 1
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        finishWaiters(isFresh: false)
     }
 
+    private func finishWaiters(isFresh: Bool) {
+        let pending = waiters
+        waiters.removeAll()
+        let snapshot = WindowSwitcherWindowRecordSnapshot(records: windowRecords, isFresh: isFresh)
+        for continuation in pending.values { continuation.resume(returning: snapshot) }
+    }
 }
 
 /// Optional read-only WindowServer metadata distinguishes ordered-out utility
@@ -341,10 +354,91 @@ enum WindowSwitcherSpaceMembership {
         return unknown ? nil : false
     }
 
-    static func hasSpace(_ window: CGWindowID) -> Bool? {
+    struct Classification: Equatable, Sendable {
+        var hasSpace: Bool? = nil
+        var isOnActiveSpace: Bool? = nil
+        var isOnFullscreenSpace: Bool? = nil
+    }
+
+    private struct Topology {
+        var activeIDs = Set<UInt64>()
+        var fullscreenIDs = Set<UInt64>()
+        var hasUnknownActiveSpace = false
+
+        init(displays: [[String: Any]]?) {
+            guard let displays, !displays.isEmpty else {
+                hasUnknownActiveSpace = true
+                return
+            }
+            fullscreenIDs = fullscreenSpaceIDs(in: displays)
+            for display in displays {
+                guard let current = display["Current Space"] as? [String: Any],
+                      let id = (current["ManagedSpaceID"] ?? current["id64"]) as? NSNumber,
+                      id.uint64Value > 0 else { hasUnknownActiveSpace = true; continue }
+                activeIDs.insert(id.uint64Value)
+            }
+        }
+
+        func classify(_ memberships: [UInt64]?) -> Classification {
+            guard let memberships else { return Classification() }
+            var result = Classification(hasSpace: !memberships.isEmpty)
+            if !memberships.isEmpty {
+                result.isOnActiveSpace = !activeIDs.isDisjoint(with: memberships)
+                    ? true : (hasUnknownActiveSpace ? nil : false)
+            }
+            if !fullscreenIDs.isEmpty {
+                result.isOnFullscreenSpace = !fullscreenIDs.isDisjoint(with: memberships)
+            }
+            return result
+        }
+    }
+
+    static func managedDisplays() -> [[String: Any]]? {
+        guard let (connection, _) = functions, let copyDisplays else { return nil }
+        return copyDisplays(connection())?.takeRetainedValue() as? [[String: Any]]
+    }
+
+    static func memberships(_ window: CGWindowID) -> [UInt64]? {
         guard let (connection, copySpaces) = functions,
-              let raw = copySpaces(connection(), 7, [NSNumber(value: window)] as CFArray)?.takeRetainedValue(),
-              let spaces = raw as? [NSNumber] else { return nil }
-        return !spaces.isEmpty
+              let spaces = copySpaces(connection(), 7, [NSNumber(value: window)] as CFArray)?.takeRetainedValue() as? [NSNumber]
+        else { return nil }
+        return spaces.map(\.uint64Value)
+    }
+
+    static func classify(_ window: CGWindowID) -> Classification {
+        Topology(displays: managedDisplays()).classify(memberships(window))
+    }
+
+    /// Share one topology snapshot across the inventory, including failed reads.
+    /// The next inventory reads it again so Space changes are never cached across scans.
+    static func classify(records: [WindowSwitcherWindowRecord],
+                         loadDisplays: () -> [[String: Any]]? = { managedDisplays() },
+                         loadMemberships: (CGWindowID) -> [UInt64]? = { memberships($0) }) -> [WindowSwitcherWindowRecord] {
+        guard !records.isEmpty else { return [] }
+        let topology = Topology(displays: loadDisplays())
+        return records.map { record in
+            var record = record
+            let classification = topology.classify(loadMemberships(record.windowNumber))
+            record.hasSpace = classification.hasSpace ?? record.hasSpace
+            record.isOnActiveSpace = classification.isOnActiveSpace
+            record.isOnFullscreenSpace = classification.isOnFullscreenSpace
+            return record
+        }
+    }
+
+    static func fullscreenSpaceIDs(in displays: [[String: Any]]) -> Set<UInt64> {
+        var ids = Set<UInt64>()
+        for display in displays {
+            for space in display["Spaces"] as? [[String: Any]] ?? [] {
+                guard (space["type"] as? NSNumber)?.intValue == 4,
+                      let id = (space["id64"] as? NSNumber)?.uint64Value, id > 0 else { continue }
+                ids.insert(id)
+            }
+        }
+        return ids
+    }
+
+    static func hasSpace(_ window: CGWindowID) -> Bool? {
+        memberships(window).map { !$0.isEmpty }
     }
 }

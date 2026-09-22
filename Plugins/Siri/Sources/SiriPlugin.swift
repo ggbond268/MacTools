@@ -15,16 +15,23 @@ public final class SiriPluginFactory: NSObject, MacToolsPluginBundleFactory {
 }
 
 @MainActor
-final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
-    PluginActionInputProviding, PluginActionInputPresentationRequesting, PluginActionExposureProviding, PluginActionPermissionProviding {
+final class SiriPlugin: MacToolsPlugin, PluginActionProviding, PluginActionInputProviding, PluginActionInputPresentationRequesting, PluginActionExposureProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ID {
         static let permission = "accessibility"
         static let ask = ActionKey(providerID: "siri", actionID: "ask-new-conversation")
     }
     let metadata: PluginMetadata
-    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor {
+    var rowDescriptor: PluginPanelRowDescriptor {
         let title = controller.isBusy ? text("取消") : text("询问 Siri")
-        return PluginPrimaryPanelDescriptor(controlStyle: .button, menuActionBehavior: .keepPresented,
+        return PluginPanelRowDescriptor(controlStyle: .button, menuActionBehavior: .keepPresented,
                                              buttonTitleProvider: { title })
     }
     var onStateChange: (() -> Void)?
@@ -119,9 +126,9 @@ final class SiriPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProvidin
               let handle = controller.start(message) else { return ActionExecutionHandle { .failed(message: self.text("Siri 暂不可用")) } }
         return handle
     }
-    var primaryPanelState: PluginPanelState {
-        .init(subtitle: status, isOn: controller.isBusy, isExpanded: false, isEnabled: true,
-              isVisible: true, detail: nil, errorMessage: controller.failure == nil ? nil : status)
+    var rowState: PluginPanelRowState {
+        .init(subtitle: status, isOn: controller.isBusy, isEnabled: true,
+              isAvailable: true, detail: nil, errorMessage: controller.failure == nil ? nil : status)
     }
     func handleAction(_ action: PluginPanelAction) {
         guard case let .invokeAction(controlID) = action, controlID == "execute" else { return }

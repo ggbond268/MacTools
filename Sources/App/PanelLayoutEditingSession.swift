@@ -3,8 +3,6 @@ import MacToolsPluginKit
 
 /// Offsets use SwiftUI's move semantics: an insertion boundary in the original sequence.
 enum PanelLayoutDestination {
-    static let rowHeight: CGFloat = 44
-    static let rowSpacing: CGFloat = 8
     static let dropTailHeight: CGFloat = 8
     static func visibleContentHeight(itemHeight: CGFloat) -> CGFloat {
         itemHeight > 0 ? itemHeight + dropTailHeight : 0
@@ -15,30 +13,10 @@ enum PanelLayoutDestination {
     }
 
     static func editorContentHeight(itemHeight: CGFloat, maximumHeight: CGFloat) -> CGFloat {
-        let minimumHeight = max(0, MenuBarPanelLayout.minimumContentHeight - MenuBarPanelLayout.editingActionBarHeight)
+        let minimumHeight = max(0, MenuBarPanelLayout.minimumPanelHeight
+            - MenuBarPanelLayout.editingPanelChromeHeight - MenuBarPanelLayout.editingActionBarHeight)
         return min(maximumHeight, max(minimumHeight, editorDocumentHeight(itemHeight: itemHeight)
             + MenuBarPanelLayout.contentVerticalPadding))
-    }
-
-    static func listOffset(at point: CGPoint, count: Int) -> Int {
-        min(max(Int(floor((point.y + rowSpacing / 2) / (rowHeight + rowSpacing) + 0.5)), 0), count)
-    }
-
-    static func gridOffset(at point: CGPoint, placements: [ComponentGridPlacement], rightToLeft: Bool) -> Int {
-        guard !placements.isEmpty else { return 0 }
-        if point.y < 0 { return 0 }
-        if point.y >= ComponentPanelLayout.gridContentHeight(for: placements) { return placements.count }
-        let logicalPoint = CGPoint(
-            x: rightToLeft ? ComponentPanelLayout.gridWidth - point.x : point.x,
-            y: point.y
-        )
-        // Use the committed layout as the hit map throughout the drag. Hit-testing the
-        // repacked preview would make a stationary pointer repeatedly move its own target.
-        let nearest = placements.enumerated().min { lhs, rhs in
-            distance(logicalPoint, to: frame(lhs.element)) < distance(logicalPoint, to: frame(rhs.element))
-        }!
-        let rect = frame(nearest.element)
-        return nearest.offset + (logicalPoint.x >= rect.midX ? 1 : 0)
     }
 
     static func frame(_ placement: ComponentGridPlacement) -> CGRect {
@@ -47,21 +25,6 @@ enum PanelLayoutDestination {
             width: ComponentPanelLayout.itemWidth(for: placement.span),
             height: ComponentPanelLayout.itemHeight(for: placement.span)
         )
-    }
-
-    static func gridInsertionFrame(offset: Int, placements: [ComponentGridPlacement], rightToLeft: Bool) -> CGRect? {
-        guard !placements.isEmpty else { return nil }
-        let boundary = min(max(offset, 0), placements.count)
-        let rect = frame(placements[min(boundary, placements.count - 1)])
-        let x = boundary == placements.count ? rect.maxX - 3 : rect.minX
-        return CGRect(x: rightToLeft ? ComponentPanelLayout.gridWidth - x - 3 : x,
-                      y: rect.minY, width: 3, height: rect.height)
-    }
-
-    private static func distance(_ point: CGPoint, to rect: CGRect) -> CGFloat {
-        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
-        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
-        return dx * dx + dy * dy
     }
 
     static func moving(_ id: String, toOffset offset: Int, in ids: [String]) -> [String] {
@@ -84,7 +47,7 @@ enum PanelLayoutDestination {
 
 @MainActor
 final class PanelLayoutDragPreview: ObservableObject {
-    @Published fileprivate(set) var destination: Int?
+    @Published fileprivate(set) var target: PanelLayoutDropTarget?
 }
 
 @MainActor
@@ -126,10 +89,7 @@ final class PanelLayoutEditingSession: ObservableObject {
     @Published private(set) var sourceID: String?
     // Pointer updates only invalidate the insertion marker, not the editor or its toolbar.
     let dragPreview = PanelLayoutDragPreview()
-    private(set) var destination: Int? {
-        get { dragPreview.destination }
-        set { dragPreview.destination = newValue }
-    }
+    var destination: Int? { dragPreview.target?.offset }
     @Published private(set) var feedback: Feedback = .guidance
     @Published private var undoMove: UndoMove?
     @Published private var transferUndo: TransferUndo?
@@ -194,10 +154,15 @@ final class PanelLayoutEditingSession: ObservableObject {
     }
 
     func preview(offset: Int, ids: [String]) {
+        preview(target: .init(offset: offset, markerFrame: nil), ids: ids)
+    }
+
+    func preview(target: PanelLayoutDropTarget, ids: [String]) {
         guard validate(ids: ids) else { return }
-        let nextDestination = min(max(offset, 0), ids.count)
-        guard destination != nextDestination else { return }
-        destination = nextDestination
+        let next = PanelLayoutDropTarget(offset: min(max(target.offset, 0), ids.count),
+                                        markerFrame: target.markerFrame, isVacancy: target.isVacancy)
+        guard dragPreview.target != next else { return }
+        dragPreview.target = next
     }
 
     func previewIDs(currentIDs: [String]) -> [String] {
@@ -212,7 +177,7 @@ final class PanelLayoutEditingSession: ObservableObject {
 
     func leave() {
         guard destination != nil else { return }
-        destination = nil
+        dragPreview.target = nil
     }
 
     func finish(ids: [String]) -> Move? {
@@ -332,7 +297,7 @@ final class PanelLayoutEditingSession: ObservableObject {
 
     func cancel() {
         if destination != nil {
-            destination = nil
+            dragPreview.target = nil
         }
         if sourceID != nil {
             sourceID = nil

@@ -1,4 +1,4 @@
-# MacTools URL Scheme
+# URL scheme and Run Links
 
 MacTools exposes a guarded URL API for navigation and explicitly eligible Run Links used by shortcuts, launchers, scripts, and links from other apps.
 
@@ -8,7 +8,7 @@ MacTools exposes a guarded URL API for navigation and explicitly eligible Run Li
 
 The three schemes route to the matching installation. Stable, development, and Nightly builds can coexist without one build intercepting another build's links.
 
-## Public routes
+## Navigation routes
 
 | Destination | Release URL |
 | --- | --- |
@@ -25,8 +25,6 @@ The three schemes route to the matching installation. Stable, development, and N
 | Dashboard | `mactools://app/panels/dashboard` |
 | Feature Panel | `mactools://app/panels/feature` |
 | Unified search | `mactools://app/search` |
-| Parameterless action | `mactools://app/actions/<provider-id>/<action-id>` |
-| Saved parameter preset | `mactools://app/presets/<preset-uuid>` |
 
 For example:
 
@@ -35,7 +33,6 @@ open 'mactools://app/settings/plugins/fan-control'
 open 'mactools://app/settings/plugins/marketplace/fan-control?provider=fan-control&action=set-speed'
 open 'mactools://app/panels/dashboard'
 open 'mactools://app/search'
-open 'mactools://app/actions/display-sleep/execute'
 ```
 
 Use the stable ID from the plugin's `plugin.json` for `<plugin-id>`. The ID `marketplace` is reserved for the host-owned Marketplace route and cannot be used by a plugin. A plugin settings link is accepted only when that plugin is installed, loaded, and provides settings. Dashboard and Feature Panel links always use show/focus behavior, so opening the same link again does not toggle the panel closed.
@@ -43,6 +40,11 @@ Use the stable ID from the plugin's `plugin.json` for `<plugin-id>`. The ID `mar
 Marketplace detail links are navigation-only. They can refer to an available or installed catalog entry, but never install a package or execute an action. `provider` and `action` are accepted only as a pair, must identify a catalog-published static action for that plugin, and reject unknown, duplicate, partial, or malformed values.
 
 ## Run Links
+
+| Reference | Release URL |
+| --- | --- |
+| Eligible parameterless action | `mactools://app/actions/<provider-id>/<action-id>` |
+| Saved parameter preset | `mactools://app/presets/<preset-uuid>` |
 
 Only actions explicitly published to the shared action catalog and permitted by their provider receive Run Links. Direct action routes are parameterless and use stable, non-localized provider and action IDs. They never accept query parameters or infer actions from UI controls, shortcut IDs, or legacy commands.
 
@@ -64,7 +66,7 @@ Any local process or website can invoke a custom URL scheme, so every URL is tre
 
 The parser enforces the exact scheme and `app` authority, a 4 KiB limit, strict path-component decoding, and rejection of traversal, encoded separators, control characters, fragments, user info, ports, malformed queries, and duplicate parameters. The router records only bounded diagnostic codes and route shapes; it never logs the complete URL or query values.
 
-Do not put secrets in URL parameters. Rejected links produce a diagnostic reason, but MacTools does not log complete public URLs or query values.
+Do not put secrets in URL parameters.
 
 ## Finder Sync compatibility
 

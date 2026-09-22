@@ -28,32 +28,47 @@ private struct MenuBarHiddenPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class MenuBarHiddenPlugin: MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginComponentPanel,
-    PluginActionProviding,
-    MenuBarHostStatusItemRecovering,
-    PluginPanelSurfaceLifecycleHandling
-{
+final class MenuBarHiddenPlugin: MacToolsPlugin, PluginActionProviding, MenuBarHostStatusItemRecovering {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("widget") }
+                    else { self?.panelItemDidBecomeHidden("widget") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
     }
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
 
-    var descriptor: PluginComponentDescriptor {
+    var descriptor: PluginPanelWidgetDescriptor {
         let items = controller.snapshot.hiddenItems + controller.snapshot.alwaysHiddenItems
         let height = MenuBarHiddenComponentIconLayout.spanHeight(
             forItems: items,
             iconCache: controller.manager.iconCache
         )
-        return PluginComponentDescriptor(
-            span: PluginComponentSpan(width: 4, height: height)!
+        return PluginPanelWidgetDescriptor(
+            span: PluginPanelWidgetSpan(width: 4, height: height)!
         )
     }
 
@@ -127,8 +142,8 @@ final class MenuBarHiddenPlugin: MacToolsPlugin,
         controller.deactivate()
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
@@ -136,8 +151,8 @@ final class MenuBarHiddenPlugin: MacToolsPlugin,
         controller.refreshPermissions()
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
@@ -166,26 +181,25 @@ final class MenuBarHiddenPlugin: MacToolsPlugin,
 
     // MARK: - Panel state
 
-    var primaryPanelState: PluginPanelState {
-        return PluginPanelState(
+    var rowState: PluginPanelRowState {
+        return PluginPanelRowState(
             subtitle: controller.panelSubtitle,
             isOn: controller.isEnabled,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
     }
 
-    var componentPanelState: PluginComponentState {
+    var widgetState: PluginPanelWidgetState {
         let shouldShowHiddenIconsCard = controller.currentPermissions().canManageItems
             && controller.showsHiddenIconsInPanel
-        return PluginComponentState(
+        return PluginPanelWidgetState(
             subtitle: shouldShowHiddenIconsCard ? controller.componentSubtitle : "",
             isActive: controller.isEnabled,
             isEnabled: shouldShowHiddenIconsCard,
-            isVisible: shouldShowHiddenIconsCard,
+            isAvailable: shouldShowHiddenIconsCard,
             errorMessage: nil
         )
     }
@@ -343,7 +357,7 @@ final class MenuBarHiddenPlugin: MacToolsPlugin,
 
     // MARK: - Component panel
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(
             MenuBarHiddenComponentView(
                 controller: controller,

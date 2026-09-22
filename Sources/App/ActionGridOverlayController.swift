@@ -50,12 +50,6 @@ enum ActionSurfaceExecutionSupport {
     }
 }
 
-enum ActionGridPanelDismissalPolicy {
-    static func shouldCloseWhenResigningKey(isPresentingConfirmation: Bool) -> Bool {
-        !isPresentingConfirmation
-    }
-}
-
 enum ActionGridExecutionOutcome: Equatable {
     case terminal(ActionExecutionOutcome)
     case handedOff
@@ -623,7 +617,7 @@ private final class ActionGridOverlayPanel: NSPanel {
     var keyEventHandler: ((NSEvent) -> Bool)?
 
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 
     override func keyDown(with event: NSEvent) {
         if keyEventHandler?(event) == true { return }
@@ -633,16 +627,10 @@ private final class ActionGridOverlayPanel: NSPanel {
 
 private final class ActionGridDismissTokens {
     var localMouse: Any?
-    var globalMouse: Any?
-    var resignKey: NSObjectProtocol?
 
     func removeAll() {
         if let localMouse { NSEvent.removeMonitor(localMouse) }
-        if let globalMouse { NSEvent.removeMonitor(globalMouse) }
-        if let resignKey { NotificationCenter.default.removeObserver(resignKey) }
         localMouse = nil
-        globalMouse = nil
-        resignKey = nil
     }
 
     deinit { removeAll() }
@@ -698,7 +686,8 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
     private let confirmationRouter: ActionConfirmationRouter
     private let tokens = ActionGridDismissTokens()
     private var panel: ActionGridOverlayPanel?
-    private var previousApplication: NSRunningApplication?
+    private let focusRestoration = PluginPanelFocusRestoration()
+    private let dismissalMonitor = PluginPanelDismissalMonitor()
     private var presentationUptime: TimeInterval = 0
     private var presentationSource = ActionExecutionSource.manual
     private var presentationPointer: CGPoint?
@@ -906,6 +895,7 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
                 includesNavigationHeader: !model.isAtRoot,
                 includesFeedback: model.feedback != nil
             )
+            installDismissHandlers(panel: panel)
             orderPanel(panel, at: frame, intendedScreen: screen, generation: generation)
             return true
         }
@@ -916,7 +906,7 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
         )
         let panel = ActionGridOverlayPanel(
             contentRect: frame,
-            styleMask: [.borderless],
+            styleMask: PluginPanelPresentation.styleMask,
             backing: .buffered,
             defer: false,
             screen: screen
@@ -928,9 +918,8 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isMovable = false
-        panel.isReleasedWhenClosed = false
+        PluginPanelPresentation.configure(panel)
         panel.level = .popUpMenu
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.keyEventHandler = { [weak self] event in self?.processKeyEvent(event) ?? false }
         panel.contentView = NSHostingView(
             rootView: ActionGridOverlayRootView(
@@ -938,12 +927,9 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
                 onDismiss: { [weak self] in self?.close() }
             )
         )
-        previousApplication = NSWorkspace.shared.frontmostApplication == .current
-            ? nil
-            : NSWorkspace.shared.frontmostApplication
+        focusRestoration.prepareForPresentation()
         self.panel = panel
         installDismissHandlers(panel: panel)
-        NSApp.activate(ignoringOtherApps: true)
         orderPanel(panel, at: frame, intendedScreen: screen, generation: generation)
         return true
     }
@@ -957,8 +943,7 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
         // AppKit may apply its Space placement policy while ordering a panel. Set the
         // desired frame on both sides of that operation so the pointer's display wins.
         panel.setFrame(frame, display: true, animate: false)
-        PluginPresentationSafety.prepareForWindowOrdering(panel)
-        panel.makeKeyAndOrderFront(nil)
+        PluginPanelPresentation.present(panel)
         panel.setFrame(frame, display: true, animate: false)
         logPanelPlacement(panel, intendedScreen: intendedScreen)
 
@@ -1021,15 +1006,13 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
         guard let panel else { return }
         presentationGeneration &+= 1
         tokens.removeAll()
+        dismissalMonitor.stop()
         panel.keyEventHandler = nil
         panel.delegate = nil
         self.panel = nil
         panel.orderOut(nil)
         panel.close()
-        if restoringFocus {
-            previousApplication?.activate()
-        }
-        previousApplication = nil
+        focusRestoration.dismiss(wasVisible: true, restoringFocus: restoringFocus)
         presentationPointer = nil
         presentationVisibleFrame = nil
         isPresentingConfirmation = false
@@ -1101,12 +1084,8 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
         return true
     }
 
-    func dismissIfPointerIsOutside(_ point: CGPoint) {
-        guard let frame = panel?.frame, !frame.contains(point) else { return }
-        close(restoringFocus: false)
-    }
-
     private func installDismissHandlers(panel: NSPanel) {
+        tokens.removeAll()
         let mouseMask: NSEvent.EventTypeMask = [
             .leftMouseDown,
             .leftMouseUp,
@@ -1125,29 +1104,13 @@ final class ActionGridOverlayController: NSObject, NSWindowDelegate {
                ) {
                 return nil
             }
-            let belongsToOverlay = event.window === panel || panel.attachedSheet === event.window
-            if !belongsToOverlay { self.close(restoringFocus: false) }
             return event
         }
-        tokens.globalMouse = NSEvent.addGlobalMonitorForEvents(matching: mouseMask) { [weak self] _ in
-            let point = NSEvent.mouseLocation
-            DispatchQueue.main.async {
-                self?.dismissIfPointerIsOutside(point)
-            }
-        }
-        tokens.resignKey = NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self,
-                      ActionGridPanelDismissalPolicy.shouldCloseWhenResigningKey(
-                          isPresentingConfirmation: self.isPresentingConfirmation
-                      ) else { return }
-                self.close(restoringFocus: false)
-            }
-        }
+        dismissalMonitor.start(
+            for: panel,
+            isSuspended: { [weak self] in self?.isPresentingConfirmation == true },
+            onDismiss: { [weak self] in self?.close(restoringFocus: false) }
+        )
     }
 }
 

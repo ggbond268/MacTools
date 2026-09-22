@@ -1,21 +1,45 @@
 # Siri
 
-Requires MacTools 1.3.1, macOS 27 with the Siri AI app, and Accessibility permission for the MacTools app being run. The catalog keeps incompatible plugins visible, explains the missing OS/app requirement, and disables installation. Manual packages and installed-plugin activation use the same checks. Use Check Again after making the required app available. Accessibility permission is setup guidance and does not prevent installation. App presence does not prove Siri onboarding is complete; the runtime still waits for usable chat controls.
+The Siri plugin sends a message to a new conversation in the Siri app through native Accessibility controls. Replies remain in Siri.
 
-Open the command palette and type `ask siri <message>`, then press Return once. The palette identifies **Ask Siri — New Conversation** before sending. You can also type `ask`, highlight the Siri action, and press Tab to insert your configured trigger plus a space. The caret stays ready for your message; Tab does not open Siri, create a conversation, or send anything. Shift-Tab and IME composition keep their native behavior. Alternatively search for Siri, select the action, and compose a message. Return sends; Shift-Return inserts a newline in the composer. IME composition must finish before Return or the Send button can send.
+## Requirements
 
-In Settings → Siri, change **Trigger phrase** and choose Save, or use Restore Default to return to `ask siri`. The preview shows the phrase followed by your message. Changes apply immediately and persist across app launches. A custom phrase replaces the default; matching remains case-insensitive. Empty phrases, leading/trailing whitespace, control characters, phrases longer than 64 characters, and conflicting or overlapping aliases are rejected. If a newly installed plugin later introduces a conflict, the palette blocks the ambiguous action.
+- MacTools 1.3.1 or later.
+- macOS 27 with the Siri AI app installed and ready to use.
+- Accessibility permission for the MacTools installation you are running.
 
-The Siri feature-panel row offers **Ask Siri** when idle. Clicking it opens the existing command-palette composer directly; it does not open Siri, create a chat, or send a message until you submit. While sending, the row shows progress and **Cancel**. Failed or uncertain attempts keep their explanation visible, and **Ask Siri** opens a fresh composer without automatically retrying the previous message.
+The marketplace explains missing OS/app requirements and disables incompatible installation. Manual packages and activation use the same checks. After making Siri available, choose **Check Again**. Accessibility permission is setup guidance and does not block installation; Siri onboarding must still be complete before a message can be sent.
 
-`ask siri` is the default explicit, case-insensitive alias. The alias and its first separator space are removed; the remaining text is preserved. Messages are limited to 4,096 UTF-8 bytes by the existing action parameter contract. Empty messages cannot be sent.
+## Send a message
 
-MacTools opens Siri explicitly, starts a new conversation, fills its message field, and submits through native Accessibility controls. It does not use the clipboard, AppleScript, private Siri frameworks, or guessed URL parameters. The answer stays in Siri. The plugin's panel and settings show progress and the last attempt's status without retaining message content.
+1. Open Unified Search and enter `ask siri <message>`.
+2. Check that **Ask Siri — New Conversation** is selected.
+3. Press Return to send.
 
-Siri control discovery waits up to 15 seconds, and new-conversation readiness up to 10 seconds, within the existing overall deadline. Temporary read failures retry only these read-only checks. Creating a conversation, entering text, and submitting are each attempted once. Existing drafts are preserved, including when their contents cannot be read. Only one Siri operation runs at a time, and cancellation applies to that operation. If Siri's controls, window, or conversation change, MacTools stops rather than selecting an arbitrary field. If delivery cannot be confirmed after submission, check Siri before trying again: the message may already have been sent. Cancellation cannot retract a submitted message and may leave the draft in Siri.
+You can also type `ask`, highlight the Siri action, and press Tab to insert the configured trigger phrase. Tab only completes the phrase; it does not open Siri or send a message. Alternatively, select the Siri action or the panel's **Ask Siri** button to open the composer.
 
-The first implementation exposes only new conversations. Continuing a selected conversation is withheld until a durable destination identity can be validated across window and selection changes. Siri's accessibility interface is not a documented app automation API and needs revalidation after macOS updates.
+In the composer, Return sends and Shift-Return inserts a newline. IME composition must finish before sending; Shift-Tab retains its native behavior. While sending, the panel shows progress and **Cancel**. A failed or uncertain attempt keeps its explanation visible; opening a fresh composer does not retry it.
 
-These actions are local palette actions. They do not expose Run Links, unattended rules, App Intents, or saved prompt presets. The plugin does not persist prompts, titles, responses, or conversation identifiers. Siri itself retains its conversations under its own settings and may use Apple's online services.
+## Change the trigger phrase
 
-Control discovery skips the transcript itself while keeping the composer accessible. Preparation supports Siri's empty-selection screen only with readable empty selection evidence. If Siri already shows a fresh empty chat with New Chat disabled, preparation requires an empty draft and transcript, writable input, and stable destination identity before using it. Unreadable state never authorizes entering text.
+In **Settings → Siri**, edit **Trigger phrase** and choose **Save**. **Restore Default** restores `ask siri`. Changes persist and replace the previous phrase immediately.
+
+Matching is case-insensitive. Phrases must be nonempty, at most 64 characters, and contain no leading/trailing whitespace, control characters, or conflicting/overlapping aliases. If a later plugin introduces a conflict, the palette blocks the ambiguous action.
+
+The alias and its first separator space are removed; remaining message text is preserved. Messages must be nonempty and at most 4,096 UTF-8 bytes.
+
+## Delivery and cancellation
+
+MacTools opens Siri, prepares a new conversation, fills the composer, and submits once. It preserves existing drafts and stops if the destination, window, or controls cannot be validated. Only one operation runs at a time.
+
+Read-only control discovery may retry for up to 15 seconds, and new-conversation readiness for up to 10 seconds, within the overall action deadline. Creating a conversation, entering text, and submitting are each attempted once.
+
+If delivery cannot be confirmed, check Siri before trying again: the message may already have been sent. Cancellation cannot retract a submitted message and may leave a draft.
+
+## Privacy and implementation
+
+The plugin does not use the clipboard, AppleScript, private Siri frameworks, or guessed URL parameters. It does not persist prompts, conversation titles, replies, or conversation identifiers. Siri retains conversations according to its own settings and may use Apple's online services.
+
+Only new conversations are supported. The action is local to the palette and does not expose Run Links, unattended rules, App Intents, or saved prompt presets. Siri's Accessibility interface is not a documented automation API and requires revalidation after macOS updates.
+
+Control discovery skips the transcript while retaining access to the composer. An empty-selection screen requires readable evidence of an empty selection. Reusing a fresh empty chat with New Chat disabled requires an empty draft/transcript, writable input, and stable destination identity. Unreadable state never permits entering text.

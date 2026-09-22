@@ -1,6 +1,6 @@
-# US-plugins-calendar-today-details — Keep Calendar Details on Today
+# US-plugins-calendar-today-details — Review Recent Calendar Events
 
-Last verified: 2026-09-14
+Last verified: 2026-09-17
 
 | Field | Value |
 | ----- | ------ |
@@ -11,29 +11,36 @@ Last verified: 2026-09-14
 
 ## User Story
 
-> As a MacTools user, when I browse or hover dates in Calendar, I want the lower details area to stay on today and be optional so that I can avoid duplicate date details while keeping today's lunar date and agenda visible.
+> As a MacTools user, I want to review events around today under the month grid, with a configurable range and clear date groups, so that I can check recent and upcoming arrangements without changing the displayed month.
 
 ## Acceptance
 
-- Given the lower details setting is unset, then the Calendar component shows today's date, full lunar date, and agenda below the monthly grid.
-- When the user hovers or selects another day, then the lower details remain on today and the existing hover popover shows that day's details.
-- When the user disables the Calendar lower details setting, then an already displayed component hides the details immediately and returns to its compact height.
-- When the user enables the setting again, then the details and their reserved height return immediately.
-- When a cross-day event overlaps both today and a separately queried month grid, then it appears once on each applicable day.
-- When the user reopens MacTools, then the stored lower details setting is retained.
+- A new configuration shows events for today and the next two days.
+- The user can choose Past, Future, or Past + Future and 1–7 total calendar days. Every range includes today; a three-day bidirectional range means yesterday, today, and tomorrow.
+- Settings persist across restarts, and the previous hidden-today-details preference keeps the new agenda hidden.
+- Disabling the agenda immediately hides it and restores the compact month height; range controls become disabled without losing their values.
+- Dates with events form chronological groups with the selected alternate calendar's date context. Each event shows its title, time, and calendar; clicking opens the corresponding date.
+- The Alternate Calendar menu offers None and Chinese lunar calendar. The initial choice follows app language (Chinese selects Chinese lunar calendar; other languages select None), then persists independently of language and region changes. Earlier explicit visibility choices migrate without being overwritten.
+- The month grid, agenda, hover details, and accessibility descriptions use the same saved alternate calendar. None removes alternate-date rows without leaving empty lines. Mainland holiday and makeup-workday badges appear only in the CN system region, independently of this selection.
+- The month and agenda use one continuous card with no gap. Long lists scroll within a bounded area; no events means the original month-only appearance and height.
+- Initial loading does not add an empty agenda section. Permission and failure states retain compact guidance and retry actions.
+- Calendar changes and day boundaries refresh the visible agenda. Hidden components stop observing changes.
+- Browsing another month does not alter the agenda range, query intervening years, or duplicate cross-day events.
+- Rapid month navigation preserves the loaded agenda and its height while requests are pending. Late cancelled results cannot resize it, and only a confirmed empty result removes the footer. Short lists use their intrinsic height immediately; long lists stay bounded and scroll.
 
 ## References
 
 | Type | Source |
 | ---- | ------ |
+| Issue | [#17](https://github.com/ggbond268/MacTools/issues/17) |
 | Feature | `docs/features/calendar-selected-day-details.md` |
 | Code | `Plugins/Calendar/Sources/CalendarComponentViewModel.swift` |
 | Settings | `Plugins/Calendar/Sources/CalendarSettings.swift` |
-| Test | `Plugins/Calendar/Tests/CalendarComponentViewModelTests.swift` |
-| Test | `Plugins/Calendar/Tests/CalendarPluginIntegrationTests.swift` |
+| Tests | `Plugins/Calendar/Tests/` |
 
 ## History
 
 | Date | Type | Previous | New | Source |
 | ---- | ---- | -------- | --- | ------ |
-| 2026-09-14 | created | — | Fixed-today details and default-on visibility contract | PR #368 comment #5645830568 |
+| 2026-09-14 | created | — | Fixed-today details and default-on visibility | PR #368 |
+| 2026-09-16 | changed | Fixed-today details | Configurable recent agenda with bounded grouped lists | Issue #17 |

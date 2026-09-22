@@ -1,49 +1,79 @@
-# Actions, Automation, Run Links, and Action Grid
+# Actions and automation
 
-MacTools exposes one host-owned action platform to every invocation surface. Plugins publish stable action definitions and catalog entries; the host owns lookup, migration, availability, shortcut registration, confirmation, and execution.
+MacTools uses one action system for Unified Search, global shortcuts, workflows, Run Links, and Action Grid. Plugins declare actions; the host validates and executes them consistently across these surfaces.
 
-## Ownership
+## Choose a surface
 
-- `ActionRegistry` owns revisioned in-memory definition/catalog indexes and live availability invalidation.
-- `ActionExecutor` is the only execution gate. It validates parameters and execution mode, applies confirmation policy, revalidates the exact approved request, provider, and availability, enforces a deadline for every action, and calls provider cancellation when supported. Definitions also declare how overlapping invocations behave: reject by default, serialize, or allow concurrent execution.
-- `ShortcutAssignmentService` owns ordinary global-action bindings, conflicts, migration, persistence, and Carbon registration state. Actions & Shortcuts is the canonical editor for these bindings; plugin settings retain only specialized plugin shortcuts that are not ordinary action assignments.
-- Automation owns workflow definitions, rules, conditions, and bounded privacy-conscious history. Steps store versioned `ActionReference` values and execute serially through `ActionExecutor`.
-- `AppURLRouter` owns one strict, ordered, bounded route queue. Run Links resolve to `ActionReference` values before execution.
-- Action Grid owns only its versioned tree of folders, each containing up to nine positioned references. Catalog discovery, owner navigation, migration, availability, execution, shortcut assignment, and Run Link generation remain host-owned.
-- `PluginActionExecutionHostContext` is the narrow composition bridge for a plugin that needs to invoke another provider's canonical action. Its live lookup and execution closures still enter `ActionRegistry` and `ActionExecutor`; it does not expose provider instances or create a parallel dispatch path. The host refreshes consumers after catalog revisions and clears the context when isolating a plugin.
+| Task | Surface |
+| --- | --- |
+| Find and run an action | Unified Search |
+| Assign a global key binding | Settings → Actions & Shortcuts |
+| Run several actions in order | Settings → Automation |
+| Run a workflow when an event occurs | Automation rules |
+| Open an action from another app or script | [Run Links](url-scheme.md#run-links) |
+| Arrange actions in a compact launcher | Action Grid; each folder holds up to nine entries |
+| Discover eligible actions from a local agent | [Command-line interface](cli/agent-usage.md) |
 
-Unavailable references are retained by shortcut assignments, workflows, presets, and Action Grid. A provider returning with a compatible migration can restore them without recreating user configuration.
+Unavailable actions remain in saved shortcuts, workflows, presets, and Action Grid. Re-enabling or reinstalling a compatible provider can restore them without recreating the configuration.
 
-Portable imports distinguish unavailable providers from configuration-defined actions. A plugin payload that defines action identities must validate and report successful restoration before the host admits dependent workflows, shortcuts, Run Links, Trackpad mappings, or Action Grid entries. Workflows restore before those consumers; if provider or workflow persistence fails, the import reports a warning and drops the affected imported dependency chain instead of creating dangling state. Current backups treat an explicitly empty action-shortcut section as authoritative, while older backups bridge only the legacy assignments they actually contain and preserve unrelated destination assignments.
+## Workflows
 
-## Automation boundaries
+A workflow is an ordered list of action references. It can be created, renamed, duplicated, reordered, enabled, disabled, run, stopped, or deleted.
 
-Workflows can be created, renamed, duplicated, enabled or disabled, reordered, previewed, run, stopped, and deleted. Preview Before Running is enabled by default and shows the ordered steps, current availability, waits, confirmation requirements, and the lack of automatic rollback before a manual run starts. Automatic rules are managed separately; deleting a workflow first cancels its active runs and explicitly removes its attached rules so neither an unreachable run nor enabled orphan trigger remains hidden. Manual runs ignore rule-specific conditions. Enabled workflows publish stable `automation/workflow.<uuid>` actions, so Unified Search, global shortcuts, Run Links, and Action Grid need no workflow-specific dispatch path.
+- **Preview Before Running** is enabled by default for manual runs. It shows steps, availability, waits, and confirmation requirements. Workflows do not provide automatic rollback.
+- Changing a step's action opens the shared picker and replaces its parameters with a valid reference. Step names, waits, and failure policy are under **Advanced Options**.
+- Text and numeric edits are saved after a short debounce. Structural edits, such as moving or deleting a step, are saved immediately.
+- Manual runs ignore rule-specific conditions. Deleting a workflow cancels active runs and removes its attached rules.
 
-The workflow editor keeps action identity and parameters together: changing an action uses the shared action picker and replaces its parameters with a valid reference. Step names, waits, and failure policy live under Advanced Options. Text and numeric drafts are debounced before persistence, while structural changes such as adding, replacing, moving, or deleting steps are saved immediately and rebuild the published catalog only when action identity changes.
+Enabled workflows publish stable `automation/workflow.<uuid>` actions. After validation and confirmation, Unified Search and Action Grid hand the run to Automation and close. The menu-bar running indicator, run history, and Stop control track progress. Ordinary actions keep their invoking surface open until they finish; nested workflow steps always await their child action.
 
-Workflow actions publish durable progress through Automation. Action Grid and Unified Search complete validation, availability checks, provider-generation revalidation, and any confirmation before handing the run to Automation and closing; the menu-bar running indicator, Automation run history, and Stop control then own its lifecycle. Ordinary actions still keep the invoking surface open until they return a terminal result, and nested workflow steps always await their child action so ordering, failure policy, recursion limits, and cancellation remain deterministic.
+## Automatic rules
 
-Automatic rules use one trigger and zero or more conditions:
+Each rule has one trigger, optional conditions, and a workflow:
 
-```text
-When: schedule, calendar, application, power, display, or network event
-If:   frontmost app, power/battery, connected display, time range, or network state
-Run:  reusable workflow
-```
+| Part | Supported choices |
+| --- | --- |
+| When | Schedule, calendar, application, power, display, or network event |
+| If | Frontmost app, power or battery state, connected display, time range, or network state |
+| Run | An enabled reusable workflow |
 
-Trigger delivery is debounced, serialized per rule, and bounded. MacTools starts a trigger provider only while at least one enabled rule uses that trigger family, limits automatic runs globally, and never overlaps a second run of the same workflow. Providers must explicitly opt an action into unattended execution with the `.automatic` capability; background support alone is not sufficient. Calendar offsets, crossed battery thresholds, and network-interface transitions are carried as exact event identities so adjacent rules cannot cross-fire; positive calendar offsets retain ended events across provider refreshes. Skipped rules record a concise reason. Workflow recursion and execution depth are bounded; history recovers unfinished runs as interrupted after a restart. Advanced branches, loops, variables, folders, and application-specific Action Grid profiles are intentionally outside this release.
+Trigger delivery is debounced and serialized per rule. Providers run only while enabled rules use their trigger family. The runtime bounds total automatic runs and prevents overlapping runs of the same workflow.
 
-Run Link controls copy the canonical direct URL when an action is externally invocable. If a parameterized action needs a durable preset, preset creation remains an internal compatibility mechanism instead of a second user-facing link type.
+An action must explicitly declare the `.automatic` capability to run unattended; `.background` alone is insufficient. Calendar offsets, battery-threshold crossings, and network transitions use exact event identities so adjacent rules do not cross-fire. Positive calendar offsets retain ended events across provider refreshes.
 
-## Automated verification
+Skipped rules record a reason. Recursion and execution depth are bounded, and unfinished runs become interrupted history entries after restart. Branches, loops, variables, workflow folders, and application-specific Action Grid profiles are not supported.
 
-Use focused tests while developing, then the full suite for cross-module changes:
+## Developer ownership
+
+| Component | Responsibility |
+| --- | --- |
+| `ActionRegistry` | Definitions, catalog indexes, migration, live availability, and provider revisions |
+| `ActionExecutor` | Parameter and mode validation, confirmation, revalidation, deadlines, concurrency, and supported cancellation |
+| `ShortcutAssignmentService` | Ordinary action bindings, conflicts, migration, persistence, and Carbon registration |
+| Automation | Workflow and rule storage, serial step execution, progress, and bounded history |
+| `AppURLRouter` | Strict URL parsing and one bounded, ordered navigation/action queue |
+| Action Grid | Folder structure and positioned `ActionReference` values |
+
+All execution enters `ActionExecutor`. After confirmation it revalidates the approved request, provider, and availability. Overlapping invocations are rejected by default; providers may explicitly choose serialization or concurrency. Deadlines apply to every action, while provider cancellation requires the corresponding capability.
+
+Plugins should publish canonical actions through `PluginActionProviding`. Plugin settings retain only specialized shortcuts that are not ordinary action assignments. For composition across providers, use `PluginActionExecutionHostContext`: its lookup and execution closures enter the same registry and executor without exposing provider instances. The host refreshes this context after catalog revisions and clears it when isolating a plugin.
+
+Run Link controls copy a direct URL for eligible parameterless actions. Parameterized actions may use a host-owned preset, whose URL contains only an opaque identifier; see the [URL contract](url-scheme.md).
+
+## Backup and restoration
+
+Portable imports restore providers that define action identities before admitting their dependent references. Workflows restore before shortcuts, Run Links, Trackpad mappings, and Action Grid entries. Failed provider or workflow persistence produces a warning and removes the affected imported dependency chain.
+
+An explicitly empty action-shortcut section in a current backup clears that section. Older backups migrate only the legacy assignments they contain and preserve unrelated destination bindings.
+
+## Verification
+
+Reuse the smallest relevant existing test class: `ActionRegistryTests`, `ActionExecutorTests`, `AppURLRouterTests`, or the affected workflow, rule, or shortcut suite. Add coverage for missing core behavior or a concrete regression, especially permissions, confirmation, persistence, cancellation, and unavailable providers.
 
 ```bash
-DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
-  xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug \
-  -derivedDataPath build/DerivedData test -quiet
+xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug \
+  -derivedDataPath build/DerivedData test -quiet \
+  -only-testing:MacToolsTests/ActionExecutorTests
 ```
 
-The test suite covers registry revisions and migration; parameter validation; executor safety, confirmation, cancellation, and timeout behavior; shortcut persistence/conflicts/registration/reentrancy and unavailable-provider visibility; Run Link parsing, queue bounds, presets, feedback, and privacy; workflow editing, ordering, rule cleanup, recovery, cancellation, execution, recursion, startup sequencing, and history; all trigger/condition families with injected providers; and Action Grid storage, migration, geometry, keyboard mapping, distinct accessible controls, repeat presentation, unavailable actions, and shared execution.
+Use `make ci` before pushing cross-module or PluginKit changes. For native interactions, select the affected scenarios from the [end-to-end guide](testing/actions-automation-e2e.md); a copy or layout change does not require replaying the entire matrix. See [Contributing](../CONTRIBUTING.md#validation) for the shared validation policy.

@@ -17,6 +17,7 @@ struct CalendarEventInput: Equatable, Sendable {
     let endDate: Date
     let isAllDay: Bool
     let color: CalendarEventColor
+    var calendarTitle: String = ""
 }
 
 struct CalendarEventSummary: Identifiable, Equatable, Sendable {
@@ -27,6 +28,7 @@ struct CalendarEventSummary: Identifiable, Equatable, Sendable {
     let endDate: Date
     let isAllDay: Bool
     let color: CalendarEventColor
+    var calendarTitle: String = ""
 }
 
 enum CalendarHolidayKind: Int, Equatable, Sendable {
@@ -47,8 +49,8 @@ struct CalendarDayModel: Identifiable, Equatable, Sendable {
     let id: String
     let date: Date
     let dayNumber: String
-    let lunarText: String
-    let lunarDateText: String
+    let alternateCalendarText: String
+    let alternateCalendarDateText: String
     let isInDisplayedMonth: Bool
     let isToday: Bool
     let isWeekend: Bool
@@ -73,7 +75,7 @@ enum CalendarComponentCalendars {
     static func gregorian(firstWeekday: Int = CalendarWeekStartDay.sunday.calendarFirstWeekday) -> Calendar {
         let current = Calendar.autoupdatingCurrent
         var calendar = current.identifier == .gregorian ? current : Calendar(identifier: .gregorian)
-        calendar.locale = current.locale
+        calendar.locale = .autoupdatingCurrent
         calendar.timeZone = current.timeZone
         calendar.firstWeekday = min(max(firstWeekday, 1), 7)
         return calendar
@@ -101,20 +103,27 @@ struct CalendarMonthModelBuilder {
     private let holidayProvider: CalendarHolidayProvider
     private let localization: PluginLocalization
     private let showsHolidayBadges: Bool
+    private let alternateCalendar: CalendarAlternateCalendar
+    private let displayLocale: Locale
 
     init(
         calendar: Calendar = CalendarComponentCalendars.gregorian(),
         holidayProvider: CalendarHolidayProvider = .empty,
-        localization: PluginLocalization = PluginLocalization(bundle: .main)
+        localization: PluginLocalization = PluginLocalization(bundle: .main),
+        alternateCalendar: CalendarAlternateCalendar = .none,
+        displayLocale: Locale = PluginRuntimeLocalization.locale
     ) {
         self.calendar = calendar
         self.holidayProvider = holidayProvider
         self.localization = localization
+        self.displayLocale = displayLocale
+        self.alternateCalendar = alternateCalendar
         var lunarCalendar = Calendar(identifier: .chinese)
         lunarCalendar.locale = Locale(identifier: "zh_Hans_CN")
         lunarCalendar.timeZone = calendar.timeZone
         self.lunarCalendar = lunarCalendar
-        self.showsHolidayBadges = Self.shouldShowHolidayBadges(calendar: calendar)
+        let regionalLocale = calendar.locale ?? .autoupdatingCurrent
+        self.showsHolidayBadges = CalendarDisplayPolicy.showsMainlandHolidayBadges(in: regionalLocale)
     }
 
     func makeMonth(
@@ -148,24 +157,37 @@ struct CalendarMonthModelBuilder {
                 return nil
             }
 
-            let dayStart = calendar.startOfDay(for: date)
-            let components = calendar.dateComponents([.year, .month, .day], from: dayStart)
-            let isInDisplayedMonth = calendar.isDate(dayStart, equalTo: displayedMonthStart, toGranularity: .month)
-            let holidayKind = showsHolidayBadges ? holidayProvider.kind(for: dayStart, calendar: calendar) : nil
-
-            return CalendarDayModel(
-                id: CalendarComponentCalendars.dayID(for: dayStart, calendar: calendar),
-                date: dayStart,
-                dayNumber: String(components.day ?? 0),
-                lunarText: lunarText(for: dayStart),
-                lunarDateText: lunarDateText(for: dayStart),
-                isInDisplayedMonth: isInDisplayedMonth,
-                isToday: calendar.isDate(dayStart, inSameDayAs: today),
-                isWeekend: calendar.isDateInWeekend(dayStart),
-                holidayKind: holidayKind,
-                events: eventsByDay[dayStart] ?? []
+            return makeDay(
+                for: date, today: today, displayedMonthStart: displayedMonthStart,
+                events: eventsByDay[calendar.startOfDay(for: date)] ?? []
             )
         }
+    }
+
+    func makeDay(
+        for date: Date,
+        today: Date,
+        displayedMonthStart: Date? = nil,
+        events: [CalendarEventSummary] = []
+    ) -> CalendarDayModel {
+        let dayStart = calendar.startOfDay(for: date)
+        let components = calendar.dateComponents([.year, .month, .day], from: dayStart)
+        let holidayKind = showsHolidayBadges ? holidayProvider.kind(for: dayStart, calendar: calendar) : nil
+        let alternateDate = alternateDateText(for: dayStart)
+        return CalendarDayModel(
+            id: CalendarComponentCalendars.dayID(for: dayStart, calendar: calendar),
+            date: dayStart,
+            dayNumber: String(components.day ?? 0),
+            alternateCalendarText: alternateDate.compact,
+            alternateCalendarDateText: alternateDate.full,
+            isInDisplayedMonth: calendar.isDate(
+                dayStart, equalTo: displayedMonthStart ?? date, toGranularity: .month
+            ),
+            isToday: calendar.isDate(dayStart, inSameDayAs: today),
+            isWeekend: calendar.isDateInWeekend(dayStart),
+            holidayKind: holidayKind,
+            events: events
+        )
     }
 
     private func gridStartDate(for displayedMonthStart: Date) -> Date? {
@@ -188,7 +210,14 @@ struct CalendarMonthModelBuilder {
         return Array(symbols[startIndex..<symbols.count] + symbols[0..<startIndex])
     }
 
-    private func lunarText(for date: Date) -> String {
+    private func alternateDateText(for date: Date) -> (compact: String, full: String) {
+        switch alternateCalendar {
+        case .none: ("", "")
+        case .chinese: (chineseCalendarText(for: date), chineseCalendarDateText(for: date))
+        }
+    }
+
+    private func chineseCalendarText(for date: Date) -> String {
         let components = lunarCalendar.dateComponents([.year, .month, .day, .isLeapMonth], from: date)
         let month = components.month ?? 1
         let day = components.day ?? 1
@@ -197,7 +226,7 @@ struct CalendarMonthModelBuilder {
             return localization.string("lunar.festival.newYearsEve", defaultValue: "除夕")
         }
 
-        if let festival = lunarFestival(month: month, day: day) {
+        if components.isLeapMonth != true, let festival = lunarFestival(month: month, day: day) {
             return festival
         }
 
@@ -211,7 +240,7 @@ struct CalendarMonthModelBuilder {
         return lunarDayName(day)
     }
 
-    private func lunarDateText(for date: Date) -> String {
+    private func chineseCalendarDateText(for date: Date) -> String {
         let components = lunarCalendar.dateComponents([.month, .day, .isLeapMonth], from: date)
         let month = components.month ?? 1
         let day = components.day ?? 1
@@ -256,13 +285,12 @@ struct CalendarMonthModelBuilder {
     }
 
     private func monthTitle(for date: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.year, .month], from: date)
-        return String(
-            format: localization.string("month.title", defaultValue: "%04d年%02d月"),
-            locale: Locale(identifier: "en_US_POSIX"),
-            components.year ?? 0,
-            components.month ?? 0
-        )
+        let formatter = DateFormatter()
+        formatter.locale = displayLocale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("yMMMM")
+        return formatter.string(from: date)
     }
 
     private func lunarMonthName(_ month: Int) -> String {
@@ -327,8 +355,4 @@ struct CalendarMonthModelBuilder {
         return names[day - 1]
     }
 
-    private static func shouldShowHolidayBadges(calendar: Calendar) -> Bool {
-        let identifier = calendar.locale?.identifier ?? Locale.autoupdatingCurrent.identifier
-        return identifier.lowercased().hasPrefix("zh")
-    }
 }

@@ -137,7 +137,8 @@ final class CalendarEventService: CalendarEventServicing {
             startDate: event.startDate,
             endDate: event.endDate,
             isAllDay: event.isAllDay,
-            color: CalendarEventColor(nsColor: event.calendar.color)
+            color: CalendarEventColor(nsColor: event.calendar.color),
+            calendarTitle: event.calendar.title
         )
     }
 

@@ -118,7 +118,7 @@ struct WindowSwitcherSession {
         let desiredColumns = count <= 6 ? count : count <= 10 ? 5 : 6
         let width = min(layout == .list ? 600 : max(560, CGFloat(desiredColumns) * 132 + 44),
                         max(0, visibleFrame.width - 24))
-        // Include room for the legacy (always visible) scrollbar.
+        // Allow room for a legacy scrollbar when the results overflow.
         let columns = max(1, Int((width - 44) / 132))
         let rows = (count + columns - 1) / columns
         let contentHeight = layout == .list

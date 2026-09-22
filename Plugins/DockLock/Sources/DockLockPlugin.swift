@@ -246,12 +246,26 @@ private struct DockLockPluginProvider: PluginProvider {
 
 @MainActor
 final class DockLockPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    AccessibilityPermissionRefreshing,
-    PluginActionProviding,
-    PluginActionPermissionProviding
-{
+    MacToolsPlugin, AccessibilityPermissionRefreshing, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let toggle = "toggle"
         static let setEnabled = "set-enabled"
@@ -271,7 +285,7 @@ final class DockLockPlugin:
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -328,13 +342,12 @@ final class DockLockPlugin:
 
     func refresh() {}
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: isEnabled,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

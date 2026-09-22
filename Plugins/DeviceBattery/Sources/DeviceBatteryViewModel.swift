@@ -47,6 +47,7 @@ final class DeviceBatteryViewModel: ObservableObject {
     private var activityResumeTask: Task<Void, Never>?
     private var pendingVisibleBluetoothRefresh = false
     private var pendingVisibleAppleMobileRefresh = false
+    private var pendingConnectionRefresh = false
     private var activeCollectionIDs: Set<UUID> = []
     private var collectionSourcesByID: [UUID: DeviceBatterySource] = [:]
 
@@ -116,10 +117,8 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
 
         isStarted = true
-        vendorHIDMonitor.onSnapshotChange = { [weak self] snapshot in
-            self?.vendorHIDSnapshot = snapshot
-            self?.vendorHIDSnapshots = self?.vendorHIDMonitor.deviceSnapshots ?? []
-            self?.rebuildSnapshot()
+        vendorHIDMonitor.onSnapshotChange = { [weak self] _ in
+            self?.updateVendorHIDSnapshot()
         }
         powerSourceObserver.onChange = { [weak self] in
             self?.handlePowerSourceChange()
@@ -131,12 +130,9 @@ final class DeviceBatteryViewModel: ObservableObject {
     }
 
     func stop() {
-        cancelSampling()
-        powerSourceObserver.stop()
-        bluetoothConnectionObserver.stop()
+        pauseSampling()
         powerSourceObserver.onChange = nil
         bluetoothConnectionObserver.onConnectionChange = nil
-        vendorHIDMonitor.stop()
         vendorHIDMonitor.onSnapshotChange = nil
         isComponentPanelVisible = false
         isStarted = false
@@ -205,7 +201,7 @@ final class DeviceBatteryViewModel: ObservableObject {
                 bluetoothConnectionObserver.start()
                 restartBluetoothSampling(
                     forceProfileRefresh: true,
-                    performActiveScan: true,
+                    scanScope: .allConnected,
                     revalidateSupplementalState: isComponentPanelVisible
                 )
             } else {
@@ -216,6 +212,7 @@ final class DeviceBatteryViewModel: ObservableObject {
                 bluetoothEventTask = nil
                 discardCollections(for: .bluetooth)
                 pendingVisibleBluetoothRefresh = false
+                pendingConnectionRefresh = false
             }
         }
 
@@ -278,12 +275,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         guard isStarted else { return }
         guard state.allowsBackgroundWork else {
             needsBluetoothRefreshOnResume = true
-            activityResumeTask?.cancel()
-            activityResumeTask = nil
-            cancelSampling()
-            powerSourceObserver.stop()
-            bluetoothConnectionObserver.stop()
-            vendorHIDMonitor.stop()
+            pauseSampling()
             return
         }
 
@@ -360,7 +352,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         restartInternalBatterySampling()
         restartBluetoothSampling(
             forceProfileRefresh: forceBluetoothProfileRefresh,
-            performActiveScan: true,
+            scanScope: .allConnected,
             revalidateSupplementalState: isComponentPanelVisible
         )
         restartAppleMobileSampling(revalidateImmediately: isComponentPanelVisible)
@@ -379,7 +371,7 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func restartBluetoothSampling(
         forceProfileRefresh: Bool,
-        performActiveScan: Bool,
+        scanScope: DeviceBatteryBluetoothScanScope,
         revalidateSupplementalState: Bool = false,
         initialDelay: TimeInterval = 0
     ) {
@@ -391,7 +383,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             guard let self else { return }
             await self.runBluetoothLoop(
                 forceProfileRefresh: forceProfileRefresh,
-                performInitialActiveScan: performActiveScan,
+                initialScanScope: scanScope,
                 revalidateInitialSupplementalState: revalidateSupplementalState,
                 initialDelay: initialDelay
             )
@@ -428,7 +420,7 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func runBluetoothLoop(
         forceProfileRefresh: Bool,
-        performInitialActiveScan: Bool,
+        initialScanScope: DeviceBatteryBluetoothScanScope,
         revalidateInitialSupplementalState: Bool,
         initialDelay: TimeInterval = 0
     ) async {
@@ -441,26 +433,35 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
 
         var shouldForceProfileRefresh = forceProfileRefresh
-        var shouldPerformActiveScan = performInitialActiveScan
+        var scanScope = initialScanScope
         var shouldRevalidateSupplementalState = revalidateInitialSupplementalState
 
         while !Task.isCancelled {
             await refreshBluetooth(
                 forceProfileRefresh: shouldForceProfileRefresh,
-                performActiveScan: shouldPerformActiveScan,
+                scanScope: scanScope,
                 revalidateSupplementalState: shouldRevalidateSupplementalState
             )
+            guard !Task.isCancelled else { return }
+            if pendingConnectionRefresh, bluetoothEventTask == nil {
+                pendingConnectionRefresh = false
+                pendingVisibleBluetoothRefresh = false
+                shouldForceProfileRefresh = true
+                scanScope = .newlyConnected
+                shouldRevalidateSupplementalState = true
+                continue
+            }
             if pendingVisibleBluetoothRefresh,
                isComponentPanelVisible,
                includeBluetoothDevices {
                 pendingVisibleBluetoothRefresh = false
                 shouldForceProfileRefresh = false
-                shouldPerformActiveScan = false
+                scanScope = .none
                 shouldRevalidateSupplementalState = true
                 continue
             }
             shouldForceProfileRefresh = false
-            shouldPerformActiveScan = true
+            scanScope = .allConnected
             shouldRevalidateSupplementalState = false
 
             do {
@@ -519,7 +520,7 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func refreshBluetooth(
         forceProfileRefresh: Bool,
-        performActiveScan: Bool,
+        scanScope: DeviceBatteryBluetoothScanScope,
         revalidateSupplementalState: Bool
     ) async {
         let collectionID = beginCollection(source: .bluetooth)
@@ -529,7 +530,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             referenceDate: referenceDate,
             options: DeviceBatteryBluetoothSamplingOptions(
                 forceProfileRefresh: forceProfileRefresh,
-                performActiveScan: performActiveScan,
+                scanScope: scanScope,
                 revalidateSupplementalState: revalidateSupplementalState
             )
         )
@@ -573,6 +574,8 @@ final class DeviceBatteryViewModel: ObservableObject {
             return
         }
 
+        pendingConnectionRefresh = true
+
         bluetoothEventTask?.cancel()
         bluetoothEventTask = Task { @MainActor [weak self, schedule] in
             do {
@@ -588,9 +591,12 @@ final class DeviceBatteryViewModel: ObservableObject {
                 return
             }
             self.bluetoothEventTask = nil
+            // The collection loop consumes the request after its current read finishes.
+            guard !self.isCollecting(.bluetooth) else { return }
+            self.pendingConnectionRefresh = false
             self.restartBluetoothSampling(
                 forceProfileRefresh: true,
-                performActiveScan: true,
+                scanScope: .newlyConnected,
                 revalidateSupplementalState: self.isComponentPanelVisible
             )
         }
@@ -601,15 +607,33 @@ final class DeviceBatteryViewModel: ObservableObject {
               activityState.allowsBackgroundWork,
               hasSamplingDemand else {
             vendorHIDMonitor.stop()
-            vendorHIDSnapshot = .idle
-            vendorHIDSnapshots.removeAll()
-            rebuildSnapshot()
             return
         }
 
         vendorHIDMonitor.start()
+        updateVendorHIDSnapshot()
+    }
+
+    private func updateVendorHIDSnapshot() {
+        // Discovery is transient; keep the last result until the device list is known.
+        guard vendorHIDMonitor.snapshot.accessState != .scanning else {
+            rebuildSnapshot()
+            return
+        }
         vendorHIDSnapshot = vendorHIDMonitor.snapshot
-        vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots
+        vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots.map { current in
+            guard current.accessState == .waitingForReport,
+                  current.reading == nil,
+                  let device = current.device,
+                  let previous = vendorHIDSnapshots.first(where: { $0.device?.stableKey == device.stableKey })
+            else {
+                return current
+            }
+            var retained = current
+            retained.reading = previous.reading
+            retained.lastUpdated = previous.lastUpdated
+            return retained
+        }
         rebuildSnapshot()
     }
 
@@ -632,7 +656,7 @@ final class DeviceBatteryViewModel: ObservableObject {
             } else {
                 restartBluetoothSampling(
                     forceProfileRefresh: shouldForceBluetoothProfileRefresh,
-                    performActiveScan: true,
+                    scanScope: .allConnected,
                     revalidateSupplementalState: true
                 )
             }
@@ -646,9 +670,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         }
         if includeVendorHIDDevices {
             vendorHIDMonitor.refresh()
-            vendorHIDSnapshot = vendorHIDMonitor.snapshot
-            vendorHIDSnapshots = vendorHIDMonitor.deviceSnapshots
-            rebuildSnapshot()
+            updateVendorHIDSnapshot()
         }
     }
 
@@ -658,7 +680,7 @@ final class DeviceBatteryViewModel: ObservableObject {
         if includeBluetoothDevices, !isCollecting(.bluetooth) {
             restartBluetoothSampling(
                 forceProfileRefresh: false,
-                performActiveScan: true,
+                scanScope: .allConnected,
                 initialDelay: remainingDelay(
                     since: sourceUpdateDates[.bluetooth],
                     interval: schedule.bluetoothBackground,
@@ -692,20 +714,8 @@ final class DeviceBatteryViewModel: ObservableObject {
 
     private func reconcileSamplingDemand(forceBluetoothProfileRefresh: Bool) {
         guard isStarted else { return }
-        guard activityState.allowsBackgroundWork else {
-            cancelSampling()
-            powerSourceObserver.stop()
-            bluetoothConnectionObserver.stop()
-            vendorHIDMonitor.stop()
-            rebuildSnapshot()
-            return
-        }
-        guard hasSamplingDemand else {
-            cancelSampling()
-            powerSourceObserver.stop()
-            bluetoothConnectionObserver.stop()
-            vendorHIDMonitor.stop()
-            clearCollectedSnapshots()
+        guard activityState.allowsBackgroundWork, hasSamplingDemand else {
+            pauseSampling()
             return
         }
 
@@ -728,9 +738,10 @@ final class DeviceBatteryViewModel: ObservableObject {
         restartSampling(
             forceBluetoothProfileRefresh: shouldForceBluetoothProfileRefresh
         )
+        rebuildSnapshot()
     }
 
-    private func cancelSampling() {
+    private func pauseSampling() {
         internalBatteryTask?.cancel()
         bluetoothTask?.cancel()
         appleMobileTask?.cancel()
@@ -743,8 +754,12 @@ final class DeviceBatteryViewModel: ObservableObject {
         activityResumeTask = nil
         pendingVisibleBluetoothRefresh = false
         pendingVisibleAppleMobileRefresh = false
+        pendingConnectionRefresh = false
         activeCollectionIDs.removeAll()
         collectionSourcesByID.removeAll()
+        powerSourceObserver.stop()
+        bluetoothConnectionObserver.stop()
+        vendorHIDMonitor.stop()
         rebuildSnapshot()
     }
 
@@ -810,9 +825,6 @@ final class DeviceBatteryViewModel: ObservableObject {
             })
         }
 
-        let accessState = items.isEmpty && !activeCollectionIDs.isEmpty
-            ? DeviceBatteryAccessState.scanning
-            : resolvedAccessState(items: items)
         let visibleSourceUpdateDates = [
             includeInternalBattery ? sourceUpdateDates[.internalBattery] : nil,
             includeBluetoothDevices ? sourceUpdateDates[.bluetooth] : nil,
@@ -822,7 +834,7 @@ final class DeviceBatteryViewModel: ObservableObject {
                 : nil
         ].compactMap { $0 }
         snapshot = DeviceBatterySnapshot(
-            accessState: accessState,
+            accessState: resolvedAccessState(items: items),
             items: deduplicated(
                 DeviceBatteryItemNormalizer.resolvingAppleMobileDeviceAliases(items)
             ),
@@ -832,13 +844,26 @@ final class DeviceBatteryViewModel: ObservableObject {
     }
 
     private func resolvedAccessState(items: [DeviceBatteryItem]) -> DeviceBatteryAccessState {
-        if vendorHIDSnapshot.accessState == .permissionDenied {
-            return items.isEmpty ? .permissionDenied : .ready
+        guard items.isEmpty else { return .ready }
+
+        let hasPendingInitialRead = (includeInternalBattery && sourceUpdateDates[.internalBattery] == nil)
+            || (includeBluetoothDevices && sourceUpdateDates[.bluetooth] == nil)
+            || (includeAppleMobileDevices && sourceUpdateDates[.appleMobile] == nil)
+            || (includeVendorHIDDevices && (
+                vendorHIDSnapshot.accessState == .idle
+                    || vendorHIDSnapshot.accessState == .scanning
+                    || vendorHIDSnapshot.accessState == .waitingForReport
+            ))
+        if hasPendingInitialRead {
+            return isStarted && hasSamplingDemand && activityState.allowsBackgroundWork ? .scanning : .idle
         }
-        if case let .failed(message) = vendorHIDSnapshot.accessState, items.isEmpty {
+        if vendorHIDSnapshot.accessState == .permissionDenied {
+            return .permissionDenied
+        }
+        if case let .failed(message) = vendorHIDSnapshot.accessState {
             return .failed(message)
         }
-        return items.isEmpty ? .noDevices : .ready
+        return .noDevices
     }
 
     private func deduplicated(_ items: [DeviceBatteryItem]) -> [DeviceBatteryItem] {

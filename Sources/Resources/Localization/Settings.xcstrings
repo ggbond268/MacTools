@@ -645,102 +645,6 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "主题前景与背景对比度只有 %.2f:1，至少需要 4.5:1。" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "主題前景與背景對比度只有 %.2f:1，至少需要 4.5:1。" } }
     } },
-    "plugins.dashboard.hiddenSectionFormat": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "مخفي في لوحة المعلومات (%d)" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Dashboard ausgeblendet (%d)" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hidden on Dashboard (%d)" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Oculto en el panel (%d)" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masqués du tableau de bord (%d)" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードで非表示（%d）" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드에서 가림 (%d)" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultos no painel (%d)" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыто на панели управления (%d)" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已在仪表盘隐藏（%d）" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已在儀表板隱藏（%d）" } }
-      }
-    },
-    "plugins.featurePanel.hiddenSectionFormat": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "مخفي في لوحة الميزات (%d)" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Im Funktionsbereich ausgeblendet (%d)" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hidden in Feature Panel (%d)" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Oculto en el panel de funciones (%d)" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masqués du panneau de fonctionnalités (%d)" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルで非表示（%d）" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널에서 가림 (%d)" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultos no painel de recursos (%d)" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыто на панели функций (%d)" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已在功能面板隐藏（%d）" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已在功能面板隱藏（%d）" } }
-      }
-    },
-    "plugins.dashboard.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختر ما يظهر على لوحة المعلومات واسحب لإعادة الترتيب." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Wählen Sie, was im Dashboard angezeigt wird, und ziehen Sie zum Neuordnen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Choose what appears on Dashboard, then drag to reorder." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Elige qué aparece en el panel y arrastra para reordenar." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Choisissez ce qui apparaît dans le tableau de bord, puis faites glisser pour réorganiser." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードに表示する項目を選び、ドラッグして並べ替えます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드에 표시할 항목을 선택하고 드래그하여 순서를 변경하세요." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Escolha o que aparece no painel e arraste para reordenar." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Выберите элементы на панели управления и перетащите их для изменения порядка." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择在仪表盘显示的插件，再拖拽调整顺序。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇在儀表板顯示的外掛，再拖曳調整順序。" } }
-      }
-    },
-    "plugins.dashboard.empty.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تظهر هنا المكونات الإضافية المثبتة التي تدعم لوحة المعلومات." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Installierte Plugins, die das Dashboard unterstützen, werden hier angezeigt." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Installed plugins that support the Dashboard appear here." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Aquí aparecen los plugins instalados que admiten el panel." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Les modules installés qui prennent en charge le tableau de bord apparaissent ici." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードに対応するインストール済みプラグインがここに表示されます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드를 지원하는 설치된 플러그인이 여기에 표시됩니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Os plugins instalados compatíveis com o painel aparecem aqui." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Здесь отображаются установленные плагины, поддерживающие панель управления." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "支持仪表盘的已安装插件将显示在这里。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "支援儀表板的已安裝外掛會顯示在這裡。" } }
-      }
-    },
-    "plugins.dashboard.empty.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "لا توجد مكوّنات للوحة المعلومات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Keine Dashboard-Komponenten" } },
-        "en": { "stringUnit": { "state": "translated", "value": "No Dashboard Components" } },
-        "es": { "stringUnit": { "state": "translated", "value": "No hay componentes del panel" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Aucun composant de tableau de bord" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードコンポーネントはありません" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드 구성 요소 없음" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Nenhum componente do painel" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Нет компонентов панели управления" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "暂无仪表盘组件" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "暫無儀表板組件" } }
-      }
-    },
-    "plugins.dashboard.open": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "فتح لوحة المعلومات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Dashboard öffnen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Open Dashboard" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Abrir panel" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir le tableau de bord" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "ダッシュボードを開く" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "대시보드 열기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Abrir painel" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Открыть панель управления" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开仪表盘" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開儀表板" } }
-      }
-    },
     "plugins.dashboard.title": {
       "extractionState": "manual",
       "localizations": {
@@ -757,70 +661,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "儀表板" } }
       }
     },
-    "plugins.featurePanel.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختر ما يظهر في لوحة الميزات واسحب لإعادة الترتيب." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Wählen Sie, was im Funktionsbereich angezeigt wird, und ziehen Sie zum Neuordnen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Choose what appears in Feature Panel, then drag to reorder." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Elige qué aparece en el panel de funciones y arrastra para reordenar." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Choisissez ce qui apparaît dans le panneau de fonctionnalités, puis faites glisser pour réorganiser." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルに表示する項目を選び、ドラッグして並べ替えます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널에 표시할 항목을 선택하고 드래그하여 순서를 변경하세요." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Escolha o que aparece no painel de recursos e arraste para reordenar." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Выберите элементы на панели функций и перетащите их для изменения порядка." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "选择在功能面板显示的插件，再拖拽调整顺序。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選擇在功能面板顯示的外掛，再拖曳調整順序。" } }
-      }
-    },
-    "plugins.featurePanel.empty.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "تظهر هنا المكونات الإضافية المثبتة التي تدعم لوحة الميزات." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Installierte Plugins, die den Funktionsbereich unterstützen, werden hier angezeigt." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Installed plugins that support the Feature Panel appear here." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Aquí aparecen los plugins instalados que admiten el panel de funciones." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Les modules installés qui prennent en charge le panneau de fonctionnalités apparaissent ici." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルに対応するインストール済みプラグインがここに表示されます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널을 지원하는 설치된 플러그인이 여기에 표시됩니다." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Os plugins instalados compatíveis com o painel de recursos aparecem aqui." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Здесь отображаются установленные плагины, поддерживающие панель функций." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "支持功能面板的已安装插件将显示在这里。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "支援功能面板的已安裝外掛會顯示在這裡。" } }
-      }
-    },
-    "plugins.featurePanel.empty.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "لا توجد إجراءات للوحة الميزات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Keine Aktionen im Funktionsbereich" } },
-        "en": { "stringUnit": { "state": "translated", "value": "No Feature Panel Actions" } },
-        "es": { "stringUnit": { "state": "translated", "value": "No hay acciones en el panel de funciones" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Aucune action du panneau de fonctionnalités" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルのアクションはありません" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널 작업 없음" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Nenhuma ação do painel de recursos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Нет действий панели функций" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "暂无功能面板操作" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "暫無功能面板操作" } }
-      }
-    },
-    "plugins.featurePanel.open": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "فتح لوحة الميزات" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Funktionsbereich öffnen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Open Feature Panel" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Abrir panel de funciones" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Ouvrir le panneau de fonctionnalités" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "機能パネルを開く" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기능 패널 열기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Abrir painel de recursos" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Открыть панель функций" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开功能面板" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開功能面板" } }
-      }
-    },
     "plugins.featurePanel.title": {
       "extractionState": "manual",
       "localizations": {
@@ -835,22 +675,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Панель функций" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "功能面板" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "功能面板" } }
-      }
-    },
-    "plugins.layout.restoreDefaultOrder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "استعادة الترتيب الافتراضي" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Standardreihenfolge wiederherstellen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Restore Default Order" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Restaurar orden predeterminado" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Rétablir l’ordre par défaut" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "デフォルトの順序に戻す" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기본 순서 복원" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Restaurar ordem padrão" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Восстановить порядок по умолчанию" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复默认排列" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "恢復預設排列" } }
       }
     },
     "plugins.sidebar.dashboard": {
@@ -9254,13 +9078,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "السوق"
+            "value": "سوق الإضافات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Marktplatz"
+            "value": "Plugin-Marktplatz"
           }
         },
         "en": {
@@ -9272,13 +9096,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mercado"
+            "value": "Catálogo de complementos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Place de marché"
+            "value": "Catalogue de plugins"
           }
         },
         "ja": {
@@ -9296,25 +9120,25 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mercado"
+            "value": "Catálogo de plug-ins"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Торговая площадка"
+            "value": "Каталог плагинов"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "市场"
+            "value": "插件市场"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "市場"
+            "value": "外掛市場"
           }
         }
       }

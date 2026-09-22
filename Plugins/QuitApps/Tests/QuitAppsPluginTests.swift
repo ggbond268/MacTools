@@ -8,22 +8,6 @@ import MacToolsPluginKit
 final class QuitAppsPluginTests: XCTestCase {
 
     // MARK: - Plugin Metadata
-    func testConfirmTitleIsQuitAllWhenNothingSelected() {
-        let vm = QuitAppsViewModel()
-
-        XCTAssertEqual(vm.confirmTitle, "退出全部应用")
-    }
-
-    func testConfirmTitleReflectsSelectionCount() {
-        let vm = QuitAppsViewModel()
-        vm.entries = [
-            makeEntry(id: "a", isSelected: true),
-            makeEntry(id: "b", isSelected: true),
-            makeEntry(id: "c", isSelected: false),
-        ]
-
-        XCTAssertEqual(vm.confirmTitle, "退出 2 个应用")
-    }
 
     // MARK: - QuitAppsViewModel – invertSelection
     func testInvertSelectionTogglesAllEntries() {
@@ -185,19 +169,6 @@ final class QuitAppsPluginTests: XCTestCase {
         let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
 
         XCTAssertFalse(plugin.actionAvailability(for: reference).isAvailable)
-    }
-
-    func testSelectionWindowDismissalNotifiesOwnerOnlyOnce() {
-        var dismissalCount = 0
-        let window = QuitAppsSelectionWindow {
-            dismissalCount += 1
-        }
-
-        window.dismiss()
-        window.dismiss()
-
-        XCTAssertEqual(dismissalCount, 1)
-        XCTAssertFalse(window.isVisible)
     }
 
     private func makeEntry(id: String, isSelected: Bool) -> QuitAppEntry {

@@ -20,9 +20,25 @@ private struct AutoHideMenuBarPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AutoHideMenuBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
-    PluginActionPermissionProviding
-{
+final class AutoHideMenuBarPlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("action.hide.title", defaultValue: "隐藏菜单栏"),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: rowDescriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let setMode = "set-mode"
@@ -33,7 +49,7 @@ final class AutoHideMenuBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginAct
     }
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -69,13 +85,12 @@ final class AutoHideMenuBarPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginAct
         self.mode = (try? self.controller.read()) ?? .never
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: modeTitle(mode),
             isOn: mode.hidesAnywhere,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

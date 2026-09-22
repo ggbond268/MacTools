@@ -30,7 +30,7 @@ Build local candidates from a recorded source commit, using the intended stable 
 
 The shared packaging and verification subcommands in `scripts/nightly-release.py` support both channels. `scripts/release-local.sh` continues producing app-only releases; it does not automatically package a managed stable CLI. Candidate preparation must explicitly follow the CLI packaging and metadata-sealing steps above.
 
-Never change metadata after signing, replace published assets at an existing tag, re-sign downloaded product binaries to bypass verification, or remove quarantine. Do not enable the publication gate merely to make test downloads available. No stable candidate was signed or published as part of implementing this support.
+Never change metadata after signing, replace published assets at an existing tag, re-sign downloaded product binaries to bypass verification, or remove quarantine. Do not enable the publication gate merely to make test downloads available.
 
 The **Release** workflow retains normal tag-based checkout and publication semantics, including when started manually. It has no candidate-only mode and must not be dispatched as a dry run. Local validation avoids creating a release tag that would trigger normal publication.
 
@@ -40,4 +40,4 @@ The **Release** workflow retains normal tag-based checkout and publication seman
 
 When enabled, the release workflow signs and notarizes the separate CLI, seals its metadata before app signing, and statically verifies it. Publication depends on the signing job and the credential-isolated CLI verification job, which verifies and executes the archive on a separate runner. The publisher downloads the same artifact ID, includes the separately verified ZIP/checksum and informational manifest, and refuses to overwrite an existing stable CLI release tag. The app's embedded metadata is authoritative. No CLI executable is embedded in the app, no shell files are changed, and users who have not installed the CLI receive no automatic CLI installation.
 
-Code/unit tests, candidate archive smoke tests, signed native installation/permission checks, full Sparkle updates, and release approval are separate evidence. Track the remaining Nightly matrix in #403 and stable rollout in #417; this implementation alone closes neither issue.
+Code/unit tests, candidate archive smoke tests, signed native installation/permission checks, full Sparkle updates, and release approval are separate evidence. Track release acceptance in the [Nightly checklist](../testing/cli-nightly-distribution.md) and the [stable CLI rollout](https://github.com/ggbond268/MacTools/issues/417).

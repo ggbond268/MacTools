@@ -19,8 +19,8 @@ separate system actions because macOS delivers them as system-defined events.
 - ID: `input-remapping`.
 - Settings layout: `workspace`.
 - Permissions: Accessibility, Input Monitoring.
-- `pluginKitVersion`: `6`.
-- Minimum host: MacTools `1.3.0`.
+- `pluginKitVersion`: `7`.
+- Minimum host: MacTools `1.3.1`.
 
 ## Shared trackpad gestures
 

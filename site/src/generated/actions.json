@@ -2317,6 +2317,124 @@
       "action": {
         "automaticEligible": true,
         "description": {
+          "ar": "خفض",
+          "de": "Senken",
+          "en": "Decrease",
+          "es": "Disminuir",
+          "fr": "Diminuer",
+          "ja": "減らす",
+          "ko": "줄이기",
+          "pt": "Diminuir",
+          "ru": "Уменьшить",
+          "zh-Hans": "降低",
+          "zh-Hant": "降低"
+        },
+        "externalInvocation": "allowed",
+        "id": "display-volume.decrease",
+        "keywords": [
+          "显示器音量",
+          "降低",
+          "display",
+          "volume",
+          "decrease"
+        ],
+        "parameters": [],
+        "permissionIDs": [],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "run-link",
+          "workflow",
+          "automatic-rule",
+          "action-grid",
+          "trackpad-gesture",
+          "app-intent",
+          "manual"
+        ],
+        "systemImage": "speaker.wave.1.fill",
+        "title": {
+          "ar": "خفض",
+          "de": "Senken",
+          "en": "Decrease",
+          "es": "Disminuir",
+          "fr": "Diminuer",
+          "ja": "減らす",
+          "ko": "줄이기",
+          "pt": "Diminuir",
+          "ru": "Уменьшить",
+          "zh-Hans": "降低",
+          "zh-Hant": "降低"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/display-volume?provider=display-volume&action=display-volume.decrease",
+      "pluginID": "display-volume",
+      "providerID": "display-volume",
+      "route": "/plugins/display-volume/actions/display-volume/display-volume.decrease/"
+    },
+    {
+      "action": {
+        "automaticEligible": true,
+        "description": {
+          "ar": "رفع",
+          "de": "Erhöhen",
+          "en": "Increase",
+          "es": "Aumentar",
+          "fr": "Augmenter",
+          "ja": "増やす",
+          "ko": "늘리기",
+          "pt": "Aumentar",
+          "ru": "Увеличить",
+          "zh-Hans": "增加",
+          "zh-Hant": "增加"
+        },
+        "externalInvocation": "allowed",
+        "id": "display-volume.increase",
+        "keywords": [
+          "显示器音量",
+          "增加",
+          "display",
+          "volume",
+          "increase"
+        ],
+        "parameters": [],
+        "permissionIDs": [],
+        "risk": "safe",
+        "surfaces": [
+          "unified-search",
+          "global-shortcut",
+          "run-link",
+          "workflow",
+          "automatic-rule",
+          "action-grid",
+          "trackpad-gesture",
+          "app-intent",
+          "manual"
+        ],
+        "systemImage": "speaker.wave.3.fill",
+        "title": {
+          "ar": "رفع",
+          "de": "Erhöhen",
+          "en": "Increase",
+          "es": "Aumentar",
+          "fr": "Augmenter",
+          "ja": "増やす",
+          "ko": "늘리기",
+          "pt": "Aumentar",
+          "ru": "Увеличить",
+          "zh-Hans": "增加",
+          "zh-Hant": "增加"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/display-volume?provider=display-volume&action=display-volume.increase",
+      "pluginID": "display-volume",
+      "providerID": "display-volume",
+      "route": "/plugins/display-volume/actions/display-volume/display-volume.increase/"
+    },
+    {
+      "action": {
+        "automaticEligible": true,
+        "description": {
           "ar": "عيّن ما إذا كان «قفل Dock» مفعّلًا.",
           "de": "Legt fest, ob „Dock-Sperre“ aktiviert ist.",
           "en": "Set whether Dock Lock is enabled.",

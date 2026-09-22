@@ -166,58 +166,6 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "登录系统时不再自动启动 MacTools。" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "登入系統時不再自動啟動 MacTools。" } }
     } },
-    "search.command.pluginVisibility.show.titleFormat": { "extractionState": "manual", "localizations": {
-      "ar": { "stringUnit": { "state": "translated", "value": "إظهار «%2$@» في %1$@" } },
-      "de": { "stringUnit": { "state": "translated", "value": "„%2$@“ in %1$@ anzeigen" } },
-      "en": { "stringUnit": { "state": "translated", "value": "Show “%2$@” in %1$@" } },
-      "es": { "stringUnit": { "state": "translated", "value": "Mostrar «%2$@» en %1$@" } },
-      "fr": { "stringUnit": { "state": "translated", "value": "Afficher « %2$@ » dans %1$@" } },
-      "ja": { "stringUnit": { "state": "translated", "value": "%1$@に「%2$@」を表示" } },
-      "ko": { "stringUnit": { "state": "translated", "value": "%1$@에 “%2$@” 표시" } },
-      "pt": { "stringUnit": { "state": "translated", "value": "Mostrar “%2$@” em %1$@" } },
-      "ru": { "stringUnit": { "state": "translated", "value": "Показать «%2$@» в разделе «%1$@»" } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "在%1$@中显示“%2$@”" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "在%1$@中顯示「%2$@」" } }
-    } },
-    "search.command.pluginVisibility.show.descriptionFormat": { "extractionState": "manual", "localizations": {
-      "ar": { "stringUnit": { "state": "translated", "value": "اعرض «%1$@» في %2$@." } },
-      "de": { "stringUnit": { "state": "translated", "value": "„%1$@“ in %2$@ einblenden." } },
-      "en": { "stringUnit": { "state": "translated", "value": "Show “%1$@” in %2$@." } },
-      "es": { "stringUnit": { "state": "translated", "value": "Mostrar «%1$@» en %2$@." } },
-      "fr": { "stringUnit": { "state": "translated", "value": "Afficher « %1$@ » dans %2$@." } },
-      "ja": { "stringUnit": { "state": "translated", "value": "「%1$@」を%2$@に表示します。" } },
-      "ko": { "stringUnit": { "state": "translated", "value": "“%1$@”을(를) %2$@에 표시합니다." } },
-      "pt": { "stringUnit": { "state": "translated", "value": "Mostrar “%1$@” em %2$@." } },
-      "ru": { "stringUnit": { "state": "translated", "value": "Показывать «%1$@» в разделе «%2$@»." } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "让“%1$@”出现在%2$@中。" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "讓「%1$@」顯示在%2$@中。" } }
-    } },
-    "search.command.pluginVisibility.hide.titleFormat": { "extractionState": "manual", "localizations": {
-      "ar": { "stringUnit": { "state": "translated", "value": "إخفاء «%2$@» من %1$@" } },
-      "de": { "stringUnit": { "state": "translated", "value": "„%2$@“ in %1$@ ausblenden" } },
-      "en": { "stringUnit": { "state": "translated", "value": "Hide “%2$@” from %1$@" } },
-      "es": { "stringUnit": { "state": "translated", "value": "Ocultar «%2$@» de %1$@" } },
-      "fr": { "stringUnit": { "state": "translated", "value": "Masquer « %2$@ » dans %1$@" } },
-      "ja": { "stringUnit": { "state": "translated", "value": "%1$@で「%2$@」を非表示" } },
-      "ko": { "stringUnit": { "state": "translated", "value": "%1$@에서 “%2$@” 숨기기" } },
-      "pt": { "stringUnit": { "state": "translated", "value": "Ocultar “%2$@” de %1$@" } },
-      "ru": { "stringUnit": { "state": "translated", "value": "Скрыть «%2$@» из раздела «%1$@»" } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "在%1$@中隐藏“%2$@”" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "在%1$@中隱藏「%2$@」" } }
-    } },
-    "search.command.pluginVisibility.hide.descriptionFormat": { "extractionState": "manual", "localizations": {
-      "ar": { "stringUnit": { "state": "translated", "value": "أخفِ «%2$@» من %1$@ مع إبقاء الإضافة مثبتة." } },
-      "de": { "stringUnit": { "state": "translated", "value": "„%2$@“ in %1$@ ausblenden, ohne das Plugin zu deinstallieren." } },
-      "en": { "stringUnit": { "state": "translated", "value": "Hide “%2$@” from %1$@ without uninstalling the plugin." } },
-      "es": { "stringUnit": { "state": "translated", "value": "Ocultar «%2$@» de %1$@ sin desinstalar el plugin." } },
-      "fr": { "stringUnit": { "state": "translated", "value": "Masquer « %2$@ » dans %1$@ sans désinstaller le module." } },
-      "ja": { "stringUnit": { "state": "translated", "value": "プラグインをアンインストールせずに、%1$@で「%2$@」を非表示にします。" } },
-      "ko": { "stringUnit": { "state": "translated", "value": "플러그인을 제거하지 않고 %1$@에서 “%2$@”을(를) 숨깁니다." } },
-      "pt": { "stringUnit": { "state": "translated", "value": "Ocultar “%2$@” de %1$@ sem desinstalar o plugin." } },
-      "ru": { "stringUnit": { "state": "translated", "value": "Скрыть «%2$@» из раздела «%1$@», не удаляя плагин." } },
-      "zh-Hans": { "stringUnit": { "state": "translated", "value": "从%1$@中隐藏“%2$@”，但保留插件安装。" } },
-      "zh-Hant": { "stringUnit": { "state": "translated", "value": "從%1$@中隱藏「%2$@」，但保留外掛安裝。" } }
-    } },
     "search.detail.about": { "extractionState": "manual", "localizations": {
       "ar": { "stringUnit": { "state": "translated", "value": "الإصدار والتحديثات وروابط المشروع." } }, "de": { "stringUnit": { "state": "translated", "value": "Version, Updates und Projektlinks." } }, "en": { "stringUnit": { "state": "translated", "value": "Version, updates, and project links." } }, "es": { "stringUnit": { "state": "translated", "value": "Versión, actualizaciones y enlaces del proyecto." } }, "fr": { "stringUnit": { "state": "translated", "value": "Version, mises à jour et liens du projet." } }, "ja": { "stringUnit": { "state": "translated", "value": "バージョン、アップデート、プロジェクトリンク。" } }, "ko": { "stringUnit": { "state": "translated", "value": "버전, 업데이트 및 프로젝트 링크." } }, "pt": { "stringUnit": { "state": "translated", "value": "Versão, atualizações e links do projeto." } }, "ru": { "stringUnit": { "state": "translated", "value": "Версия, обновления и ссылки проекта." } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "版本、更新和项目链接。" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "版本、更新與專案連結。" } }
     } },

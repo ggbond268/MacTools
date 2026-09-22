@@ -20,9 +20,25 @@ private struct AppearancePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
-    PluginActionPermissionProviding
-{
+final class AppearancePlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: rowDescriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let toggle = "toggle"
@@ -33,7 +49,7 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
     }
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -76,15 +92,14 @@ final class AppearancePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPr
         }
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: isDarkMode
                 ? localization.string("panel.subtitle.enabled", defaultValue: "已开启")
                 : localization.string("panel.subtitle.disabled", defaultValue: "已关闭"),
             isOn: isDarkMode,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

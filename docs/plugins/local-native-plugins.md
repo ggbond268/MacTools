@@ -2,7 +2,7 @@
 
 MacTools supports trusted local native plugins through a host-owned package store and a shared `MacToolsPluginKit.framework`.
 
-This phase intentionally supports only trusted local plugins built by the same developer identity as the host app. The host validates the plugin bundle signature before loading code. Disabling or uninstalling a plugin immediately removes its contributions from the UI and deletes package files when requested, while already-loaded native code is fully released after the app restarts.
+Native plugins run in-process and must be trusted. When the host has a Team ID, plugin bundles must use the same Team ID. The host validates the plugin bundle signature before loading code. Disabling or uninstalling a plugin immediately removes its contributions from the UI and deletes package files when requested, while already-loaded native code is fully released after the app restarts.
 
 For catalog-based installation, GitHub release distribution, and Debug `file://` development catalogs, see [plugin-catalog.md](plugin-catalog.md).
 
@@ -28,7 +28,7 @@ Example.mactoolsplugin/
 
 `plugin.json` is read before loading executable code:
 
-PluginKit v6 first ships in MacTools 1.3.0. Every v6 package must declare `minHostVersion` of at least `1.3.0`; raise it again when using APIs introduced in a later host. Older ABI packages remain discoverable for updates but cannot load into the v6 host.
+The current source uses PluginKit v7 with a minimum host version of `1.3.1`. Rebuild packages for this ABI; older packages remain discoverable for updates but cannot load into the v7 host. Released v6 hosts retain their own catalog.
 
 ```json
 {
@@ -46,13 +46,12 @@ PluginKit v6 first ships in MacTools 1.3.0. Every v6 package must declare `minHo
     }
   },
   "version": "1.0.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "Example.bundle",
   "factoryClass": "Example.ExamplePluginFactory",
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": false,
+    "panelItems": ["row"],
     "settings": "form"
   },
   "permissions": [],
@@ -95,7 +94,7 @@ When a plugin uses a private Apple framework, it must load that framework dynami
 
 ## Development Steps
 
-To add a plugin, create `Plugins/<PluginName>/plugin.json`, `Sources/`, and `Bundle/`. Add `Tests/` when the behavior is testable. Most plugins can then run directly with:
+To add a plugin, create `Plugins/<PluginName>/plugin.json`, `Sources/`, and `Bundle/`. Add `Tests/` for core behavior or regressions not already covered; see the [validation policy](../../CONTRIBUTING.md#validation). Most plugins can then run directly with:
 
 ```bash
 make run
@@ -123,7 +122,7 @@ private enum DemoL10n {
 }
 ```
 
-To resynchronize already-built Debug plugin bundles without launching the app:
+To build and resynchronize Debug plugin bundles without launching the app:
 
 ```bash
 make sync-debug-plugins
@@ -144,13 +143,13 @@ When a change touches `Sources/MacToolsPluginKit/`, it is package-relevant for e
 
 Users can remove every widget or add multiple copies of the same plugin. A widget is a presentation entry, not a new plugin instance: installation, activation, shortcuts, and independently enabled background services remain plugin-owned.
 
-Use `PluginPanelSurfaceLifecycleHandling` for work required by the currently visible panel. The host sends one visibility transition per plugin and surface, regardless of copy count; switching between panels containing the same surface keeps that consumer alive. Removing the last visible copy releases it. Plugins with multiple foreground surfaces should track a set of consumers, as System Status does.
+Declare multiple named views with `MacToolsPlugin.panelItems`; see [Panel items](panel-items.md) for IDs, renderer types, defaults, and migration. Use each item’s `onVisibilityChange` for work required by the presented panel. Copies of the same item share one visibility transition, while distinct items are separate consumers. Switching panels containing the same item does not restart its work.
 
-Component views are mounted near the scroll viewport and can be recycled. Keep durable selection state and business tasks in a plugin-owned model; reserve view-local state for transient interaction. Do not start polling or refresh business data from each copy's `onAppear`. Library previews receive `PluginComponentContext.isPanelVisible == false`: they must not acquire foreground consumers or change live layout measurements. That context distinguishes preview creation from live content; lifecycle callbacks are the authority for subsequent panel visibility changes.
+Component views are mounted near the scroll viewport and can be recycled. Keep durable selection state and business tasks in a plugin-owned model; reserve view-local state for transient interaction. Do not start polling or refresh business data from each copy's `onAppear`. Library previews receive `PluginPanelWidgetContext.isPreview == true`: they must not acquire foreground consumers or change live layout measurements. That context distinguishes preview creation from live content; lifecycle callbacks are the authority for subsequent panel visibility changes.
 
 ## Settings UI
 
-Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` entry point with two explicit layouts:
+Plugin settings are hosted by MacTools. PluginKit 7 exposes one `settingsPage` entry point with two explicit layouts:
 
 - `PluginSettingsPage.form` is the default. Describe standard controls with `PluginSettingsSection`, `PluginSettingsRow`, and `PluginSettingsControl`; the host renders the native grouped form, search entries, validation, permissions, and shortcuts.
 - Reserve segmented pickers for a few short labels; use `.menu` when options are longer or localization can make the row overflow. Declarative sliders should provide `valueFormat` for a live host-rendered readout. Custom settings use `PluginSettingsSlider` to keep stepped values without drawing dense tick marks.
@@ -161,10 +160,6 @@ Plugin settings are hosted by MacTools. PluginKit 6 exposes one `settingsPage` e
 
 The manifest must declare the matching `capabilities.settings` value: `none`, `form`, or `workspace`. The host does not read an undeclared page and rejects a runtime layout that differs from the manifest. This capability is an ABI contract, not a styling preference.
 
-## Pointer-intercepting plugins
-
-Plugins that use a `CGEvent` tap must declare `accessibility` in `plugin.json.permissions` and expose the matching `PluginPermissionRequirement`. Start the tap only after authorization, stop and invalidate it during deactivation, and re-enable it after `.tapDisabledByTimeout` or `.tapDisabledByUserInput`. Keep callback work bounded; never perform I/O, scanning, or blocking operations there.
-
 Settings changes use typed `PluginSettingsAction` values (`setBoolean`, `setSelection`, `setNumber`, `setText`, and `invoke`) instead of string-only callbacks. Text and numeric controls distinguish `.changed` from `.committed`, allowing live updates without rebuilding the entire settings hierarchy for every keystroke or slider tick.
 
 Custom sections and workspaces provide only plugin-specific content. The settings window title, plugin icon, description, permission cards, shortcut cards, scrolling shell, and system background are derived by the host; do not repeat a page title inside custom content. Form sections must not draw their own outer card or section header: use `presentation: .standard` for normal custom content, or `.edgeToEdge` for an AppKit table or an internally padded row collection. Add/Refresh-style actions belong in `.headerAccessory`.
@@ -173,23 +168,15 @@ All custom settings views should use `MacToolsPluginKit.PluginSettingsTheme` for
 
 Use `PluginSettingsItem` (host 1.3.1+) for an icon, title, optional description, and trailing custom control. It shares the host form row layout and neutral icon styling. The containing form or custom section still owns padding and separators; use `pluginSettingsListRowPadding` for internally padded sections.
 
-Recommended mapping:
-
-- Page-level text: `PluginSettingsTheme.Typography.pageTitle` and `pageDescription`.
-- Section labels: `Label` with an SF Symbol, `sectionTitle`, and `.foregroundStyle(.secondary)`.
-- Row text: `rowTitle` or `emphasizedRowTitle`; supporting text uses `rowDescription`; status pills use `statusBadge`.
-- Fixed-width numeric or path-like values may use `monospacedValue` or a local monospaced font when the content requires it.
-- Layout: use `Spacing.section`, `sectionHeaderContent`, `cardContent`, `rowHorizontal`, `rowVertical`, `interactiveRowVertical`, and `rowContentControl`.
-- Containers: grouped Form supplies ordinary settings cards. Use `.pluginSettingsCardBackground(.standard)` only inside workspaces, and `.recessed` for inset fields or log panes.
-- Ordinary settings cards should be separated by background color, spacing, and rounded corners rather than borders. Reserve strokes for focused inputs, keycaps, badges, or other control-specific states.
-
-Avoid copying a plugin-local settings style enum. If a token is missing, add it to `PluginSettingsTheme` instead of hard-coding the same value in multiple plugins.
+Use the shared typography, spacing, control, and container rules in [Plugin development standards](development-guidelines.md#visual-and-interaction-design). Extend `PluginSettingsTheme` when a shared token is missing instead of copying a local style enum.
 
 ### Unified Search
 
 MacTools automatically indexes visible declarative row titles, descriptions, keywords and picker options, plus permission and shortcut rows. Current text-field and secure-field values are never indexed. Custom sections and workspaces can expose individual destinations by conforming to `PluginSettingsSearchProviding`; apply `pluginSettingsSearchAnchor(pluginID:entryID:)` to the matching control so selecting a result scrolls to, highlights, and exposes accessibility focus.
 
-Commands are never inferred from panel buttons. A plugin must explicitly conform to `PluginCommandProviding` and publish only actions that are safe and useful in the global palette. Commands that need an extra user decision should provide confirmation metadata. Destructive actions should remain in their contextual plugin UI unless their complete safety flow can be represented by that confirmation.
+Actions are never inferred from panel buttons. `PluginCommandProviding` remains available for existing legacy commands; new executable capabilities use the canonical action API below. Actions requiring a decision must declare confirmation metadata and preserve their complete safety flow.
+
+## Actions and shortcuts
 
 New executable capabilities should use `PluginActionProviding` rather than adding new legacy commands or shortcut-owned callbacks. Publish stable `ActionKey` values, versioned parameter schemas, availability snapshots, risk/confirmation policy, external-invocation policy, execution capabilities, and bounded timeouts. If discovery surfaces should name system permissions before execution, also implement `PluginActionPermissionProviding` and map each action to IDs declared by `permissionRequirements`.
 
@@ -236,7 +223,7 @@ Install and update are staged before moving into `Installed`. Per-plugin runtime
 - The manifest ID, versions, and bundle relative path are validated before loading code.
 - Host version and plugin kit version are checked before loading code.
 - Installed packages built for an older PluginKit are kept on disk but marked incompatible and are never passed to the native bundle loader.
-- Public value types within one PluginKit version must preserve their stored binary layout. CI compiles the frozen v5 `PluginShortcutRecorder` client declaration and links that client against the current framework so source-only tests cannot hide an incompatible in-place layout change.
+- Public value types within one PluginKit version must preserve their stored binary layout. CI compiles the independent frozen v7 client in `scripts/fixtures/plugin-kit-v7/` and links it against the current framework to catch binary incompatibility that source-only tests can miss. See [Panel items](panel-items.md#compact-icon-controls) for the pre-release baseline.
 - The plugin bundle signature is validated before loading code.
 - When the host has a Team ID, the plugin bundle must have the same Team ID.
 - Untrusted third-party native plugins should use a future isolated process or XPC model instead of in-process bundle loading.
@@ -254,7 +241,11 @@ func deactivate(reason: PluginDeactivationReason)
 
 Native bundle code is treated as loaded for the lifetime of the current app process. If a loaded plugin is updated or uninstalled, its contributions are removed from MacTools immediately and `deactivate` is called, but the executable code is considered fully released only after the app restarts. Updating a loaded plugin replaces the package files on disk and activates the new code on the next launch.
 
-## Palette text input (MacTools 1.3.1)
+## Pointer-intercepting plugins
+
+Plugins using a `CGEvent` tap declare `accessibility` in the manifest and expose a matching `PluginPermissionRequirement`. Start only after authorization, stop and invalidate the tap during deactivation, and re-enable it after `.tapDisabledByTimeout` or `.tapDisabledByUserInput`. Keep callback work bounded; never perform I/O, scans, or blocking operations there.
+
+## Palette text input
 
 A provider can additionally adopt `PluginActionInputProviding` to expose one required string input through host-owned composition and optional explicit aliases. Declare an existing canonical action with a sensitive, local-only string parameter, then publish an `ActionInputDescriptor`. The host keeps these incomplete descriptors separate from executable catalog references. After preparation and validation, it assembles the complete reference and uses the normal action executor.
 

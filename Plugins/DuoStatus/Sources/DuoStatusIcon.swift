@@ -9,6 +9,9 @@ enum DuoIconAppearance {
 enum DuoStatusIcon {
     static let size = NSSize(width: 24, height: 24)
     private static let drawingPointSize: CGFloat = 18
+    private static let artworkScale: CGFloat = 0.8
+    // Include the power badge and signal dots in one fixed optical center for every state.
+    private static let artworkCenter = NSPoint(x: 9, y: 9.5)
 
     static func image(
         for snapshot: DuoSystemStatusSnapshot,
@@ -20,8 +23,11 @@ enum DuoStatusIcon {
         let image = NSImage(size: pointSize, flipped: false) { _ in
             NSGraphicsContext.saveGraphicsState()
             defer { NSGraphicsContext.restoreGraphicsState() }
+            let scale = min(pointSize.width, pointSize.height) / drawingPointSize * artworkScale
             let transform = NSAffineTransform()
-            transform.scaleX(by: pointSize.width / drawingPointSize, yBy: pointSize.height / drawingPointSize)
+            transform.translateX(by: pointSize.width / 2, yBy: pointSize.height / 2)
+            transform.scale(by: scale)
+            transform.translateX(by: -artworkCenter.x, yBy: -artworkCenter.y)
             transform.concat()
             drawBattery(snapshot, color: ringColor ?? foreground)
             if snapshot.isExternalPowerConnected {

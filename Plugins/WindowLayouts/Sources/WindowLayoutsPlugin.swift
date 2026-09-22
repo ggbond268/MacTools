@@ -228,7 +228,7 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
                 "settings.shortcuts.description",
                 "可使用预设，也可逐项录制自己的全局快捷键。"
             ),
-            actionIDs: Set(actionDefinitions.map(\.key.actionID))
+            actionIDs: Set(WindowLayoutOperation.allCases.map(\.rawValue) + store.customCommands.map(\.actionID))
         )
     }
 
@@ -267,7 +267,8 @@ final class WindowLayoutsPlugin: MacToolsPlugin, AccessibilityPermissionRefreshi
 
     func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
         guard actionKey.providerID == metadata.id,
-              actionDefinitions.contains(where: { $0.key == actionKey })
+              WindowLayoutOperation(rawValue: actionKey.actionID) != nil
+                || store.customCommand(actionID: actionKey.actionID) != nil
         else { return [] }
         return [PermissionID.accessibility]
     }

@@ -6,19 +6,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class SystemSoftRestartPluginTests: XCTestCase {
-    func testDefaultsPreserveDockAndReopenApplications() throws {
-        let storage = SystemSoftRestartMemoryStorage()
-        let plugin = makePlugin(storage: storage)
-        let settingsPage = try XCTUnwrap(plugin.settingsPage)
-        guard case let .form(sections) = settingsPage.body,
-              case let .rows(rows) = sections.first?.content
-        else {
-            return XCTFail("Expected a declarative settings form")
-        }
-
-        XCTAssertTrue(toggleValue(id: "reopens-applications", rows: rows))
-        XCTAssertTrue(toggleValue(id: "preserves-dock-layout", rows: rows))
-    }
 
     func testPanelActionPresentsConfirmationBeforeRunning() async throws {
         let runner = FakeSystemSoftRestartRunner()
@@ -34,6 +21,8 @@ final class SystemSoftRestartPluginTests: XCTestCase {
 
         XCTAssertEqual(presenter.confirmationPlans.count, 1)
         XCTAssertEqual(presenter.confirmationPlans.first?.applicationURLs, [applicationURL])
+        XCTAssertEqual(presenter.confirmationPlans.first?.reopensApplications, true)
+        XCTAssertEqual(presenter.confirmationPlans.first?.preservesDockLayout, true)
         XCTAssertTrue(runner.plans.isEmpty)
 
         presenter.confirmHandler?()
@@ -166,7 +155,7 @@ final class SystemSoftRestartPluginTests: XCTestCase {
         let plugin = makePlugin(runner: runner)
         let definition = try XCTUnwrap(plugin.actionDefinitions.first)
 
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isEnabled)
         XCTAssertFalse(plugin.actionAvailability(for: ActionReference(key: definition.key)).isAvailable)
     }
 
@@ -272,16 +261,6 @@ final class SystemSoftRestartPluginTests: XCTestCase {
             presenter: presenter ?? FakeSystemSoftRestartPresenter(),
             applicationURLProvider: { applicationURLs }
         )
-    }
-
-    private func toggleValue(id: String, rows: [PluginSettingsRow]) -> Bool {
-        guard let row = rows.first(where: { $0.id == id }),
-              case let .toggle(isOn) = row.control
-        else {
-            XCTFail("Missing toggle \(id)")
-            return false
-        }
-        return isOn
     }
 
     private func makeApplicationBundle(

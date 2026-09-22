@@ -2,548 +2,121 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// AX objects are opaque handles. All reads and actions on them are serialized by
-/// their owning process worker; only immutable snapshots cross to the main actor.
-struct WindowSwitcherWindowSnapshot: @unchecked Sendable {
-    let id: String
-    let element: AXUIElement
-    var title: String
-    var minimized: Bool
-    var bounds: CGRect
-    var windowNumber: CGWindowID? = nil
-    var unavailable: Bool = false
-}
-
-struct WindowSwitcherScan: Sendable {
-    var windows: [WindowSwitcherWindowSnapshot]
-    var focusedID: String?
-    var unavailable: Bool
-    var windowListReadSucceeded = true
-}
-
-struct WindowSwitcherAXIdentity: Hashable {
-    let element: AXUIElement
-    static func == (lhs: Self, rhs: Self) -> Bool { CFEqual(lhs.element, rhs.element) }
-    func hash(into hasher: inout Hasher) { hasher.combine(CFHash(element)) }
-}
-
-struct WindowSwitcherWindowIdentities {
-    private var live: [WindowSwitcherAXIdentity: String] = [:]
-
-    mutating func reconcile(_ elements: [AXUIElement]) -> [String] {
-        reconcile(elements, shouldContinue: { true })!
-    }
-
-    mutating func reconcile(_ elements: [AXUIElement], shouldContinue: () -> Bool) -> [String]? {
-        var next: [WindowSwitcherAXIdentity: String] = [:]
-        var result: [String] = []
-        for element in elements {
-            guard shouldContinue() else { return nil }
-            let key = WindowSwitcherAXIdentity(element: element)
-            let id = next[key] ?? live[key] ?? "window:\(UUID())"
-            next[key] = id
-            result.append(id)
-        }
-        live = next
-        return result
-    }
-}
-
-enum WindowSwitcherActionResult: Equatable, Sendable {
-    case succeeded, requested, unavailable, failed, cancelled
-    var message: String? {
-        switch self {
-        case .succeeded, .cancelled: nil
-        case .requested: "已发送请求；窗口可能需要确认保存。"
-        case .unavailable: "窗口已关闭或暂时无法访问，请重新选择。"
-        case .failed: "未能确认目标窗口，请重试或检查辅助功能权限。"
-        }
-    }
-}
-
-/// One bounded queue per application prevents a hung process from blocking the UI
-/// or another application's discovery. Notifications coalesce with a polling fallback.
-final class WindowSwitcherProcessWorker: @unchecked Sendable {
-    let pid: pid_t
-    let launchDate: Date?
-    let lifetime = UUID()
-    private let queue: DispatchQueue
-    private let app: AXUIElement
-    private let access: any WindowSwitcherAXAccess
-    private let requestWindowActivation: @Sendable (CGWindowID, pid_t, WindowSwitcherActionCancellation) -> Bool
-    private let windowIsRevealable: @Sendable (CGWindowID, pid_t) -> Bool
-    private let windowIsOnScreen: @Sendable (CGWindowID, pid_t) -> Bool
-    private let windowIsOnActiveSpace: @Sendable (CGWindowID) -> Bool?
-    private var records: [WindowSwitcherWindowSnapshot] = []
-    private var identities = WindowSwitcherWindowIdentities()
-    private var offSpaceResolver = WindowSwitcherOffSpaceResolver()
-    private var observer: AXObserver?
-    private var observedWindows: Set<WindowSwitcherAXIdentity> = []
-    private let uptime: @Sendable () -> TimeInterval
-    private var cursor = 0
-    private var stopped = false
-    private let invalidated: @Sendable () -> Void
-
-    init(pid: pid_t, launchDate: Date?, access: any WindowSwitcherAXAccess = SystemWindowSwitcherAXAccess(),
-         uptime: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-         requestWindowActivation: @escaping @Sendable (CGWindowID, pid_t, WindowSwitcherActionCancellation) -> Bool = { WindowSwitcherWindowServer.activate($0, pid: $1, cancellation: $2) },
-         windowIsRevealable: @escaping @Sendable (CGWindowID, pid_t) -> Bool = { WindowSwitcherWindowServer.isRevealable($0, pid: $1) },
-         windowIsOnScreen: @escaping @Sendable (CGWindowID, pid_t) -> Bool = { WindowSwitcherWindowServer.isOnScreen($0, pid: $1) },
-         windowIsOnActiveSpace: @escaping @Sendable (CGWindowID) -> Bool? = { WindowSwitcherSpaceMembership.isOnActiveSpace($0) },
-         invalidated: @escaping @Sendable () -> Void) {
-        self.access = access
-        self.requestWindowActivation = requestWindowActivation
-        self.windowIsRevealable = windowIsRevealable
-        self.windowIsOnScreen = windowIsOnScreen
-        self.windowIsOnActiveSpace = windowIsOnActiveSpace
-        self.uptime = uptime
-        self.pid = pid
-        self.launchDate = launchDate
-        self.invalidated = invalidated
-        queue = DispatchQueue(label: "WindowSwitcher.AX.\(pid)", qos: .userInitiated)
-        app = AXUIElementCreateApplication(pid)
-    }
-
-    func stop() {
-        queue.async { [self] in
-            stopped = true
-            observedWindows.removeAll()
-            records.removeAll()
-            // Keep the callback context alive until removal on the callback's
-            // own run loop; an in-progress main-thread callback cannot race free.
-            DispatchQueue.main.async { [self] in
-                if let observer { CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes) }
-                observer = nil
-            }
-        }
-    }
-
-    func scan() async -> WindowSwitcherScan {
-        await withCheckedContinuation { continuation in
-            queue.async { [self] in continuation.resume(returning: read()) }
-        }
-    }
-
-    private func read() -> WindowSwitcherScan {
-        guard !stopped else { return WindowSwitcherScan(windows: [], unavailable: true, windowListReadSucceeded: false) }
-        let deadline = uptime() + 0.25
-        func incomplete() -> WindowSwitcherScan {
-            WindowSwitcherScan(windows: records.map { var r = $0; r.unavailable = true; return r },
-                               unavailable: true, windowListReadSucceeded: false)
-        }
-        AXUIElementSetMessagingTimeout(app, 0.06)
-        installObserver()
-        guard let windows = copyWindows(shouldContinue: { self.uptime() < deadline }) else { return incomplete() }
-        let live = Set(windows.map { WindowSwitcherAXIdentity(element: $0) })
-        guard uptime() < deadline,
-              let windowIDs = identities.reconcile(windows, shouldContinue: { self.uptime() < deadline }) else { return incomplete() }
-        records.removeAll { !live.contains(WindowSwitcherAXIdentity(element: $0.element)) }
-        // Deferred observer removal retains ownership until a later scan can finish it.
-        for old in observedWindows where !live.contains(old) {
-            guard uptime() < deadline else { break }
-            if let observer {
-                for name in Self.windowNotifications { AXObserverRemoveNotification(observer, old.element, name as CFString) }
-            }
-            observedWindows.remove(old)
-        }
-        var indexes = Dictionary(uniqueKeysWithValues: records.enumerated().map { (WindowSwitcherAXIdentity(element: $0.element.element), $0.offset) })
-        var excluded = Set<String>()
-        var didRead = 0
-        var metadataFailed = false
-        let count = windows.count
-        for offset in 0..<count {
-            guard uptime() < deadline else { break }
-            let index = (cursor + offset) % count
-            let window = windows[index]
-            let key = WindowSwitcherAXIdentity(element: window)
-            AXUIElementSetMessagingTimeout(window, 0.06)
-            let oldIndex = indexes[key]
-            switch snapshot(window, id: windowIDs[index]) {
-            case let .eligible(snapshot):
-                if let oldIndex { records[oldIndex] = snapshot }
-                else { indexes[key] = records.count; records.append(snapshot) }
-                if uptime() < deadline { observe(window) }
-            case .excluded:
-                if let oldIndex { excluded.insert(records[oldIndex].id) }
-            case .unavailable:
-                metadataFailed = true
-                if let oldIndex { records[oldIndex].unavailable = true }
-            }
-            didRead += 1
-        }
-        records.removeAll { excluded.contains($0.id) }
-        cursor = count == 0 ? 0 : (cursor + didRead) % count
-        let focused = uptime() < deadline ? copyElement(app, kAXFocusedWindowAttribute) : nil
-        let focusedID = focused.flatMap { element in records.first { CFEqual($0.element, element) }?.id }
-        return WindowSwitcherScan(windows: records, focusedID: focusedID, unavailable: metadataFailed || didRead < count)
-    }
-
-    private enum Admission { case eligible(WindowSwitcherWindowSnapshot), excluded, unavailable }
-    private func snapshot(_ window: AXUIElement, id: String) -> Admission {
-        guard let values = access.windowAttributes(window), values.count == 6,
-              let role = values[0] as? String else { return .unavailable }
-        // A process root masquerading as a window is invalid AX data, not
-        // evidence that the app has no user windows.
-        if role == kAXApplicationRole as String { return .unavailable }
-        guard role == kAXWindowRole as String else { return .excluded }
-        if let subrole = values[1] as? String,
-           ![kAXStandardWindowSubrole as String, kAXDialogSubrole as String, "AXFullScreenWindow"].contains(subrole) {
-            return .excluded
-        }
-        guard let minimized = values[3] as? Bool,
-              let point = decodePoint(values[4]),
-              let size = decodeSize(values[5]) else { return .unavailable }
-        guard point.x.isFinite, point.y.isFinite, size.width.isFinite, size.height.isFinite,
-              size.width >= 0, size.height >= 0 else { return .unavailable }
-        guard minimized || (size.width >= 80 && size.height >= 60) else { return .excluded }
-        return .eligible(WindowSwitcherWindowSnapshot(id: id, element: window, title: values[2] as? String ?? "",
-                                                       minimized: minimized, bounds: CGRect(origin: point, size: size),
-                                                       windowNumber: access.windowNumber(window)))
-    }
-
-    private func decodePoint(_ raw: Any) -> CGPoint? {
-        let value = raw as CFTypeRef
-        guard CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
-        var result = CGPoint.zero
-        guard AXValueGetValue(value as! AXValue, .cgPoint, &result) else { return nil }
-        return result
-    }
-
-    private func decodeSize(_ raw: Any) -> CGSize? {
-        let value = raw as CFTypeRef
-        guard CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
-        var result = CGSize.zero
-        guard AXValueGetValue(value as! AXValue, .cgSize, &result) else { return nil }
-        return result
-    }
-
-    private func copyWindows(shouldContinue: () -> Bool = { true }) -> [AXUIElement]? {
-        guard let values = access.windows(of: app), shouldContinue() else { return nil }
-        var seen = Set<WindowSwitcherAXIdentity>()
-        var result: [AXUIElement] = []
-        for window in values {
-            guard shouldContinue(), !CFEqual(window, app) else { return nil }
-            if seen.insert(WindowSwitcherAXIdentity(element: window)).inserted { result.append(window) }
-        }
-        return result
-    }
-
-    private func copyElement(_ element: AXUIElement, _ name: String) -> AXUIElement? {
-        access.element(element, attribute: name)
-    }
-
-    /// Cooperative app activation can be declined when handing focus from the
-    /// chooser to the selected window's application. Request the
-    /// app's Accessibility foreground state once, then observe it before raising.
-    func requestApplicationActivation(cancellation: WindowSwitcherActionCancellation = WindowSwitcherActionCancellation()) async -> AXError {
-        return await withTaskCancellationHandler {
-            guard !Task.isCancelled else { return .cannotComplete }
-            return await withCheckedContinuation { continuation in
-                queue.async { [self] in
-                    guard !stopped, !cancellation.isCancelled else {
-                        continuation.resume(returning: .cannotComplete); return
-                    }
-                    continuation.resume(returning: access.set(app, attribute: kAXFrontmostAttribute, value: true))
-                }
-            }
-        } onCancel: { cancellation.cancel() }
-    }
-
-    func validate(_ id: String) async -> Bool {
-        await withCheckedContinuation { continuation in
-            queue.async { [self] in continuation.resume(returning: liveWindow(id, retryUnavailable: true) != nil) }
-        }
-    }
-
-    private func liveWindow(_ id: String, cancellation: WindowSwitcherActionCancellation? = nil,
-                            retryUnavailable: Bool = false) -> AXUIElement? {
-        guard !stopped, let record = records.first(where: { $0.id == id }) else { return nil }
-        for attempt in 0..<(retryUnavailable ? 3 : 1) {
-            guard cancellation?.isCancelled != true else { return nil }
-            if let windows = copyWindows() {
-                // A successful read excluding the target is authoritative.
-                return windows.contains(where: { CFEqual($0, record.element) }) ? record.element : nil
-            }
-            if retryUnavailable && attempt < 2 { Thread.sleep(forTimeInterval: 0.04) }
-        }
-        return nil
-    }
-
-    private func minimizedBeforeAction(_ window: AXUIElement, cancellation: WindowSwitcherActionCancellation) -> Bool? {
-        for attempt in 0..<3 {
-            guard !cancellation.isCancelled else { return nil }
-            if let value = access.minimized(window) { return value }
-            if attempt < 2 { Thread.sleep(forTimeInterval: 0.04) }
-        }
-        return nil
-    }
-
-    func resolveOffSpaceWindow(_ number: CGWindowID, cancellation: WindowSwitcherActionCancellation) async -> WindowSwitcherResolvedWindow? {
-        await withCheckedContinuation { continuation in
-            queue.async { [self] in
-                guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: nil); return }
-                var candidates = records.map(\.element)
-                candidates += [copyElement(app, kAXFocusedWindowAttribute), copyElement(app, kAXMainWindowAttribute)].compactMap { $0 }
-                let element = offSpaceResolver.resolve(pid: pid, number: number, access: access,
-                    candidates: candidates, shouldContinue: { !self.stopped && !cancellation.isCancelled })
-                continuation.resume(returning: element.map { WindowSwitcherResolvedWindow(number: number, element: $0) })
-            }
-        }
-    }
-
-    func focusOffSpaceWindow(_ target: WindowSwitcherResolvedWindow, cancellation: WindowSwitcherActionCancellation) async -> WindowSwitcherActionResult {
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                queue.async { [self] in
-                    guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                    guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
-                        continuation.resume(returning: .unavailable); return
-                    }
-                    if access.minimized(target.element) == true {
-                        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                        guard access.set(target.element, attribute: kAXMinimizedAttribute, value: false) == .success else {
-                            continuation.resume(returning: .failed); return
-                        }
-                        waitForOffSpaceRestore(target, attempts: 12, cancellation: cancellation, continuation: continuation)
-                    } else {
-                        submitOffSpaceFocus(target, cancellation: cancellation, continuation: continuation)
-                    }
-                }
-            }
-        } onCancel: { cancellation.cancel() }
-    }
-
-    private func waitForOffSpaceRestore(_ target: WindowSwitcherResolvedWindow, attempts: Int,
-                                        cancellation: WindowSwitcherActionCancellation,
-                                        continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        queue.asyncAfter(deadline: .now() + 0.1) { [self] in
-            guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-            guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
-                continuation.resume(returning: .unavailable); return
-            }
-            if access.minimized(target.element) == false {
-                submitOffSpaceFocus(target, cancellation: cancellation, continuation: continuation)
-            } else if attempts > 1 {
-                waitForOffSpaceRestore(target, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
-            } else {
-                continuation.resume(returning: .failed)
-            }
-        }
-    }
-
-    private func submitOffSpaceFocus(_ target: WindowSwitcherResolvedWindow,
-                                     cancellation: WindowSwitcherActionCancellation,
-                                     continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
-            continuation.resume(returning: .unavailable); return
-        }
-        // Keep exact fronting and AX focus adjacent on this queue.
-        // App-only activation in between can restore a different window.
-        guard requestWindowActivation(target.number, pid, cancellation) else { continuation.resume(returning: .failed); return }
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        _ = access.set(target.element, attribute: kAXMainAttribute, value: true)
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        _ = access.set(target.element, attribute: kAXFocusedAttribute, value: true)
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        _ = access.perform(target.element, action: kAXRaiseAction)
-        verifyOffSpaceFocus(target, attempts: 24, cancellation: cancellation, continuation: continuation)
-    }
-
-    private func isExactWindow(_ target: WindowSwitcherResolvedWindow) -> Bool {
-        access.windowNumber(target.element) == target.number
-            && access.windowAttributes(target.element)?.first as? String == kAXWindowRole
-    }
-
-    private func verifyOffSpaceFocus(_ target: WindowSwitcherResolvedWindow, attempts: Int,
-                                    cancellation: WindowSwitcherActionCancellation,
-                                    continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        queue.asyncAfter(deadline: .now() + 0.05) { [self] in
-            guard !stopped, !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-            guard isExactWindow(target), windowIsRevealable(target.number, pid) else {
-                continuation.resume(returning: .unavailable); return
-            }
-            let focused = copyElement(app, kAXFocusedWindowAttribute)
-            let exactFocus = focused.map {
-                access.windowNumber($0) == target.number
-                    && access.windowAttributes($0)?.first as? String == kAXWindowRole
-            } ?? false
-            // AX focus can change before Mission Control finishes its transition.
-            // Require this exact window onscreen and on an active display Space.
-            // During an animation the compositor can expose both Spaces at once.
-            if exactFocus && windowIsOnScreen(target.number, pid) && windowIsOnActiveSpace(target.number) != false {
-                continuation.resume(returning: .succeeded)
-            } else if attempts > 1 {
-                verifyOffSpaceFocus(target, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
-            } else {
-                continuation.resume(returning: .failed)
-            }
-        }
-    }
-
-    func perform(_ id: String, close: Bool, cancellation: WindowSwitcherActionCancellation = WindowSwitcherActionCancellation()) async -> WindowSwitcherActionResult {
-        return await withTaskCancellationHandler {
-            if Task.isCancelled { cancellation.cancel() }
-            return await withCheckedContinuation { continuation in
-                queue.async { [self] in
-                    guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                    guard let window = liveWindow(id, cancellation: cancellation, retryUnavailable: true) else {
-                        continuation.resume(returning: cancellation.isCancelled ? .cancelled : .unavailable); return
-                    }
-                    guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                    if close {
-                        guard let button = copyElement(window, kAXCloseButtonAttribute) else {
-                            continuation.resume(returning: .unavailable); return
-                        }
-                        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                        let result = access.perform(button, action: kAXPressAction)
-                        continuation.resume(returning: result == .success ? .requested : .failed)
-                        return
-                    }
-                    guard let minimized = minimizedBeforeAction(window, cancellation: cancellation) else {
-                        continuation.resume(returning: cancellation.isCancelled ? .cancelled : .unavailable); return
-                    }
-                    guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-                    if minimized {
-                        guard access.set(window, attribute: kAXMinimizedAttribute, value: false) == .success else {
-                            continuation.resume(returning: .failed); return
-                        }
-                        waitForRestore(id, window: window, attempts: 12, cancellation: cancellation, continuation: continuation)
-                    } else {
-                        raise(id, window: window, cancellation: cancellation, continuation: continuation)
-                    }
-                }
-            }
-        } onCancel: {
-            cancellation.cancel()
-        }
-    }
-
-    private func waitForRestore(_ id: String, window: AXUIElement, attempts: Int,
-                                cancellation: WindowSwitcherActionCancellation,
-                                continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        queue.asyncAfter(deadline: .now() + 0.1) { [self] in
-            guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-            guard !stopped else { continuation.resume(returning: .unavailable); return }
-            // macOS may accept deminiaturization before its animation completes.
-            // Observe readiness without resubmitting the restore request.
-            if access.minimized(window) == false {
-                guard liveWindow(id, cancellation: cancellation, retryUnavailable: true) != nil else {
-                    continuation.resume(returning: cancellation.isCancelled ? .cancelled : .unavailable); return
-                }
-                raise(id, window: window, cancellation: cancellation, continuation: continuation)
-            } else if attempts > 1 {
-                waitForRestore(id, window: window, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
-            } else {
-                continuation.resume(returning: .failed)
-            }
-        }
-    }
-
-    private func raise(_ id: String, window: AXUIElement, cancellation: WindowSwitcherActionCancellation,
-                       continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        // Writable main/focus are hints; read-back verification is authoritative
-        // for apps which implement only the raise action.
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        _ = access.set(window, attribute: kAXMainAttribute, value: true)
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        _ = access.set(window, attribute: kAXFocusedAttribute, value: true)
-        guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-        // Some apps report an unsupported/failed raise after accepting main or
-        // focus. Observe exact focus before deciding whether switching failed.
-        _ = access.perform(window, action: kAXRaiseAction)
-        verifyFocus(id, attempts: 12, cancellation: cancellation, continuation: continuation)
-    }
-
-    private func verifyFocus(_ id: String, attempts: Int, cancellation: WindowSwitcherActionCancellation,
-                             continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
-        queue.asyncAfter(deadline: .now() + 0.1) { [self] in
-            guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
-            guard !stopped, let record = records.first(where: { $0.id == id }) else {
-                continuation.resume(returning: .unavailable); return
-            }
-            // An unavailable AX list is not evidence that the target closed.
-            // Spend the existing verification budget observing, without raising again.
-            guard let windows = copyWindows() else {
-                if attempts > 1 {
-                    verifyFocus(id, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
-                } else {
-                    continuation.resume(returning: .failed)
-                }
-                return
-            }
-            guard windows.contains(where: { CFEqual($0, record.element) }) else {
-                continuation.resume(returning: .unavailable); return
-            }
-            let live = record.element
-            if let focused = copyElement(app, kAXFocusedWindowAttribute), CFEqual(focused, live) {
-                continuation.resume(returning: .succeeded)
-            } else if attempts > 1 {
-                // Retry only the observation, never resubmit an action.
-                verifyFocus(id, attempts: attempts - 1, cancellation: cancellation, continuation: continuation)
-            } else {
-                continuation.resume(returning: .failed)
-            }
-        }
-    }
-
-    static var windowNotifications: [String] {
-        [kAXUIElementDestroyedNotification, kAXTitleChangedNotification, kAXWindowMiniaturizedNotification,
-         kAXWindowDeminiaturizedNotification]
-    }
-    private func installObserver() {
-        guard access.observesSystemNotifications, observer == nil else { return }
-        var result: AXObserver?
-        let callback: AXObserverCallback = { _, _, _, context in
-            guard let context else { return }
-            Unmanaged<WindowSwitcherProcessWorker>.fromOpaque(context).takeUnretainedValue().invalidated()
-        }
-        guard AXObserverCreate(pid, callback, &result) == .success, let result else { return }
-        observer = result
-        for name in [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification] {
-            AXObserverAddNotification(result, app, name as CFString, Unmanaged.passUnretained(self).toOpaque())
-        }
-        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(result), .commonModes)
-    }
-    private func observe(_ window: AXUIElement) {
-        guard let observer, observedWindows.insert(WindowSwitcherAXIdentity(element: window)).inserted else { return }
-        for name in Self.windowNotifications {
-            AXObserverAddNotification(observer, window, name as CFString, Unmanaged.passUnretained(self).toOpaque())
-        }
-    }
-}
-
 @MainActor
 protocol WindowSwitcherCatalog: AnyObject {
     var onChange: (() -> Void)? { get set }
     var focusedWindowID: String? { get }
     var isInitialDiscoveryComplete: Bool { get }
+    var isInvocationReady: Bool { get }
+    var listingPolicy: WindowSwitcherListingPolicy { get set }
     func start()
     func stop()
     func refresh()
+    func prepareForInvocation()
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry]
     func activate(_ entry: WindowSwitcherAppEntry, intent: WindowSwitcherActivationIntent) async -> WindowSwitcherActionResult
     func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult
     func quitApplication(_ entry: WindowSwitcherAppEntry) -> WindowSwitcherActionResult
 }
 
+extension WindowSwitcherCatalog {
+    var isInvocationReady: Bool { isInitialDiscoveryComplete }
+    func prepareForInvocation() { refresh() }
+
+    var listingPolicy: WindowSwitcherListingPolicy {
+        get { .default }
+        set { _ = newValue }
+    }
+}
+
 @MainActor
 final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
+    struct Application {
+        struct Presentation {
+            var localizedName: String?
+            var icon: NSImage?
+            var isHidden: Bool
+            var isActive: Bool
+        }
+
+        var processIdentifier: pid_t
+        var bundleIdentifier: String?
+        var bundlePath: String?
+        var localizedName: String?
+        var icon: NSImage? = nil
+        var launchDate: Date? = nil
+        var lifetime: UUID? = nil
+        var isRegular = true
+        var isHidden = false
+        var isActive = false
+        var loadPresentation: (() -> Presentation)? = nil
+
+        func withPresentation() -> Application {
+            guard let loadPresentation else { return self }
+            let presentation = loadPresentation()
+            var result = self
+            result.localizedName = presentation.localizedName
+            result.icon = presentation.icon
+            result.isHidden = presentation.isHidden
+            result.isActive = presentation.isActive
+            result.loadPresentation = nil
+            return result
+        }
+    }
+
+    struct DiscoveryEnvironment {
+        var applications: (() -> [Application])? = nil
+        var isAccessibilityTrusted: () -> Bool = { AXIsProcessTrusted() }
+        var isDragging: () -> Bool = { CGEventSource.buttonState(.combinedSessionState, button: .left) }
+    }
+
     var onChange: (() -> Void)?
     private(set) var isInitialDiscoveryComplete = false
+    private(set) var isInvocationReady = false
     private(set) var unavailableApplicationCount = 0
     var focusedWindowID: String? { publication.recency.focusedID }
+    var listingPolicy = WindowSwitcherListingPolicy.default {
+        didSet {
+            guard listingPolicy != oldValue else { return }
+            rebuildPublication()
+            onChange?()
+        }
+    }
+    private var processMapping = WindowSwitcherProcessMapping.Snapshot()
+    private var helperPIDsByHost: [pid_t: Set<pid_t>] = [:]
+    private var expectedHostPIDs: Set<pid_t> = []
     private let notificationCenter: NotificationCenter
     private let accessFactory: @Sendable (pid_t) -> any WindowSwitcherAXAccess
     private var observers: [NSObjectProtocol] = []
     private var workers: [pid_t: WindowSwitcherProcessWorker] = [:]
     private var snapshots: [pid_t: [WindowSwitcherAppEntry]] = [:]
     private var inFlight: Set<pid_t> = []
+    // Kept across stop/start until the actual worker returns.
+    private var activeScanCount = 0
+    private var dirtyHosts: Set<pid_t> = []
+    private var pendingInvalidations: Set<pid_t> = []
+    private var pendingRecordsInvalidation = false
+    private var applicationsByPID: [pid_t: Application] = [:]
+    private var mappingCandidates: [WindowSwitcherProcessMapping.Candidate] = []
+    private let applicationInventory: WindowSwitcherApplicationInventory?
+    private static let maximumConcurrentScans = 4
     private var unavailable: Set<pid_t> = []
     private var timer: Timer?
     private var running = false
     private var invalidationTask: Task<Void, Never>?
-    private let allSpacesCatalog = WindowSwitcherWindowRecords()
+    private var publicationTask: Task<Void, Never>?
+    private var publicationDirty = false
+    private var removedProcesses: Set<pid_t> = []
+    private var pendingFocus: [pid_t: (id: String?, unavailable: Bool)] = [:]
+    private var windowRecordsPending = false
+    private var sleeping = false
+    private var sessionInactive = false
+    private var suspended: Bool { sleeping || sessionInactive }
+    private var invocationGeneration = UUID()
+    private var invocationRequiredHosts: Set<pid_t> = []
+    private var invocationRequiresRecords = false
+    private let allSpacesCatalog: WindowSwitcherWindowRecords
+    private let discovery: DiscoveryEnvironment
     private var publication = WindowSwitcherPublishedWindows()
     private let hostWindows = WindowSwitcherHostWindows()
     private var allSpacesRecordsAreFresh = false
@@ -553,31 +126,91 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     private var didReadAllSpaces = false
 
     init(notificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
-         accessFactory: @escaping @Sendable (pid_t) -> any WindowSwitcherAXAccess = { _ in SystemWindowSwitcherAXAccess() }) {
+         accessFactory: @escaping @Sendable (pid_t) -> any WindowSwitcherAXAccess = { _ in SystemWindowSwitcherAXAccess() },
+         allSpacesCatalog: WindowSwitcherWindowRecords = WindowSwitcherWindowRecords(),
+         discovery: DiscoveryEnvironment = DiscoveryEnvironment()) {
         self.notificationCenter = notificationCenter
         self.accessFactory = accessFactory
+        self.allSpacesCatalog = allSpacesCatalog
+        self.discovery = discovery
+        applicationInventory = discovery.applications == nil ? WindowSwitcherApplicationInventory() : nil
     }
 
     func start() {
         guard !running else { return }
         running = true
+        let lifecycle = allSpacesGeneration
+        applicationInventory?.onChange = { [weak self] pids in
+            guard let self, running else { return }
+            reloadApplications()
+            invalidate(processIdentifiers: pids, windowRecords: true)
+        }
+        applicationInventory?.start()
         for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.didLaunchApplicationNotification,
                      NSWorkspace.didTerminateApplicationNotification, NSWorkspace.didHideApplicationNotification,
-                     NSWorkspace.didUnhideApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
-            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.refresh(); self?.onChange?() }
+                     NSWorkspace.didUnhideApplicationNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    applicationInventory?.reconcile(notify: false)
+                    if let pid { applicationInventory?.reload(processIdentifier: pid) }
+                    reloadApplications()
+                    if let pid { invalidate(processIdentifiers: [pid], windowRecords: true) }
+                    else { refresh() }
+                }
             })
         }
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refresh() }
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didWakeNotification,
+                     NSWorkspace.sessionDidBecomeActiveNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    if name == NSWorkspace.didWakeNotification { sleeping = false }
+                    if name == NSWorkspace.sessionDidBecomeActiveNotification { sessionInactive = false }
+                    refresh()
+                }
+            })
         }
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+            observers.append(notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, running, allSpacesGeneration == lifecycle else { return }
+                    if name == NSWorkspace.willSleepNotification { sleeping = true }
+                    if name == NSWorkspace.sessionDidResignActiveNotification { sessionInactive = true }
+                }
+            })
+        }
+        // Recover omitted/unsupported AX events without continuously scanning
+        // every application. Invocation always requests its own reconciliation.
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, allSpacesGeneration == lifecycle else { return }
+                refresh()
+            }
+        }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
         refresh()
     }
 
     func stop() {
         running = false
+        sleeping = false
+        sessionInactive = false
         invalidationTask?.cancel(); invalidationTask = nil
+        publicationTask?.cancel(); publicationTask = nil
+        publicationDirty = false
+        removedProcesses.removeAll()
+        pendingFocus.removeAll()
+        applicationInventory?.stop()
         allSpacesGeneration = UUID()
+        invocationGeneration = UUID()
+        invocationRequiredHosts.removeAll()
+        invocationRequiresRecords = false
+        isInvocationReady = false
+        windowRecordsPending = false
         allSpacesRefreshTask?.cancel(); allSpacesRefreshTask = nil
         allSpacesCatalog.stop()
         allSpacesRecords.removeAll()
@@ -586,103 +219,198 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         allSpacesRecordsAreFresh = false
         didReadAllSpaces = false
         isInitialDiscoveryComplete = false
+        expectedHostPIDs = []
+        processMapping = WindowSwitcherProcessMapping.Snapshot()
+        mappingCandidates.removeAll()
+        applicationsByPID.removeAll()
+        helperPIDsByHost.removeAll()
+        dirtyHosts.removeAll()
+        pendingInvalidations.removeAll()
+        pendingRecordsInvalidation = false
         timer?.invalidate(); timer = nil
         observers.forEach(notificationCenter.removeObserver); observers.removeAll()
         workers.values.forEach { $0.stop() }; workers.removeAll()
         snapshots.removeAll(); inFlight.removeAll(); unavailable.removeAll()
+        unavailableApplicationCount = 0
+    }
+
+    /// Coalesces events by owner. A dirty host remains queued when a scan is in
+    /// flight, so changes arriving during that scan get one follow-up read.
+    func invalidate(processIdentifiers: Set<pid_t>, windowRecords: Bool) {
+        guard running else { return }
+        pendingInvalidations.formUnion(processIdentifiers.map { processMapping.host(for: $0) }.filter { expectedHostPIDs.contains($0) })
+        pendingRecordsInvalidation = pendingRecordsInvalidation || windowRecords
+        if processIdentifiers.contains(ProcessInfo.processInfo.processIdentifier) { markPublicationDirty() }
+        scheduleRefresh()
     }
 
     private func scheduleRefresh() {
-        guard running, invalidationTask == nil else { return }
+        guard running, !suspended, invalidationTask == nil else { return }
         invalidationTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(200))
+            do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
             guard !Task.isCancelled, let self else { return }
             invalidationTask = nil
-            refresh()
+            applyInvalidations()
+            drainRefreshes()
         }
     }
 
+    private func applyInvalidations() {
+        dirtyHosts.formUnion(pendingInvalidations.intersection(expectedHostPIDs))
+        pendingInvalidations.removeAll()
+        windowRecordsPending = windowRecordsPending || pendingRecordsInvalidation
+        pendingRecordsInvalidation = false
+    }
+
     func refresh() {
+        guard running, !suspended else { return }
+        applicationInventory?.reconcile(notify: false)
+        reloadApplications()
+        applyInvalidations()
+        dirtyHosts.formUnion(expectedHostPIDs)
+        windowRecordsPending = true
+        markPublicationDirty()
+        drainRefreshes()
+    }
+
+    func prepareForInvocation() {
         guard running else { return }
-        // AX reads execute in the target app. Avoid competing with its tracking
-        // loop during drags; the periodic refresh catches up after mouse-up.
-        guard !CGEventSource.buttonState(.combinedSessionState, button: .left) else { return }
-        guard AXIsProcessTrusted() else {
-            // Notify the plugin so an open session is cancelled on revocation.
+        invocationGeneration = UUID()
+        isInvocationReady = false
+        applicationInventory?.reconcile(notify: false)
+        reloadApplications()
+        applyInvalidations()
+        invocationRequiredHosts = expectedHostPIDs
+        invocationRequiresRecords = true
+        dirtyHosts.formUnion(expectedHostPIDs)
+        windowRecordsPending = true
+        markPublicationDirty()
+        drainRefreshes()
+    }
+
+    private func reloadApplications() {
+        let oldMapping = processMapping
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let runningApps = discovery.applications?() ?? applicationInventory?.applications ?? []
+        applicationsByPID = Dictionary(runningApps.map { ($0.processIdentifier, $0) },
+                                       uniquingKeysWith: { first, _ in first })
+        let candidates = runningApps.map {
+            WindowSwitcherProcessMapping.Candidate(processIdentifier: $0.processIdentifier,
+                bundleIdentifier: $0.bundleIdentifier, bundlePath: $0.bundlePath, isRegular: $0.isRegular)
+        }.sorted { $0.processIdentifier < $1.processIdentifier }
+        if candidates != mappingCandidates {
+            mappingCandidates = candidates
+            processMapping = WindowSwitcherProcessMapping.snapshot(candidates: candidates, ownPID: ownPID)
+            helperPIDsByHost = processMapping.helpersByHost(owningWindowsIn: allSpacesRecords)
+        }
+        expectedHostPIDs = Set(runningApps.filter {
+            $0.isRegular && $0.processIdentifier != ownPID && $0.processIdentifier > 0
+                && processMapping.host(for: $0.processIdentifier) == $0.processIdentifier
+        }.map(\.processIdentifier))
+        let liveWorkerPIDs = expectedHostPIDs.union(helperPIDsByHost.values.flatMap { $0 })
+        for pid in Array(workers.keys) {
+            guard liveWorkerPIDs.contains(pid), let app = applicationsByPID[pid],
+                  workers[pid]?.launchDate == app.launchDate,
+                  workers[pid]?.applicationLifetime == app.lifetime else {
+                workers.removeValue(forKey: pid)?.stop()
+                inFlight.remove(pid)
+                unavailable.remove(pid)
+                snapshots.removeValue(forKey: pid)
+                pendingFocus.removeValue(forKey: pid)
+                removedProcesses.insert(pid)
+                dirtyHosts.insert(oldMapping.host(for: pid))
+                markPublicationDirty()
+                continue
+            }
+        }
+        for pid in Array(snapshots.keys) where !expectedHostPIDs.contains(pid) {
+            snapshots.removeValue(forKey: pid)
+            removedProcesses.insert(pid)
+            markPublicationDirty()
+        }
+        dirtyHosts.formIntersection(expectedHostPIDs)
+        invocationRequiredHosts.formIntersection(expectedHostPIDs)
+        dirtyHosts.formUnion(expectedHostPIDs.filter { snapshots[$0] == nil })
+    }
+
+    private func drainRefreshes() {
+        guard running, !suspended else { return }
+        guard discovery.isAccessibilityTrusted() else {
             onChange?()
             return
         }
-        refreshAllSpaces()
-        let apps = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && !$0.isTerminated && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        // Preserve pending work during tracking; the short retry exists only
+        // while a user drag prevents a requested refresh from proceeding.
+        guard !discovery.isDragging() else { scheduleRefresh(); return }
+        if windowRecordsPending { refreshAllSpaces() }
+        let pids = dirtyHosts.sorted {
+            let lhsActive = applicationsByPID[$0]?.isActive == true
+            let rhsActive = applicationsByPID[$1]?.isActive == true
+            return lhsActive == rhsActive ? $0 < $1 : lhsActive
         }
-        let pids = Set(apps.map(\.processIdentifier))
-        for pid in Array(workers.keys) where !pids.contains(pid) {
-            workers.removeValue(forKey: pid)?.stop(); snapshots.removeValue(forKey: pid)
-            publication.removeProcess(pid)
-            inFlight.remove(pid); unavailable.remove(pid)
-        }
-        for app in apps {
-            let pid = app.processIdentifier
-            let worker: WindowSwitcherProcessWorker
-            if let existing = workers[pid], existing.launchDate == app.launchDate { worker = existing } else {
-                workers.removeValue(forKey: pid)?.stop()
-                snapshots.removeValue(forKey: pid)
-                publication.removeProcess(pid)
-                inFlight.remove(pid)
-                worker = WindowSwitcherProcessWorker(pid: pid, launchDate: app.launchDate, access: accessFactory(pid)) { [weak self] in
-                    Task { @MainActor [weak self] in self?.scheduleRefresh() }
-                }
-                workers[pid] = worker
-            }
-            guard inFlight.insert(pid).inserted else { continue }
+        for pid in pids {
+            guard activeScanCount < Self.maximumConcurrentScans else { break }
+            guard !inFlight.contains(pid), let application = applicationsByPID[pid] else { continue }
+            let worker = ensureWorker(pid: pid, launchDate: application.launchDate, applicationLifetime: application.lifetime)
+            dirtyHosts.remove(pid)
+            inFlight.insert(pid)
+            activeScanCount += 1
+            let app = application.withPresentation()
+            let invocation = invocationGeneration
             Task { [weak self] in
+                defer {
+                    if let self {
+                        activeScanCount -= 1
+                        drainRefreshes()
+                    }
+                }
                 let result = await worker.scan()
                 guard let self, running, workers[pid] === worker else { return }
+                var entries = windowEntries(from: result, app: app, ownerPID: pid)
+                var helperUnavailable = false
+                for helperPID in helperPIDsByHost[pid] ?? [] {
+                    guard let helperApp = applicationsByPID[helperPID] else { continue }
+                    let helperWorker = ensureWorker(pid: helperPID, launchDate: helperApp.launchDate,
+                                                    applicationLifetime: helperApp.lifetime)
+                    let helperScan = await helperWorker.scan()
+                    guard running, workers[pid] === worker else { return }
+                    guard workers[helperPID] === helperWorker else { continue }
+                    if helperScan.unavailable { helperUnavailable = true }
+                    entries = WindowSwitcherListing.preferringUniqueWindowNumbers(
+                        entries + windowEntries(from: helperScan, app: app, ownerPID: helperPID))
+                }
                 inFlight.remove(pid)
-                if result.unavailable { unavailable.insert(pid) } else { unavailable.remove(pid) }
+                let unavailableScan = result.unavailable || helperUnavailable
+                if unavailableScan { unavailable.insert(pid) } else { unavailable.remove(pid) }
                 unavailableApplicationCount = unavailable.count
                 let previous = snapshots[pid]
-                var entries = result.windows.map { window in
-                    var entry = WindowSwitcherAppEntry(id: window.id, processIdentifier: pid,
-                        bundleIdentifier: app.bundleIdentifier, appName: app.localizedName ?? "App",
-                        windowTitle: window.title, icon: app.icon, windowElement: window.element,
-                        isMinimized: window.minimized, windowNumber: window.windowNumber, applicationLaunchDate: app.launchDate, shortcutToken: nil)
-                    entry.bounds = window.bounds; entry.isHidden = app.isHidden
-                    entry.metadataUnavailable = window.unavailable
-                    let display = displayContext(for: window.bounds)
-                    entry.displayNameContext = display?.name
-                    entry.displayID = display?.id
-                    return entry
-                }
-                // Retain application metadata for other-Space discovery. Publication never
-                // exposes this metadata-only entry as a selectable window.
                 // A failed read is never evidence of a windowless application.
-                if entries.isEmpty && !result.unavailable {
+                if entries.isEmpty && !unavailableScan {
                     entries = [WindowSwitcherAppEntry(id: "app:\(worker.lifetime)", processIdentifier: pid,
                         bundleIdentifier: app.bundleIdentifier, appName: app.localizedName ?? "App",
-                        windowTitle: nil, icon: app.icon, windowElement: nil, isMinimized: false, applicationLaunchDate: app.launchDate, shortcutToken: nil,
-                        isHidden: app.isHidden)]
+                        windowTitle: nil, icon: app.icon, windowElement: nil, isMinimized: false,
+                        applicationLaunchDate: app.launchDate, shortcutToken: nil, isHidden: app.isHidden)]
                 }
                 if !result.windowListReadSucceeded, entries.isEmpty, let previous {
                     entries = previous.map { var entry = $0; entry.metadataUnavailable = true; return entry }
                 }
                 snapshots[pid] = entries
-                rebuildPublication()
-                if didReadAllSpaces && workers.keys.allSatisfy({ snapshots[$0] != nil }) { isInitialDiscoveryComplete = true }
-                if app.isActive {
-                    let published = self.entries(sortMode: .fixed).filter { $0.processIdentifier == pid }
-                    let focusedID = published.first { ($0.workerWindowID ?? $0.id) == result.focusedID }?.id
-                    publication.recency.observeForeground(entries: published, focusedWindowID: focusedID, unavailable: result.unavailable)
+                if previous != entries { markPublicationDirty() }
+                if applicationsByPID[pid]?.isActive == true {
+                    pendingFocus[pid] = (result.focusedID, unavailableScan)
+                    markPublicationDirty()
                 }
-                if previous != entries || app.isActive { onChange?() }
+                if invocation == invocationGeneration {
+                    invocationRequiredHosts.remove(pid)
+                }
+                schedulePublication()
             }
         }
-        rebuildPublication()
+        schedulePublication()
     }
 
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry] {
-        let entries = publication.entries
+        let entries = WindowSwitcherListing.apply(publication.entries, policy: listingPolicy)
         switch sortMode {
         case .recentUse: return publication.recency.sort(entries)
         case .fixed: return entries.sorted {
@@ -694,8 +422,58 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         }
     }
 
+    private func ensureWorker(pid: pid_t, launchDate: Date?, applicationLifetime: UUID? = nil) -> WindowSwitcherProcessWorker {
+        if let existing = workers[pid], existing.launchDate == launchDate,
+           existing.applicationLifetime == applicationLifetime { return existing }
+        workers.removeValue(forKey: pid)?.stop()
+        if processMapping.host(for: pid) == pid {
+            snapshots.removeValue(forKey: pid)
+            removedProcesses.insert(pid)
+            markPublicationDirty()
+        }
+        inFlight.remove(pid)
+        let created = WindowSwitcherProcessWorker(pid: pid, launchDate: launchDate,
+            applicationLifetime: applicationLifetime, access: accessFactory(pid)) { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self, workers[event.processIdentifier]?.lifetime == event.lifetime else { return }
+                invalidate(processIdentifiers: [event.processIdentifier], windowRecords: event.kind.requiresWindowRecords)
+            }
+        }
+        workers[pid] = created
+        return created
+    }
+
+    private func windowEntries(from scan: WindowSwitcherScan, app: Application, ownerPID: pid_t) -> [WindowSwitcherAppEntry] {
+        scan.windows.map { window in
+            var entry = WindowSwitcherAppEntry(id: window.id, processIdentifier: app.processIdentifier,
+                bundleIdentifier: app.bundleIdentifier, appName: app.localizedName ?? "App",
+                windowTitle: window.title, icon: app.icon, windowElement: window.element,
+                isMinimized: window.minimized, windowNumber: window.windowNumber, applicationLaunchDate: app.launchDate, shortcutToken: nil)
+            entry.bounds = window.bounds
+            entry.isHidden = app.isHidden
+            entry.metadataUnavailable = window.unavailable
+            entry.windowOwnerPID = ownerPID
+            entry.axWorkerPID = ownerPID
+            entry.isOnFullscreenSpace = window.isFullscreen
+            entry.workerWindowID = window.id
+            let display = displayContext(for: window.bounds)
+            entry.displayNameContext = display?.name
+            entry.displayID = display?.id
+            return entry
+        }
+    }
+
+    private func processWorker(for entry: WindowSwitcherAppEntry) -> WindowSwitcherProcessWorker? {
+        // A compositor owner can differ from the process exposing this AX record.
+        // Never redirect a recorded AX identity to another worker.
+        if let axWorkerPID = entry.axWorkerPID { return workers[axWorkerPID] }
+        if entry.windowElement != nil { return workers[entry.processIdentifier] }
+        return workers[entry.owningProcessIdentifier] ?? workers[entry.processIdentifier]
+    }
+
     private func rebuildPublication() {
         publication.update(snapshots: snapshots, records: allSpacesRecords, recordsAreFresh: allSpacesRecordsAreFresh, localEntries: hostWindows.entries(),
+                           helperProcessIdentifiers: helperPIDsByHost,
                            displayContext: { self.displayContext(for: $0) })
         if NSApp.isActive, let focusedID = hostWindows.focusedID {
             publication.recency.observeForeground(entries: publication.entries.filter {
@@ -704,20 +482,77 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         }
     }
 
+    private func markPublicationDirty() {
+        publicationDirty = true
+        schedulePublication()
+    }
+
+    private func schedulePublication() {
+        guard running, publicationTask == nil else { return }
+        publicationTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+            guard !Task.isCancelled, let self, running else { return }
+            publicationTask = nil
+            let oldEntries = publication.entries
+            let oldFocus = publication.recency.focusedID
+            let wasComplete = isInitialDiscoveryComplete
+            let wasReady = isInvocationReady
+            if publicationDirty {
+                publicationDirty = false
+                for pid in removedProcesses { publication.removeProcess(pid) }
+                removedProcesses.removeAll()
+                rebuildPublication()
+            }
+            for (pid, focus) in pendingFocus where applicationsByPID[pid]?.isActive == true {
+                let entries = publication.entries.filter { $0.processIdentifier == pid }
+                let id = entries.first { ($0.workerWindowID ?? $0.id) == focus.id }?.id
+                publication.recency.observeForeground(entries: entries, focusedWindowID: id, unavailable: focus.unavailable)
+            }
+            pendingFocus.removeAll()
+            isInitialDiscoveryComplete = didReadAllSpaces && expectedHostPIDs.allSatisfy { snapshots[$0] != nil }
+            isInvocationReady = isInitialDiscoveryComplete && !invocationRequiresRecords && invocationRequiredHosts.isEmpty
+            if oldEntries != publication.entries || oldFocus != publication.recency.focusedID
+                || wasComplete != isInitialDiscoveryComplete || wasReady != isInvocationReady {
+                onChange?()
+            }
+        }
+    }
+
     private func refreshAllSpaces() {
         guard allSpacesRefreshTask == nil else { return }
+        windowRecordsPending = false
         let generation = allSpacesGeneration
+        let invocation = invocationGeneration
         allSpacesRefreshTask = Task { [weak self] in
             guard let self else { return }
             let result = await allSpacesCatalog.freshWindowRecordSnapshot()
             guard !Task.isCancelled, running, allSpacesGeneration == generation else { return }
             allSpacesRefreshTask = nil
+            let oldRecords = Dictionary(grouping: allSpacesRecords, by: \.processIdentifier)
+            let newRecords = Dictionary(grouping: result.records, by: \.processIdentifier)
+            let changedOwners = Set(oldRecords.keys).union(newRecords.keys).filter {
+                oldRecords[$0]?.sorted { $0.windowNumber < $1.windowNumber }
+                    != newRecords[$0]?.sorted { $0.windowNumber < $1.windowNumber }
+            }
+            let oldHelpers = helperPIDsByHost
+            if allSpacesRecords != result.records || allSpacesRecordsAreFresh != result.isFresh { markPublicationDirty() }
             allSpacesRecords = result.records
+            helperPIDsByHost = processMapping.helpersByHost(owningWindowsIn: allSpacesRecords)
             allSpacesRecordsAreFresh = result.isFresh
-            rebuildPublication()
+            if oldHelpers != helperPIDsByHost { reloadApplications() }
+            // New helper ownership and missing AX events must schedule a scoped
+            // scan, including when another read of that host is already active.
+            for pid in expectedHostPIDs {
+                let changed = changedOwners.contains { processMapping.host(for: $0) == pid }
+                if oldHelpers[pid] != helperPIDsByHost[pid] || (changed && snapshots[pid] != nil) {
+                    dirtyHosts.insert(pid)
+                }
+            }
             didReadAllSpaces = true
-            isInitialDiscoveryComplete = workers.keys.allSatisfy { snapshots[$0] != nil }
-            onChange?()
+            if invocation == invocationGeneration { invocationRequiresRecords = false }
+            if !isInvocationReady { invocationRequiredHosts.formUnion(dirtyHosts) }
+            schedulePublication()
+            drainRefreshes()
         }
     }
 
@@ -726,9 +561,12 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
     static func mergeAllSpacesEntries(_ entries: [WindowSwitcherAppEntry], records: [WindowSwitcherWindowRecord],
                                       knownWindowIDs: [CGWindowID: String] = [:],
                                       confirmedAXWindowNumbers: Set<CGWindowID> = [],
-                                      hasConfirmedEmptyAXSnapshot: Bool = false) -> [WindowSwitcherAppEntry] {
+                                      hasConfirmedEmptyAXSnapshot: Bool = false,
+                                      helperProcessIdentifiers: Set<pid_t> = []) -> [WindowSwitcherAppEntry] {
         guard let application = entries.first else { return entries }
-        let records = records.filter { $0.processIdentifier == application.processIdentifier }
+        let hostPID = application.processIdentifier
+        let records = records.filter { $0.processIdentifier == hostPID || helperProcessIdentifiers.contains($0.processIdentifier) }
+        let recordsByNumber = Dictionary(records.map { ($0.windowNumber, $0) }, uniquingKeysWith: { first, _ in first })
         var claimed = Set<CGWindowID>()
         let windows = entries.filter { $0.windowElement != nil }.compactMap { entry -> WindowSwitcherAppEntry? in
             var window = entry
@@ -737,6 +575,11 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 // Multiple AX aliases for one system window are one row.
                 guard claimed.insert(number).inserted else { return nil }
                 if let knownID = knownWindowIDs[number] { window.id = knownID }
+                if let record = recordsByNumber[number] {
+                    window.windowOwnerPID = record.processIdentifier
+                    window.isOnOtherDesktop = record.isOnActiveSpace == false
+                    window.isOnFullscreenSpace = window.isOnFullscreenSpace || record.isOnFullscreenSpace == true
+                }
             }
             return window
         }
@@ -761,12 +604,16 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             guard confirmedAXWindowNumbers.contains(record.windowNumber)
                 || !record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || unavailableOffSpaceTitle else { return nil }
-            return WindowSwitcherAppEntry(id: knownWindowIDs[record.windowNumber] ?? "window:cg:\(application.processIdentifier):\(application.applicationLaunchDate.map { String($0.timeIntervalSince1970) } ?? application.id):\(record.windowNumber)",
+            var fallbackEntry = WindowSwitcherAppEntry(id: knownWindowIDs[record.windowNumber] ?? "window:cg:\(application.processIdentifier):\(application.applicationLaunchDate.map { String($0.timeIntervalSince1970) } ?? application.id):\(record.windowNumber)",
                 processIdentifier: application.processIdentifier, bundleIdentifier: application.bundleIdentifier,
                 appName: application.appName, windowTitle: record.titleIsAvailable ? record.title : nil, icon: application.icon,
                 windowElement: nil, isMinimized: false, windowNumber: record.windowNumber,
                 windowBounds: record.bounds, applicationLaunchDate: application.applicationLaunchDate,
                 shortcutToken: nil, bounds: record.bounds, isHidden: application.isHidden)
+            fallbackEntry.windowOwnerPID = record.processIdentifier
+            fallbackEntry.isOnOtherDesktop = record.isOnActiveSpace == false
+            fallbackEntry.isOnFullscreenSpace = record.isOnFullscreenSpace == true
+            return fallbackEntry
         }
         return windows.isEmpty && fallback.isEmpty ? entries : windows + fallback
     }
@@ -830,7 +677,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             return result
         }
         guard containsCurrentEntry(entry),
-              let worker = workers[entry.processIdentifier],
+              let worker = processWorker(for: entry),
               let app = NSRunningApplication(processIdentifier: entry.processIdentifier), !app.isTerminated else { return .unavailable }
         var isFallback = entry.windowElement == nil && entry.windowNumber != nil
         guard entry.applicationLaunchDate == nil || app.launchDate == nil || entry.applicationLaunchDate == app.launchDate else { return .unavailable }
@@ -851,16 +698,18 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             isValid = true
         }
         guard intent.shouldContinue() else { return .cancelled }
-        guard isValid, workers[entry.processIdentifier] === worker else { return .unavailable }
+        guard isValid, processWorker(for: entry) === worker else { return .unavailable }
+        let ownerPID = entry.owningProcessIdentifier
         let needsExactReveal = isFallback || allSpacesRecords.contains {
-            $0.windowNumber == entry.windowNumber && $0.processIdentifier == entry.processIdentifier
+            $0.windowNumber == entry.windowNumber
+                && ($0.processIdentifier == entry.processIdentifier || $0.processIdentifier == ownerPID)
                 && $0.isOnScreen != true && $0.hasSpace == true
         }
         let resolved: WindowSwitcherResolvedWindow?
         if needsExactReveal, WindowSwitcherWindowServer.supportsExactActivation, let number = entry.windowNumber {
-            resolved = await worker.resolveOffSpaceWindow(number, cancellation: intent.cancellation)
+            resolved = await worker.resolveOffSpaceWindow(number, ownerPID: ownerPID, cancellation: intent.cancellation)
         } else { resolved = nil }
-        guard intent.shouldContinue(), workers[entry.processIdentifier] === worker, !app.isTerminated else { return .cancelled }
+        guard intent.shouldContinue(), processWorker(for: entry) === worker, !app.isTerminated else { return .cancelled }
         if let resolved {
             if app.isHidden {
                 _ = app.unhide()
@@ -881,14 +730,14 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         let prepared = await WindowSwitcherApplicationActivation.prepare(state: {
             .init(isHidden: app.isHidden,
                   isFrontmost: NSWorkspace.shared.frontmostApplication?.processIdentifier == entry.processIdentifier,
-                  isTerminated: app.isTerminated || self.workers[entry.processIdentifier] !== worker)
+                  isTerminated: app.isTerminated || self.processWorker(for: entry) !== worker)
         }, request: { request in
             guard intent.shouldContinue() else { return }
             switch request {
             case .unhide: _ = app.unhide()
             case .activate:
                 if needsExactReveal, let number = entry.windowNumber,
-                   WindowSwitcherWindowServer.activate(number, pid: entry.processIdentifier, cancellation: intent.cancellation) { return }
+                   WindowSwitcherWindowServer.activate(number, pid: ownerPID, cancellation: intent.cancellation) { return }
                 NSApp.yieldActivation(to: app)
                 if isFallback {
                     // Public fallback when the optional exact-window bridge is unavailable.
@@ -921,7 +770,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 records: { await self.allSpacesCatalog.freshRecordsForActivation() }) else {
                 return intent.shouldContinue() ? .unavailable : .cancelled
             }
-            guard workers[entry.processIdentifier] === worker, !Task.isCancelled else { return .cancelled }
+            guard self.processWorker(for: entry) === worker, !Task.isCancelled else { return .cancelled }
             targetID = matchedID
         } else {
             targetID = entry.workerWindowID ?? entry.id
@@ -941,7 +790,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             refresh()
             return result
         }
-        guard entry.isWindowEntry, containsCurrentEntry(entry), let worker = workers[entry.processIdentifier] else { return .unavailable }
+        guard entry.isWindowEntry, containsCurrentEntry(entry), let worker = processWorker(for: entry) else { return .unavailable }
         var targetID = entry.workerWindowID ?? entry.id
         if entry.windowElement == nil {
             guard await allSpacesCatalog.isCurrentFallback(entry) else { return .unavailable }
@@ -950,7 +799,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                   let matchedID = Self.matchingFallbackWindowID(entry, windows: scan.windows, records: allSpacesRecords) else { return .unavailable }
             targetID = matchedID
         }
-        guard workers[entry.processIdentifier] === worker else { return .unavailable }
+        guard processWorker(for: entry) === worker else { return .unavailable }
         let result = await worker.perform(targetID, close: true)
         refresh()
         return result
