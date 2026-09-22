@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Runs AppleScript source in a short-lived `/usr/bin/osascript` child process.
 ///
@@ -52,12 +53,19 @@ final class SerializedAppleScriptRunner: @unchecked Sendable {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 if box.begin(continuation: continuation) {
-                    do {
-                        let process = try Self.launchScriptProcess(source: source, box: box)
-                        box.adopt(process: process)
-                        Self.scheduleWatchdog(process: process, box: box, timeout: effectiveTimeout)
-                    } catch {
-                        box.launchFailed()
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        guard box.beginLaunch() else { return }
+                        do {
+                            let (process, stdout) = try Self.launchScriptProcess(source: source, box: box)
+                            box.adopt(process: process)
+                            try? stdout.fileHandleForWriting.close()
+                            DispatchQueue.global(qos: .utility).async {
+                                box.stdoutDidFinish(stdout.fileHandleForReading.readDataToEndOfFile())
+                            }
+                            Self.scheduleWatchdog(process: process, box: box, timeout: effectiveTimeout)
+                        } catch {
+                            box.launchFailed()
+                        }
                     }
                 } else {
                     // Cancellation won the race before the continuation was
@@ -75,7 +83,7 @@ final class SerializedAppleScriptRunner: @unchecked Sendable {
     private static func launchScriptProcess(
         source: String,
         box: AppleScriptRunBox
-    ) throws -> Process {
+    ) throws -> (Process, Pipe) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", source]
@@ -85,10 +93,10 @@ final class SerializedAppleScriptRunner: @unchecked Sendable {
         let stdout = Pipe()
         process.standardOutput = stdout
         process.terminationHandler = { [box] process in
-            box.processDidTerminate(process, stdout: stdout)
+            box.processDidTerminate(process)
         }
         try process.run()
-        return process
+        return (process, stdout)
     }
 
     private static func scheduleWatchdog(
@@ -181,6 +189,10 @@ private final class AppleScriptRunBox: @unchecked Sendable {
     private var process: Process?
     private var continuation: CheckedContinuation<String?, any Error>?
     private var didResume = false
+    private var launchStarted = false
+    private var pendingError: (any Error)?
+    private var terminationStatus: Int32?
+    private var outputData: Data?
 
     /// Registers the continuation. Returns false when the run was already
     /// resolved by a racing cancellation, in which case the caller owns
@@ -193,10 +205,20 @@ private final class AppleScriptRunBox: @unchecked Sendable {
         return true
     }
 
-    func adopt(process: Process) {
+    func beginLaunch() -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        guard !didResume else { return false }
+        launchStarted = true
+        return true
+    }
+
+    func adopt(process: Process) {
+        lock.lock()
         self.process = process
+        let shouldTerminate = pendingError != nil
+        lock.unlock()
+        if shouldTerminate { terminate(process) }
     }
 
     /// Watchdog fired: resume with `.timeout` and stop the script.
@@ -214,42 +236,58 @@ private final class AppleScriptRunBox: @unchecked Sendable {
     func launchFailed() {
         lock.lock()
         defer { lock.unlock() }
-        resumeLocked(throwing: SerializedAppleScriptRunner.ExecutionError.executionFailed)
+        resumeLocked(throwing: pendingError ?? SerializedAppleScriptRunner.ExecutionError.executionFailed)
         process = nil
     }
 
-    /// The child exited on its own (watchdog/cancel completions are no-ops).
-    func processDidTerminate(_ process: Process, stdout: Pipe) {
+    /// Wait for both termination and the concurrent stdout reader before
+    /// releasing the serial turn.
+    func processDidTerminate(_ process: Process) {
         lock.lock()
         defer { lock.unlock() }
-        guard !didResume else {
-            self.process = nil
-            return
-        }
-
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        didResume = true
-        if process.terminationStatus == 0 {
-            continuation?.resume(returning: output?.isEmpty == false ? output : nil)
-        } else {
-            continuation?.resume(throwing: SerializedAppleScriptRunner.ExecutionError.executionFailed)
-        }
-        continuation = nil
+        terminationStatus = process.terminationStatus
         self.process = nil
+        finishIfReady()
+    }
+
+    func stdoutDidFinish(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        outputData = data
+        finishIfReady()
     }
 
     private func resumeAndTerminate(throwing error: any Error) {
         lock.lock()
-        defer { lock.unlock() }
-        resumeLocked(throwing: error)
-        if let process {
-            if process.isRunning {
-                process.terminate()
-            }
-            self.process = nil
+        guard !didResume else { lock.unlock(); return }
+        if pendingError == nil { pendingError = error }
+        let runningProcess = process
+        if !launchStarted { resumeLocked(throwing: error) }
+        lock.unlock()
+        if let runningProcess { terminate(runningProcess) }
+    }
+
+    private func terminate(_ process: Process) {
+        guard process.isRunning else { return }
+        process.terminate()
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.2) {
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
+    }
+
+    /// Must be called while holding `lock`.
+    private func finishIfReady() {
+        guard let terminationStatus, let outputData, !didResume else { return }
+        if let pendingError {
+            resumeLocked(throwing: pendingError)
+        } else if terminationStatus == 0 {
+            let output = String(data: outputData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            didResume = true
+            continuation?.resume(returning: output?.isEmpty == false ? output : nil)
+            continuation = nil
+        } else {
+            resumeLocked(throwing: SerializedAppleScriptRunner.ExecutionError.executionFailed)
         }
     }
 

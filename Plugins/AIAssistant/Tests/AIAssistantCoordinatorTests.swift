@@ -271,6 +271,10 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
         XCTAssertEqual(client.callCount, 0)
 
+        coordinator.handle(.retry)
+        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
+        XCTAssertEqual(client.callCount, 0)
+
         coordinator.handle(.confirmSource)
         await waitForPhase(coordinator) { $0 == .success }
 

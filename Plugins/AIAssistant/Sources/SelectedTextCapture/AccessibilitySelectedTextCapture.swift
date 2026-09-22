@@ -151,23 +151,13 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
             if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &appFocusedValue) == .success,
                let element = appFocusedValue,
                CFGetTypeID(element) == AXUIElementGetTypeID() {
-                return (element as! AXUIElement)
+                let focusedElement = (element as! AXUIElement)
+                setMessagingTimeout(focusedElement)
+                return focusedElement
             }
         }
-
-        let systemWideElement = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
-           let element = focusedValue,
-           CFGetTypeID(element) == AXUIElementGetTypeID() {
-            // The focused element carries the messaging timeout itself; the
-            // system-wide element is deliberately left untouched because AX
-            // would apply that timeout process-wide.
-            let focusedElement = (element as! AXUIElement)
-            setMessagingTimeout(focusedElement)
-            return focusedElement
-        }
-
+        // A system-wide query cannot be bounded without changing the AX
+        // timeout for this entire process. Let the next capture strategy try.
         return nil
     }
 

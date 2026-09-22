@@ -9,28 +9,14 @@ import MacToolsPluginKit
 /// Safety properties required by the capture pipeline:
 /// - Concurrent captures are serialized: only one simulated copy is ever in
 ///   flight, and a cancelled waiter releases the turn instead of wedging it.
-/// - Exactly one ⌘C is posted per capture, either to the frontmost process or
-///   to the session tap — never both.
-/// - The clipboard is restored only when the user has not copied anything
-///   else in the meantime (pasteboard change-count guard).
-/// - The System Events AppleScript fallback runs off the main thread through
-///   `SerializedAppleScriptRunner` with a watchdog timeout.
+/// - Exactly one ⌘C is posted to the host-captured application process.
+/// - Clipboard content is never restored automatically: a change count
+///   cannot prove which application wrote it.
 struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
     let strategyID: SelectedTextCaptureStrategyID = .simulatedCopy
 
-    /// Posts one simulated ⌘C. A positive process identifier delivers the
-    /// keystroke to that process only; otherwise the event goes to the session
-    /// tap. Exactly one destination is used per call.
+    /// Posts one simulated ⌘C to the captured application process.
     typealias CopyEventSender = @Sendable (pid_t?) -> Void
-
-    /// AppleScript fallback invoked when the primary CGEvent path made no
-    /// pasteboard change. Runs off the main actor.
-    typealias AppleScriptFallback = @Sendable () async -> Void
-
-    /// Supplies the pid of the current frontmost application so the fallback
-    /// can verify that the captured target still has focus before an
-    /// untargeted System Events keystroke is sent.
-    typealias FrontmostPIDProvider = @Sendable () -> pid_t?
 
     /// Supplies the pasteboard to observe (tests use a private pasteboard).
     typealias PasteboardProvider = @Sendable () -> NSPasteboard
@@ -39,25 +25,17 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
 
     private let localization: PluginLocalization
     private let copyEventSender: CopyEventSender
-    private let appleScriptFallback: AppleScriptFallback
-    private let frontmostPIDProvider: FrontmostPIDProvider
     private let pasteboardProvider: PasteboardProvider
     private let pasteboardChangeTimeout: TimeInterval
 
     init(
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         copyEventSender: @escaping CopyEventSender = SimulatedCopySelectedTextCapture.postCommandC,
-        appleScriptFallback: @escaping AppleScriptFallback = SimulatedCopySelectedTextCapture.runAppleScriptFallback,
-        frontmostPIDProvider: @escaping FrontmostPIDProvider = {
-            NSWorkspace.shared.frontmostApplication?.processIdentifier
-        },
         pasteboardProvider: @escaping PasteboardProvider = { NSPasteboard.general },
         pasteboardChangeTimeout: TimeInterval = 0.35
     ) {
         self.localization = localization
         self.copyEventSender = copyEventSender
-        self.appleScriptFallback = appleScriptFallback
-        self.frontmostPIDProvider = frontmostPIDProvider
         self.pasteboardProvider = pasteboardProvider
         self.pasteboardChangeTimeout = pasteboardChangeTimeout
     }
@@ -82,7 +60,6 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         defer { Task { await Self.gate.finishTurn() } }
 
         let pasteboard = pasteboardProvider()
-        let snapshot = PasteboardSnapshot.capture(from: pasteboard)
         let baselineChangeCount = pasteboard.changeCount
 
         await Self.waitForModifierKeysToClear()
@@ -94,51 +71,28 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
             )
         }
 
-        // Single ⌘C: the sender picks exactly one destination.
-        copyEventSender(context.frontmostApplicationProcessIdentifier)
+        guard let targetPID = context.frontmostApplicationProcessIdentifier,
+              targetPID > 0 else {
+            return failure(
+                context: context,
+                reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")
+            )
+        }
 
-        // The detected change count is recorded the moment the pasteboard
-        // changes, so a later user copy produces a different count and the
-        // restore step can detect it.
-        var capturedChangeCount = await Self.waitForPasteboardChange(
+        // Single ⌘C to the host-captured target.
+        copyEventSender(targetPID)
+
+        // Record the first observed change; reject the result if another
+        // write occurs before it is read.
+        let capturedChangeCount = await Self.waitForPasteboardChange(
             from: baselineChangeCount,
             in: pasteboard,
             timeout: pasteboardChangeTimeout
         )
-        if capturedChangeCount == nil && !Task.isCancelled {
-            // Fallback through System Events for apps that filter synthetic
-            // CGEvents. The keystroke is untargeted, so it may only run while
-            // the host-captured target is still frontmost; when the target is
-            // unknown (nil pid) or focus has moved elsewhere the retry is
-            // skipped instead of risking a copy from an unrelated app. The
-            // script runs off the main thread, bounded by the serialized
-            // runner's watchdog.
-            if isCapturedTargetStillFrontmost(context) {
-                await appleScriptFallback()
-                capturedChangeCount = await Self.waitForPasteboardChange(
-                    from: baselineChangeCount,
-                    in: pasteboard,
-                    timeout: pasteboardChangeTimeout
-                )
-            }
-        }
-
-        let text = pasteboard.string(forType: .string)
-
-        // Restore only when the pasteboard still holds exactly what the
-        // simulated copy produced; never clobber content the user copied
-        // after we did. When nothing changed there is nothing to restore.
-        let restored = Self.restoreIfUnchanged(
-            snapshot: snapshot,
-            expectedChangeCount: capturedChangeCount,
-            pasteboard: pasteboard
-        )
-        if !restored {
-            return failure(
-                context: context,
-                reason: localization.string("capture.error.restorePasteboardFailed", defaultValue: "无法恢复剪贴板")
-            )
-        }
+        // A change can be caused by another application. Preserve whatever
+        // is there and require explicit confirmation before using its text.
+        let text = capturedChangeCount == pasteboard.changeCount
+            ? pasteboard.string(forType: .string) : nil
 
         if Task.isCancelled {
             return failure(
@@ -168,36 +122,11 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         )
     }
 
-    /// The System Events fallback keystroke is untargeted, so it must only run
-    /// while the process the host captured is still the frontmost app. A nil
-    /// captured pid can never be verified and is treated as not frontmost.
-    private func isCapturedTargetStillFrontmost(_ context: SelectedTextCaptureContext) -> Bool {
-        guard let capturedPID = context.frontmostApplicationProcessIdentifier, capturedPID > 0 else {
-            return false
-        }
-        return frontmostPIDProvider() == capturedPID
-    }
-
-    /// Restores the snapshot only when the pasteboard still holds exactly what
-    /// the simulated copy produced (same change count). Returns false without
-    /// touching the pasteboard when the user copied something else meanwhile.
-    /// A nil expected count means our copy never modified the pasteboard, so
-    /// there is nothing to restore and the clipboard is left untouched.
-    @MainActor
-    static func restoreIfUnchanged(
-        snapshot: PasteboardSnapshot,
-        expectedChangeCount: Int?,
-        pasteboard: NSPasteboard
-    ) -> Bool {
-        guard let expectedChangeCount else { return true }
-        guard pasteboard.changeCount == expectedChangeCount else { return false }
-        return snapshot.restore(to: pasteboard)
-    }
-
     // MARK: - Default seams
 
     nonisolated private static func postCommandC(pid: pid_t?) {
-        guard let source = CGEventSource(stateID: .combinedSessionState),
+        guard let pid, pid > 0,
+              let source = CGEventSource(stateID: .combinedSessionState),
               let keyDown = CGEvent(
                 keyboardEventSource: source,
                 virtualKey: CGKeyCode(kVK_ANSI_C),
@@ -215,22 +144,8 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
 
-        if let pid, pid > 0 {
-            // Deliver to the frontmost process only; also posting to the
-            // session tap would trigger the copy twice.
-            keyDown.postToPid(pid)
-            keyUp.postToPid(pid)
-            return
-        }
-
-        keyDown.post(tap: .cgSessionEventTap)
-        keyUp.post(tap: .cgSessionEventTap)
-    }
-
-    nonisolated private static func runAppleScriptFallback() async {
-        _ = try? await SerializedAppleScriptRunner.shared.execute(
-            "tell application \"System Events\" to keystroke \"c\" using command down"
-        )
+        keyDown.postToPid(pid)
+        keyUp.postToPid(pid)
     }
 
     // MARK: - Helpers

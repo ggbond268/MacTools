@@ -329,6 +329,7 @@ final class AIAssistantCoordinator {
     }
 
     private func retry() {
+        guard snapshot.phase != .awaitingConfirmation else { return }
         guard let prompt = lastPrompt else { return }
 
         if let sourceText = lastSourceText {

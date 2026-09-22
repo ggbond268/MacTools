@@ -1089,14 +1089,6 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "輔助功能取詞逾時" } }
       }
     },
-    "capture.error.restorePasteboardFailed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Failed to restore the pasteboard." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法恢复剪贴板" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法復原剪貼簿" } }
-      }
-    },
     "secretStore.error.unexpectedItemData": {
       "extractionState": "manual",
       "localizations": {
