@@ -841,6 +841,38 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏 (Esc)" } }
       }
     },
+    "panel.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Possible Clipboard Content" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "疑似剪贴板内容" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "疑似剪貼簿內容" } }
+      }
+    },
+    "panel.confirm.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The selected text could not be read directly; the content above comes from the clipboard. Confirm before sending it to AI." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未能直接读取选中文本，以上内容来自剪贴板。请确认是否将其发送给 AI 处理。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法直接讀取選取的文字，以上內容來自剪貼簿。請確認是否將其傳送給 AI 處理。" } }
+      }
+    },
+    "panel.confirm.useText": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Use This Text" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用此文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用此文字" } }
+      }
+    },
+    "panel.confirm.discard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Discard" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "放弃" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "放棄" } }
+      }
+    },
     "panel.source.title": {
       "extractionState": "manual",
       "localizations": {

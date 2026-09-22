@@ -254,6 +254,61 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.snapshot.retainedResult)
     }
 
+    // MARK: - Confirmation flow for unverified pasteboard captures
+
+    func testUnverifiedClipboardCaptureRequiresConfirmationBeforeRequest() async {
+        capturePipeline = StubCapturePipeline(result: .unverified("剪贴板文本"))
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+
+        await waitForPhase(coordinator) { $0 == .awaitingConfirmation }
+
+        // The panel shows the pasteboard-derived text and waits; no provider
+        // request may be issued before the user confirms.
+        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
+        XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
+        XCTAssertEqual(client.callCount, 0)
+
+        coordinator.handle(.confirmSource)
+        await waitForPhase(coordinator) { $0 == .success }
+
+        XCTAssertEqual(client.callCount, 1)
+        XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
+        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+    }
+
+    // MARK: - Hidden panel completions
+
+    func testCompletionWhileHiddenKeepsPanelHiddenUntilReopen() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        // The result lands well after the hide so the completion genuinely
+        // happens for a hidden panel.
+        client.resultDelay = 0.3
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .processing }
+
+        coordinator.handle(.hide)
+        XCTAssertFalse(panelController.isVisible)
+
+        await waitForPhase(coordinator) { $0 == .success }
+
+        // The snapshot is retained for the session, but the panel must not
+        // reopen on its own.
+        XCTAssertEqual(coordinator.snapshot.phase, .success)
+        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+        XCTAssertFalse(panelController.isVisible)
+        XCTAssertFalse(panelController.shownSnapshots.contains { $0.phase == .success })
+
+        coordinator.reopenSession()
+        XCTAssertTrue(panelController.isVisible)
+        XCTAssertEqual(panelController.shownSnapshots.last?.phase, .success)
+        XCTAssertEqual(panelController.shownSnapshots.last?.result?.text, "处理结果")
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator(client: any AIProcessing) -> AIAssistantCoordinator {
@@ -351,6 +406,9 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
     enum Outcome {
         case success(String)
         case missing
+        /// Simulates the simulated-copy fallback: text exists but its
+        /// pasteboard origin cannot be attributed, so it needs confirmation.
+        case unverified(String)
     }
 
     var outcome: Outcome
@@ -371,6 +429,15 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
                 sourceApplicationBundleID: nil,
                 failureReason: nil
             )
+        case let .unverified(text):
+            return SelectedTextCaptureResult(
+                text: text,
+                strategyID: .simulatedCopy,
+                isEditable: false,
+                sourceApplicationBundleID: nil,
+                failureReason: nil,
+                requiresUserConfirmation: true
+            )
         case .missing:
             return SelectedTextCaptureResult(
                 text: nil,
@@ -387,6 +454,9 @@ private final class StubProcessingClient: AIProcessing, @unchecked Sendable {
     private let lock = NSLock()
     private var _callCount = 0
     var hangsUntilCancelled = false
+    /// Artificial latency before the configured result is returned, used to
+    /// observe panel state while a run is still in flight.
+    var resultDelay: TimeInterval = 0
 
     var callCount: Int {
         lock.lock()
@@ -410,6 +480,9 @@ private final class StubProcessingClient: AIProcessing, @unchecked Sendable {
         _callCount += 1
         lock.unlock()
 
+        if resultDelay > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(resultDelay * 1_000_000_000))
+        }
         if hangsUntilCancelled {
             while !Task.isCancelled {
                 try await Task.sleep(nanoseconds: 10_000_000)

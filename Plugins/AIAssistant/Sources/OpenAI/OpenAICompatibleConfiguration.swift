@@ -161,9 +161,22 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
     }
 
     private static func isPrivateIPv4Host(_ host: String) -> Bool {
-        let octets = host.split(separator: ".").compactMap { UInt8($0) }
-        guard octets.count == 4 else {
+        // Strict dotted-quad parsing: every dot-separated part must be a
+        // complete decimal octet. Nothing is discarded, so mixed hosts such
+        // as "10.0.0.1.example.com" or "10.0.0.1.evil" fail outright instead
+        // of passing with their numeric prefix.
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else {
             return false
+        }
+
+        var octets: [UInt8] = []
+        octets.reserveCapacity(4)
+        for part in parts {
+            guard let octet = Self.decimalOctet(part) else {
+                return false
+            }
+            octets.append(octet)
         }
 
         // 10.0.0.0/8
@@ -179,6 +192,17 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
             return true
         }
         return false
+    }
+
+    /// Parses one canonical decimal octet: one to three ASCII digits with no
+    /// leading zeros and a value that fits in a byte.
+    private static func decimalOctet(_ part: Substring) -> UInt8? {
+        guard (1...3).contains(part.count),
+              part.utf8.allSatisfy({ (0x30...0x39).contains($0) }),
+              !(part.count > 1 && part.hasPrefix("0")) else {
+            return nil
+        }
+        return UInt8(part)
     }
 }
 

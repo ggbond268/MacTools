@@ -85,7 +85,8 @@ struct SelectedTextCapturePipeline: SelectedTextCaptureProviding {
             strategyID: result.strategyID,
             isEditable: result.isEditable,
             sourceApplicationBundleID: result.sourceApplicationBundleID,
-            failureReason: nil
+            failureReason: nil,
+            requiresUserConfirmation: result.requiresUserConfirmation
         )
     }
 }

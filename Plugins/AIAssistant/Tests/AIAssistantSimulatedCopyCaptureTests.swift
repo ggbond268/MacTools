@@ -82,12 +82,14 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
         pasteboard: NSPasteboard,
         sender: @escaping SimulatedCopySelectedTextCapture.CopyEventSender = { _ in },
         fallback: @escaping SimulatedCopySelectedTextCapture.AppleScriptFallback = {},
+        frontmostPIDProvider: @escaping SimulatedCopySelectedTextCapture.FrontmostPIDProvider = { 4242 },
         pasteboardChangeTimeout: TimeInterval = 0.3
     ) -> SimulatedCopySelectedTextCapture {
         let box = PasteboardBox(pasteboard)
         return SimulatedCopySelectedTextCapture(
             copyEventSender: sender,
             appleScriptFallback: fallback,
+            frontmostPIDProvider: frontmostPIDProvider,
             pasteboardProvider: { box.pasteboard },
             pasteboardChangeTimeout: pasteboardChangeTimeout
         )
@@ -203,6 +205,61 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
         XCTAssertEqual(counter.total, 0)
     }
 
+    func testFallbackSkippedWhenFrontmostAppChanged() async {
+        let pasteboard = makePrivatePasteboard(content: "original")
+        let counter = FallbackCounter()
+        // The captured target (4242) lost focus to another app (9999); the
+        // untargeted System Events keystroke must not run in that state.
+        let capture = makeCapture(
+            pasteboard: pasteboard,
+            fallback: { counter.increment() },
+            frontmostPIDProvider: { 9999 }
+        )
+
+        let result = await capture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 4242))
+
+        XCTAssertNil(result.text)
+        XCTAssertNotNil(result.failureReason)
+        XCTAssertEqual(counter.total, 0)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
+    func testFallbackSkippedWhenCapturedPIDUnknown() async {
+        let pasteboard = makePrivatePasteboard(content: "original")
+        let counter = FallbackCounter()
+        // Without a captured pid the target can never be verified, so the
+        // fallback is skipped even though the provider still reports a pid.
+        let capture = makeCapture(
+            pasteboard: pasteboard,
+            fallback: { counter.increment() },
+            frontmostPIDProvider: { 4242 }
+        )
+
+        let result = await capture.capture(context: SelectedTextCaptureContext())
+
+        XCTAssertNil(result.text)
+        XCTAssertNotNil(result.failureReason)
+        XCTAssertEqual(counter.total, 0)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
+
+    func testSuccessfulResultRequiresUserConfirmation() async {
+        let pasteboard = makePrivatePasteboard(content: "original")
+        let box = PasteboardBox(pasteboard)
+        let capture = makeCapture(pasteboard: pasteboard) { pid in
+            _ = pid
+            box.pasteboard.clearContents()
+            box.pasteboard.setString("captured", forType: .string)
+        }
+
+        let result = await capture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 4242))
+
+        // Simulated-copy text is pasteboard content with no proven owner; the
+        // coordinator must show it for confirmation instead of sending it.
+        XCTAssertTrue(result.requiresUserConfirmation)
+        XCTAssertEqual(result.text, "captured")
+    }
+
     // MARK: - Cancellation
 
     func testCancelledCaptureSendsNoCopy() async {
@@ -252,7 +309,8 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
             sender: { pid in
                 recorder.record(pid)
             },
-            fallback: { counter.increment() }
+            fallback: { counter.increment() },
+            frontmostPIDProvider: { 111 }
         )
         let queuedCapture = makeCapture(
             pasteboard: pasteboard,
@@ -261,7 +319,8 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
                 box.pasteboard.clearContents()
                 box.pasteboard.setString("queued-\(pid ?? -1)", forType: .string)
             },
-            fallback: { counter.increment() }
+            fallback: { counter.increment() },
+            frontmostPIDProvider: { 222 }
         )
 
         let slowTask = Task { await slowCapture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 111)) }
@@ -416,7 +475,8 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
 
         XCTAssertLessThan(Date().timeIntervalSince(start), 2.0)
 
-        // The watchdog must rotate the stuck queue so later runs work.
+        // The timed-out run must release the serial execution gate and
+        // terminate its osascript child so later runs work.
         let recovered = try? await runner.execute("2 * 3")
         XCTAssertEqual(recovered, "6")
     }

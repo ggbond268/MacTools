@@ -104,6 +104,20 @@ final class AIAssistantOpenAICompatibleConfigurationTests: XCTestCase {
         }
     }
 
+    func testIncompleteIPv4HTTPBaseURLIsInvalid() {
+        // Hosts that merely look like private IPv4 addresses must not bypass
+        // the HTTP restriction: only complete dotted-quad addresses count.
+        let configurations = [
+            OpenAICompatibleConfiguration(baseURL: "http://10.0.0.1.example.com:8080"),
+            OpenAICompatibleConfiguration(baseURL: "http://10.0.0.01:8080"),
+            OpenAICompatibleConfiguration(baseURL: "http://172.029.227.37:51381"),
+        ]
+
+        for configuration in configurations {
+            XCTAssertEqual(configuration.validationError, .invalidBaseURL)
+        }
+    }
+
     func testWhitespaceOnlyModelIsInvalid() {
         let configuration = OpenAICompatibleConfiguration(model: " \n\t ")
 

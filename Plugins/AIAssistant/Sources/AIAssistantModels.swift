@@ -72,6 +72,10 @@ enum AIAssistantPanelPhase: Equatable, Sendable {
     case idle
     case capturing
     case processing
+    /// Capture returned pasteboard-derived text whose owner cannot be
+    /// verified; the panel shows it and waits for the user to confirm before
+    /// any provider request is issued.
+    case awaitingConfirmation
     case success
     case error(AIAssistantPanelError)
 }
@@ -124,6 +128,9 @@ struct AIAssistantPanelSnapshot: Equatable, Sendable {
 enum AIAssistantPanelAction: Equatable, Sendable {
     case retry
     case reprocess(sourceText: String)
+    /// Sends the confirmation-pending source text to the provider after the
+    /// user reviewed it in the panel.
+    case confirmSource
     /// Cancels the running capture/request but keeps the session visible.
     case stop
     /// Hides the panel without cancelling the task or discarding the session.

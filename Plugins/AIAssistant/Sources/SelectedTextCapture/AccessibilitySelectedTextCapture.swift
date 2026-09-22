@@ -17,6 +17,14 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
     /// fast with a timeout instead of hanging the caller.
     private static let probeTimeout: TimeInterval = 1.0
 
+    /// Per-element AX messaging timeout applied to every element this probe
+    /// creates, so a blocked AX call self-terminates natively instead of being
+    /// abandoned behind the watchdog. Kept below `probeTimeout` so the
+    /// watchdog stays the outer bound. Only per-element timeouts are used:
+    /// setting the timeout on the system-wide element would make it the
+    /// process-wide default and also bound other plugins' AX calls.
+    private nonisolated static let axMessagingTimeout: Float = 0.8
+
     private let localization: PluginLocalization
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
@@ -82,7 +90,15 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
     /// Synchronous Accessibility probe. Must stay off the main actor because
     /// every AXUIElementCopyAttributeValue call below can block.
     nonisolated static func probeSelection(context: SelectedTextCaptureContext) -> AXProbeOutcome {
+        if Task.isCancelled {
+            return AXProbeOutcome(text: nil, isEditable: false)
+        }
+
         guard let focusedElement = findFocusedElement(context: context) else {
+            return AXProbeOutcome(text: nil, isEditable: false)
+        }
+
+        if Task.isCancelled {
             return AXProbeOutcome(text: nil, isEditable: false)
         }
 
@@ -93,6 +109,10 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
             return AXProbeOutcome(text: selectedText, isEditable: isEditable)
         }
 
+        if Task.isCancelled {
+            return AXProbeOutcome(text: nil, isEditable: false)
+        }
+
         if let selectedText = selectedTextFromValueAndRange(focusedElement),
            !selectedText.isEmpty {
             return AXProbeOutcome(text: selectedText, isEditable: isEditable)
@@ -101,7 +121,11 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         // If the focused element does not expose selected text, query the
         // frontmost app's top-level element directly.
         if let pid = context.frontmostApplicationProcessIdentifier {
+            if Task.isCancelled {
+                return AXProbeOutcome(text: nil, isEditable: false)
+            }
             let appElement = AXUIElementCreateApplication(pid)
+            setMessagingTimeout(appElement)
             if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: appElement),
                !selectedText.isEmpty {
                 return AXProbeOutcome(text: selectedText, isEditable: isEditable)
@@ -122,6 +146,7 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
     nonisolated private static func findFocusedElement(context: SelectedTextCaptureContext) -> AXUIElement? {
         if let pid = context.frontmostApplicationProcessIdentifier {
             let appElement = AXUIElementCreateApplication(pid)
+            setMessagingTimeout(appElement)
             var appFocusedValue: CFTypeRef?
             if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &appFocusedValue) == .success,
                let element = appFocusedValue,
@@ -135,10 +160,21 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         if AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedUIElementAttribute as CFString, &focusedValue) == .success,
            let element = focusedValue,
            CFGetTypeID(element) == AXUIElementGetTypeID() {
-            return (element as! AXUIElement)
+            // The focused element carries the messaging timeout itself; the
+            // system-wide element is deliberately left untouched because AX
+            // would apply that timeout process-wide.
+            let focusedElement = (element as! AXUIElement)
+            setMessagingTimeout(focusedElement)
+            return focusedElement
         }
 
         return nil
+    }
+
+    /// Applies the native per-element messaging timeout so a blocked AX call
+    /// returns an error instead of hanging the probe.
+    nonisolated private static func setMessagingTimeout(_ element: AXUIElement) {
+        AXUIElementSetMessagingTimeout(element, axMessagingTimeout)
     }
 
     nonisolated private static func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {

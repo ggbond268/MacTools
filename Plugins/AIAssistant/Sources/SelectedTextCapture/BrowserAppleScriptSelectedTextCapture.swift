@@ -141,23 +141,21 @@ struct BrowserAppleScriptSelectedTextCapture: SelectedTextCapturing {
     }
 }
 
+/// Runs browser automation through the shared serialized osascript runner so
+/// the outer watchdog's cancellation actually terminates the script child
+/// process instead of abandoning an in-process NSAppleScript call.
 private struct DefaultBrowserAppleScriptExecutor: BrowserAppleScriptExecuting {
     func execute(_ script: String) async throws -> String? {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                guard let appleScript = NSAppleScript(source: script) else {
-                    continuation.resume(throwing: BrowserAppleScriptExecutionError.invalidScript)
-                    return
-                }
-
-                var errorInfo: NSDictionary?
-                let descriptor = appleScript.executeAndReturnError(&errorInfo)
-                guard errorInfo == nil else {
-                    continuation.resume(throwing: BrowserAppleScriptExecutionError.executionFailed)
-                    return
-                }
-
-                continuation.resume(returning: descriptor.stringValue)
+        do {
+            return try await SerializedAppleScriptRunner.shared.execute(script)
+        } catch let error as SerializedAppleScriptRunner.ExecutionError {
+            switch error {
+            case .invalidScript:
+                throw BrowserAppleScriptExecutionError.invalidScript
+            case .executionFailed:
+                throw BrowserAppleScriptExecutionError.executionFailed
+            case .timeout:
+                throw BrowserAppleScriptExecutionError.timeout
             }
         }
     }

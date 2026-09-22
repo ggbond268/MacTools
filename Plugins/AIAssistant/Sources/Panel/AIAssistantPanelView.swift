@@ -255,6 +255,8 @@ struct AIAssistantPanelView: View {
                     if let result = snapshot.result {
                         resultCard(result)
                     }
+                case .awaitingConfirmation:
+                    confirmationCard
                 case .error:
                     if let retained = snapshot.retainedResult {
                         resultCard(retained)
@@ -336,6 +338,58 @@ struct AIAssistantPanelView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
+    }
+
+    /// Shown when the captured text came from the pasteboard and its owner
+    /// cannot be verified. The user must explicitly confirm before the text
+    /// is sent to the AI provider.
+    private var confirmationCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.yellow)
+                Text(localization.string("panel.confirm.title", defaultValue: "疑似剪贴板内容"))
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            Text(localization.string(
+                "panel.confirm.description",
+                defaultValue: "未能直接读取选中文本，以上内容来自剪贴板。请确认是否将其发送给 AI 处理。"
+            ))
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Button {
+                    onAction(.confirmSource)
+                } label: {
+                    Label(
+                        localization.string("panel.confirm.useText", defaultValue: "使用此文本"),
+                        systemImage: "checkmark.circle"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Button {
+                    onAction(.discard)
+                } label: {
+                    Label(
+                        localization.string("panel.confirm.discard", defaultValue: "放弃"),
+                        systemImage: "xmark.circle"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(panelCardColor, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+        )
     }
 
     private func tipCard(_ message: String) -> some View {

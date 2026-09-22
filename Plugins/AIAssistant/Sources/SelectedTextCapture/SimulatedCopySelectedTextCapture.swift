@@ -27,6 +27,11 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
     /// pasteboard change. Runs off the main actor.
     typealias AppleScriptFallback = @Sendable () async -> Void
 
+    /// Supplies the pid of the current frontmost application so the fallback
+    /// can verify that the captured target still has focus before an
+    /// untargeted System Events keystroke is sent.
+    typealias FrontmostPIDProvider = @Sendable () -> pid_t?
+
     /// Supplies the pasteboard to observe (tests use a private pasteboard).
     typealias PasteboardProvider = @Sendable () -> NSPasteboard
 
@@ -35,6 +40,7 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
     private let localization: PluginLocalization
     private let copyEventSender: CopyEventSender
     private let appleScriptFallback: AppleScriptFallback
+    private let frontmostPIDProvider: FrontmostPIDProvider
     private let pasteboardProvider: PasteboardProvider
     private let pasteboardChangeTimeout: TimeInterval
 
@@ -42,12 +48,16 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         copyEventSender: @escaping CopyEventSender = SimulatedCopySelectedTextCapture.postCommandC,
         appleScriptFallback: @escaping AppleScriptFallback = SimulatedCopySelectedTextCapture.runAppleScriptFallback,
+        frontmostPIDProvider: @escaping FrontmostPIDProvider = {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier
+        },
         pasteboardProvider: @escaping PasteboardProvider = { NSPasteboard.general },
         pasteboardChangeTimeout: TimeInterval = 0.35
     ) {
         self.localization = localization
         self.copyEventSender = copyEventSender
         self.appleScriptFallback = appleScriptFallback
+        self.frontmostPIDProvider = frontmostPIDProvider
         self.pasteboardProvider = pasteboardProvider
         self.pasteboardChangeTimeout = pasteboardChangeTimeout
     }
@@ -97,14 +107,20 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
         )
         if capturedChangeCount == nil && !Task.isCancelled {
             // Fallback through System Events for apps that filter synthetic
-            // CGEvents. It runs off the main thread and is bounded by the
-            // serialized runner's watchdog.
-            await appleScriptFallback()
-            capturedChangeCount = await Self.waitForPasteboardChange(
-                from: baselineChangeCount,
-                in: pasteboard,
-                timeout: pasteboardChangeTimeout
-            )
+            // CGEvents. The keystroke is untargeted, so it may only run while
+            // the host-captured target is still frontmost; when the target is
+            // unknown (nil pid) or focus has moved elsewhere the retry is
+            // skipped instead of risking a copy from an unrelated app. The
+            // script runs off the main thread, bounded by the serialized
+            // runner's watchdog.
+            if isCapturedTargetStillFrontmost(context) {
+                await appleScriptFallback()
+                capturedChangeCount = await Self.waitForPasteboardChange(
+                    from: baselineChangeCount,
+                    in: pasteboard,
+                    timeout: pasteboardChangeTimeout
+                )
+            }
         }
 
         let text = pasteboard.string(forType: .string)
@@ -144,8 +160,22 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
             strategyID: strategyID,
             isEditable: false,
             sourceApplicationBundleID: context.frontmostApplicationBundleID,
-            failureReason: nil
+            failureReason: nil,
+            // Pasteboard content cannot be attributed: a change count only
+            // proves that something changed. The coordinator must show this
+            // text for confirmation instead of sending it to the provider.
+            requiresUserConfirmation: true
         )
+    }
+
+    /// The System Events fallback keystroke is untargeted, so it must only run
+    /// while the process the host captured is still the frontmost app. A nil
+    /// captured pid can never be verified and is treated as not frontmost.
+    private func isCapturedTargetStillFrontmost(_ context: SelectedTextCaptureContext) -> Bool {
+        guard let capturedPID = context.frontmostApplicationProcessIdentifier, capturedPID > 0 else {
+            return false
+        }
+        return frontmostPIDProvider() == capturedPID
     }
 
     /// Restores the snapshot only when the pasteboard still holds exactly what

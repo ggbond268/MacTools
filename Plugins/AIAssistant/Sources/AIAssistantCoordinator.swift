@@ -36,6 +36,10 @@ final class AIAssistantCoordinator {
     /// The latest terminal snapshot (success or error), used to restore the
     /// session view when the user stops an in-flight run.
     private var finishedSnapshot: AIAssistantPanelSnapshot?
+    /// True after the user hid the panel for the current run. While set, run
+    /// completions only refresh the retained snapshot and never reopen the
+    /// panel; the user brings the session back via `reopenSession`.
+    private var isPanelDismissedByUser = false
 
     private(set) var snapshot: AIAssistantPanelSnapshot = .idle {
         didSet {
@@ -72,6 +76,7 @@ final class AIAssistantCoordinator {
     /// Shows the retained session again without recapturing text or issuing a
     /// new provider request.
     func reopenSession() {
+        isPanelDismissedByUser = false
         panelController?.show(snapshot: snapshot)
     }
 
@@ -91,6 +96,8 @@ final class AIAssistantCoordinator {
             retry()
         case let .reprocess(sourceText):
             reprocess(with: sourceText)
+        case .confirmSource:
+            confirmSource()
         case .stop:
             stop()
         case .hide:
@@ -107,7 +114,9 @@ final class AIAssistantCoordinator {
     }
 
     /// Hides the panel but keeps the session and any running task alive.
+    /// Completion updates stay hidden until the user reopens the session.
     func hide() {
+        isPanelDismissedByUser = true
         panelController?.hide()
     }
 
@@ -122,6 +131,7 @@ final class AIAssistantCoordinator {
             sessionID = UUID()
             snapshot = .idle
         }
+        isPanelDismissedByUser = false
         panelController?.show(snapshot: snapshot)
     }
 
@@ -133,6 +143,7 @@ final class AIAssistantCoordinator {
         lastSourceText = nil
         lastPrompt = nil
         finishedSnapshot = nil
+        isPanelDismissedByUser = false
         snapshot = .idle
         panelController?.close()
     }
@@ -180,12 +191,28 @@ final class AIAssistantCoordinator {
             } else {
                 setError(.missingSelection, sourceText: nil)
             }
-            panelController?.show(snapshot: snapshot)
+            present(snapshot)
             return
         }
 
         // Metadata only: strategy and length, never the captured text itself.
         AIAssistantLog.capture.notice("Capture succeeded via \(result.strategyID?.rawValue ?? "unknown", privacy: .public), \(sourceText.count, privacy: .public) chars")
+
+        // The simulated-copy fallback reads the pasteboard, so ownership of the
+        // text cannot be proven. Require explicit confirmation instead of
+        // silently sending possibly-unrelated clipboard content to a provider.
+        if result.requiresUserConfirmation {
+            lastSourceText = sourceText
+            retainResultForRerun()
+            present(AIAssistantPanelSnapshot(
+                phase: .awaitingConfirmation,
+                sourceText: sourceText,
+                result: nil,
+                errorMessage: nil,
+                retainedResult: snapshot.retainedResult
+            ))
+            return
+        }
 
         lastSourceText = sourceText
         await process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
@@ -206,26 +233,23 @@ final class AIAssistantCoordinator {
         case let .success(resolved):
             provider = resolved
         case let .failure(error):
-            snapshot = AIAssistantPanelSnapshot(
+            present(AIAssistantPanelSnapshot(
                 phase: .error(.missingConfiguration),
                 sourceText: sourceText,
                 result: nil,
                 errorMessage: error.message,
                 retainedResult: retained
-            )
-            finishedSnapshot = snapshot
-            panelController?.show(snapshot: snapshot)
+            ))
             return
         }
 
-        snapshot = AIAssistantPanelSnapshot(
+        present(AIAssistantPanelSnapshot(
             phase: .processing,
             sourceText: sourceText,
             result: nil,
             errorMessage: nil,
             retainedResult: retained
-        )
-        panelController?.show(snapshot: snapshot)
+        ))
 
         do {
             try Task.checkCancellation()
@@ -244,29 +268,62 @@ final class AIAssistantCoordinator {
 
             guard !Task.isCancelled, sessionID == currentSessionID else { return }
 
-            snapshot = AIAssistantPanelSnapshot(
+            finish(AIAssistantPanelSnapshot(
                 phase: .success,
                 sourceText: sourceText,
                 result: result,
                 errorMessage: nil,
                 retainedResult: nil
-            )
-            finishedSnapshot = snapshot
-            panelController?.show(snapshot: snapshot)
+            ))
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled, sessionID == currentSessionID else { return }
 
             let message = Self.userFacingMessage(for: error, localization: localization)
-            snapshot = AIAssistantPanelSnapshot(
+            finish(AIAssistantPanelSnapshot(
                 phase: .error(.requestFailed(message)),
                 sourceText: sourceText,
                 result: nil,
                 errorMessage: message,
                 retainedResult: retained
-            )
-            finishedSnapshot = snapshot
+            ))
+        }
+    }
+
+    /// Sends the confirmation-pending source text to the provider after the
+    /// user reviewed the clipboard-derived content.
+    private func confirmSource() {
+        guard snapshot.phase == .awaitingConfirmation,
+              let sourceText = lastSourceText, !sourceText.isEmpty,
+              let prompt = lastPrompt
+        else { return }
+
+        activeTask?.cancel()
+        activeTask = Task { [weak self] in
+            guard let self else { return }
+            let currentSessionID = UUID()
+            self.sessionID = currentSessionID
+            await self.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
+        }
+    }
+
+    /// Presents a brand-new run state (fresh capture, failure, or
+    /// configuration problem). This always shows the panel and clears any
+    /// stale dismissal marker from a previous run.
+    private func present(_ newSnapshot: AIAssistantPanelSnapshot) {
+        isPanelDismissedByUser = false
+        snapshot = newSnapshot
+        panelController?.show(snapshot: snapshot)
+    }
+
+    /// Applies a run completion (success or failure). When the user hid the
+    /// panel for this run the snapshot is retained but the panel is not
+    /// reopened; `reopenSession` shows it on request.
+    private func finish(_ newSnapshot: AIAssistantPanelSnapshot) {
+        snapshot = newSnapshot
+        finishedSnapshot = newSnapshot
+        if !isPanelDismissedByUser {
             panelController?.show(snapshot: snapshot)
         }
     }
