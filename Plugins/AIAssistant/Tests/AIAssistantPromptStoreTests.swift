@@ -78,4 +78,27 @@ final class AIAssistantPromptStoreTests: XCTestCase {
         XCTAssertEqual(prompt.template, "{{text}}")
         XCTAssertFalse(prompt.id.isEmpty)
     }
+
+    /// Regression: when a prompt already uses the first generated default
+    /// name ("新模板 1"), repeated makeNewPrompt calls must terminate and
+    /// produce pairwise-distinct names instead of looping on one constant
+    /// candidate forever.
+    func testMakeNewPromptGeneratesDistinctNamesWhenDefaultNameTaken() {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let store = AIAssistantPromptStore(storage: storage)
+
+        var existing = [
+            AIAssistantPrompt(id: "taken", name: "新模板 1", template: "{{text}}", systemPrompt: nil, isEnabled: true),
+        ]
+        var names: [String] = []
+        for _ in 0..<5 {
+            let prompt = store.makeNewPrompt(existing: existing)
+            names.append(prompt.name)
+            existing.append(prompt)
+        }
+
+        XCTAssertEqual(Set(names).count, names.count, "Generated prompt names must be pairwise distinct: \(names)")
+        XCTAssertFalse(names.contains("新模板 1"))
+        XCTAssertTrue(names.allSatisfy { !$0.isEmpty })
+    }
 }

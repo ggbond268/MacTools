@@ -25,6 +25,22 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "請先設定 AI 服務。" } }
       }
     },
+    "common.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "取消" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "取消" } }
+      }
+    },
+    "common.delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "删除" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "刪除" } }
+      }
+    },
     "metadata.title": {
       "extractionState": "manual",
       "localizations": {
@@ -97,15 +113,7 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "按需確認" } }
       }
     },
-    "settings.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "AI Assistant Settings" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "AI 助手设置" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "AI 助手設定" } }
-      }
-    },
-    "settings.provider.title": {
+    "settings.service.title": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "AI Service" } },
@@ -249,7 +257,7 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "暫時無法測試連線" } }
       }
     },
-    "settings.provider.temperature.title": {
+    "settings.prompt.temperature.title": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Temperature" } },
@@ -257,12 +265,20 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "溫度" } }
       }
     },
-    "settings.provider.temperature.description": {
+    "settings.prompt.temperature.description": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "0-2, higher is more creative." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "0-2，越高越有创造性。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "0-2，越高越有創造性。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "0-2. Controls output creativity and stability; 0.7 by default." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "0-2，控制输出创造力与稳定性，默认 0.7。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "0-2，控制輸出創造力與穩定性，預設 0.7。" } }
+      }
+    },
+    "settings.prompt.temperature.resetHelp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reset temperature to 0.7" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重置温度为 0.7" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "重設溫度為 0.7" } }
       }
     },
     "settings.provider.name.placeholder": {
@@ -313,12 +329,12 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "為 DeepSeek / Qwen 等推理模型在請求中啟用思考欄位。" } }
       }
     },
-    "settings.promptList.title": {
+    "settings.prompts.title": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Prompts" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "处理模板" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "處理模板" } }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "处理模块" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "處理模組" } }
       }
     },
     "settings.promptList.add": {
@@ -337,23 +353,23 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "模板名稱" } }
       }
     },
-    "settings.prompt.templatePlaceholder": {
+    "settings.prompt.template.placeholder": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Prompt, must contain {{text}}" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "提示词，必须包含 {{text}}" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "提示詞，必須包含 {{text}}" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Translate the following into English:\n\n{{text}}" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "请将以下内容翻译为英文：\n\n{{text}}" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "請將以下內容翻譯為英文：\n\n{{text}}" } }
       }
     },
-    "settings.prompt.systemPromptPlaceholder": {
+    "settings.prompt.systemPrompt.placeholder": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "System prompt (optional)" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统提示词（可选）" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "系統提示詞（可選）" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Set the AI persona, tone, or formatting rules (optional)..." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "设定 AI 角色的背景人设、语气或格式规则（可选）..." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "設定 AI 角色的背景人設、語氣或格式規則（可選）..." } }
       }
     },
-    "settings.prompt.edit": {
+    "settings.promptRow.edit": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Edit" } },
@@ -361,12 +377,52 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "編輯" } }
       }
     },
-    "settings.prompt.done": {
+    "settings.prompt.save": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Done" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "完成" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "完成" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Save" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "保存" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "儲存" } }
+      }
+    },
+    "settings.prompt.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "取消" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "取消" } }
+      }
+    },
+    "settings.prompt.error.emptyName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Prompt name cannot be empty." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "模板名称不能为空" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "模板名稱不能為空" } }
+      }
+    },
+    "settings.prompt.error.duplicateName": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Prompt name already exists." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "模板名称与现有模板重复" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "模板名稱與現有模板重複" } }
+      }
+    },
+    "settings.prompt.deleteConfirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete this prompt?" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "确认删除处理模块？" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "確認刪除處理模組？" } }
+      }
+    },
+    "settings.prompt.deleteConfirm.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete “%@”? Its shortcut and related settings stop working and cannot be restored." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "确定要删除「%@」吗？删除后快捷键与相关配置将一并失效，且无法恢复。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "確定要刪除「%@」嗎？刪除後快速鍵與相關設定將一併失效，且無法恢復。" } }
       }
     },
     "settings.prompt.shortcutLabel": {
@@ -377,36 +433,60 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "全域快捷鍵" } }
       }
     },
-    "settings.prompt.templateLabel": {
+    "settings.prompt.shortcutClear": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Prompt template" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "提示词模板" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "提示詞模板" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Clear Shortcut" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "清除快捷键" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "清除快速鍵" } }
       }
     },
-    "settings.prompt.systemPromptLabel": {
+    "settings.prompt.shortcutDescription": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "System prompt (optional)" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统提示词（可选）" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "系統提示詞（可選）" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Press the shortcut to process selected text with this prompt." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按下快捷键直接使用此模板处理划词。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "按下快速鍵直接使用此模板處理選取的文字。" } }
       }
     },
-    "settings.prompt.systemPromptEmpty": {
+    "settings.prompt.template.title": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Not set" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未设置" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未設定" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Prompt Template" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "提示词模板 (Prompt Template)" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "提示詞模板 (Prompt Template)" } }
       }
     },
-    "settings.shortcut.unavailable": {
+    "settings.prompt.systemPrompt.title": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Available after saving" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "保存后可用" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "儲存後可用" } }
+        "en": { "stringUnit": { "state": "translated", "value": "System Prompt" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统提示词 (System Prompt)" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "系統提示詞 (System Prompt)" } }
+      }
+    },
+    "settings.shortcuts.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Shortcuts" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "快捷键" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵" } }
+      }
+    },
+    "settings.shortcut.conflict.system": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This shortcut conflicts with a common system action. Use a combination that includes ⌥ (Option) or ⌃ (Control)." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "该快捷键与常用系统操作冲突，请使用包含 ⌥(Option) 或 ⌃(Control) 的组合键。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此快速鍵與常用系統操作衝突，請使用包含 ⌥(Option) 或 ⌃(Control) 的組合鍵。" } }
+      }
+    },
+    "settings.shortcut.conflict.duplicatePrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This shortcut is already used by the prompt “%@”. Choose a different combination." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "该快捷键已被模板「%@」占用，请更换其他按键组合。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "此快速鍵已被模板「%@」佔用，請更換其他按鍵組合。" } }
       }
     },
     "settings.promptRow.moveUpHelp": {
@@ -441,20 +521,20 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "恢復預設" } }
       }
     },
-    "settings.action.save": {
+    "settings.action.saveService": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Save" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "保存" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "儲存" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Save Service Settings" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "保存服务设置" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "儲存服務設定" } }
       }
     },
-    "settings.message.saved": {
+    "settings.message.serviceSaved": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Saved" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已保存" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已儲存" } }
+        "en": { "stringUnit": { "state": "translated", "value": "AI service saved" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "AI 服务已保存" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "AI 服務已儲存" } }
       }
     },
     "settings.error.noEnabledProvider": {
@@ -673,6 +753,14 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "用「%@」處理目前選取的文字。" } }
       }
     },
+    "panel.header.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "AI Assistant" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "AI 助手" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "AI 助手" } }
+      }
+    },
     "panel.subtitle.shortcutPaused": {
       "extractionState": "manual",
       "localizations": {
@@ -721,12 +809,100 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在處理..." } }
       }
     },
+    "panel.status.reprocessing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Rerunning; the previous result is kept for now..." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在重新处理，先前的结果暂时保留..." } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "正在重新處理，先前的結果暫時保留..." } }
+      }
+    },
+    "panel.action.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Stop Current Run" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "停止当前处理" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "停止目前處理" } }
+      }
+    },
+    "panel.action.discard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Discard and Close" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "丢弃会话并关闭" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "丟棄對話並關閉" } }
+      }
+    },
+    "panel.action.hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Hide" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "隐藏 (Esc)" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏 (Esc)" } }
+      }
+    },
+    "panel.source.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Source Text" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "原始文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "原始文字" } }
+      }
+    },
+    "panel.source.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No selected text detected" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未检测到选中文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "未偵測到選取的文字" } }
+      }
+    },
+    "panel.source.editing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "(Editing)" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "（正在编辑）" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "（正在編輯）" } }
+      }
+    },
+    "panel.source.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "(Double-click or click to edit)" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "（双击或点击编辑）" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "（按兩下或點擊編輯）" } }
+      }
+    },
+    "panel.source.editButton": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Edit" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "编辑" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "編輯" } }
+      }
+    },
+    "panel.source.applyAndRerun": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Apply and Rerun" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "应用并重跑" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "套用並重跑" } }
+      }
+    },
     "panel.result.copy": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Copy" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "复制" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "複製" } }
+      }
+    },
+    "panel.result.copied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Copied" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已复制" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已複製" } }
       }
     },
     "panel.reasoning.title": {
@@ -751,6 +927,14 @@
         "en": { "stringUnit": { "state": "translated", "value": "How to fix" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "如何解决" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "如何解決" } }
+      }
+    },
+    "panel.tip.enterTextManually": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Type Text Instead" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "手动输入文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "手動輸入文字" } }
       }
     },
     "panel.retryHelp": {
@@ -865,20 +1049,20 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動化取詞失敗" } }
       }
     },
+    "capture.error.axTimeout": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Accessibility capture timed out" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "辅助功能取词超时" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "輔助功能取詞逾時" } }
+      }
+    },
     "capture.error.restorePasteboardFailed": {
       "extractionState": "manual",
       "localizations": {
         "en": { "stringUnit": { "state": "translated", "value": "Failed to restore the pasteboard." } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法恢复剪贴板" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "無法復原剪貼簿" } }
-      }
-    },
-    "capture.error.simulatedCopyFailed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Simulated copy failed." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "模拟复制失败" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "模擬複製失敗" } }
       }
     },
     "secretStore.error.unexpectedItemData": {

@@ -33,6 +33,9 @@ final class AIAssistantCoordinator {
     private var activeTask: Task<Void, Never>?
     private var lastSourceText: String?
     private var lastPrompt: AIAssistantPrompt?
+    /// The latest terminal snapshot (success or error), used to restore the
+    /// session view when the user stops an in-flight run.
+    private var finishedSnapshot: AIAssistantPanelSnapshot?
 
     private(set) var snapshot: AIAssistantPanelSnapshot = .idle {
         didSet {
@@ -52,7 +55,30 @@ final class AIAssistantCoordinator {
         self.localization = localization
     }
 
+    // MARK: - Session state
+
+    /// Whether a session for this prompt still holds recoverable state (a
+    /// running task or a finished snapshot). Used to reopen instead of
+    /// recapturing.
+    func hasSession(forPromptID promptID: String) -> Bool {
+        guard lastPrompt?.id == promptID else { return false }
+        return activeTask != nil || finishedSnapshot != nil || snapshot.phase != .idle
+    }
+
+    var isPanelVisible: Bool {
+        panelController?.isVisible ?? false
+    }
+
+    /// Shows the retained session again without recapturing text or issuing a
+    /// new provider request.
+    func reopenSession() {
+        panelController?.show(snapshot: snapshot)
+    }
+
+    // MARK: - Actions
+
     func startProcessing(prompt: AIAssistantPrompt) {
+        retainResultForRerun()
         activeTask?.cancel()
         activeTask = Task { [weak self] in
             await self?.runProcessing(prompt: prompt)
@@ -65,21 +91,59 @@ final class AIAssistantCoordinator {
             retry()
         case let .reprocess(sourceText):
             reprocess(with: sourceText)
+        case .stop:
+            stop()
+        case .hide:
+            hide()
+        case .discard:
+            discard()
         case .close:
             close()
         case .copyResult:
-            copy(snapshot.result?.text)
+            copy(snapshot.result?.text ?? snapshot.retainedResult?.text)
         case .openSettings:
             break
         }
     }
 
-    func close() {
+    /// Hides the panel but keeps the session and any running task alive.
+    func hide() {
+        panelController?.hide()
+    }
+
+    /// Cancels the in-flight task and restores the last finished view without
+    /// discarding the session.
+    func stop() {
+        activeTask?.cancel()
+        activeTask = nil
+        if let finishedSnapshot {
+            snapshot = finishedSnapshot
+        } else {
+            sessionID = UUID()
+            snapshot = .idle
+        }
+        panelController?.show(snapshot: snapshot)
+    }
+
+    /// Cancels the task and discards the session, closing the panel.
+    func discard() {
         sessionID = UUID()
         activeTask?.cancel()
         activeTask = nil
+        lastSourceText = nil
+        lastPrompt = nil
+        finishedSnapshot = nil
+        snapshot = .idle
         panelController?.close()
     }
+
+    /// Fully closes the panel and resets the session. Kept for teardown paths
+    /// (deactivation, saving configuration).
+    func close() {
+        discard()
+    }
+
+    // MARK: - Processing
 
     private func runProcessing(prompt: AIAssistantPrompt) async {
         let currentSessionID = UUID()
@@ -97,7 +161,8 @@ final class AIAssistantCoordinator {
         }
         panelController?.close()
 
-        AIAssistantLog.capture.notice("Starting capture for prompt: \(prompt.normalizedName), targetApp: \(frontmostApplication?.localizedName ?? "nil", privacy: .public) (pid: \(frontmostApplication?.processIdentifier ?? -1, privacy: .public))")
+        // Metadata only: never log the prompt name or captured user text.
+        AIAssistantLog.capture.notice("Starting capture, targetApp: \(frontmostApplication?.localizedName ?? "nil", privacy: .public) (pid: \(frontmostApplication?.processIdentifier ?? -1, privacy: .public))")
 
         // 先在目标应用完整持有焦点状态下取词，避免提前弹窗抢占焦点导致划词与模拟复制失败
         let result = await selectedTextCapturePipeline.capture(
@@ -119,7 +184,8 @@ final class AIAssistantCoordinator {
             return
         }
 
-        AIAssistantLog.capture.notice("Capture succeeded: \(sourceText.prefix(30), privacy: .public)... (\(sourceText.count) chars)")
+        // Metadata only: strategy and length, never the captured text itself.
+        AIAssistantLog.capture.notice("Capture succeeded via \(result.strategyID?.rawValue ?? "unknown", privacy: .public), \(sourceText.count, privacy: .public) chars")
 
         lastSourceText = sourceText
         await process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
@@ -132,6 +198,8 @@ final class AIAssistantCoordinator {
     ) async {
         guard !Task.isCancelled, sessionID == currentSessionID else { return }
 
+        let retained = snapshot.result ?? snapshot.retainedResult
+
         let providerResult = providerFactory()
         let provider: ResolvedAIProvider
         switch providerResult {
@@ -142,8 +210,10 @@ final class AIAssistantCoordinator {
                 phase: .error(.missingConfiguration),
                 sourceText: sourceText,
                 result: nil,
-                errorMessage: error.message
+                errorMessage: error.message,
+                retainedResult: retained
             )
+            finishedSnapshot = snapshot
             panelController?.show(snapshot: snapshot)
             return
         }
@@ -152,7 +222,8 @@ final class AIAssistantCoordinator {
             phase: .processing,
             sourceText: sourceText,
             result: nil,
-            errorMessage: nil
+            errorMessage: nil,
+            retainedResult: retained
         )
         panelController?.show(snapshot: snapshot)
 
@@ -177,8 +248,10 @@ final class AIAssistantCoordinator {
                 phase: .success,
                 sourceText: sourceText,
                 result: result,
-                errorMessage: nil
+                errorMessage: nil,
+                retainedResult: nil
             )
+            finishedSnapshot = snapshot
             panelController?.show(snapshot: snapshot)
         } catch is CancellationError {
             return
@@ -190,23 +263,29 @@ final class AIAssistantCoordinator {
                 phase: .error(.requestFailed(message)),
                 sourceText: sourceText,
                 result: nil,
-                errorMessage: message
+                errorMessage: message,
+                retainedResult: retained
             )
+            finishedSnapshot = snapshot
             panelController?.show(snapshot: snapshot)
         }
     }
 
     private func retry() {
-        guard let sourceText = lastSourceText, let prompt = lastPrompt else {
-            return
-        }
+        guard let prompt = lastPrompt else { return }
 
-        activeTask?.cancel()
-        activeTask = Task { [weak self] in
-            guard let self else { return }
-            let currentSessionID = UUID()
-            self.sessionID = currentSessionID
-            await self.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
+        if let sourceText = lastSourceText {
+            activeTask?.cancel()
+            activeTask = Task { [weak self] in
+                guard let self else { return }
+                let currentSessionID = UUID()
+                self.sessionID = currentSessionID
+                await self.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
+            }
+        } else {
+            // The previous run failed before any text was captured; retry
+            // attempts capture again for the same prompt.
+            startProcessing(prompt: prompt)
         }
     }
 
@@ -224,13 +303,23 @@ final class AIAssistantCoordinator {
         }
     }
 
+    /// Keeps the most recent successful result visible across a rerun so
+    /// editing the source or a failed request never blanks the output.
+    private func retainResultForRerun() {
+        if let current = snapshot.result ?? snapshot.retainedResult, snapshot.phase == .success {
+            snapshot.retainedResult = current
+        }
+    }
+
     private func setError(_ error: AIAssistantPanelError, sourceText: String?) {
         snapshot = AIAssistantPanelSnapshot(
             phase: .error(error),
             sourceText: sourceText,
             result: nil,
-            errorMessage: error.message(localization: localization)
+            errorMessage: error.message(localization: localization),
+            retainedResult: snapshot.retainedResult
         )
+        finishedSnapshot = snapshot
     }
 
     private func copy(_ text: String?) {

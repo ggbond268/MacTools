@@ -2,8 +2,13 @@
 import Foundation
 
 enum AccessibilityCheck {
+    /// Injectable trust probe so capture tests can simulate both trust states
+    /// without changing the test runner's system permissions. Always restore
+    /// the default in test teardown.
+    nonisolated(unsafe) static var trustProbe: () -> Bool = { AXIsProcessTrusted() }
+
     static func isTrusted() -> Bool {
-        AXIsProcessTrusted()
+        trustProbe()
     }
 
     static func requestTrust(prompt: Bool) -> Bool {

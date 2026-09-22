@@ -2,8 +2,21 @@ import ApplicationServices
 import Foundation
 import MacToolsPluginKit
 
+/// Outcome of one synchronous Accessibility probe. Sendable so it can cross
+/// from a detached probe task back to the main actor.
+struct AXProbeOutcome: Sendable {
+    let text: String?
+    let isEditable: Bool
+}
+
 struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
     let strategyID: SelectedTextCaptureStrategyID = .accessibility
+
+    /// Upper bound for one AX probe. AXUIElementCopyAttributeValue can block
+    /// for a long time on a misbehaving target app, so the capture path fails
+    /// fast with a timeout instead of hanging the caller.
+    private static let probeTimeout: TimeInterval = 1.0
+
     private let localization: PluginLocalization
 
     init(localization: PluginLocalization = PluginLocalization(bundle: .main)) {
@@ -18,58 +31,95 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
             )
         }
 
-        guard let focusedElement = findFocusedElement(context: context) else {
+        let outcome: AXProbeOutcome
+        do {
+            outcome = try await probeSelectionWithTimeout(context)
+        } catch {
+            return failure(
+                context: context,
+                reason: localization.string("capture.error.axTimeout", defaultValue: "辅助功能取词超时")
+            )
+        }
+
+        guard let selectedText = outcome.text, !selectedText.isEmpty else {
             return failure(
                 context: context,
                 reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")
             )
         }
 
+        return SelectedTextCaptureResult(
+            text: selectedText,
+            strategyID: strategyID,
+            isEditable: outcome.isEditable,
+            sourceApplicationBundleID: context.frontmostApplicationBundleID,
+            failureReason: nil
+        )
+    }
+
+    /// Runs the synchronous AX probe off the main actor and bounds it with a
+    /// timeout watchdog. The continuation box guarantees exactly one resume,
+    /// whether the probe finishes first or the watchdog fires first.
+    private func probeSelectionWithTimeout(_ context: SelectedTextCaptureContext) async throws -> AXProbeOutcome {
+        let timeoutNanoseconds = Self.timeoutNanoseconds(for: Self.probeTimeout)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let box = AXProbeContinuationBox()
+            let probe = Task.detached(priority: .userInitiated) {
+                let outcome = Self.probeSelection(context: context)
+                box.resume(continuation, returning: outcome)
+            }
+
+            Task {
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                // Abandon the probe; its late result is dropped by the box.
+                probe.cancel()
+                box.resume(continuation, throwing: AXProbeError.timeout)
+            }
+        }
+    }
+
+    /// Synchronous Accessibility probe. Must stay off the main actor because
+    /// every AXUIElementCopyAttributeValue call below can block.
+    nonisolated static func probeSelection(context: SelectedTextCaptureContext) -> AXProbeOutcome {
+        guard let focusedElement = findFocusedElement(context: context) else {
+            return AXProbeOutcome(text: nil, isEditable: false)
+        }
+
         let isEditable = isEditableTextElement(focusedElement)
+
         if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: focusedElement),
            !selectedText.isEmpty {
-            return SelectedTextCaptureResult(
-                text: selectedText,
-                strategyID: strategyID,
-                isEditable: isEditable,
-                sourceApplicationBundleID: context.frontmostApplicationBundleID,
-                failureReason: nil
-            )
+            return AXProbeOutcome(text: selectedText, isEditable: isEditable)
         }
 
         if let selectedText = selectedTextFromValueAndRange(focusedElement),
            !selectedText.isEmpty {
-            return SelectedTextCaptureResult(
-                text: selectedText,
-                strategyID: strategyID,
-                isEditable: isEditable,
-                sourceApplicationBundleID: context.frontmostApplicationBundleID,
-                failureReason: nil
-            )
+            return AXProbeOutcome(text: selectedText, isEditable: isEditable)
         }
 
-        // 如果聚焦元素本身未暴露选中文字，尝试从前台 App 的顶层元素直接查询选中文字
+        // If the focused element does not expose selected text, query the
+        // frontmost app's top-level element directly.
         if let pid = context.frontmostApplicationProcessIdentifier {
             let appElement = AXUIElementCreateApplication(pid)
             if let selectedText = stringAttribute(kAXSelectedTextAttribute, from: appElement),
                !selectedText.isEmpty {
-                return SelectedTextCaptureResult(
-                    text: selectedText,
-                    strategyID: strategyID,
-                    isEditable: isEditable,
-                    sourceApplicationBundleID: context.frontmostApplicationBundleID,
-                    failureReason: nil
-                )
+                return AXProbeOutcome(text: selectedText, isEditable: isEditable)
             }
         }
 
-        return failure(
-            context: context,
-            reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")
-        )
+        return AXProbeOutcome(text: nil, isEditable: false)
     }
 
-    private func findFocusedElement(context: SelectedTextCaptureContext) -> AXUIElement? {
+    // Pure AX C-API helpers below are `nonisolated`: the struct inherits main
+    // actor isolation from the @MainActor SelectedTextCapturing protocol, but
+    // these probes must run on the detached probe task instead.
+
+    nonisolated private static func timeoutNanoseconds(for timeout: TimeInterval) -> UInt64 {
+        UInt64(max(timeout, 0) * 1_000_000_000)
+    }
+
+    nonisolated private static func findFocusedElement(context: SelectedTextCaptureContext) -> AXUIElement? {
         if let pid = context.frontmostApplicationProcessIdentifier {
             let appElement = AXUIElementCreateApplication(pid)
             var appFocusedValue: CFTypeRef?
@@ -91,24 +141,14 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         return nil
     }
 
-    private func failure(context: SelectedTextCaptureContext, reason: String) -> SelectedTextCaptureResult {
-        SelectedTextCaptureResult(
-            text: nil,
-            strategyID: strategyID,
-            isEditable: false,
-            sourceApplicationBundleID: context.frontmostApplicationBundleID,
-            failureReason: reason
-        )
-    }
-
-    private func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {
+    nonisolated private static func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
         guard status == .success else { return nil }
         return value as? String
     }
 
-    private func isEditableTextElement(_ element: AXUIElement) -> Bool {
+    nonisolated private static func isEditableTextElement(_ element: AXUIElement) -> Bool {
         guard let role = stringAttribute(kAXRoleAttribute, from: element) else {
             return false
         }
@@ -116,7 +156,7 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         return role == kAXTextFieldRole as String || role == kAXTextAreaRole as String
     }
 
-    private func selectedTextFromValueAndRange(_ element: AXUIElement) -> String? {
+    nonisolated private static func selectedTextFromValueAndRange(_ element: AXUIElement) -> String? {
         guard let value = stringAttribute(kAXValueAttribute, from: element),
               let selectedRange = selectedTextRange(from: element),
               selectedRange.length > 0 else {
@@ -150,7 +190,7 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         return String(value[lower..<upper])
     }
 
-    private func selectedTextRange(from element: AXUIElement) -> CFRange? {
+    nonisolated private static func selectedTextRange(from element: AXUIElement) -> CFRange? {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
             element,
@@ -174,5 +214,44 @@ struct AccessibilitySelectedTextCapture: SelectedTextCapturing {
         }
 
         return range
+    }
+
+    private func failure(context: SelectedTextCaptureContext, reason: String) -> SelectedTextCaptureResult {
+        SelectedTextCaptureResult(
+            text: nil,
+            strategyID: strategyID,
+            isEditable: false,
+            sourceApplicationBundleID: context.frontmostApplicationBundleID,
+            failureReason: reason
+        )
+    }
+}
+
+private enum AXProbeError: Error {
+    case timeout
+}
+
+/// NSLock + didResume guard so only the first resume (probe result or
+/// timeout) wins; the loser is silently dropped.
+private final class AXProbeContinuationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func resume<T>(_ continuation: CheckedContinuation<T, any Error>, returning value: sending T) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume else { return }
+        didResume = true
+        continuation.resume(returning: value)
+    }
+
+    func resume<T>(_ continuation: CheckedContinuation<T, any Error>, throwing error: any Error) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume else { return }
+        didResume = true
+        continuation.resume(throwing: error)
     }
 }

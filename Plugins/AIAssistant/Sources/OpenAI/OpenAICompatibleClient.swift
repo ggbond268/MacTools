@@ -76,8 +76,9 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
 
         guard (200 ... 299).contains(response.statusCode) else {
             let serverMessage = Self.extractErrorMessage(from: data)
+            // Log the status code only: response bodies can echo prompt content.
             AIAssistantLog.provider.error(
-                "completion request failed with status \(response.statusCode, privacy: .public): \(serverMessage ?? "none", privacy: .public)"
+                "completion request failed with status \(response.statusCode, privacy: .private)"
             )
 
             if response.statusCode == 401 || response.statusCode == 403 {
@@ -128,8 +129,9 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
 
         guard (200 ... 299).contains(response.statusCode) else {
             let serverMessage = Self.extractErrorMessage(from: data)
+            // Log the status code only: response bodies can echo prompt content.
             AIAssistantLog.provider.error(
-                "models request failed with status \(response.statusCode, privacy: .public): \(serverMessage ?? "none", privacy: .public)"
+                "models request failed with status \(response.statusCode, privacy: .private)"
             )
 
             if response.statusCode == 401 || response.statusCode == 403 {
@@ -143,8 +145,14 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
         return try decodeModelsResponse(from: data)
     }
 
+    /// Extracts a user-presentable error message from a non-2xx response body.
+    /// For valid JSON (object or array) only an explicit message-like field is
+    /// used; JSON payloads without such a field return `nil` so raw provider
+    /// text (which can echo prompt content) is never surfaced. The trimmed
+    /// raw-text fallback applies only to non-JSON bodies.
     private static func extractErrorMessage(from data: Data) -> String? {
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        if let json = try? JSONSerialization.jsonObject(with: data) {
+            guard let json = json as? [String: Any] else { return nil }
             if let errorObj = json["error"] as? [String: Any],
                let msg = errorObj["message"] as? String,
                !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -154,6 +162,7 @@ struct OpenAICompatibleClient: AIProcessing, Sendable {
                !msg.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return msg.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+            return nil
         }
         if let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !text.isEmpty,

@@ -2,7 +2,9 @@ import AppKit
 
 @MainActor
 final class AIAssistantPanelWindow: NSPanel {
-    var onCloseRequest: (() -> Void)?
+    /// Invoked when the user dismisses the panel via Esc or focus loss. The
+    /// handler must hide the panel non-destructively, not discard the session.
+    var onDismissRequest: (() -> Void)?
 
     private var isProgrammaticClose = false
 
@@ -52,6 +54,6 @@ final class AIAssistantPanelWindow: NSPanel {
     }
 
     private func requestClose() {
-        onCloseRequest?()
+        onDismissRequest?()
     }
 }

@@ -126,6 +126,134 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertEqual(firstShown.phase, .processing)
     }
 
+    // MARK: - Non-destructive session controls
+
+    func testHideKeepsSessionAndReopenShowsItWithoutRecapture() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+
+        coordinator.handle(.hide)
+        XCTAssertFalse(panelController.isVisible)
+        XCTAssertTrue(coordinator.hasSession(forPromptID: "translate"))
+
+        coordinator.reopenSession()
+        XCTAssertTrue(panelController.isVisible)
+        XCTAssertEqual(panelController.shownSnapshots.last?.phase, .success)
+        XCTAssertEqual(panelController.shownSnapshots.last?.result?.text, "处理结果")
+        // Reopening must not recapture or re-request.
+        XCTAssertEqual(capturePipeline.captureCount, 1)
+        XCTAssertEqual(client.callCount, 1)
+    }
+
+    func testStopDuringProcessingRestoresFinishedResult() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+
+        // Start a rerun that hangs until cancelled.
+        client.hangsUntilCancelled = true
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForCondition(coordinator) { $0.phase == .processing }
+
+        coordinator.handle(.stop)
+
+        // Stop restores the previous finished view and keeps the session.
+        XCTAssertEqual(coordinator.snapshot.phase, .success)
+        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+        XCTAssertEqual(panelController.shownSnapshots.last?.phase, .success)
+        XCTAssertTrue(coordinator.hasSession(forPromptID: "translate"))
+    }
+
+    func testDiscardAndCloseResetSession() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+        XCTAssertTrue(coordinator.hasSession(forPromptID: "translate"))
+
+        coordinator.handle(.discard)
+        XCTAssertFalse(coordinator.hasSession(forPromptID: "translate"))
+        XCTAssertEqual(coordinator.snapshot.phase, .idle)
+        XCTAssertTrue(panelController.closedCount > 0)
+
+        // close() shares discard semantics for teardown paths.
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+        coordinator.handle(.close)
+        XCTAssertFalse(coordinator.hasSession(forPromptID: "translate"))
+        XCTAssertEqual(coordinator.snapshot.phase, .idle)
+    }
+
+    // MARK: - Retry semantics
+
+    func testRetryAfterCaptureFailureRecapturesText() async {
+        capturePipeline = StubCapturePipeline(result: .missing)
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .error(.missingSelection) }
+        XCTAssertEqual(capturePipeline.captureCount, 1)
+
+        // The failed run never captured text, so retry must capture again.
+        capturePipeline.outcome = .success("你好世界")
+        coordinator.handle(.retry)
+        await waitForPhase(coordinator) { $0 == .success }
+
+        XCTAssertEqual(capturePipeline.captureCount, 2)
+        XCTAssertEqual(client.callCount, 1)
+        XCTAssertEqual(coordinator.snapshot.sourceText, "你好世界")
+    }
+
+    func testRetryWithCapturedTextReprocessesWithoutRecapture() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+        XCTAssertEqual(capturePipeline.captureCount, 1)
+
+        // Make any recapture fail: retry must reuse the captured text instead.
+        capturePipeline.outcome = .missing
+        coordinator.handle(.retry)
+        // The retried run must report success via a second client call, not the stale pre-retry snapshot.
+        await waitForCondition(coordinator) {
+            $0.phase == .success
+                && $0.result?.text == "处理结果"
+                && $0.sourceText == "你好世界"
+                && client.callCount == 2
+        }
+
+        XCTAssertEqual(capturePipeline.captureCount, 1)
+        XCTAssertEqual(client.callCount, 2)
+    }
+
+    func testRetainedResultSurvivesRerunAndStop() async {
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client)
+
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+
+        client.hangsUntilCancelled = true
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForCondition(coordinator) { $0.phase == .processing }
+
+        // The previous successful result stays visible while reprocessing.
+        XCTAssertEqual(coordinator.snapshot.retainedResult?.text, "处理结果")
+
+        coordinator.handle(.stop)
+        XCTAssertEqual(coordinator.snapshot.phase, .success)
+        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+        XCTAssertNil(coordinator.snapshot.retainedResult)
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator(client: any AIProcessing) -> AIAssistantCoordinator {
@@ -198,12 +326,24 @@ final class AIAssistantCoordinatorTests: XCTestCase {
 private final class RecordingPanelController: AIAssistantPanelControlling {
     var onAction: ((AIAssistantPanelAction) -> Void)?
     private(set) var shownSnapshots: [AIAssistantPanelSnapshot] = []
+    private(set) var closedCount = 0
+    private(set) var hiddenCount = 0
+
+    var isVisible = false
 
     func show(snapshot: AIAssistantPanelSnapshot) {
         shownSnapshots.append(snapshot)
+        isVisible = true
     }
     func update(snapshot: AIAssistantPanelSnapshot) {}
-    func close() {}
+    func hide() {
+        hiddenCount += 1
+        isVisible = false
+    }
+    func close() {
+        closedCount += 1
+        isVisible = false
+    }
 }
 
 @MainActor
@@ -213,13 +353,15 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
         case missing
     }
 
-    private let outcome: Outcome
+    var outcome: Outcome
+    private(set) var captureCount = 0
 
     init(result: Outcome) {
         self.outcome = result
     }
 
     func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
+        captureCount += 1
         switch outcome {
         case let .success(text):
             return SelectedTextCaptureResult(
@@ -241,8 +383,22 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
     }
 }
 
-private struct StubProcessingClient: AIProcessing {
+private final class StubProcessingClient: AIProcessing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _callCount = 0
+    var hangsUntilCancelled = false
+
+    var callCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _callCount
+    }
+
     let result: Result<AIProcessResult, Error>
+
+    init(result: Result<AIProcessResult, Error>) {
+        self.result = result
+    }
 
     func complete(
         prompt: String,
@@ -250,6 +406,16 @@ private struct StubProcessingClient: AIProcessing {
         configuration: OpenAICompatibleConfiguration,
         apiKey: String
     ) async throws -> AIProcessResult {
-        try result.get()
+        lock.lock()
+        _callCount += 1
+        lock.unlock()
+
+        if hangsUntilCancelled {
+            while !Task.isCancelled {
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+            throw CancellationError()
+        }
+        return try result.get()
     }
 }

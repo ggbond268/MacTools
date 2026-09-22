@@ -419,6 +419,23 @@ struct AIAssistantPromptSettingsView: View {
     @State private var messageIsError = false
     @State private var editingPromptIDs: Set<String> = []
     @State private var promptPendingDeletion: AIAssistantPrompt?
+    @State private var promptEditDrafts: [String: PromptEditDraft] = [:]
+
+    /// Snapshot of the editable fields taken when a row enters edit mode,
+    /// so Cancel can revert unsaved changes without persisting.
+    private struct PromptEditDraft {
+        var name: String
+        var template: String
+        var systemPrompt: String?
+        var temperature: Double
+
+        init(_ prompt: AIAssistantPrompt) {
+            name = prompt.name
+            template = prompt.template
+            systemPrompt = prompt.systemPrompt
+            temperature = prompt.temperature
+        }
+    }
 
     let localization: PluginLocalization
     let settingsContext: PluginSettingsContext
@@ -614,13 +631,22 @@ struct AIAssistantPromptSettingsView: View {
                 Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
                 Button {
-                    toggleEditing(for: prompt.id)
+                    saveEditing(for: prompt.id)
                 } label: {
-                    Text(localization.string("settings.prompt.done", defaultValue: "完成"))
+                    Text(localization.string("settings.prompt.save", defaultValue: "保存"))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(isDisabled)
+
+                // Cancel always stays enabled so editing is never a trap.
+                Button {
+                    cancelEditing(for: prompt.id)
+                } label: {
+                    Text(localization.string("settings.prompt.cancel", defaultValue: "取消"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
 
                 iconButton("chevron.up", help: localization.string("settings.promptRow.moveUpHelp", defaultValue: "上移")) {
                     movePrompt(from: index, offset: -1)
@@ -847,17 +873,62 @@ struct AIAssistantPromptSettingsView: View {
     // MARK: - Actions
 
     private func toggleEditing(for promptID: String) {
-        if editingPromptIDs.contains(promptID) {
-            editingPromptIDs.remove(promptID)
-            persistPrompts()
-        } else {
-            editingPromptIDs.insert(promptID)
+        guard !editingPromptIDs.contains(promptID) else { return }
+
+        // Snapshot the editable fields so Cancel can revert unsaved changes.
+        if let index = prompts.firstIndex(where: { $0.id == promptID }) {
+            promptEditDrafts[promptID] = PromptEditDraft(prompts[index])
         }
+        editingPromptIDs.insert(promptID)
+    }
+
+    /// Persists the edited values through the same path as the other controls,
+    /// then exits editing. An empty or duplicate name keeps the editor open.
+    private func saveEditing(for promptID: String) {
+        guard let index = prompts.firstIndex(where: { $0.id == promptID }) else {
+            promptEditDrafts.removeValue(forKey: promptID)
+            editingPromptIDs.remove(promptID)
+            return
+        }
+
+        let name = prompts[index].normalizedName
+        if name.isEmpty {
+            message = localization.string("settings.prompt.error.emptyName", defaultValue: "模板名称不能为空")
+            messageIsError = true
+            return
+        }
+        let isDuplicate = prompts.contains { $0.id != promptID && $0.normalizedName == name }
+        if isDuplicate {
+            message = localization.string("settings.prompt.error.duplicateName", defaultValue: "模板名称与现有模板重复")
+            messageIsError = true
+            return
+        }
+
+        persistPrompts()
+        promptEditDrafts.removeValue(forKey: promptID)
+        editingPromptIDs.remove(promptID)
+    }
+
+    /// Reverts the row's fields to their pre-edit snapshot and exits editing
+    /// without persisting.
+    private func cancelEditing(for promptID: String) {
+        if let index = prompts.firstIndex(where: { $0.id == promptID }),
+           let draft = promptEditDrafts[promptID] {
+            prompts[index].name = draft.name
+            prompts[index].template = draft.template
+            prompts[index].systemPrompt = draft.systemPrompt
+            prompts[index].temperature = draft.temperature
+        }
+        promptEditDrafts.removeValue(forKey: promptID)
+        editingPromptIDs.remove(promptID)
+        message = nil
+        messageIsError = false
     }
 
     private func addPrompt() {
         let prompt = onMakeNewPrompt(prompts)
         prompts.append(prompt)
+        promptEditDrafts[prompt.id] = PromptEditDraft(prompt)
         editingPromptIDs.insert(prompt.id)
         message = nil
         messageIsError = false
@@ -889,6 +960,7 @@ struct AIAssistantPromptSettingsView: View {
     private func deletePrompt(_ prompt: AIAssistantPrompt) {
         if let index = prompts.firstIndex(where: { $0.id == prompt.id }) {
             prompts.remove(at: index)
+            promptEditDrafts.removeValue(forKey: prompt.id)
             editingPromptIDs.remove(prompt.id)
             persistPrompts()
         }

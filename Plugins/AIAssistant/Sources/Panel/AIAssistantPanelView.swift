@@ -80,8 +80,36 @@ struct AIAssistantPanelView: View {
 
             Spacer()
 
+            if isRunActive {
+                Button {
+                    onAction(.stop)
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(localization.string("panel.action.stop", defaultValue: "停止当前处理"))
+            }
+
+            if hasSessionContent {
+                Button {
+                    onAction(.discard)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(localization.string("panel.action.discard", defaultValue: "丢弃会话并关闭"))
+            }
+
             Button {
-                onAction(.close)
+                onAction(.hide)
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
@@ -90,9 +118,19 @@ struct AIAssistantPanelView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(localization.string("panel.action.close", defaultValue: "关闭 (Esc)"))
+            .help(localization.string("panel.action.hide", defaultValue: "隐藏 (Esc)"))
         }
         .padding(.horizontal, 2)
+    }
+
+    private var isRunActive: Bool {
+        snapshot.phase == .capturing || snapshot.phase == .processing
+    }
+
+    private var hasSessionContent: Bool {
+        snapshot.sourceText?.isEmpty == false
+            || snapshot.result != nil
+            || snapshot.retainedResult != nil
     }
 
     // MARK: - Source Text Section (Double Click to Edit, Max 10 Lines)
@@ -117,16 +155,24 @@ struct AIAssistantPanelView: View {
                 Spacer()
 
                 if isEditingSource {
-                    Button(localization.string("panel.source.confirm", defaultValue: "确定")) {
-                        isEditingSource = false
-                        isSourceFocused = false
-                        let trimmed = editedSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty && trimmed != (snapshot.sourceText ?? "").trimmingCharacters(in: .whitespacesAndNewlines) {
-                            onAction(.reprocess(sourceText: trimmed))
+                    HStack(spacing: 6) {
+                        Button(localization.string("panel.source.applyAndRerun", defaultValue: "应用并重跑")) {
+                            isEditingSource = false
+                            isSourceFocused = false
+                            let trimmed = editedSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !trimmed.isEmpty && trimmed != (snapshot.sourceText ?? "").trimmingCharacters(in: .whitespacesAndNewlines) {
+                                onAction(.reprocess(sourceText: trimmed))
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
+
+                        Button(localization.string("common.cancel", defaultValue: "取消")) {
+                            cancelSourceEdit()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
                 } else {
                     Button {
                         isEditingSource = true
@@ -191,15 +237,28 @@ struct AIAssistantPanelView: View {
                 case .idle, .capturing:
                     statusText(localization.string("panel.status.capturing", defaultValue: "正在读取选中文本..."))
                 case .processing:
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        statusText(localization.string("panel.status.processing", defaultValue: "正在处理..."))
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            statusText(
+                                snapshot.retainedResult == nil
+                                    ? localization.string("panel.status.processing", defaultValue: "正在处理...")
+                                    : localization.string("panel.status.reprocessing", defaultValue: "正在重新处理，先前的结果暂时保留...")
+                            )
+                        }
+                        if let retained = snapshot.retainedResult {
+                            resultCard(retained)
+                        }
                     }
                 case .success:
-                    successContent
+                    if let result = snapshot.result {
+                        resultCard(result)
+                    }
                 case .error:
-                    EmptyView()
+                    if let retained = snapshot.retainedResult {
+                        resultCard(retained)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -208,9 +267,7 @@ struct AIAssistantPanelView: View {
         .frame(minHeight: 60, maxHeight: 220, alignment: .top)
     }
 
-    @ViewBuilder
-    private var successContent: some View {
-        if let result = snapshot.result {
+    private func resultCard(_ result: AIProcessResult) -> some View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
@@ -270,7 +327,6 @@ struct AIAssistantPanelView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
             .background(panelCardColor, in: RoundedRectangle(cornerRadius: 8))
-        }
     }
 
     private func statusText(_ text: String) -> some View {
@@ -304,6 +360,21 @@ struct AIAssistantPanelView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
 
+                if (snapshot.sourceText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        isEditingSource = true
+                        editedSourceText = ""
+                        isSourceFocused = true
+                    } label: {
+                        Label(
+                            localization.string("panel.tip.enterTextManually", defaultValue: "手动输入文本"),
+                            systemImage: "square.and.pencil"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
                 Button {
                     onAction(.openSettings)
                 } label: {
@@ -326,7 +397,9 @@ struct AIAssistantPanelView: View {
     private var errorMessage: String? {
         switch snapshot.phase {
         case let .error(error):
-            return error.message(localization: localization)
+            // Prefer the specific provider/configuration message recorded on
+            // the snapshot over the generic error-case copy.
+            return snapshot.errorMessage ?? error.message(localization: localization)
         default:
             return snapshot.errorMessage
         }
@@ -347,6 +420,12 @@ struct AIAssistantPanelView: View {
         if let source = snapshot.sourceText, !source.isEmpty {
             editedSourceText = source
         }
+    }
+
+    private func cancelSourceEdit() {
+        isEditingSource = false
+        isSourceFocused = false
+        editedSourceText = snapshot.sourceText ?? ""
     }
 
     private var panelCardColor: Color {

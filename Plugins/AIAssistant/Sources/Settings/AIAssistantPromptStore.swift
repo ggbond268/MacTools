@@ -32,11 +32,26 @@ struct AIAssistantPromptStore {
     func makeNewPrompt(existing: [AIAssistantPrompt]) -> AIAssistantPrompt {
         let existingNames = Set(existing.map(\.normalizedName))
         var index = existing.count + 1
-        var name = localization.string("prompt.newDefaultName", defaultValue: "新模板 \(index)")
 
+        // The localized pattern contains a numeric placeholder ("新模板 %d");
+        // format it, otherwise every candidate would share one constant name
+        // and the dedup loop below could never terminate.
+        var name = localization.format("prompt.newDefaultName", defaultValue: "新模板 %d", index)
+        var attempts = 0
         while existingNames.contains(name) {
             index += 1
-            name = localization.string("prompt.newDefaultName", defaultValue: "新模板 \(index)")
+            name = localization.format("prompt.newDefaultName", defaultValue: "新模板 %d", index)
+            attempts += 1
+            if attempts >= 1000 {
+                // Defensive bound: guarantee termination even if a
+                // localization table ever drops the numeric placeholder.
+                name = localization.format(
+                    "prompt.newDefaultName",
+                    defaultValue: "新模板 %d",
+                    index
+                ) + " (\(UUID().uuidString.prefix(4)))"
+                break
+            }
         }
 
         return AIAssistantPrompt(

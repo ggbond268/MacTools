@@ -174,12 +174,9 @@ final class AIAssistantPlugin:
             }
     }
 
-    /// Returns the migrated shortcut binding from legacy IDs if present,
-    /// otherwise falls back to the default Option+1 / Option+2 / Option+3 bindings for built-in prompts.
+    /// Returns the default shortcut binding for built-in prompts
+    /// (Option+1 / Option+2 / Option+3); custom prompts have no default.
     private func defaultBinding(for prompt: AIAssistantPrompt) -> ShortcutBinding? {
-        if let migrated = migratedDefaultBinding(for: prompt) {
-            return migrated
-        }
         switch prompt.id {
         case "translate":
             return AIAssistantConstants.Defaults.translateShortcut
@@ -190,20 +187,6 @@ final class AIAssistantPlugin:
         default:
             return nil
         }
-    }
-
-    /// Maps legacy shortcut definition IDs from earlier versions onto the new
-    /// per-prompt shortcut IDs so existing user bindings are preserved.
-    private func migratedDefaultBinding(for prompt: AIAssistantPrompt) -> ShortcutBinding? {
-        let legacyID: String?
-        switch prompt.id {
-        case "translate": legacyID = "process-translate"
-        case "summarize": legacyID = "process-summary"
-        case "polish": legacyID = "process-text"
-        default: legacyID = nil
-        }
-        guard let legacyID else { return nil }
-        return shortcutBindingResolver?(legacyID)
     }
 
     var actionDefinitions: [ActionDefinition] {
@@ -473,7 +456,14 @@ final class AIAssistantPlugin:
 
         let coordinator = coordinator ?? makeCoordinator()
         self.coordinator = coordinator
-        coordinator.startProcessing(prompt: prompt)
+        // Pressing the shortcut for the prompt that owns a hidden session
+        // reopens the existing session without recapturing text or issuing a
+        // new request. A different prompt starts a fresh run.
+        if coordinator.hasSession(forPromptID: prompt.id), !coordinator.isPanelVisible {
+            coordinator.reopenSession()
+        } else {
+            coordinator.startProcessing(prompt: prompt)
+        }
     }
 
     // MARK: - Helpers
@@ -518,6 +508,12 @@ final class AIAssistantPlugin:
     private func handlePanelAction(_ action: AIAssistantPanelAction) {
         if action == .openSettings {
             requestSettingsPresentation?()
+            return
+        }
+
+        if action == .hide {
+            // Non-destructive: keep the session and the running task alive.
+            coordinator?.hide()
             return
         }
 

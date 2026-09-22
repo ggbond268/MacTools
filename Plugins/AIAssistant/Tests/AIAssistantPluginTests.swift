@@ -10,7 +10,7 @@ final class AIAssistantPluginTests: XCTestCase {
         XCTAssertEqual(plugin.metadata.id, "ai-assistant")
         XCTAssertEqual(plugin.metadata.title, "AI 助手")
         XCTAssertEqual(plugin.metadata.defaultDescription, "划词调用 AI 翻译、总结、润色等")
-        XCTAssertNotNil(plugin.primaryPanel)
+        XCTAssertFalse(plugin.panelItems.isEmpty)
         XCTAssertNotNil(plugin.settingsPage)
     }
 
@@ -76,27 +76,46 @@ final class AIAssistantPluginTests: XCTestCase {
         plugin.handleShortcutEvent(id: "summarize", phase: .pressed)
     }
 
-    func testShortcutDefinitionsMigrateLegacyBindingsForBuiltInPrompts() {
+    func testShortcutDefinitionsIgnoreHostLegacyResolverAndKeepDefaultBindings() {
         let storage = AIAssistantInMemoryPluginStorage()
         let plugin = makePlugin(storage: storage)
-        let migratedBinding = ShortcutBinding(keyCode: 1, modifiers: [.command])
 
+        // The getter must derive default bindings directly from the prompt IDs
+        // and must not consult the host's legacy binding resolver anymore.
+        var resolverCalls = 0
         plugin.shortcutBindingResolver = { legacyID in
-            switch legacyID {
-            case "process-translate": return migratedBinding
-            case "process-summary": return nil
-            default: return nil
-            }
+            _ = legacyID
+            resolverCalls += 1
+            return ShortcutBinding(keyCode: 1, modifiers: [.command])
         }
 
         let definitions = plugin.shortcutDefinitions
-        let translateDefinition = definitions.first { $0.actionID == "translate" }
-        let summarizeDefinition = definitions.first { $0.actionID == "summarize" }
-        let polishDefinition = definitions.first { $0.actionID == "polish" }
+        XCTAssertEqual(definitions.map(\.actionID), ["translate", "summarize", "polish"])
+        XCTAssertEqual(definitions.map(\.defaultBinding), [
+            AIAssistantConstants.Defaults.translateShortcut,
+            AIAssistantConstants.Defaults.summarizeShortcut,
+            AIAssistantConstants.Defaults.polishShortcut,
+        ])
+        XCTAssertEqual(resolverCalls, 0)
 
-        XCTAssertEqual(translateDefinition?.defaultBinding, migratedBinding)
-        XCTAssertEqual(summarizeDefinition?.defaultBinding, AIAssistantConstants.Defaults.summarizeShortcut)
-        XCTAssertEqual(polishDefinition?.defaultBinding, AIAssistantConstants.Defaults.polishShortcut)
+        // A custom prompt has no built-in default binding.
+        let customPrompt = AIAssistantPrompt(
+            id: "custom",
+            name: "自定义",
+            template: "{{text}}",
+            systemPrompt: nil,
+            isEnabled: true
+        )
+        _ = plugin.saveConfiguration(
+            profiles: [AIAssistantProviderProfile.defaultProfile()],
+            prompts: [customPrompt],
+            apiKey: "sk-test"
+        )
+        XCTAssertEqual(
+            plugin.shortcutDefinitions.first { $0.actionID == "custom" }?.defaultBinding,
+            nil
+        )
+        XCTAssertEqual(resolverCalls, 0)
     }
 
     func testDeclaresAccessibilityAndAutomationPermissions() {
@@ -108,7 +127,7 @@ final class AIAssistantPluginTests: XCTestCase {
 
     func testPrimaryPanelReflectsPermissionState() {
         XCTAssertEqual(
-            makePlugin(accessibilityTrustProvider: { false }).primaryPanelState.subtitle,
+            makePlugin(accessibilityTrustProvider: { false }).rowState.subtitle,
             "启用前需要辅助功能授权"
         )
     }
@@ -203,7 +222,7 @@ final class AIAssistantPluginTests: XCTestCase {
 
         XCTAssertEqual(storage.bool(forKey: "ai-assistant.shortcut.enabled"), false)
         XCTAssertTrue(didNotify)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testActionDefinitionsFollowEnabledPrompts() {
@@ -296,8 +315,19 @@ private final class CountingAIAssistantSecretStore: AIAssistantSecretStoring, @u
 @MainActor
 private final class RecordingAIAssistantPanelController: AIAssistantPanelControlling {
     var onAction: ((AIAssistantPanelAction) -> Void)?
+    var isVisible = false
 
-    func show(snapshot: AIAssistantPanelSnapshot) {}
+    func show(snapshot: AIAssistantPanelSnapshot) {
+        isVisible = true
+    }
+
     func update(snapshot: AIAssistantPanelSnapshot) {}
-    func close() {}
+
+    func hide() {
+        isVisible = false
+    }
+
+    func close() {
+        isVisible = false
+    }
 }

@@ -4876,19 +4876,16 @@ final class PluginHost: ObservableObject {
         forPluginID pluginID: String,
         shortcutDefinitionID: String
     ) -> ShortcutBinding? {
-        // Resolve legacy shortcut bindings directly from the store using the
-        // historical item ID instead of searching current plugin definitions.
-        // Searching `shortcutDescriptors()` would re-enter every plugin's
-        // `shortcutDefinitions` getter; plugins such as AIAssistant resolve
-        // their own default bindings through this resolver, which would
-        // recurse indefinitely.
-        shortcutStore.resolvedBinding(
-            for: shortcutItemID(
-                pluginID: pluginID,
-                shortcutDefinitionID: shortcutDefinitionID
-            ),
-            default: nil
-        )
+        let descriptors: [ShortcutDescriptor]
+        if let snapshot = shortcutResolutionSnapshot, snapshot.revision == shortcutDefinitionRevision {
+            descriptors = snapshot.descriptors
+        } else {
+            descriptors = shortcutDescriptors()
+        }
+        guard let descriptor = descriptors.first(where: {
+            $0.pluginID == pluginID && $0.definition.id == shortcutDefinitionID
+        }), eventShortcutConflictError(for: descriptor, descriptors: descriptors) == nil else { return nil }
+        return legacyResolvedBinding(for: descriptor)
     }
 
     private func applyImportedShortcutCustomizations(

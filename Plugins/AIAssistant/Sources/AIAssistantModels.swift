@@ -108,18 +108,28 @@ struct AIAssistantPanelSnapshot: Equatable, Sendable {
     var sourceText: String?
     var result: AIProcessResult?
     var errorMessage: String?
+    /// The most recent successful result, kept visible while a rerun is in
+    /// progress or has failed, so editing the source never blanks the output.
+    var retainedResult: AIProcessResult?
 
     static let idle = AIAssistantPanelSnapshot(
         phase: .idle,
         sourceText: nil,
         result: nil,
-        errorMessage: nil
+        errorMessage: nil,
+        retainedResult: nil
     )
 }
 
 enum AIAssistantPanelAction: Equatable, Sendable {
     case retry
     case reprocess(sourceText: String)
+    /// Cancels the running capture/request but keeps the session visible.
+    case stop
+    /// Hides the panel without cancelling the task or discarding the session.
+    case hide
+    /// Cancels the task and discards the session, closing the panel.
+    case discard
     case close
     case copyResult
     case openSettings

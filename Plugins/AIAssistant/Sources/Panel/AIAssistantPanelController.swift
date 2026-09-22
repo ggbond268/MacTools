@@ -6,8 +6,12 @@ import SwiftUI
 protocol AIAssistantPanelControlling: AnyObject {
     var onAction: ((AIAssistantPanelAction) -> Void)? { get set }
 
+    var isVisible: Bool { get }
+
     func show(snapshot: AIAssistantPanelSnapshot)
     func update(snapshot: AIAssistantPanelSnapshot)
+    /// Hides the panel without destroying it, so the session can be reopened.
+    func hide()
     func close()
 }
 
@@ -27,12 +31,22 @@ final class AIAssistantPanelController: AIAssistantPanelControlling {
         self.localization = localization
     }
 
+    var isVisible: Bool {
+        panelWindow?.isVisible ?? false
+    }
+
     func show(snapshot: AIAssistantPanelSnapshot) {
         model.snapshot = snapshot
         let panel = panelWindow ?? makePanel()
         panelWindow = panel
-        panel.markPresented()
 
+        // Only position and focus a panel that is newly presented. Reapplying
+        // the frame on every state update would snap the panel back to its old
+        // position mid-drag, and calling makeKey again would steal focus when
+        // processing completes.
+        guard !panel.isVisible else { return }
+
+        panel.markPresented()
         let targetFrame = lastFrame ?? defaultFrame(for: panel)
         panel.setFrame(clampedFrame(for: targetFrame, panel: panel), display: true)
 
@@ -48,6 +62,15 @@ final class AIAssistantPanelController: AIAssistantPanelControlling {
         model.snapshot = snapshot
     }
 
+    func hide() {
+        guard let panelWindow else { return }
+
+        lastFrame = panelWindow.frame
+        panelWindow.performProgrammaticClose {
+            panelWindow.orderOut(nil)
+        }
+    }
+
     func close() {
         guard let panelWindow else { return }
 
@@ -60,8 +83,10 @@ final class AIAssistantPanelController: AIAssistantPanelControlling {
 
     private func makePanel() -> AIAssistantPanelWindow {
         let panel = AIAssistantPanelWindow(size: Self.panelSize)
-        panel.onCloseRequest = { [weak self] in
-            self?.onAction?(.close)
+        panel.onDismissRequest = { [weak self] in
+            // Esc and focus loss hide the panel non-destructively; the
+            // session stays available for reopening.
+            self?.onAction?(.hide)
         }
 
         let effectView = NSVisualEffectView(frame: NSRect(origin: .zero, size: Self.panelSize))
