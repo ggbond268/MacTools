@@ -3,29 +3,40 @@ import Carbon.HIToolbox
 import Foundation
 import MacToolsPluginKit
 
-final class WindowSwitcherShortcutTap: @unchecked Sendable {
-    var onShortcutPressed: @MainActor (_ reversed: Bool, _ isRepeat: Bool) -> Void = { _, _ in }
+protocol WindowSwitcherShortcutListening: AnyObject {
+    var onShortcutPressed: @MainActor (Bool, Bool, Bool) -> Void { get set }
+    var onShortcutReleased: @MainActor () -> Void { get set }
+    var onEscape: @MainActor () -> Void { get set }
+    var onAccessibilityRevoked: @MainActor () -> Void { get set }
+    var isRunning: Bool { get }
+    func start()
+    func stop()
+    func configure(allBinding: ShortcutBinding?, currentAppBinding: ShortcutBinding?)
+    func setEditing(_ value: Bool)
+    func setSessionActive(_ value: Bool)
+}
+
+final class WindowSwitcherShortcutTap: WindowSwitcherShortcutListening, @unchecked Sendable {
+    var onShortcutPressed: @MainActor (_ reversed: Bool, _ isRepeat: Bool, _ currentApp: Bool) -> Void = { _, _, _ in }
     var onShortcutReleased: @MainActor () -> Void = {}
     var onEscape: @MainActor () -> Void = {}
     var onAccessibilityRevoked: @MainActor () -> Void = {}
+    private var didReportAccessibilityRevocation = false
 
     private let lock = NSLock()
-    private let userDefaults: UserDefaults
-    private let accessibilityTrusted: @Sendable () -> Bool
     private var currentBinding: ShortcutBinding?
+    private var currentAppBinding: ShortcutBinding?
     private var activeModifiers: ShortcutModifiers?
-    private var didReportAccessibilityRevocation = false
+    private var isEditing = false
+    private var sessionActive = false
+    private var deliveryGeneration = 0
+    private var lifecycleGeneration = 0
+    private let accessibilityTrusted: @Sendable () -> Bool
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var defaultsObserver: NSObjectProtocol?
 
-    init(
-        userDefaults: UserDefaults = .standard,
-        accessibilityTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() }
-    ) {
-        self.userDefaults = userDefaults
+    init(accessibilityTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() }) {
         self.accessibilityTrusted = accessibilityTrusted
-        self.currentBinding = WindowSwitcherShortcutBindingStore.resolvedBinding(userDefaults: userDefaults)
     }
 
     var isRunning: Bool {
@@ -36,13 +47,7 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
         lock.lock()
         let alreadyRunning = tap != nil
         lock.unlock()
-        guard !alreadyRunning else {
-            reloadBinding()
-            return
-        }
-
-        reloadBinding()
-        installDefaultsObserver()
+        guard !alreadyRunning else { return }
 
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -68,13 +73,15 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
     }
 
     func stop() {
-        let state = lock.withLock { () -> (CFMachPort?, CFRunLoopSource?, NSObjectProtocol?) in
-            let state = (tap, runLoopSource, defaultsObserver)
+        let state = lock.withLock { () -> (CFMachPort?, CFRunLoopSource?) in
+            let state = (tap, runLoopSource)
             tap = nil
             runLoopSource = nil
-            defaultsObserver = nil
             activeModifiers = nil
             didReportAccessibilityRevocation = false
+            deliveryGeneration += 1
+            lifecycleGeneration += 1
+            sessionActive = false; isEditing = false
             return state
         }
 
@@ -84,41 +91,21 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
         if let source = state.1 {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
         }
-        if let observer = state.2 {
-            NotificationCenter.default.removeObserver(observer)
-        }
     }
 
-    func reloadBinding() {
-        let binding = WindowSwitcherShortcutBindingStore.resolvedBinding(userDefaults: userDefaults)
+    func configure(allBinding: ShortcutBinding?, currentAppBinding: ShortcutBinding?) {
         lock.withLock {
-            currentBinding = binding
+            self.currentBinding = allBinding
+            self.currentAppBinding = currentAppBinding
         }
     }
 
-    private func installDefaultsObserver() {
-        lock.lock()
-        let hasObserver = defaultsObserver != nil
-        lock.unlock()
-        guard !hasObserver else {
-            return
-        }
-
-        let observer = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: userDefaults,
-            queue: nil
-        ) { [weak self] _ in
-            self?.reloadBinding()
-        }
-
+    func setEditing(_ value: Bool) { lock.withLock { isEditing = value } }
+    func setSessionActive(_ value: Bool) {
         lock.withLock {
-            defaultsObserver = observer
+            sessionActive = value
+            if !value { deliveryGeneration += 1 }
         }
-    }
-
-    private func bindingSnapshot() -> ShortcutBinding? {
-        lock.withLock { currentBinding }
     }
 
     private func activeModifiersSnapshot() -> ShortcutModifiers? {
@@ -133,32 +120,22 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
 
     func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         guard accessibilityTrusted() else {
-            let shouldNotify = lock.withLock {
+            let notify = lock.withLock {
                 activeModifiers = nil
-                guard !didReportAccessibilityRevocation else {
-                    return false
-                }
-
+                guard !didReportAccessibilityRevocation else { return false }
                 didReportAccessibilityRevocation = true
                 return true
             }
-            if shouldNotify {
-                Task { @MainActor in
-                    self.onAccessibilityRevoked()
-                }
-            }
+            if notify { deliverLifecycleCallback { $0.onAccessibilityRevoked() } }
             return Unmanaged.passUnretained(event)
         }
+        lock.withLock { didReportAccessibilityRevocation = false }
 
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = lock.withLock({ tap }) {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
             return Unmanaged.passUnretained(event)
-        }
-
-        lock.withLock {
-            didReportAccessibilityRevocation = false
         }
 
         switch type {
@@ -174,27 +151,37 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
     private func handleKeyDown(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
 
-        if keyCode == UInt16(kVK_Escape), activeModifiersSnapshot() != nil {
+        // Keep the configured Tab switch chord inside the persistent search panel.
+        // Ordinary editing shortcuts and IME keys still belong to its responder.
+        let editing = lock.withLock { isEditing }
+        if editing, ![UInt16(kVK_Tab), UInt16(kVK_ANSI_Grave)].contains(keyCode) { return Unmanaged.passUnretained(event) }
+        if keyCode == UInt16(kVK_Escape), lock.withLock({ sessionActive || activeModifiers != nil }) {
             setActiveModifiers(nil)
-            Task { @MainActor in
-                self.onEscape()
-            }
+            deliverLifecycleCallback { $0.onEscape() }
             return nil
         }
 
-        guard let binding = bindingSnapshot(),
-              keyCode == binding.keyCode,
-              binding.matches(eventFlags: event.flags, allowingExtraShift: true)
-        else {
-            return Unmanaged.passUnretained(event)
+        // Escape and text editing belong to the panel's native responder chain,
+        // including marked-text cancellation by an input method.
+        let bindings = lock.withLock { [(currentBinding, false), (currentAppBinding, true)] }
+        // An explicitly configured chord wins over another binding's implicit
+        // Shift-to-reverse variant, regardless of which scope owns it.
+        let exact = bindings.first { binding, _ in
+            binding.map { keyCode == $0.keyCode && $0.matches(eventFlags: event.flags, allowingExtraShift: false) } ?? false
         }
+        guard let match = exact ?? bindings.first(where: { binding, _ in
+            binding.map { keyCode == $0.keyCode && $0.matches(eventFlags: event.flags, allowingExtraShift: true) } ?? false
+        }), let binding = match.0 else { return Unmanaged.passUnretained(event) }
+        let currentApp = match.1
 
         setActiveModifiers(binding.modifiers)
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         let reversed = !binding.modifiers.contains(.shift) && event.flags.contains(.maskShift)
 
-        Task { @MainActor in
-            self.onShortcutPressed(reversed, isRepeat)
+        let generation = lock.withLock { deliveryGeneration }
+        DispatchQueue.main.async {
+            guard self.lock.withLock({ self.deliveryGeneration == generation }) else { return }
+            self.onShortcutPressed(reversed, isRepeat, currentApp)
         }
 
         return nil
@@ -208,10 +195,18 @@ final class WindowSwitcherShortcutTap: @unchecked Sendable {
         }
 
         setActiveModifiers(nil)
-        Task { @MainActor in
-            self.onShortcutReleased()
-        }
+        deliverLifecycleCallback { $0.onShortcutReleased() }
         return Unmanaged.passUnretained(event)
+    }
+
+    // Session setup invalidates queued presses but must preserve the release
+    // already queued behind a quick press. Only a stopped listener ends this epoch.
+    private func deliverLifecycleCallback(_ action: @escaping @MainActor @Sendable (WindowSwitcherShortcutTap) -> Void) {
+        let generation = lock.withLock { lifecycleGeneration }
+        DispatchQueue.main.async {
+            guard self.lock.withLock({ self.lifecycleGeneration == generation }) else { return }
+            action(self)
+        }
     }
 
     private nonisolated static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in

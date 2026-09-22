@@ -25,11 +25,10 @@ final class DisplayBrightnessPluginTests: XCTestCase {
         let plugin = DisplayBrightnessPlugin(controller: controller)
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let state = plugin.primaryPanelState
+        let state = plugin.rowState
 
         XCTAssertEqual(state.subtitle, "未检测到可调节亮度的显示器")
         XCTAssertFalse(state.isEnabled)
-        XCTAssertFalse(state.isExpanded)
         XCTAssertNil(state.detail)
     }
 
@@ -44,7 +43,7 @@ final class DisplayBrightnessPluginTests: XCTestCase {
 
         let plugin = DisplayBrightnessPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "Studio Display 72%")
+        XCTAssertEqual(plugin.rowState.subtitle, "Studio Display 72%")
     }
 
     func testMultipleDisplaysSummaryUsesDisplayCount() {
@@ -59,7 +58,7 @@ final class DisplayBrightnessPluginTests: XCTestCase {
 
         let plugin = DisplayBrightnessPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "2 个显示器")
+        XCTAssertEqual(plugin.rowState.subtitle, "2 个显示器")
     }
 
     func testExpandedStateBuildsOneSliderPerDisplay() throws {
@@ -75,7 +74,7 @@ final class DisplayBrightnessPluginTests: XCTestCase {
         let plugin = DisplayBrightnessPlugin(controller: controller)
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
         let sliders = controls.filter { $0.kind == .slider }
 
         XCTAssertEqual(sliders.count, 2)
@@ -362,7 +361,7 @@ final class DisplayBrightnessPluginTests: XCTestCase {
 
         let plugin = DisplayBrightnessPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "调节失败：DDC 写入失败")
+        XCTAssertEqual(plugin.rowState.errorMessage, "调节失败：DDC 写入失败")
     }
 }
 

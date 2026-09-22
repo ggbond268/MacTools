@@ -148,8 +148,8 @@ final class DockLockPluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testDisablingStopsMonitorAndPersistsState() {
@@ -161,7 +161,7 @@ final class DockLockPluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(false))
 
         XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testSettingsPageExposesPersistedEnableToggle() {
@@ -206,28 +206,28 @@ final class DockLockPluginTests: XCTestCase {
         )
 
         XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
 
         let enabledReloadedPlugin = DockLockPlugin(
             context: context,
             monitor: MockDockLockMonitor(),
             accessibilityTrusted: { true }
         )
-        XCTAssertTrue(enabledReloadedPlugin.primaryPanelState.isOn)
+        XCTAssertTrue(enabledReloadedPlugin.rowState.isOn)
 
         plugin.handleSettingsAction(
             .setBoolean(controlID: "dock-lock.settings.enabled", value: false)
         )
 
         XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
 
         let reloadedPlugin = DockLockPlugin(
             context: context,
             monitor: MockDockLockMonitor(),
             accessibilityTrusted: { true }
         )
-        XCTAssertFalse(reloadedPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(reloadedPlugin.rowState.isOn)
     }
 
     func testSettingsEnableToggleReportsMissingAccessibilityPermission() {
@@ -243,9 +243,9 @@ final class DockLockPluginTests: XCTestCase {
             .setBoolean(controlID: "dock-lock.settings.enabled", value: true)
         )
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(monitor.startCallCount, 0)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testMissingPermissionDoesNotStartMonitor() {
@@ -261,7 +261,7 @@ final class DockLockPluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 0)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testFirstLaunchIsDisabled() {
@@ -271,7 +271,7 @@ final class DockLockPluginTests: XCTestCase {
 
         plugin.activate(context: context)
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertEqual(monitor.startCallCount, 0)
     }
 
@@ -320,14 +320,14 @@ final class DockLockPluginTests: XCTestCase {
             ActionInvocation(reference: enable, source: .test, mode: .background)
         ).result()
         XCTAssertEqual(enableResult, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .active)
 
         let disableResult = try await plugin.beginAction(
             ActionInvocation(reference: disable, source: .test, mode: .background)
         ).result()
         XCTAssertEqual(disableResult, .succeeded())
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertGreaterThanOrEqual(monitor.stopCallCount, 1)
     }
 

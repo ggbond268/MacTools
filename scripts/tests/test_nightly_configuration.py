@@ -150,12 +150,28 @@ class NightlyConfigurationTests(unittest.TestCase):
     def test_ci_workflows_use_their_configured_build_products_and_have_sufficient_timeout(self) -> None:
         build_workflow = (REPO_ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
         nightly_workflow = (REPO_ROOT / ".github/workflows/nightly.yml").read_text(encoding="utf-8")
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        nightly_validation = nightly_workflow.split(
+            "- name: Run contributor-testable validation",
+            1,
+        )[1].split("\n      - name:", 1)[0]
 
         self.assertIn("timeout-minutes: 60", build_workflow)
+        self.assertIn("make ci", nightly_validation)
+        self.assertIn('DERIVED_DATA="$DERIVED_DATA"', nightly_validation)
+        self.assertIn('BUILD_DESTINATION="platform=macOS"', nightly_validation)
+        self.assertIn("XCODEBUILD=xcodebuild", nightly_validation)
+        self.assertNotIn("scripts/changelog.py validate", nightly_validation)
+        for option in [
+            "-parallel-testing-enabled NO",
+            "-test-timeouts-enabled YES",
+            "-default-test-execution-time-allowance 120",
+            "-maximum-test-execution-time-allowance 120",
+        ]:
+            self.assertIn(option, makefile)
         self.assertIn(
-            './scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh \\\n'
-            '            "$DERIVED_DATA/Build/Products/Debug"',
-            nightly_workflow,
+            'verify-plugin-kit-v7-binary-compatibility.sh "$(abspath $(DEBUG_BUILD_PRODUCTS_DIR))"',
+            makefile,
         )
 
     def test_nightly_plugin_builder_accepts_an_empty_filter_list_on_system_bash(self) -> None:

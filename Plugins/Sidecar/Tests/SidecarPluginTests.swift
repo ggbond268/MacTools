@@ -171,7 +171,7 @@ final class SidecarPluginTests: XCTestCase {
         }
         XCTAssertFalse(plugin.actionAvailability(for: reference).isAvailable)
         XCTAssertFalse(
-            plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? true
+            expandedDetail(for: plugin)?.controls.first?.isEnabled ?? true
         )
 
         service.complete(.success(()))
@@ -187,9 +187,9 @@ final class SidecarPluginTests: XCTestCase {
         )
         XCTAssertTrue(plugin.actionAvailability(for: disconnectReference).isAvailable)
         XCTAssertTrue(
-            plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? false
+            expandedDetail(for: plugin)?.controls.first?.isEnabled ?? false
         )
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testTimedOutConnectUnblocksWhenSnapshotConfirmsTopology() async throws {
@@ -223,7 +223,7 @@ final class SidecarPluginTests: XCTestCase {
         )
 
         XCTAssertTrue(plugin.actionAvailability(for: disconnectReference).isAvailable)
-        XCTAssertTrue(plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? false)
+        XCTAssertTrue(expandedDetail(for: plugin)?.controls.first?.isEnabled ?? false)
     }
 
     func testTimedOutDisconnectAllUnblocksWhenSnapshotConfirmsTopology() async throws {
@@ -257,7 +257,7 @@ final class SidecarPluginTests: XCTestCase {
         )
 
         XCTAssertTrue(plugin.actionAvailability(for: connectReference).isAvailable)
-        XCTAssertTrue(plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? false)
+        XCTAssertTrue(expandedDetail(for: plugin)?.controls.first?.isEnabled ?? false)
     }
 
     func testTimedOutCanonicalActionStaysBlockedAcrossReactivation() async throws {
@@ -331,15 +331,15 @@ final class SidecarPluginTests: XCTestCase {
         try await Task.sleep(nanoseconds: 10_000_000)
         plugin.activate(context: context)
 
-        XCTAssertFalse(plugin.primaryPanelState.subtitle.contains("正在"))
+        XCTAssertFalse(plugin.rowState.subtitle.contains("正在"))
         XCTAssertEqual(
-            plugin.primaryPanelState.errorMessage,
+            plugin.rowState.errorMessage,
             "Sidecar 请求已提交，但未能确认显示器状态"
         )
         XCTAssertTrue(plugin.actionAvailability(for: reference).isAvailable)
 
         service.complete(.success(()))
-        XCTAssertFalse(plugin.primaryPanelState.subtitle.contains("正在"))
+        XCTAssertFalse(plugin.rowState.subtitle.contains("正在"))
 
         let retryHandle = try plugin.beginAction(ActionInvocation(
             reference: reference,
@@ -391,7 +391,7 @@ final class SidecarPluginTests: XCTestCase {
         }
 
         XCTAssertTrue(plugin.actionAvailability(for: reference).isAvailable)
-        XCTAssertTrue(plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? false)
+        XCTAssertTrue(expandedDetail(for: plugin)?.controls.first?.isEnabled ?? false)
     }
 
     func testConnectPreparesPresentationBeforeCallingSidecarCore() async throws {
@@ -504,8 +504,8 @@ final class SidecarPluginTests: XCTestCase {
     func testCollapsedRowSaysWhenNoSidecarDisplayIsAvailable() {
         let plugin = makePlugin(service: FakeSidecarService())
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "未发现可连接的 Sidecar 显示器")
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "未发现可连接的 Sidecar 显示器")
+        XCTAssertTrue(plugin.rowState.isEnabled)
     }
 
     func testBackgroundRefreshFindsDisplaysThatAppearAfterPluginStartup() async {
@@ -517,12 +517,12 @@ final class SidecarPluginTests: XCTestCase {
         )
         let refreshed = expectation(description: "displays refreshed")
         plugin.onStateChange = {
-            if plugin.primaryPanelState.subtitle == "1 台可连接的 Sidecar 显示器" {
+            if plugin.rowState.subtitle == "1 台可连接的 Sidecar 显示器" {
                 refreshed.fulfill()
             }
         }
         plugin.activate(context: PluginRuntimeContext(pluginID: "sidecar", storage: InMemoryPluginStorage()))
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
 
         service.updateDevices([
             SidecarDevice(id: "vision-pro", name: "Apple Vision Pro", connectionState: .disconnected)
@@ -544,11 +544,11 @@ final class SidecarPluginTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 30_000_000)
         XCTAssertEqual(service.reachableDevicesCallCount, callsWhileHidden)
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         try? await Task.sleep(nanoseconds: 30_000_000)
         XCTAssertGreaterThan(service.reachableDevicesCallCount, callsWhileHidden)
 
-        plugin.panelSurfaceDidBecomeHidden(.primary)
+        plugin.panelItemDidBecomeHidden("control")
         let callsAfterHiding = service.reachableDevicesCallCount
         try? await Task.sleep(nanoseconds: 30_000_000)
         XCTAssertEqual(service.reachableDevicesCallCount, callsAfterHiding)
@@ -560,8 +560,8 @@ final class SidecarPluginTests: XCTestCase {
             SidecarDevice(id: "ipad-connected", name: "Connected iPad", connectionState: .connected)
         ]))
 
-        let controls = plugin.primaryPanelState.detail?.primaryControls ?? []
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "1 台已连接 · 1 台可连接")
+        let controls = expandedDetail(for: plugin)?.primaryControls ?? []
+        XCTAssertEqual(plugin.rowState.subtitle, "1 台已连接 · 1 台可连接")
         XCTAssertEqual(controls.map(\.id), ["sidecar-disconnect.ipad-connected", "sidecar-connect.ipad-available"])
         XCTAssertEqual(controls[0].sectionTitle, "已连接")
         XCTAssertEqual(controls[0].actionTitle, "Connected iPad · 断开连接")
@@ -578,23 +578,23 @@ final class SidecarPluginTests: XCTestCase {
         let plugin = makePlugin(service: service)
 
         XCTAssertEqual(
-            plugin.primaryPanelState.detail?.primaryControls.last?.actionTitle,
+            expandedDetail(for: plugin)?.primaryControls.last?.actionTitle,
             "Target iPad · 切换"
         )
         plugin.handleAction(.invokeAction(controlID: "sidecar-connect.ipad-target"))
 
         XCTAssertEqual(service.operations, ["disconnect:ipad-current"])
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "正在断开 Current iPad，然后连接 Target iPad…")
+        XCTAssertEqual(plugin.rowState.subtitle, "正在断开 Current iPad，然后连接 Target iPad…")
 
         service.complete(.success(()))
 
         XCTAssertEqual(service.operations, ["disconnect:ipad-current", "connect:ipad-target"])
         service.complete(.success(()))
         XCTAssertEqual(
-            plugin.primaryPanelState.detail?.primaryControls.last?.actionTitle,
+            expandedDetail(for: plugin)?.primaryControls.last?.actionTitle,
             "已断开 Current iPad，并已提交连接 Target iPad 的请求"
         )
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testSwitchDoesNotConnectTheTargetWhenDisconnectingTheCurrentDisplayFails() {
@@ -608,8 +608,8 @@ final class SidecarPluginTests: XCTestCase {
         service.complete(.failure(.system("Disconnect failed")))
 
         XCTAssertEqual(service.operations, ["disconnect:ipad-current"])
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法断开 Current iPad，因此无法切换到 Target iPad")
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "1 台已连接 · 1 台可连接")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法断开 Current iPad，因此无法切换到 Target iPad")
+        XCTAssertEqual(plugin.rowState.subtitle, "1 台已连接 · 1 台可连接")
     }
 
     func testSwitchExplainsThatThePreviousDisplayWasDisconnectedWhenTargetConnectionFails() {
@@ -624,7 +624,7 @@ final class SidecarPluginTests: XCTestCase {
         service.complete(.failure(.system("Target unavailable")))
 
         XCTAssertEqual(
-            plugin.primaryPanelState.errorMessage,
+            plugin.rowState.errorMessage,
             "已断开 Current iPad，但无法连接 Target iPad：Target unavailable"
         )
     }
@@ -638,7 +638,7 @@ final class SidecarPluginTests: XCTestCase {
         store.updateTransport(.wiredOnly, for: "ipad-1")
         let plugin = makePlugin(service: service, preferences: store)
 
-        XCTAssertEqual(plugin.primaryPanelState.detail?.primaryControls.first?.actionTitle, "My iPad · 仅通过有线连接")
+        XCTAssertEqual(expandedDetail(for: plugin)?.primaryControls.first?.actionTitle, "My iPad · 仅通过有线连接")
         plugin.handleAction(.invokeAction(controlID: "sidecar-connect.ipad-1"))
 
         XCTAssertTrue(service.didConnect)
@@ -650,8 +650,8 @@ final class SidecarPluginTests: XCTestCase {
             SidecarDevice(id: "ipad-1", name: "My iPad", connectionState: .unknown)
         ]))
 
-        let control = plugin.primaryPanelState.detail?.primaryControls.first
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "1 台 Sidecar 显示器的连接状态不可用")
+        let control = expandedDetail(for: plugin)?.primaryControls.first
+        XCTAssertEqual(plugin.rowState.subtitle, "1 台 Sidecar 显示器的连接状态不可用")
         XCTAssertEqual(control?.actionIconSystemName, "questionmark.circle")
         XCTAssertFalse(control?.isEnabled ?? true)
     }
@@ -663,11 +663,11 @@ final class SidecarPluginTests: XCTestCase {
         let plugin = makePlugin(service: service)
         plugin.handleAction(.invokeAction(controlID: "sidecar-connect.ipad-1"))
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "正在连接 My iPad…")
+        XCTAssertEqual(plugin.rowState.subtitle, "正在连接 My iPad…")
         service.complete(.success(()))
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "1 台可连接的 Sidecar 显示器")
-        XCTAssertEqual(plugin.primaryPanelState.detail?.primaryControls.first?.actionIconSystemName, "checkmark.circle")
+        XCTAssertEqual(plugin.rowState.subtitle, "1 台可连接的 Sidecar 显示器")
+        XCTAssertEqual(expandedDetail(for: plugin)?.primaryControls.first?.actionIconSystemName, "checkmark.circle")
     }
 
     func testMissingWiredCapabilityKeepsAutomaticConnectionAvailable() {
@@ -898,7 +898,7 @@ final class SidecarPluginTests: XCTestCase {
         plugin.handleShortcutAction(id: "device.ipad-1")
 
         XCTAssertFalse(service.didDisconnect)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "该 Sidecar 显示器当前未连接")
+        XCTAssertEqual(plugin.rowState.errorMessage, "该 Sidecar 显示器当前未连接")
     }
 
     func testDeactivationStopsPolling() {
@@ -914,9 +914,9 @@ final class SidecarPluginTests: XCTestCase {
 
         plugin.deactivate(reason: .disabled)
         plugin.refresh()
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
 
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testFailedOperationFeedbackRemainsVisible() async {
@@ -929,7 +929,7 @@ final class SidecarPluginTests: XCTestCase {
         service.complete(.failure(.system("Unavailable")))
         try? await Task.sleep(nanoseconds: 10_000_000)
 
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Unavailable")
+        XCTAssertEqual(plugin.rowState.errorMessage, "Unavailable")
     }
 
     func testClosingThePanelClearsTerminalFeedbackThatWasAlreadyVisible() {
@@ -939,13 +939,13 @@ final class SidecarPluginTests: XCTestCase {
         let plugin = makePlugin(service: service)
 
         plugin.activate(context: PluginRuntimeContext(pluginID: "sidecar", storage: InMemoryPluginStorage()))
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         plugin.handleAction(.invokeAction(controlID: "sidecar-connect.ipad-1"))
         service.complete(.failure(.system("Unavailable")))
 
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Unavailable")
-        plugin.panelSurfaceDidBecomeHidden(.primary)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertEqual(plugin.rowState.errorMessage, "Unavailable")
+        plugin.panelItemDidBecomeHidden("control")
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testServiceErrorsAndUnsupportedStateAreShown() {
@@ -953,10 +953,26 @@ final class SidecarPluginTests: XCTestCase {
         let plugin = makePlugin(service: service)
         plugin.handleAction(.invokeAction(controlID: "sidecar-connect.ipad-1"))
         service.complete(.failure(.deviceUnavailable))
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "Sidecar 显示器已不在可用设备列表中")
+        XCTAssertEqual(plugin.rowState.errorMessage, "Sidecar 显示器已不在可用设备列表中")
 
         let unsupported = makePlugin(service: FakeSidecarService(availability: .unsupported(.frameworkLoadFailed)))
-        XCTAssertEqual(unsupported.primaryPanelState.errorMessage, "此系统无法加载 SidecarCore")
+        XCTAssertEqual(unsupported.rowState.errorMessage, "此系统无法加载 SidecarCore")
+    }
+
+    func testAvailableDevicesDoNotExpandTheRowUntilRequested() {
+        let plugin = makePlugin(service: FakeSidecarService(devices: [
+            SidecarDevice(id: "ipad-1", name: "My iPad", connectionState: .disconnected)
+        ]))
+        XCTAssertNil(plugin.rowState.detail)
+        plugin.handleAction(.setDisclosureExpanded(true))
+        XCTAssertNotNil(plugin.rowState.detail)
+        plugin.handleAction(.setDisclosureExpanded(false))
+        XCTAssertNil(plugin.rowState.detail)
+    }
+
+    private func expandedDetail(for plugin: SidecarPlugin) -> PluginPanelDetail? {
+        plugin.handleAction(.setDisclosureExpanded(true))
+        return plugin.rowState.detail
     }
 
     private func makePlugin(

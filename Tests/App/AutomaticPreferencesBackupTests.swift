@@ -969,7 +969,7 @@ final class AutomaticPreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: appearance.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: [marker],
@@ -989,7 +989,7 @@ final class AutomaticPreferencesBackupTests: XCTestCase {
         PluginHost(
             plugins: plugins,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             automaticPreferencesBackupCoordinator: coordinator,
             globalShortcutManager: GlobalShortcutManager(),

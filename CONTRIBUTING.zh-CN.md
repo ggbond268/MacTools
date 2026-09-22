@@ -1,79 +1,121 @@
-# Contributing to MacTools
+# 贡献指南
 
-[中文] <a href="CONTRIBUTING.md">[English]</a>
+[English](CONTRIBUTING.md) · **简体中文**
 
-感谢你关注 MacTools。请让每次贡献保持小而清晰：说明问题、给出可验证改动，并避免混入无关重构。
+欢迎修复问题、开发插件、完善翻译与文档，以及改进界面。MacTools 注重原生体验、轻量运行和低打扰；每个 PR 聚焦一个问题，并验证实际行为。
 
-## 贡献方式
-- Bug 报告请包含复现步骤、期望结果、实际结果、macOS 版本和相关日志或截图。
-- 功能建议请说明使用场景、目标用户和预期交互；大型插件或交互变更请先开 issue 对齐范围。
-- 涉及磁盘删除、系统权限、全局快捷键、显示器控制、签名或更新流程的改动，需要说明风险、保护措施和回滚方式。
+## 开始之前
 
-## 开发环境
-- 需要 Xcode 和 `xcodegen`，项目最低支持 macOS 14.0。
-- 首次初始化：运行 `make setup`，再编辑 `LocalConfig.xcconfig`，填写 `DEVELOPMENT_TEAM` 和稳定、非占位的 `BUNDLE_IDENTIFIER_PREFIX`。任一值缺失时，Debug 构建会提前失败，避免 macOS 注册格式错误的重复应用身份。
-- 本地测试请使用 `make run`。它会把唯一的 Debug 应用安装到 `~/Applications/MacTools Dev.app`，并从 LaunchServices 注销其他 `MacTools Dev` 构建副本。
-- 常用命令：`make generate` 生成 Xcode 项目，`make build` 编译校验，`make run` 本地运行。
-- 插件开发：`make run` 会增量编译 App 和插件，并把最新 Debug 插件包同步到本地开发市场；`make sync-debug-plugins` 可只同步已编译插件。`make build-plugin` 保留给单独验证动态包或发布链路使用，指定插件可运行 `make build-plugin PLUGIN=calendar`。
-- 不要提交本地或生成文件：`MacTools.xcodeproj`、`MacTools.xcworkspace`、`LocalConfig.xcconfig`、`build/`、`scripts/release.local.env`。
+先搜索[已有 Issue](https://github.com/ggbond268/MacTools/issues) 和 PR。新增插件、公共 PluginKit API 或较大的交互改动，请先用 Issue 说明用户需求、预期行为和取舍。提交信息与 PR 标题优先使用英文；也欢迎清晰的中文反馈。
 
-## 项目结构
-- `Sources/App/`：应用入口、菜单栏状态项、设置页和窗口路由。
-- `Sources/Core/`：插件宿主、动态插件加载、快捷键、权限、日志、更新等共享基础能力。
-- `Sources/MacToolsPluginKit/`：插件 API、描述式 UI 模型和运行时上下文。
-- `Plugins/<PluginName>/`：插件 manifest、源码、bundle 入口、资源和相邻测试。
-- `Tests/`：App/Core 共享逻辑的 XCTest；插件测试优先放在对应插件目录下。
-- `project.yml`：XcodeGen 根项目源文件，只维护 App、PluginKit 和公共聚合入口；插件 target 由生成器自动生成。
-- `Plugins/<PluginName>/project.yml`：可选的插件构建差异配置，仅在插件需要额外 framework、include path、bundle 资源、helper/tool target 或 target 覆盖时添加。
-- `docs/plugins/`：插件包、catalog、本地调试和发布流程说明。
-- `docs/superpowers/`：较大的产品、交互或实施设计文档。
+### Issue 推荐格式
 
-## 开发约定
-- 新增插件放在 `Plugins/<PluginName>/`，至少包含 `plugin.json`、`Sources/` 和 `Bundle/`。
-- 普通插件只需要在目录内定义 `plugin.json`、源码和 bundle 入口；`make generate` 会扫描 `Plugins/*/plugin.json` 并生成本地 `Configs/GeneratedPlugins.yml`，不要手改生成文件。
-- 需要 macOS app extension 的能力（如 Finder Sync）必须在根 `project.yml` 添加扩展 target 并嵌入主应用；动态插件只负责 MacTools 面板和设置入口。
-- 新增和更新插件的命令流程见 `docs/plugins/local-native-plugins.md` 的 Development Steps。
-- 文档保持简短、聚焦任务。用户可见行为变化应同步更新 `README.md` 或 `docs/` 下的相关文档；插件包、catalog 或发布流程变化应更新 `docs/plugins/`。
-- 插件实现 `MacToolsPlugin`；菜单栏主面板实现 `PluginPrimaryPanel`，组件面板实现 `PluginComponentPanel`。
-- `plugin.json.id` 必须稳定、可读，并与运行时 `PluginMetadata.id` 完全一致；每个插件包只返回一个插件实例。
-- 插件展示状态通过 `PluginPanelState`、`PluginPanelDetail`、`PluginPanelControl` 等模型表达，不绕过现有面板框架。
-- 插件需要组合现有提供者的规范动作时，可采用 `PluginActionExecutionHostContextConsuming`；不要直接调用提供者实现或重复系统写入。该桥接只负责查询和执行，让宿主继续统一处理可用性、安全、确认和诊断。参考实现见 `docs/plugins/mac-settings.md`。
-- 插件设置优先使用 `settingsSections`、`permissionRequirements`、`shortcutDefinitions` 等描述式模型；只有复杂管理器或专用交互才使用 `PluginConfiguration` 自定义视图。
-- 普通插件资源文件如果依赖变更较少，推荐直接打包到可执行二进制中；需要额外 bundle 资源时，在插件自己的 `project.yml` 中声明最小差异。
-- 自定义插件设置视图必须复用 `MacToolsPluginKit.PluginSettingsTheme` 和 `.pluginSettingsCardBackground(...)`，不要复制插件私有 settings style，也不要让插件依赖 `Sources/App/SettingsStyle.swift`。
-- 插件状态变化后调用 `onStateChange?()`；耗时扫描、文件系统和系统调用不要长时间阻塞主线程。
-- 用户可见文案以中文为主，保持简洁、清楚、接近 macOS 原生表达。
-- 用户可见文案使用 `.xcstrings` 本地化。App/Core 文案放在 `Sources/Resources/Localization`，PluginKit 文案放在 `Sources/MacToolsPluginKit/Resources`，插件文案放在 `Plugins/<PluginName>/Resources`。插件 `plugin.json` 保留 `displayName`/`summary` 作为 fallback，并为插件市场和未加载插件展示提供 `localizedMetadata`。
-- 新插件应尽量提供多语言，至少覆盖面板文案、设置文案、权限说明和插件元数据。
-- 优先复用 Apple 原生框架；新增系统 framework、私有 include path、bundle 内辅助可执行文件时，在插件自己的 `project.yml` 中声明最小差异。需要单独签名的 bundle 资源可执行文件应写入 `plugin.json.package.signPaths`。
+使用 [Bug 报告](.github/ISSUE_TEMPLATE/bug_report.yml)或[功能建议](.github/ISSUE_TEMPLATE/feature_request.yml)表单。标题描述具体症状或目标，例如「唤醒后日历面板未刷新」。
 
-## 测试
-- 行为改动应补充或更新相邻 XCTest，测试文件命名使用 `<TypeName>Tests.swift`。
-- 完整测试：`xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`。
-- 单个测试类：在完整测试命令后追加 `-only-testing:MacToolsTests/<TestClassName>`。
-- 文件系统测试使用临时目录或 fake store；磁盘清理相关测试不得删除真实用户目录。
+| 类型 | 建议提供 |
+| --- | --- |
+| Bug | 复现步骤或观察到的规律、预期与实际结果、发生频率、应用版本及渠道、插件版本、macOS 版本、Mac 芯片；相关的显示器、外设、权限状态或日志。 |
+| UI 问题 | 包含面板或窗口上下文的截图；交互问题附短录屏。必要时注明语言、外观和显示缩放。 |
+| 性能问题 | 具体操作或负载、面板打开或关闭状态、观察时长，以及 CPU、内存、能耗影响；有条件时提供对照数据。 |
+| 功能或插件建议 | 要解决的问题、使用场景、预期交互、当前替代方案，以及需要的系统访问能力。 |
 
-## Pull Request Checklist
-- PR 范围聚焦，并说明变更目的、验证方式和用户影响。
-- commit message、Pull Request 标题/描述和 issue 优先使用英文。
-- 构建或测试已通过；如无法运行，请在 PR 中说明原因。
-- 用户可见行为变化已同步更新 `README.md` 或相关设计文档。
-- 高风险功能已覆盖安全校验、错误状态和权限不足场景。
-- 不包含无关格式化、生成物、本地配置、证书或发布凭证。
+附件请移除凭证、私人内容和可识别的账号信息。每个 Issue 讨论一个问题，相关问题用链接关联。
 
-## Release
-- 发布由维护者执行；不要在普通贡献中创建 tag、发布 GitHub Release 或提交发布产物。
-- GitHub 页面发包优先使用 `Actions` → `Prepare Release`。输入 `type`、目标 `version` 和是否 `release`；勾选 `release` 时会在 bump、提交和创建 tag 后继续触发实际发包 workflow。
-- 快速发包优先使用 `make release`。命令会交互选择 `app` 或 `plugin`，先分析下一版本的 `patch`/`minor`/`major` 并预览 bump；确认后才 `git pull --rebase`、执行轻量检查、更新并提交版本 bump、创建并推送对应 tag。
-- App 发布会更新 `Configs/AppVersion.xcconfig` 的 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`，推送 `v*.*.*` tag 后由 `Release` workflow 构建、签名、公证、上传 DMG，将稳定 App Release 标记为 GitHub Latest，并更新 Appcast 和官网下载元数据。
-- 公开 Nightly 发布是由维护者执行的 `main` 快照，使用独立的应用身份、存储范围、更新源和同一提交构建的完整插件 catalog。Nightly 插件版本由流水线生成为 `source-major.run.attempt`，功能贡献不应因 Nightly 预先 bump 源 manifest。两次手动更新验证通过后，维护者可设置 `ENABLE_NIGHTLY_RELEASES=true` 启用每日计划。
-- 插件发布会推送 `plugins-*` 批次 tag。默认 `auto` 模式会按生产 catalog 找出新插件、已 bump 插件和包相关变更插件；需要时自动更新对应 `plugin.json.version`，然后由 `Plugin Release` workflow 构建并合并签名 catalog。插件批次 Release 不会标记为 GitHub Latest。
-- 新版 App 首次启动时会先检查已安装插件，并从签名后的生产 catalog 自动更新到最新版；不会自动安装用户未安装的新插件。
-- 非交互用法示例：`make release ARGS="--type app --version 1.0.7 --yes"`，或 `make release ARGS="--type plugin --version 1.0.10 --plugin-mode selected --plugin calendar --yes"`。
-- 预览将执行的步骤可追加 `--dry-run`；正式发布前工作区必须干净。
-- 本地发布前复制 `scripts/release.local.env.sample` 为 `scripts/release.local.env`，至少填写 `DEVELOPER_ID_APPLICATION`。
-- 如需 Apple 公证，首次使用 `xcrun notarytool store-credentials` 保存凭证。
-- 版本号默认读取 `project.yml` 中的 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`。
-- 生成本地正式包仍可使用底层脚本：`./scripts/release-local.sh`；发布到 GitHub Release 前需先完成 `gh auth login`，再执行 `./scripts/release-local.sh --publish`。
-- 插件库发布使用 `plugins-*` 批次 tag 触发 `Plugin Release` workflow。默认只构建和上传版本递增的插件，并将新条目合并进生产 catalog；catalog 私钥、Developer ID 证书和 GitHub token 必须来自 CI secrets 或本地环境变量。
-- GitHub Actions 自动构建与发布配置见 `docs/github-actions.md`；插件 catalog、包结构和批次发布流程见 `docs/plugins/plugin-catalog.md`。
+## 构建与运行
+
+需要 macOS、支持 Swift 6 的 Xcode 和 XcodeGen。应用最低支持 macOS 14，部分 API 需要更新版本；CI 环境见 [Build workflow](.github/workflows/build.yml)。
+
+```bash
+brew install xcodegen
+make setup
+```
+
+在生成的 `LocalConfig.xcconfig` 中填写 `DEVELOPMENT_TEAM` 和稳定的 `BUNDLE_IDENTIFIER_PREFIX`，然后运行：
+
+```bash
+make run
+```
+
+该命令构建应用与插件、同步 Debug catalog，并安装 `~/Applications/MacTools Dev.app`。完整同步会把当前检出中不存在的插件移入可恢复的隔离目录；按插件筛选的同步保留其他插件。
+
+| 命令 | 用途 |
+| --- | --- |
+| `make generate` | 生成插件 target 和 Xcode 项目；不要直接运行 `xcodegen generate`。 |
+| `make build` | 编译应用及插件 target。 |
+| `make sync-debug-plugins PLUGIN=calendar` | 先构建应用 target，再只同步指定 Debug 插件，不启动应用。 |
+| `make build-plugin PLUGIN=calendar` | 验证独立插件包及 Debug catalog。 |
+
+不要提交本地配置、凭证、生成的项目文件或构建产物。插件包配置与调试见[本地插件开发](docs/plugins/local-native-plugins.md)。
+
+## 代码放在哪里
+
+| 路径 | 职责 |
+| --- | --- |
+| `Sources/App/` | 菜单栏面板、设置、窗口与应用路由。 |
+| `Sources/Core/` | 插件宿主、操作、权限、快捷键、存储与更新。 |
+| `Sources/MacToolsPluginKit/` | 公共插件协议、描述式 UI 与运行时上下文。 |
+| `Plugins/<PluginName>/` | `plugin.json`、`Sources/`、`Bundle/`、资源和相邻的 `Tests/`。 |
+| `Tests/` | App/Core 共享逻辑测试。 |
+| `docs/plugins/` | 功能约定与插件开发指南。 |
+
+普通插件无需修改根 `project.yml`；必要的构建差异放在插件自己的 `project.yml`。Finder Sync 等 app extension 必须由宿主嵌入。
+
+## 开发规范
+
+遵循[插件开发规范](docs/plugins/development-guidelines.md)，并参考相邻实现。通用要求如下：
+
+- **遵守宿主协议。** 实现 `MacToolsPlugin`，通过稳定的 `panelItems` 声明视图；manifest 的能力、操作策略、权限和最低宿主版本应与运行时一致。复用宿主操作与快捷键。
+- **保持设计一致。** 优先使用描述式设置、宿主渲染器、`PluginSettingsTheme` 和 `PluginComponentTheme`。统一字体、间距、控件、焦点与错误状态；本地化用户文案并检查长文本。
+- **支持可复用 widget。** 正确处理零个或多个实例、独立预览、视图回收及每个放置实例的独立展示状态。详见[面板组件](docs/plugins/panel-items.md)。
+- **控制性能与能耗。** 使用缓存快照、事件驱动、有界异步任务和按可见性更新的展示层。面板隐藏时保留用户明确启用的监控，插件停用时释放其拥有的任务与资源。详见[性能要求](docs/plugins/development-guidelines.md#performance-and-energy)。
+- **保留用户控制权。** 处理权限拒绝、取消、不支持的硬件和系统变化，保留已有确认、恢复路径及破坏性操作保护。
+
+## 验证
+
+覆盖核心结果和实际回归风险。优先复用现有测试；只有变更后的行为缺少有效保护时，才补充或调整聚焦的测试。重点覆盖主流程，以及本次改动涉及的数据丢失、权限、取消、兼容性等关键边界。
+
+不按每个 PR 的测试数量或覆盖率百分比设门槛。不要增加仅复述实现、断言私有调用顺序，或检查固定文案、颜色、间距的测试。纯文档与外观微调通常通过 Review 和视觉检查验证，无需新增自动化测试。
+
+运行最小相关测试类或方法。例如：
+
+```bash
+xcodebuild -project MacTools.xcodeproj -scheme MacTools \
+  -configuration Debug -derivedDataPath build/DerivedData \
+  test -quiet -only-testing:MacToolsTests/ComponentPanelLayoutTests
+```
+
+将测试选择器替换为本次改动对应的测试；需要完整测试时再移除它。使用临时目录、测试数据和 fake service，避免访问真实用户数据或账号。仅在出现失败、共享协议变化或影响其他行为时扩大验证范围；相关检查通过后，仅在有新改动、失败或未覆盖风险时重复运行。
+
+| 改动 | 验证范围 |
+| --- | --- |
+| 应用或插件行为 | 编译并运行相关现有测试；仅为缺失的核心行为或回归补测，必要时手动验证硬件与系统集成。 |
+| UI 或 widget | 提供下述 UI 证据，检查受影响的交互；仅在状态、操作或生命周期改变时补充必要的逻辑测试。 |
+| PluginKit API/ABI 或跨模块行为 | 此类代码改动推送前运行 `make ci`，已包含脚本测试、XCTest 和冻结客户端兼容检查。新引入的 API 登记到 `scripts/tests/test_plugin_minimum_host_compatibility.py`；使用已登记 API 须确保 `minHostVersion` 兼容，无需重复登记。 |
+| 脚本、manifest 或 catalog | 独立逻辑运行相关脚本测试；包结构、schema、兼容性变化或新增公共 API 使用者运行 `make script-tests`。元数据或操作变化后运行 `python3 scripts/plugins/generate_website_plugin_data.py`。 |
+| 面板拖拽路由或命中测试 | 先运行 `make build`，再运行受影响的[原生交互场景](docs/testing/panel-layout-editing.md)。仅检查编译可用 `--compile-only`，需要全部场景时运行 `make panel-layout-ui-tests`。原生交互要求活动桌面会话，独立于 CI。 |
+| Changelog 片段 | 提交或推送前运行 `make validate-changelog`。 |
+| 仅文档 | 检查改动的链接、示例、格式与渲染效果，无需构建应用。 |
+
+## 提交 Pull Request
+
+使用 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md)，说明问题、最终行为、验证结果和相关限制，并关联 Issue。避免混入无关重构或格式化。贡献者应理解并验证全部提交内容，包括借助工具生成的代码。
+
+**UI 改动必须提供前后截图。** 新增页面提供完成后的界面和入口说明。视觉改动展示浅色与深色外观；主题行为变化再补充一种代表性的自定义主题。拖拽、焦点、键盘导航等无法用静态图说明的行为，提供短录屏。保留足够的窗口上下文，并移除私人内容。
+
+检查本次改动影响的交互、状态、翻译和窗口尺寸，不要求每个 PR 遍历全部场景。改变后台负载、采样频率、大量数据渲染，或声明性能提升时，提供可比较的前后观察；普通 UI 调整无需性能分析。详见[测量指南](docs/plugins/development-guidelines.md#performance-and-energy)。
+
+请求 Review 前确认：
+
+- [ ] 相关检查通过，PR 列出命令、结果及无法执行的检查。
+- [ ] UI 改动附有截图或录屏，设计使用统一组件与主题。
+- [ ] 用户可见变化已更新 README 或功能指南，并在 `changes/unreleased/` 添加英文片段。
+- [ ] Manifest 元数据、API 兼容性、权限及操作策略与实现一致。
+- [ ] 第三方来源与许可已记录，不含凭证、本地配置或无关生成物。
+
+Changelog 片段使用 `release: app` 或 `release: plugin` 及支持的 `type`，每条不超过 220 个字符、两句话。涉及两个发布渠道时分别说明影响；纯文档改动无需发布片段。详见 [changelog 说明](changes/README.md)。
+
+## 许可与发布
+
+贡献须遵守 [LICENSE](LICENSE) 和 [LICENSING.md](LICENSING.md)。项目自有的应用、CLI、PluginKit、官方插件、工具及文档采用 **GPL-3.0-only**；仅提交你有权按相应条款提供的内容。第三方材料保留原许可与声明，在 [ThirdPartyNotices](Sources/Resources/ThirdPartyNotices/manifest.json) 中记录来源、固定版本、受影响产品、源码路径及许可文本。进入官方 catalog 的插件须采用兼容 GPLv3 的条款，除非许可政策另有明确例外。图标还须符合[素材目录规则](docs/icon-gallery.md)。
+
+发布由维护者执行。功能 PR 不要提前递增插件版本、修改签名 catalog 或重新生成发布历史。发布相关工作请遵循[发布流程](docs/github-actions.md)、[插件 catalog](docs/plugins/plugin-catalog.md)和 [CLI 发布条件](docs/plugins/cli-release.md)。

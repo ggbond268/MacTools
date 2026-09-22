@@ -7,10 +7,10 @@ final class ScreenshotEnvironment {
     let storage: any PluginStorage
     private let localization: PluginLocalization
     private var pins: [PinWindow] = []
-    private var captureControls: [NSWindow] = []
     private var toast: NSPanel?
     private var toastTask: Task<Void, Never>?
     var savePanel: NSSavePanel?
+    private(set) var presentationGeneration: UInt64 = 0
 
     convenience init(context: PluginRuntimeContext) {
         self.init(storage: context.storage, localization: PluginLocalization(bundle: context.resourceBundle))
@@ -26,7 +26,10 @@ final class ScreenshotEnvironment {
             if let path = storage.string(forKey: "saveFolder"), path.hasPrefix("/") {
                 return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
             }
-            return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop", isDirectory: true)
+            let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Desktop", isDirectory: true)
+            return desktop.appendingPathComponent("screenshot", isDirectory: true)
         }
         set {
             guard newValue.isFileURL else { return }
@@ -44,6 +47,22 @@ final class ScreenshotEnvironment {
         String(format: string(key, defaultValue), locale: PluginRuntimeLocalization.locale, arguments: arguments)
     }
 
+    func captureErrorDescription(_ error: Error) -> String {
+        switch error {
+        case CaptureFailure.unavailable:
+            return string("capture.unavailable", "无法获取屏幕图像，请检查录屏权限后重试")
+        case CaptureFailure.timedOut:
+            return string("capture.timedOut", "获取屏幕图像超时，请重试")
+        case CaptureFailure.displayChanged:
+            return string("capture.displayChanged", "显示器配置已变化，请重新截图")
+        case CaptureFailure.invalidRegion:
+            return string("capture.invalidRegion", "截图区域无效，请重新选择")
+        case is ScreenshotControlError:
+            return string("capture.controlsNotReady", "截图控制窗口尚未就绪，请重试")
+        default: return error.localizedDescription
+        }
+    }
+
     func stamp() -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -53,25 +72,6 @@ final class ScreenshotEnvironment {
 
     func fileURL(prefix: String, ext: String) -> URL {
         saveFolder.appendingPathComponent("\(prefix) \(stamp()).\(ext)")
-    }
-
-    func captureControlWindowIDs(availableWindowIDs: Set<CGWindowID>) throws -> Set<CGWindowID> {
-        let ids = Set(captureControls.compactMap { window -> CGWindowID? in
-            guard window.windowNumber > 0 else { return nil }
-            return CGWindowID(exactly: window.windowNumber)
-        })
-        guard !ids.isEmpty, ids.count == captureControls.count, ids.isSubset(of: availableWindowIDs) else {
-            throw ScreenshotControlError.notReady
-        }
-        return ids
-    }
-
-    func registerCaptureControls(_ windows: [NSWindow]) {
-        captureControls.append(contentsOf: windows)
-    }
-
-    func removeCaptureControls(_ windows: [NSWindow]) {
-        captureControls.removeAll { control in windows.contains { $0 === control } }
     }
 
     func pin(_ png: Data, at frame: NSRect, bakedShadow: Bool, name: String) {
@@ -127,9 +127,7 @@ final class ScreenshotEnvironment {
     }
 
     func closeAll() {
-        // Startup controls can be visible before their async session has returned to the coordinator.
-        for control in captureControls { control.orderOut(nil) }
-        captureControls.removeAll()
+        presentationGeneration &+= 1
         toastTask?.cancel()
         toastTask = nil
         toast?.orderOut(nil)
@@ -140,5 +138,3 @@ final class ScreenshotEnvironment {
         pins.removeAll()
     }
 }
-
-enum ScreenshotControlError: Error { case notReady }

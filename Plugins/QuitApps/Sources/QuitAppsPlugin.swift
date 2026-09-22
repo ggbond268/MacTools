@@ -24,9 +24,26 @@ private struct QuitAppsPluginProvider: PluginProvider {
 // MARK: - Plugin
 
 @MainActor
-final class QuitAppsPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnchorProviding,
-    PluginActionProviding
-{
+final class QuitAppsPlugin: MacToolsPlugin, DropZoneAnchorProviding, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let chooseApps = "choose-apps"
     }
@@ -35,7 +52,7 @@ final class QuitAppsPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnchorPr
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     // MARK: DropZoneAnchorProviding
 
@@ -81,17 +98,17 @@ final class QuitAppsPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnchorPr
                 defaultValue: "选择并退出正在运行的应用"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.choose", defaultValue: "选择") }
         )
     }
 
-    // MARK: PluginPrimaryPanel
+    // MARK: - Panel row
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: runningAppCount > 0
                 ? localization.format(
                     "panel.subtitle.runningCountFormat",
@@ -100,9 +117,8 @@ final class QuitAppsPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnchorPr
                 )
                 : localization.string("panel.subtitle.none", defaultValue: "无正在运行的应用"),
             isOn: false,
-            isExpanded: false,
             isEnabled: runningAppCount > 0,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

@@ -10,7 +10,7 @@ final class XcodeCleanPluginTests: XCTestCase {
 
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
         XCTAssertEqual(
             controls.map(\.id),
             [XcodeCleanPlugin.ControlID.scan, XcodeCleanPlugin.ControlID.clean]
@@ -123,7 +123,7 @@ final class XcodeCleanPluginTests: XCTestCase {
 
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
         let clean = try XCTUnwrap(controls.first { $0.id == XcodeCleanPlugin.ControlID.clean })
         switch clean.actionBehavior {
         case .dismissBeforeHandling: break
@@ -154,7 +154,7 @@ final class XcodeCleanPluginTests: XCTestCase {
         )
         let plugin = makePlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "请先退出 Xcode")
+        XCTAssertEqual(plugin.rowState.subtitle, "请先退出 Xcode")
     }
 
     func testScanButtonDisabledWhenXcodeRunning() throws {
@@ -172,7 +172,7 @@ final class XcodeCleanPluginTests: XCTestCase {
         plugin.handleAction(.setDisclosureExpanded(true))
 
         let scan = try XCTUnwrap(
-            plugin.primaryPanelState.detail?.primaryControls.first { $0.id == XcodeCleanPlugin.ControlID.scan }
+            plugin.rowState.detail?.primaryControls.first { $0.id == XcodeCleanPlugin.ControlID.scan }
         )
         XCTAssertFalse(scan.isEnabled)
     }

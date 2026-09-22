@@ -15,6 +15,7 @@ struct ClipboardHistoryDetailActionStyle: ButtonStyle {
         let isPrimary: Bool
         let isEnabled: Bool
         @State private var isHovered = false
+        @Environment(\.colorSchemeContrast) private var contrast
 
         var body: some View {
             configuration.label
@@ -22,24 +23,27 @@ struct ClipboardHistoryDetailActionStyle: ButtonStyle {
                 .padding(.horizontal, 10)
                 .frame(minWidth: 36)
                 .frame(height: 36)
-                .foregroundStyle(isPrimary ? Color.white : Color.primary)
+                .foregroundStyle(!isEnabled ? Color.secondary : isPrimary
+                    ? PluginPaletteColors.selectedText : Color.primary)
                 .background(background, in: RoundedRectangle(cornerRadius: 7))
                 .overlay {
                     RoundedRectangle(cornerRadius: 7)
                         .strokeBorder(
-                            isPrimary ? Color.clear : PluginSettingsTheme.Palette.cardBorder,
-                            lineWidth: 1
+                            contrast == .increased || (isPrimary && (isHovered || configuration.isPressed))
+                                ? (isPrimary && isEnabled
+                                ? PluginPaletteColors.selectedText : Color.primary)
+                                : PluginSettingsTheme.Palette.cardBorder,
+                            lineWidth: configuration.isPressed ? 2 : 1
                         )
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 7))
-                .opacity(isEnabled ? 1 : 0.5)
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.1), value: isHovered)
         }
 
         private var background: Color {
-            if isPrimary {
-                return Color.accentColor.opacity(configuration.isPressed ? 0.65 : isHovered ? 0.85 : 1)
+            if isPrimary && isEnabled {
+                return Color(nsColor: .selectedContentBackgroundColor)
             }
             return isHovered || configuration.isPressed
                 ? PluginSettingsTheme.Palette.activeControlBackground

@@ -2326,8 +2326,8 @@ final class AutoInputPluginPanelTests: XCTestCase {
         XCTAssertEqual(plugin.metadata.id, "auto-input")
         XCTAssertEqual(plugin.metadata.iconName, "keyboard")
         XCTAssertEqual(NSColor(plugin.metadata.iconTint), .systemBlue)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "自动记忆已开启")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "自动记忆已开启")
 
         AutoInputStore(storage: storage).upsertRule(makeRule(bundleID: "com.example.app", sourceID: "en"))
         let pluginWithRule = AutoInputPlugin(
@@ -2335,11 +2335,11 @@ final class AutoInputPluginPanelTests: XCTestCase {
             sourceController: sourceController,
             applicationMonitor: appMonitor
         )
-        XCTAssertEqual(pluginWithRule.primaryPanelState.subtitle, "1 条固定规则")
+        XCTAssertEqual(pluginWithRule.rowState.subtitle, "1 条固定规则")
 
         pluginWithRule.handleAction(.setSwitch(false))
-        XCTAssertFalse(pluginWithRule.primaryPanelState.isOn)
-        XCTAssertEqual(pluginWithRule.primaryPanelState.subtitle, "已暂停")
+        XCTAssertFalse(pluginWithRule.rowState.isOn)
+        XCTAssertEqual(pluginWithRule.rowState.subtitle, "已暂停")
     }
 
     func testCanonicalActionCanPauseAutoInput() async throws {
@@ -2356,7 +2356,7 @@ final class AutoInputPluginPanelTests: XCTestCase {
         ).result()
 
         XCTAssertEqual(result, .succeeded())
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testCanonicalMutationIsDeferredAndRejectedPersistenceReturnsFailure() async throws {
@@ -2375,13 +2375,13 @@ final class AutoInputPluginPanelTests: XCTestCase {
             source: .test,
             mode: .background
         ))
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
 
         let result = await handle.result()
 
         guard case .failed = result else { return XCTFail("expected persistence failure") }
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertTrue(sources.selectedIDs.isEmpty)
         XCTAssertTrue(AutoInputStore(storage: storage).isAutoSwitchEnabled)
     }
@@ -2406,7 +2406,7 @@ final class AutoInputPluginPanelTests: XCTestCase {
         ).result()
 
         XCTAssertEqual(result, .succeeded())
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .inactive)
     }
 
@@ -2430,10 +2430,10 @@ final class AutoInputPluginPanelTests: XCTestCase {
 
         let firstResult = await first.result()
         XCTAssertEqual(firstResult, .succeeded())
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         let secondResult = await second.result()
         XCTAssertEqual(secondResult, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testInputSourcesPublishDistinctLocalOnlyCanonicalActions() throws {

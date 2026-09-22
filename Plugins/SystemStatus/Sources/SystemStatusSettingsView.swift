@@ -2,6 +2,10 @@ import AppKit
 import MacToolsPluginKit
 import SwiftUI
 
+private enum SystemStatusSettingsAppearance {
+    static let separatorOpacity = 0.5
+}
+
 struct SystemStatusSettingsView: View {
     enum SectionKind {
         case panel
@@ -41,90 +45,39 @@ struct SystemStatusSettingsView: View {
     }
 
     private var menuBarSection: some View {
-        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
-                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                    VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
-                        Text(localization.string("settings.menuBar.preview", defaultValue: "实时预览"))
-                            .font(PluginSettingsTheme.Typography.rowTitle)
-                        Text(localization.string(
-                            "settings.menuBar.builderDescription",
-                            defaultValue: "每个指标最多选择两个数值。第一个显示在第二个之前或上方。点击或拖拽数值进行分配，拖拽指标可调整顺序。"
-                        ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-                    }
-
+                HStack(alignment: .firstTextBaseline, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Text(localization.string("settings.menuBar.preview", defaultValue: "实时预览"))
+                        .font(PluginSettingsTheme.Typography.rowTitle)
                     Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
-
-                    HStack(spacing: 6) {
-                        Text(localization.string(
-                            "settings.menuBar.setAllMetricsTo",
-                            defaultValue: "所有指标设为"
-                        ))
-                        .font(PluginSettingsTheme.Typography.rowDescription)
-                        .foregroundStyle(.secondary)
-
-                        applyStyleButton(
-                            .horizontal,
-                            title: localization.string(
-                                "settings.menuBarLayout.detailed",
-                                defaultValue: "详细"
-                            )
-                        )
-                        applyStyleButton(
-                            .vertical,
-                            title: localization.string(
-                                "settings.menuBarLayout.compact",
-                                defaultValue: "紧凑"
-                            )
-                        )
-                        applyStyleButton(
-                            .minimal,
-                            title: localization.string(
-                                "settings.menuBarLayout.minimal",
-                                defaultValue: "极简"
-                            )
-                        )
-
-                        if commonMenuBarStyle == nil {
-                            Text(localization.string("settings.menuBarStyle.mixed", defaultValue: "混合"))
-                                .font(PluginSettingsTheme.Typography.statusBadge)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Menu {
-                            Button(localization.string(
-                                "settings.menuBar.resetStylesAndLayout",
-                                defaultValue: "重置样式与布局"
-                            )) {
-                                controller.resetMenuBarAppearances()
-                            }
-                            Button(role: .destructive) {
-                                isConfirmingMenuBarReset = true
-                            } label: {
-                                Text(localization.string(
-                                    "settings.menuBar.resetAll",
-                                    defaultValue: "重置所有菜单栏设置…"
-                                ))
-                            }
-                        } label: {
-                            Label(
-                                localization.string("settings.menuBar.reset", defaultValue: "重置"),
-                                systemImage: "arrow.counterclockwise"
-                            )
-                        }
-                        .menuStyle(.button)
-                        .controlSize(.small)
-                    }
-                    .fixedSize()
+                    menuBarResetMenu
                 }
 
+                Text(localization.string(
+                    "settings.menuBar.builderDescription",
+                    defaultValue: "每个指标最多选择两个数值。第一个显示在第二个之前或上方。点击或拖拽数值进行分配，拖拽指标可调整顺序。"
+                ))
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
                 menuBarPreview
+
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    Text(localization.string("settings.menuBar.setAllMetricsTo", defaultValue: "所有指标设为"))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
+                    menuBarStyleControls
+                }
             }
             .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
             .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
-            .pluginSettingsCardBackground(.standard)
+
+            PluginSettingsListDivider()
+                .opacity(SystemStatusSettingsAppearance.separatorOpacity)
 
             SystemStatusMenuBarMetricEditorView(
                 items: menuBarItems,
@@ -152,6 +105,38 @@ struct SystemStatusSettingsView: View {
                 defaultValue: "这会还原菜单栏指标的样式、数值、显示状态和顺序。"
             ))
         }
+    }
+
+    private var menuBarResetMenu: some View {
+        Menu {
+            Button(localization.string("settings.menuBar.resetStylesAndLayout", defaultValue: "重置样式与布局")) {
+                controller.resetMenuBarAppearances()
+            }
+            Button(role: .destructive) {
+                isConfirmingMenuBarReset = true
+            } label: {
+                Text(localization.string("settings.menuBar.resetAll", defaultValue: "重置所有菜单栏设置…"))
+            }
+        } label: {
+            Label(localization.string("settings.menuBar.reset", defaultValue: "重置"), systemImage: "arrow.counterclockwise")
+        }
+        .menuStyle(.button)
+        .controlSize(.small)
+        .fixedSize()
+    }
+
+    private var menuBarStyleControls: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            if commonMenuBarStyle == nil {
+                Text(localization.string("settings.menuBarStyle.mixed", defaultValue: "混合"))
+                    .font(PluginSettingsTheme.Typography.statusBadge)
+                    .foregroundStyle(.secondary)
+            }
+            applyStyleButton(.horizontal, title: localization.string("settings.menuBarLayout.detailed", defaultValue: "详细"))
+            applyStyleButton(.vertical, title: localization.string("settings.menuBarLayout.compact", defaultValue: "紧凑"))
+            applyStyleButton(.minimal, title: localization.string("settings.menuBarLayout.minimal", defaultValue: "极简"))
+        }
+        .fixedSize()
     }
 
     private var commonMenuBarStyle: SystemStatusMenuBarLayout? {
@@ -191,7 +176,8 @@ struct SystemStatusSettingsView: View {
             Text(localization.string("settings.menuBar.previewEmpty", defaultValue: "选择指标后将在这里预览。"))
                 .font(PluginSettingsTheme.Typography.rowDescription)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 30)
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowContentControl)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .pluginSettingsCardBackground(.recessed)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -204,9 +190,9 @@ struct SystemStatusSettingsView: View {
                     layout: controller.configuration.menuBarLayout
                 )
                 .fixedSize()
-                .padding(.horizontal, 8)
+                .padding(.horizontal, PluginSettingsTheme.Spacing.rowContentControl)
             }
-            .frame(maxWidth: .infinity, minHeight: 30)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .pluginSettingsCardBackground(.recessed)
         }
     }
@@ -705,18 +691,31 @@ private struct SystemStatusMenuBarMetricEditorView: View {
 }
 
 enum SystemStatusMenuBarEditorLayout {
-    static let collapsedRowHeight: CGFloat = 66
-    static let expandedSingleGridRowHeight: CGFloat = 192
-    static let valueMinimumWidth: CGFloat = 132
-    static let valueHeight: CGFloat = 28
-    static let valueSpacing: CGFloat = 7
+    static let headerHeight: CGFloat = 42
+    static let wideHeaderMinimumWidth: CGFloat = 660
+    static let collapsedRowHeight = headerHeight + PluginSettingsTheme.Spacing.interactiveRowVertical * 2
+    static let expandedSingleGridRowHeight: CGFloat = 210
+    static let valueMinimumWidth: CGFloat = 156
+    static let valueHeight = PluginSettingsTheme.Size.controlHeight
+    static let valueSpacing = PluginSettingsTheme.Spacing.controlCluster
 
-    // Match the adaptive grid without measuring live SwiftUI rows on every sample.
+    static func usesCompactHeader(width: CGFloat) -> Bool {
+        width < wideHeaderMinimumWidth
+    }
+
+    static func collapsedHeight(width: CGFloat) -> CGFloat {
+        collapsedRowHeight + (usesCompactHeader(width: width)
+            ? headerHeight + PluginSettingsTheme.Spacing.rowContentControl : 0)
+    }
+
+    // Reserve the same header and grid rows as the view without measuring on each sample.
     static func expandedHeight(width: CGFloat, valueCount: Int) -> CGFloat {
         let availableWidth = max(width - PluginSettingsTheme.Spacing.rowHorizontal * 2, 0)
         let columns = max(Int((availableWidth + valueSpacing) / (valueMinimumWidth + valueSpacing)), 1)
         let rows = max((valueCount + columns - 1) / columns, 1)
-        return expandedSingleGridRowHeight + CGFloat(rows - 1) * (valueHeight + valueSpacing)
+        return expandedSingleGridRowHeight
+            + collapsedHeight(width: width) - collapsedRowHeight
+            + CGFloat(rows - 1) * (valueHeight + valueSpacing)
     }
 }
 
@@ -730,63 +729,28 @@ struct SystemStatusMenuBarMetricEditorRow: View {
     let onStyleChange: (SystemStatusMenuBarLayout) -> Void
     let onValueArrangementChange: (SystemStatusMenuBarValueArrangement) -> Void
 
+    let contentWidth: CGFloat
+    var showsSeparator = false
+
     private let slotWidth: CGFloat = 146
     private let secondaryClearButtonWidth: CGFloat = 16
     private let secondaryClearButtonSpacing: CGFloat = 2
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                metricIdentity
-
-                HStack(spacing: 6) {
-                    slot(.primary)
-                    secondarySlotRegion
-                }
-                .fixedSize(horizontal: true, vertical: false)
-
-                Button {
-                    onVisibilityChange(!item.isVisible)
-                } label: {
-                    Image(systemName: item.isVisible ? "eye" : "eye.slash")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(item.isVisible ? Color.accentColor : Color.secondary)
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .help(item.visibilityActionTitle)
-                .accessibilityLabel(item.title)
-                .accessibilityValue(item.visibilityStateTitle)
-
-                Button(action: onToggleExpansion) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .accessibilityLabel(item.title)
-                .accessibilityValue(isExpanded ? "1" : "0")
-
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18, height: 24)
-                    .contentShape(Rectangle())
-                    .help(item.reorderAccessibilityTitle)
-                    .accessibilityLabel(item.reorderAccessibilityTitle)
-            }
+        VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+            header
 
             if isExpanded {
                 Divider()
+                    .opacity(SystemStatusSettingsAppearance.separatorOpacity)
 
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
                     HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                         Text(item.styleTitle)
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .help(item.styleTitle)
 
                         Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
@@ -809,13 +773,15 @@ struct SystemStatusMenuBarMetricEditorRow: View {
                         .labelsHidden()
                         .pickerStyle(.segmented)
                         .controlSize(.small)
-                        .frame(width: 250)
+                        .frame(width: 250, alignment: .trailing)
                     }
 
                     HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                         Text(item.valueArrangementTitle)
                             .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .help(item.valueArrangementTitle)
 
                         Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
@@ -838,7 +804,7 @@ struct SystemStatusMenuBarMetricEditorRow: View {
                         .labelsHidden()
                         .pickerStyle(.segmented)
                         .controlSize(.small)
-                        .frame(width: 250)
+                        .frame(width: 250, alignment: .trailing)
                     }
 
                     Text(item.availableValuesTitle)
@@ -863,19 +829,87 @@ struct SystemStatusMenuBarMetricEditorRow: View {
         }
         .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
         .padding(.vertical, PluginSettingsTheme.Spacing.interactiveRowVertical)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(isExpanded ? 0.065 : 0.035))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(isExpanded ? 0.10 : 0.055), lineWidth: 1)
-        )
+        .background(isExpanded ? PluginSettingsTheme.Palette.recessedControlBackground : Color.clear)
+        .overlay(alignment: .bottom) {
+            if showsSeparator {
+                PluginSettingsListDivider()
+                    .opacity(SystemStatusSettingsAppearance.separatorOpacity)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if SystemStatusMenuBarEditorLayout.usesCompactHeader(width: contentWidth) {
+            VStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                    metricIdentity
+                    headerControls
+                }
+                .frame(height: SystemStatusMenuBarEditorLayout.headerHeight)
+                valueSlots
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        } else {
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                metricIdentity
+                valueSlots
+                headerControls
+            }
+            .frame(height: SystemStatusMenuBarEditorLayout.headerHeight)
+        }
+    }
+
+    private var valueSlots: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            slot(.primary)
+            secondarySlotRegion
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var headerControls: some View {
+        HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
+            Button {
+                onVisibilityChange(!item.isVisible)
+            } label: {
+                Image(systemName: item.isVisible ? "eye" : "eye.slash")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(item.isVisible ? Color.accentColor : Color.secondary)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help(item.visibilityActionTitle)
+            .accessibilityLabel(item.title)
+            .accessibilityValue(item.visibilityStateTitle)
+
+            Button(action: onToggleExpansion) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel(item.title)
+            .accessibilityValue(isExpanded ? "1" : "0")
+
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 24)
+                .contentShape(Rectangle())
+                .help(item.reorderAccessibilityTitle)
+                .accessibilityLabel(item.reorderAccessibilityTitle)
+        }
+        .fixedSize()
     }
 
     private var metricIdentity: some View {
         Button(action: onToggleExpansion) {
-            HStack(spacing: 10) {
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(item.iconTint.opacity(0.14))
@@ -885,16 +919,18 @@ struct SystemStatusMenuBarMetricEditorRow: View {
                 }
                 .frame(width: 30, height: 30)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowTitleDescription) {
                     HStack(spacing: 6) {
                         Text(item.title)
                             .font(PluginSettingsTheme.Typography.rowTitle)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
+                            .layoutPriority(1)
                         Text(item.appearanceSummary)
                             .font(PluginSettingsTheme.Typography.statusBadge)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .help(item.appearanceSummary)
                     }
                     Text(item.description)
                         .font(PluginSettingsTheme.Typography.rowDescription)
@@ -920,23 +956,25 @@ struct SystemStatusMenuBarMetricEditorRow: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(slotTitle(slot))
-                        .font(.system(size: 9, weight: .medium))
+                        .font(PluginSettingsTheme.Typography.statusBadge)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help(slotTitle(slot))
                     if let option {
                         HStack(spacing: 5) {
                             Text(option.title)
                                 .lineLimit(1)
                             Spacer(minLength: 2)
                             Text(option.liveValue)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(PluginSettingsTheme.Typography.monospacedValue)
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        .font(.system(size: 11, weight: .medium))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
                     } else {
                         Text(item.secondaryValueNoneTitle)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(PluginSettingsTheme.Typography.rowDescription)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
@@ -945,15 +983,15 @@ struct SystemStatusMenuBarMetricEditorRow: View {
                 .padding(.vertical, 6)
                 .frame(width: slotWidth, height: 42, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.primary.opacity(0.045))
+                    RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+                        .fill(PluginSettingsTheme.Palette.fieldBackground)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
                         .strokeBorder(
                             selectedSlot == slot && isExpanded
                                 ? Color.accentColor.opacity(0.9)
-                                : Color.primary.opacity(0.10),
+                                : PluginSettingsTheme.Palette.separator,
                             style: StrokeStyle(
                                 lineWidth: selectedSlot == slot && isExpanded ? 1.5 : 1,
                                 dash: option == nil ? [4, 3] : []
@@ -1020,22 +1058,22 @@ struct SystemStatusMenuBarMetricEditorRow: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(option.liveValue)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(PluginSettingsTheme.Typography.monospacedValue)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(PluginSettingsTheme.Typography.rowDescription)
             .padding(.horizontal, 8)
             .frame(minHeight: SystemStatusMenuBarEditorLayout.valueHeight)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(assignedSlot == nil ? Color.primary.opacity(0.04) : Color.accentColor.opacity(0.08))
+                RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+                    .fill(assignedSlot == nil ? PluginSettingsTheme.Palette.keycapBackground : Color.accentColor.opacity(0.08))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
                     .stroke(
-                        assignedSlot == nil ? Color.primary.opacity(0.08) : Color.accentColor.opacity(0.25),
+                        assignedSlot == nil ? PluginSettingsTheme.Palette.separator : Color.accentColor.opacity(0.25),
                         lineWidth: 1
                     )
             )
@@ -1075,8 +1113,8 @@ struct SystemStatusMenuBarMetricEditorRow: View {
 
 struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
     static let collapsedRowHeight = SystemStatusMenuBarEditorLayout.collapsedRowHeight
-    static let rowSpacing: CGFloat = 6
-    static let verticalContentInset: CGFloat = 6
+    static let rowSpacing: CGFloat = 0
+    static let verticalContentInset: CGFloat = 0
     private static let dragType = NSPasteboard.PasteboardType(
         "com.ggbond.mactools.system-status.menu-bar-metric-editor"
     )
@@ -1095,7 +1133,7 @@ struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
     ) -> Void
 
     private func expandedRowHeight(width: CGFloat) -> CGFloat {
-        guard let item = items.first(where: { $0.kind == expandedKind }) else { return Self.collapsedRowHeight }
+        guard let item = items.first(where: { $0.kind == expandedKind }) else { return SystemStatusMenuBarEditorLayout.collapsedHeight(width: width) }
         return SystemStatusMenuBarEditorLayout.expandedHeight(width: width, valueCount: item.valueOptions.count)
     }
 
@@ -1103,8 +1141,9 @@ struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
         guard !items.isEmpty else {
             return Self.verticalContentInset * 2
         }
-        let collapsedRowsHeight = CGFloat(items.count) * Self.collapsedRowHeight
-        let expandedHeight = expandedRowHeight(width: width) - Self.collapsedRowHeight
+        let collapsedHeight = SystemStatusMenuBarEditorLayout.collapsedHeight(width: width)
+        let collapsedRowsHeight = CGFloat(items.count) * collapsedHeight
+        let expandedHeight = expandedRowHeight(width: width) - collapsedHeight
         let spacing = CGFloat(max(items.count - 1, 0)) * Self.rowSpacing
         return collapsedRowsHeight + expandedHeight + spacing + Self.verticalContentInset * 2
     }
@@ -1139,6 +1178,7 @@ struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
         )
 
         let tableView = PluginSettingsReorderTableView(dragType: Self.dragType)
+        tableView.style = .plain
         tableView.rowHeight = Self.collapsedRowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: Self.rowSpacing)
 
@@ -1185,7 +1225,7 @@ struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
             }
             return parent.items[row].kind == parent.expandedKind
                 ? parent.expandedRowHeight(width: tableView.bounds.width)
-                : SystemStatusMenuBarMetricEditorTableView.collapsedRowHeight
+                : SystemStatusMenuBarEditorLayout.collapsedHeight(width: tableView.bounds.width)
         }
 
         func tableView(
@@ -1346,7 +1386,9 @@ struct SystemStatusMenuBarMetricEditorTableView: NSViewRepresentable {
                     },
                     onValueArrangementChange: { [weak self] arrangement in
                         self?.parent.onValueArrangementChange(item.kind, arrangement)
-                    }
+                    },
+                    contentWidth: tableView?.bounds.width ?? 960,
+                    showsSeparator: row < parent.items.count - 1
                 )
             )
         }
@@ -1391,9 +1433,9 @@ private final class SystemStatusMenuBarMetricHostingCellView: NSTableCellView {
 }
 
 struct SystemStatusMetricPreferenceTableView: NSViewRepresentable {
-    static let rowHeight: CGFloat = 58
-    static let rowSpacing: CGFloat = 6
-    static let verticalContentInset: CGFloat = 6
+    static let rowHeight: CGFloat = 60
+    static let rowSpacing: CGFloat = 0
+    static let verticalContentInset: CGFloat = 0
     private static let dragType = NSPasteboard.PasteboardType("com.ggbond.mactools.system-status.metric-preference")
 
     let items: [SystemStatusMetricPreferenceTableItem]
@@ -1429,6 +1471,7 @@ struct SystemStatusMetricPreferenceTableView: NSViewRepresentable {
         )
 
         let tableView = NSTableView()
+        tableView.style = .plain
         tableView.headerView = nil
         tableView.rowHeight = Self.rowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: Self.rowSpacing)
@@ -1521,6 +1564,7 @@ struct SystemStatusMetricPreferenceTableView: NSViewRepresentable {
             let item = parent.items[row]
             view.configure(
                 item: item,
+                showsSeparator: row < parent.items.count - 1,
                 onVisibilityChange: { [weak self] isVisible in
                     self?.parent.onVisibilityChange(item.kind, isVisible)
                 }
@@ -1652,6 +1696,8 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
     private let iconImageView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let descriptionLabel = NSTextField(labelWithString: "")
+    private let textStackView = NSStackView()
+    private let separatorView = NSBox()
     private let visibilityButton = NSButton(title: "", target: nil, action: nil)
     private let handleImageView = NSImageView()
     private var visibilityHandler: ((Bool) -> Void)?
@@ -1675,8 +1721,10 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
 
     func configure(
         item: SystemStatusMetricPreferenceTableItem,
+        showsSeparator: Bool = false,
         onVisibilityChange: @escaping (Bool) -> Void
     ) {
+        separatorView.isHidden = !showsSeparator
         visibilityHandler = onVisibilityChange
         titleLabel.stringValue = item.title
         descriptionLabel.stringValue = item.description
@@ -1712,10 +1760,12 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
         addSubview(containerView)
         containerView.addSubview(iconBackgroundView)
         iconBackgroundView.addSubview(iconImageView)
-        containerView.addSubview(titleLabel)
-        containerView.addSubview(descriptionLabel)
+        containerView.addSubview(textStackView)
+        textStackView.addArrangedSubview(titleLabel)
+        textStackView.addArrangedSubview(descriptionLabel)
         containerView.addSubview(visibilityButton)
         containerView.addSubview(handleImageView)
+        containerView.addSubview(separatorView)
     }
 
     private func configureStyles() {
@@ -1723,11 +1773,24 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
         containerView.layer?.backgroundColor = NSColor.clear.cgColor
         iconBackgroundView.layer?.cornerRadius = 10
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        textStackView.orientation = .vertical
+        textStackView.alignment = .leading
+        textStackView.spacing = PluginSettingsTheme.Spacing.rowTitleDescription
+        separatorView.boxType = .custom
+        separatorView.borderType = .noBorder
+        separatorView.titlePosition = .noTitle
+        separatorView.contentViewMargins = .zero
+        let separatorColor = NSColor.separatorColor
+        separatorView.fillColor = separatorColor.withAlphaComponent(
+            separatorColor.alphaComponent * CGFloat(SystemStatusSettingsAppearance.separatorOpacity)
+        )
+        separatorView.setAccessibilityElement(false)
+
+        titleLabel.font = .systemFont(ofSize: NSFont.preferredFont(forTextStyle: .body).pointSize, weight: .medium)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
-        descriptionLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        descriptionLabel.font = .preferredFont(forTextStyle: .subheadline)
         descriptionLabel.textColor = .secondaryLabelColor
         descriptionLabel.lineBreakMode = .byTruncatingTail
         descriptionLabel.maximumNumberOfLines = 1
@@ -1752,6 +1815,8 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
             iconImageView,
             titleLabel,
             descriptionLabel,
+            textStackView,
+            separatorView,
             visibilityButton,
             handleImageView
         ].forEach {
@@ -1764,7 +1829,7 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
             containerView.topAnchor.constraint(equalTo: topAnchor),
             containerView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            iconBackgroundView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+            iconBackgroundView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: PluginSettingsTheme.Spacing.rowHorizontal),
             iconBackgroundView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
             iconBackgroundView.widthAnchor.constraint(equalToConstant: 30),
             iconBackgroundView.heightAnchor.constraint(equalToConstant: 30),
@@ -1772,23 +1837,24 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
             iconImageView.centerXAnchor.constraint(equalTo: iconBackgroundView.centerXAnchor),
             iconImageView.centerYAnchor.constraint(equalTo: iconBackgroundView.centerYAnchor),
 
-            titleLabel.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: 12),
-            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 10),
-
-            descriptionLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: visibilityButton.leadingAnchor, constant: -12),
-            descriptionLabel.trailingAnchor.constraint(lessThanOrEqualTo: visibilityButton.leadingAnchor, constant: -12),
+            textStackView.leadingAnchor.constraint(equalTo: iconBackgroundView.trailingAnchor, constant: PluginSettingsTheme.Spacing.rowContentControl),
+            textStackView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            textStackView.trailingAnchor.constraint(lessThanOrEqualTo: visibilityButton.leadingAnchor, constant: -PluginSettingsTheme.Spacing.rowContentControl),
 
             visibilityButton.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            visibilityButton.trailingAnchor.constraint(equalTo: handleImageView.leadingAnchor, constant: -12),
-            visibilityButton.widthAnchor.constraint(equalToConstant: 22),
-            visibilityButton.heightAnchor.constraint(equalToConstant: 22),
+            visibilityButton.trailingAnchor.constraint(equalTo: handleImageView.leadingAnchor, constant: -PluginSettingsTheme.Spacing.controlCluster),
+            visibilityButton.widthAnchor.constraint(equalToConstant: 24),
+            visibilityButton.heightAnchor.constraint(equalToConstant: 24),
 
             handleImageView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            handleImageView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-            handleImageView.widthAnchor.constraint(equalToConstant: 16),
-            handleImageView.heightAnchor.constraint(equalToConstant: 16)
+            handleImageView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -PluginSettingsTheme.Spacing.rowHorizontal),
+            handleImageView.widthAnchor.constraint(equalToConstant: 18),
+            handleImageView.heightAnchor.constraint(equalToConstant: 24),
+
+            separatorView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: PluginSettingsTheme.Spacing.rowHorizontal),
+            separatorView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -PluginSettingsTheme.Spacing.rowHorizontal),
+            separatorView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            separatorView.heightAnchor.constraint(equalToConstant: PluginSettingsTheme.Stroke.standard)
         ].compactMap { $0 })
     }
 

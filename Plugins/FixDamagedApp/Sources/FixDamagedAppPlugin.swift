@@ -26,9 +26,26 @@ private struct FixDamagedAppPluginProvider: PluginProvider {
 // MARK: - Plugin
 
 @MainActor
-final class FixDamagedAppPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnchorProviding,
-    PluginActionProviding
-{
+final class FixDamagedAppPlugin: MacToolsPlugin, DropZoneAnchorProviding, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ActionID {
         static let chooseApp = "choose-app"
     }
@@ -133,7 +150,7 @@ final class FixDamagedAppPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnc
                 defaultValue: "移除隔离属性，解决「已损坏」或「不受信任」提示"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.choose", defaultValue: "选择") }
@@ -193,17 +210,16 @@ final class FixDamagedAppPlugin: MacToolsPlugin, PluginPrimaryPanel, DropZoneAnc
         onStateChange?()
     }
 
-    // MARK: PluginPrimaryPanel
+    // MARK: - Panel row
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: primarySubtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: fixState != .running,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: primaryError
         )

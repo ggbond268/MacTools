@@ -125,7 +125,7 @@ final class SavedScriptsPluginTests: XCTestCase {
         )).get()
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
 
         XCTAssertEqual(controls.first?.id, script.actionID)
         XCTAssertEqual(controls.first?.actionTitle, "Panel Script")
@@ -148,11 +148,11 @@ final class SavedScriptsPluginTests: XCTestCase {
             source: "sleep 1"
         )).get()
 
-        XCTAssertNil(plugin.primaryPanelIndicator)
+        XCTAssertNil(plugin.rowIndicator)
         _ = plugin.executionStore.begin(script)
 
-        XCTAssertEqual(plugin.primaryPanelIndicator?.systemImage, "progress.indicator")
-        XCTAssertFalse(plugin.primaryPanelIndicator?.text.isEmpty ?? true)
+        XCTAssertEqual(plugin.rowIndicator?.systemImage, "progress.indicator")
+        XCTAssertFalse(plugin.rowIndicator?.text.isEmpty ?? true)
 
         let runID = try XCTUnwrap(plugin.executionStore.record(for: script.id)?.id)
         plugin.executionStore.finish(
@@ -161,13 +161,13 @@ final class SavedScriptsPluginTests: XCTestCase {
             status: .succeeded,
             now: now
         )
-        XCTAssertEqual(plugin.primaryPanelIndicator?.systemImage, "checkmark.circle.fill")
+        XCTAssertEqual(plugin.rowIndicator?.systemImage, "checkmark.circle.fill")
 
         now.addTimeInterval(7.9)
-        XCTAssertEqual(plugin.primaryPanelIndicator?.systemImage, "checkmark.circle.fill")
+        XCTAssertEqual(plugin.rowIndicator?.systemImage, "checkmark.circle.fill")
 
         now.addTimeInterval(0.1)
-        XCTAssertNil(plugin.primaryPanelIndicator)
+        XCTAssertNil(plugin.rowIndicator)
     }
 
     func testPortablePreferencesFollowPerScriptOptIn() throws {

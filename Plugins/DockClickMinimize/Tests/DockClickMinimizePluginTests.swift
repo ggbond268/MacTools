@@ -13,7 +13,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
 
         plugin.activate(context: context)
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(monitor.startCallCount, 1)
     }
 
@@ -24,9 +24,9 @@ final class DockClickMinimizePluginTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testDisablingStopsMonitoring() {
@@ -38,7 +38,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(false))
 
         XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testSettingsPageExposesPersistedEnableSwitch() {
@@ -67,10 +67,10 @@ final class DockClickMinimizePluginTests: XCTestCase {
         )
 
         XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
 
         let reloadedPlugin = makePlugin(context: context)
-        XCTAssertFalse(reloadedPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(reloadedPlugin.rowState.isOn)
     }
 
     func testDeactivationAlwaysStopsMonitoring() {
@@ -93,7 +93,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 0)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
         XCTAssertFalse(plugin.permissionState(for: "input-monitoring").isGranted)
     }
@@ -112,7 +112,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.refresh()
 
         XCTAssertTrue(requestedPermissionIDs.isEmpty)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testExplicitEnableRequestsMissingPermissionGuidance() {
@@ -128,7 +128,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(true))
 
         XCTAssertEqual(requestedPermissionIDs, ["accessibility"])
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testMonitorStartupFailureIsExposed() {
@@ -139,7 +139,7 @@ final class DockClickMinimizePluginTests: XCTestCase {
         plugin.activate(context: context)
 
         XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testResolverAcceptsOnlyApplicationDockItemWithBundleURL() {

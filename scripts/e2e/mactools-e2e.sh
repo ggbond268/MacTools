@@ -1772,6 +1772,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/DisplayResolutionPluginTests \
         -only-testing:MacToolsTests/DisplaySleepPluginTests \
         -only-testing:MacToolsTests/DisplayTrueColorPluginTests \
+        -only-testing:MacToolsTests/DisplayVolumePluginTests \
         -only-testing:MacToolsTests/DockLockPluginTests \
         -only-testing:MacToolsTests/EjectDiskPluginTests \
         -only-testing:MacToolsTests/EmptyTrashPluginTests \
@@ -1789,6 +1790,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/MiddleClickPluginTests \
         -only-testing:MacToolsTests/NightShiftPluginTests \
         -only-testing:MacToolsTests/PhysicalCleanModePluginTests \
+        -only-testing:MacToolsTests/SiriPluginTests \
         -only-testing:MacToolsTests/QuitAppsPluginTests \
         -only-testing:MacToolsTests/SavedScriptsPluginTests \
         -only-testing:MacToolsTests/ScreenshotPluginTests \

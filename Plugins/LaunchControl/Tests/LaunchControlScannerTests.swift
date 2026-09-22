@@ -125,7 +125,7 @@ final class LaunchControlPluginTests: XCTestCase {
             suiteName: suiteName
         )
 
-        XCTAssertTrue(host.panelItems.contains { $0.id == "launch-control" })
+        XCTAssertTrue(host.panelItems.contains { $0.pluginID == "launch-control" })
         XCTAssertTrue(host.pluginSettingsItems.contains { $0.pluginID == "launch-control" })
     }
 }

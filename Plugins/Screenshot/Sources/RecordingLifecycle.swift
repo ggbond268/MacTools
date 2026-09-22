@@ -1,73 +1,91 @@
 import Foundation
 
-/// Stopping capture is distinct from receiving confirmation that its output file is complete.
+/// File completion and stream termination are independent acknowledgements, in either order.
 @MainActor
 final class RecordingLifecycle {
-    var onFinish: ((Result<URL, Error>) -> Void)? {
-        didSet { deliverResult() }
-    }
+    enum Phase { case starting, recording, stopping, finalizing, waiting, finished }
+    private(set) var phase = Phase.starting { didSet { onPhaseChange?(phase) } }
     private(set) var result: Result<URL, Error>?
-    private(set) var isStopping = false
+    var onPhaseChange: ((Phase) -> Void)?
+    var onFinish: ((Result<URL, Error>) -> Void)?
 
-    private var stopCapture: (() async throws -> Void)?
-    private let onEnd: () -> Void
-    private let finishTimeout: Duration
-    private var stopTask: Task<Void, Never>?
-    private var timeoutTask: Task<Void, Never>?
-    private var delivered = false
+    private let stopCapture: () -> Void
+    private let finishWarningDelay: Duration
+    private var captureEnded = false
+    private var fileResult: Result<URL, Error>?
+    private var captureFailure: Error?
+    private var cancelled = false
+    private var warningTask: Task<Void, Never>?
 
-    init(finishTimeout: Duration = .seconds(3),
-         stopCapture: @escaping () async throws -> Void,
-         onEnd: @escaping () -> Void) {
-        self.finishTimeout = finishTimeout
+    init(finishWarningDelay: Duration = .seconds(30), stopCapture: @escaping () -> Void) {
+        self.finishWarningDelay = finishWarningDelay
         self.stopCapture = stopCapture
-        self.onEnd = onEnd
+    }
+
+    func recordingStarted() {
+        guard phase == .starting else { return }
+        phase = .recording
     }
 
     func stop() {
-        guard result == nil, !isStopping, let stopCapture else { return }
-        isStopping = true
-        stopTask = Task { [weak self, stopCapture] in
-            do { try await stopCapture() }
-            catch { self?.finish(.failure(error)) }
+        guard result == nil, !captureEnded, phase != .stopping else { return }
+        phase = .stopping
+        stopCapture()
+    }
+
+    func waitingForCapture() {
+        guard result == nil, !captureEnded else { return }
+        phase = .waiting
+    }
+
+    func fileCompleted(_ result: Result<URL, Error>) {
+        guard self.result == nil, fileResult == nil else { return }
+        fileResult = result
+        if !captureEnded { stop() }
+        settle()
+    }
+
+    func captureStopped(_ result: Result<Void, Error>) {
+        guard self.result == nil, !captureEnded else { return }
+        captureEnded = true
+        if case .failure(let error) = result { captureFailure = error }
+        if fileResult != nil { settle(); return }
+        phase = .finalizing
+        warningTask = Task { [weak self, finishWarningDelay] in
+            do { try await Task.sleep(for: finishWarningDelay) } catch { return }
+            guard let self, self.result == nil else { return }
+            // Slow finalization is not evidence that the file is corrupt or that the writer stopped.
+            phase = .waiting
         }
-        // Bound both a hanging stop request and a missing recording-output callback.
-        timeoutTask = Task { [weak self, finishTimeout] in
-            do {
-                try await Task.sleep(for: finishTimeout)
-                try Task.checkCancellation()
-                self?.finish(.failure(RecordingError.finishTimedOut))
-            } catch { /* Normal completion cancels the timeout. */ }
-        }
     }
 
-    func finish(_ result: Result<URL, Error>) {
-        guard self.result == nil else { return }
-        self.result = result
-        stopTask?.cancel()
-        timeoutTask?.cancel()
-        stopTask = nil
-        timeoutTask = nil
-        stopCapture = nil
-        onEnd()
-        deliverResult()
+    func cancel() {
+        guard result == nil else { return }
+        cancelled = true
+        stop()
+        settle()
     }
 
-    private func deliverResult() {
-        guard !delivered, let result, let onFinish else { return }
-        delivered = true
-        // Preserve early delegate events until the caller installs its completion handler.
-        onFinish(result)
-        self.onFinish = nil
+    func failBeforeCapture(_ error: Error) {
+        guard result == nil else { return }
+        captureEnded = true
+        fileResult = .failure(error)
+        settle()
     }
 
-    deinit {
-        stopTask?.cancel()
-        timeoutTask?.cancel()
+    private func settle() {
+        guard result == nil, captureEnded, let fileResult else { return }
+        let finalResult: Result<URL, Error>
+        if cancelled { finalResult = .failure(CancellationError()) }
+        else if let captureFailure { finalResult = .failure(captureFailure) }
+        else { finalResult = fileResult }
+        result = finalResult
+        warningTask?.cancel()
+        warningTask = nil
+        phase = .finished
+        let completion = onFinish
+        onFinish = nil
+        onPhaseChange = nil
+        completion?(finalResult)
     }
-}
-
-enum RecordingError: Error {
-    case finishTimedOut
-    case endedDuringStartup
 }

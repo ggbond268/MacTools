@@ -16,7 +16,7 @@ final class DeviceBatteryPluginTests: XCTestCase {
 
         XCTAssertEqual(plugin.metadata.id, "device-battery")
         XCTAssertEqual(plugin.metadata.title, "设备电量")
-        XCTAssertEqual(plugin.descriptor.span, PluginComponentSpan(width: 4, height: 15)!)
+        XCTAssertEqual(plugin.descriptor.span, PluginPanelWidgetSpan(width: 4, height: 15)!)
     }
 
     func testLayoutSpanGrowsToFitEveryVisibleDevice() {
@@ -72,20 +72,20 @@ final class DeviceBatteryPluginTests: XCTestCase {
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 5 * 60)
         XCTAssertEqual(viewModel.bluetoothRefreshInterval, 5 * 60)
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 5 * 60)
 
-        plugin.panelSurfaceDidBecomeVisible(.component)
+        plugin.panelItemDidBecomeVisible("widget")
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 90)
         XCTAssertEqual(viewModel.bluetoothRefreshInterval, 60)
 
         viewModel.stop()
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 5 * 60)
 
-        plugin.panelSurfaceDidBecomeVisible(.component)
+        plugin.panelItemDidBecomeVisible("widget")
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 90)
 
-        plugin.panelSurfaceDidBecomeHidden(.component)
+        plugin.panelItemDidBecomeHidden("widget")
         XCTAssertEqual(viewModel.appleMobileRefreshInterval, 5 * 60)
     }
 

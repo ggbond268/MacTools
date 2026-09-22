@@ -48,7 +48,26 @@ private struct DockClickMinimizePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, AccessibilityPermissionRefreshing {
+final class DockClickMinimizePlugin: MacToolsPlugin, AccessibilityPermissionRefreshing {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("widget.title", defaultValue: "点击隐藏"),
+                systemImage: metadata.iconName,
+                control: .toggle,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum PermissionID {
         static let accessibility = "accessibility"
         static let inputMonitoring = "input-monitoring"
@@ -66,7 +85,7 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
     private static let postDockClickDelay: Duration = .milliseconds(120)
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -175,13 +194,12 @@ final class DockClickMinimizePlugin: MacToolsPlugin, PluginPrimaryPanel, Accessi
         onStateChange?()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: isEnabled,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

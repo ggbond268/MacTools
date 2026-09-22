@@ -6,6 +6,28 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryWindowStyleTests: XCTestCase {
+    func testHistoryPanelKeepsResizingAndTextEditingWithoutApplicationActivation() throws {
+        let panel = NSPanel(contentRect: NSRect(x: 100, y: 100, width: 900, height: 620),
+            styleMask: ClipboardHistoryPanelController.panelStyleMask, backing: .buffered, defer: false)
+        PluginPanelPresentation.configure(panel)
+        defer { panel.close() }
+        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
+        XCTAssertTrue(panel.styleMask.contains(.titled))
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertFalse(panel.hidesOnDeactivate)
+        let field = NSTextField(frame: NSRect(x: 20, y: 20, width: 240, height: 24))
+        panel.contentView?.addSubview(field)
+        let originalPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        PluginPanelPresentation.present(panel)
+        XCTAssertTrue(panel.makeFirstResponder(field))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.insertText("Clipboard search", replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertEqual(field.stringValue, "Clipboard search")
+        XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, originalPID)
+        XCTAssertTrue(ClipboardSnippetKeywordExpander.isHostPanelKey)
+    }
+
     func testHistoryWindowMovesOnlyThroughItsExplicitDragHandle() {
         let panel = NSPanel()
         panel.isMovableByWindowBackground = true

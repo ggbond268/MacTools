@@ -355,7 +355,7 @@ final class MouseScrollEventProcessor: @unchecked Sendable {
     }
 }
 
-private extension MouseScrollEventSnapshot {
+extension MouseScrollEventSnapshot {
     init(event: CGEvent) {
         self.init(
             isContinuous: event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0,
@@ -374,7 +374,7 @@ private extension MouseScrollEventSnapshot {
     }
 }
 
-private extension MouseScrollDeltas {
+extension MouseScrollDeltas {
     init(event: CGEvent) {
         self.init(
             deltaAxis1: event.getIntegerValueField(.scrollWheelEventDeltaAxis1),
@@ -387,7 +387,7 @@ private extension MouseScrollDeltas {
     }
 }
 
-private extension CGEvent {
+extension CGEvent {
     func applyScrollDeltas(
         _ deltas: MouseScrollDeltas,
         applyVertical: Bool,

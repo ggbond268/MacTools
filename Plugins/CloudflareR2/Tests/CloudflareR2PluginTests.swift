@@ -11,15 +11,15 @@ final class CloudflareR2PluginTests: XCTestCase {
         XCTAssertEqual(h.plugin.metadata.id, "cloudflare-r2")
         XCTAssertEqual(h.plugin.metadata.order, 75)
         XCTAssertEqual(h.plugin.metadata.title, "Cloudflare R2 上传")
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.controlStyle, .button)
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.buttonTitle, "选择")
+        XCTAssertEqual(h.plugin.rowDescriptor.controlStyle, .button)
+        XCTAssertEqual(h.plugin.rowDescriptor.buttonTitle, "选择")
         XCTAssertEqual(
             h.plugin.shortcutDefinitions.first?.actionID, CloudflareR2Plugin.ShortcutID.upload)
         XCTAssertEqual(
             h.plugin.actionDefinitions.first?.key.actionID, CloudflareR2Plugin.ActionID.upload)
         XCTAssertNotNil(h.plugin.settingsPage)
-        XCTAssertTrue(h.plugin.primaryPanelState.isEnabled)
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传文件到 Cloudflare R2")
+        XCTAssertTrue(h.plugin.rowState.isEnabled)
+        XCTAssertEqual(h.plugin.rowState.subtitle, "上传文件到 Cloudflare R2")
     }
 
     func testExecuteAndShortcutOpenPickerButUnknownActionDoesNot() {
@@ -72,7 +72,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         await waitUntil { h.plugin.status == .succeeded(result) }
         XCTAssertEqual(h.clipboard.values, ["https://files.example.com/file.txt"])
         XCTAssertEqual(h.notifier.notifications, [.init(fileName: "file.txt", result: result)])
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传完成：file.txt")
+        XCTAssertEqual(h.plugin.rowState.subtitle, "上传完成：file.txt")
     }
 
     func testProgressUpdatesAreClampedAndDeduplicatedByPercentage() async {
@@ -89,7 +89,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         h.plugin.onStateChange = { stateChangeCount += 1 }
         h.plugin.handleAction(.invokeAction(controlID: "execute"))
         await waitUntil {
-            h.plugin.primaryPanelState.subtitle == "正在上传 file.txt… 42%"
+            h.plugin.rowState.subtitle == "正在上传 file.txt… 42%"
         }
         XCTAssertEqual(stateChangeCount, 3)
         XCTAssertEqual(h.progressPresenter.requestedFileNames, ["file.txt"])
@@ -236,7 +236,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         await waitUntil { h.plugin.status == .succeeded(result) }
         XCTAssertTrue(h.clipboard.values.isEmpty)
         XCTAssertEqual(h.notifier.notifications, [.init(fileName: "file.txt", result: result)])
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传完成：private/file.txt")
+        XCTAssertEqual(h.plugin.rowState.subtitle, "上传完成：private/file.txt")
     }
 
     func testDismissingPublicSuccessWithoutCopyLeavesClipboardUntouched() async {
@@ -369,7 +369,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         )
         h.plugin.handleAction(.invokeAction(controlID: "execute"))
         await waitUntil { h.plugin.status == .idle }
-        XCTAssertEqual(h.plugin.primaryPanelState.subtitle, "上传文件到 Cloudflare R2")
+        XCTAssertEqual(h.plugin.rowState.subtitle, "上传文件到 Cloudflare R2")
     }
 
     func testStatusDerivedValues() {
@@ -391,7 +391,7 @@ final class CloudflareR2PluginTests: XCTestCase {
         PluginRuntimeLocalization.source.setPreference("en")
         let h = makeHarness(configured: false, resourceBundle: resource.bundle)
         XCTAssertEqual(h.plugin.metadata.title, "Cloudflare R2 Upload")
-        XCTAssertEqual(h.plugin.primaryPanelDescriptor.buttonTitle, "Choose")
+        XCTAssertEqual(h.plugin.rowDescriptor.buttonTitle, "Choose")
         h.plugin.chooseAndUpload()
         XCTAssertEqual(h.plugin.status, .failed("Complete the R2 configuration in Settings first."))
         XCTAssertEqual(

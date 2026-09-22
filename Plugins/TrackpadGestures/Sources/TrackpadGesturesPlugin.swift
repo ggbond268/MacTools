@@ -36,21 +36,33 @@ private struct TrackpadGestureReadinessError: LocalizedError {
 }
 
 @MainActor
-final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
-    AccessibilityPermissionRefreshing, PluginSettingsPresenting,
-    PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding,
-    PluginFeatureExtractionReadinessProviding, TrackpadActionHostContextConsuming,
-    PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting,
-    PluginPersistentPreferencesChangeSignaling,
-    PluginPortablePreferencesActionReferencesProviding, PluginInputGestureClaimProviding,
-    TrackpadGestureEventProviding {
+final class TrackpadGesturesPlugin: MacToolsPlugin, AccessibilityPermissionRefreshing, PluginSettingsPresenting, PluginSettingsSearchFocusing, PluginSettingsSearchFocusMetadataProviding, PluginFeatureExtractionReadinessProviding, TrackpadActionHostContextConsuming, PluginPortablePreferencesProviding, PluginPortablePreferencesRestorationReporting, PluginPersistentPreferencesChangeSignaling, PluginPortablePreferencesActionReferencesProviding, PluginInputGestureClaimProviding, TrackpadGestureEventProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum PermissionID {
         static let accessibility = "accessibility"
         static let inputMonitoring = "input-monitoring"
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
     private let settingsSearchFocusController = TrackpadSettingsSearchFocusController()
 
     var onStateChange: (() -> Void)?
@@ -152,7 +164,7 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         self.openURL = openURL
         self.isAccessibilityGranted = accessibilityTrusted()
         self.isInputMonitoringGranted = inputMonitoringStatus() == .granted
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
             buttonTitleProvider: {
@@ -233,13 +245,12 @@ final class TrackpadGesturesPlugin: MacToolsPlugin, PluginPrimaryPanel,
         onStateChange?()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )

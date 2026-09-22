@@ -83,8 +83,8 @@ final class AppHotkeyPluginTests: XCTestCase {
         let plugin = makePlugin()
 
         XCTAssertEqual(plugin.metadata.id, "app-hotkey")
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "暂无绑定，前往设置配置")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "暂无绑定，前往设置配置")
     }
 
     func testSubtitleCountsConfiguredApplicationsAndReflectsDisabledState() {
@@ -101,12 +101,12 @@ final class AppHotkeyPluginTests: XCTestCase {
         ))
         let plugin = makePlugin(storage: storage)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "已配置 2 个应用")
+        XCTAssertEqual(plugin.rowState.subtitle, "已配置 2 个应用")
 
         plugin.handleAction(.setSwitch(false))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "快捷键已暂停")
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "快捷键已暂停")
         XCTAssertFalse(storage.bool(forKey: "isEnabled"))
     }
 

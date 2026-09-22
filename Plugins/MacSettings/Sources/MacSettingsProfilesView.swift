@@ -544,7 +544,15 @@ private struct MacSettingsProfileEditorView: View {
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 32)
-                        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                        .background(
+                            PluginSettingsTheme.Palette.fieldBackground,
+                            in: RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+                                .strokeBorder(PluginSettingsTheme.Palette.separator, lineWidth: PluginSettingsTheme.Stroke.hairline)
+                                .allowsHitTesting(false)
+                        }
 
                         Text(MacSettingsStrings.format("%@ selected", "\(selectedCount)"))
                             .font(PluginSettingsTheme.Typography.statusBadge)

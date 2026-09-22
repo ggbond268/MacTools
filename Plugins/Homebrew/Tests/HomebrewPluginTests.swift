@@ -370,10 +370,10 @@ final class HomebrewPluginTests: XCTestCase {
         let localization = PluginLocalization(bundle: .main)
         let plugin = HomebrewPlugin(controller: controller, localization: localization)
         
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .button)
-        XCTAssertEqual(plugin.primaryPanelDescriptor.menuActionBehavior, .dismissBeforeHandling)
-        XCTAssertEqual(plugin.primaryPanelDescriptor.buttonTitle, "管理")
-        XCTAssertNil(plugin.primaryPanelState.detail)
+        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .button)
+        XCTAssertEqual(plugin.rowDescriptor.menuActionBehavior, .dismissBeforeHandling)
+        XCTAssertEqual(plugin.rowDescriptor.buttonTitle, "管理")
+        XCTAssertNil(plugin.rowState.detail)
     }
 
     func testManageButtonRequestsConfigurationPresentation() {
@@ -552,14 +552,14 @@ final class HomebrewPluginTests: XCTestCase {
         
         // Case 1: Not installed
         controller.isBrewAvailable = false
-        var state = plugin.primaryPanelState
+        var state = plugin.rowState
         XCTAssertNotNil(state.errorMessage)
         
         // Case 2: Available and Busy
         controller.isBrewAvailable = true
         controller.isBusy = true
         controller.currentOperationName = "Scanning..."
-        state = plugin.primaryPanelState
+        state = plugin.rowState
         XCTAssertNil(state.errorMessage)
         XCTAssertTrue(state.isOn)
         XCTAssertEqual(state.subtitle, "Scanning...")

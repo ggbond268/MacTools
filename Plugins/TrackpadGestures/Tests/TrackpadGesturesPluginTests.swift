@@ -1362,7 +1362,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
     func testMetadataAndEmptyState() {
         let plugin = makePlugin().plugin
         XCTAssertEqual(plugin.metadata.id, "trackpad-gestures")
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "尚未配置手势")
+        XCTAssertEqual(plugin.rowState.subtitle, "尚未配置手势")
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility", "input-monitoring"])
     }
 
@@ -1704,7 +1704,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
 
         XCTAssertFalse(fixture.session.isActive)
         XCTAssertTrue(fixture.executor.actions.isEmpty)
-        XCTAssertNotNil(fixture.plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(fixture.plugin.rowState.errorMessage)
     }
 
     func testAutomaticListenerRecoveryClearsUnavailableError() {
@@ -1715,11 +1715,11 @@ final class TrackpadGesturesPluginTests: XCTestCase {
             action: .middleClick
         )))
         fixture.plugin.configurationDidChange()
-        XCTAssertNotNil(fixture.plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(fixture.plugin.rowState.errorMessage)
 
         fixture.session.reportAvailability(true)
 
-        XCTAssertNil(fixture.plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(fixture.plugin.rowState.errorMessage)
     }
 
     func testFeatureExtractionReadinessRejectsListenerActivationFailure() {
@@ -1735,7 +1735,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         XCTAssertThrowsError(try fixture.plugin.validateFeatureExtractionReadiness()) { error in
             XCTAssertEqual(
                 error.localizedDescription,
-                fixture.plugin.primaryPanelState.errorMessage
+                fixture.plugin.rowState.errorMessage
             )
         }
     }
@@ -1894,7 +1894,7 @@ final class TrackpadGesturesPluginTests: XCTestCase {
         accessibilityGranted.value = false
         fixture.plugin.refreshAccessibilityPermission()
         XCTAssertFalse(fixture.session.isActive)
-        XCTAssertNotNil(fixture.plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(fixture.plugin.rowState.errorMessage)
     }
 
     func testInputMonitoringDenialPreventsActivationAndRequestsGuidance() {

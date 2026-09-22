@@ -7,9 +7,13 @@ struct PanelLayoutDragSource: NSViewRepresentable {
     let id: String
     let title: String
     let icon: String
+    let showsControls: Bool
+    let isDraggable: Bool
+    let rightToLeft: Bool
+    let hover: PanelLayoutHoverState
+    let nativeSource: PanelLayoutNativeDragSource
     let begin: () -> String?
     let end: (String) -> Void
-    @Environment(\.layoutDirection) private var layoutDirection
 
     func makeNSView(context: Context) -> PanelLayoutDragSourceView {
         let view = PanelLayoutDragSourceView()
@@ -21,45 +25,106 @@ struct PanelLayoutDragSource: NSViewRepresentable {
         view.identifier = NSUserInterfaceItemIdentifier("panel.layout.drag.\(id)")
         view.title = title
         view.icon = icon
-        view.menuOnLeft = layoutDirection == .rightToLeft
+        view.showsControls = showsControls
+        view.isDraggable = isDraggable
+        view.rightToLeft = rightToLeft
+        view.hover = hover
+        view.nativeSource = nativeSource
+        hover.register(view, id: id)
         view.onBegin = begin
         view.onEnd = end
+    }
+
+    static func dismantleNSView(_ view: PanelLayoutDragSourceView, coordinator: ()) {
+        view.hover?.unregister(view)
     }
 }
 
 @MainActor
-final class PanelLayoutDragSourceView: NSView, NSDraggingSource {
+final class PanelLayoutDragSourceView: NSView {
     var title = ""
     var icon = ""
-    var menuOnLeft = false
+    var showsControls = false {
+        didSet {
+            if showsControls != oldValue { updateTrackingAreas() }
+        }
+    }
+    var isDraggable = true {
+        didSet {
+            if isDraggable != oldValue { updateTrackingAreas() }
+        }
+    }
+    var rightToLeft = false {
+        didSet { if rightToLeft != oldValue { updateTrackingAreas() } }
+    }
+    private(set) var controlFrames: [CGRect] = []
+    weak var hover: PanelLayoutHoverState?
     var onBegin: (() -> String?)?
     var onEnd: ((String) -> Void)?
+    weak var nativeSource: PanelLayoutNativeDragSource?
     private var mouseDownPoint: CGPoint?
-    private var completion: (() -> Void)?
+    private var cursorTrackingAreas: [NSTrackingArea] = []
+    private struct TrackingGeometry: Equatable {
+        let bounds: CGRect
+        let visibleBounds: CGRect
+        let showsControls: Bool
+        let rightToLeft: Bool
+    }
+    private var trackingGeometry: TrackingGeometry?
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    /// The menu has a 22-point label and six points of surrounding padding.
+    /// Match the adaptive, centered toolbar; its remaining card area stays draggable.
     var menuFrame: CGRect {
-        CGRect(x: menuOnLeft ? 0 : max(0, bounds.width - 34),
-               y: max(0, bounds.height - 40), width: min(34, bounds.width),
-               height: min(40, bounds.height))
+        PanelLayoutItemControlsLayout.frame(in: bounds)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        guard bounds.contains(local), !menuFrame.contains(local) else { return nil }
+        guard bounds.contains(local), !(showsControls && controlFrames.contains { $0.contains(local) }) else { return nil }
         return self
     }
 
-    override func resetCursorRects() {
-        // Keep the menu's normal pointer while making the card affordance explicit.
-        let body = CGRect(x: 0, y: 0, width: bounds.width, height: menuFrame.minY)
-        let footer = CGRect(x: menuOnLeft ? menuFrame.maxX : 0, y: menuFrame.minY,
-                            width: max(0, bounds.width - menuFrame.width), height: menuFrame.height)
-        addCursorRect(body, cursor: .openHand)
-        addCursorRect(footer, cursor: .openHand)
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        let visibleBounds = bounds.intersection(visibleRect)
+        let next = TrackingGeometry(bounds: bounds, visibleBounds: visibleBounds,
+                                    showsControls: showsControls, rightToLeft: rightToLeft)
+        guard next != trackingGeometry else { return }
+        trackingGeometry = next
+        controlFrames = PanelLayoutItemControlsLayout(size: bounds.size)
+            .buttonFrames(in: bounds, rightToLeft: rightToLeft)
+        cursorTrackingAreas.forEach(removeTrackingArea)
+        cursorTrackingAreas.removeAll(keepingCapacity: true)
+        // Track actual controls, not their bounding box: toolbar gaps remain draggable.
+        let regions = showsControls
+            ? [visibleBounds] + controlFrames.map { $0.intersection(visibleBounds) } : [visibleBounds]
+        for rect in regions where !rect.isEmpty && !rect.isNull {
+            let area = NSTrackingArea(rect: rect, options: [.cursorUpdate, .activeInKeyWindow],
+                                      owner: self, userInfo: nil)
+            addTrackingArea(area)
+            cursorTrackingAreas.append(area)
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard bounds.intersection(visibleRect).contains(point) else {
+            super.cursorUpdate(with: event)
+            return
+        }
+        if isDraggable && !(showsControls && controlFrames.contains { $0.contains(point) }) {
+            NSCursor.openHand.set()
+        } else {
+            NSCursor.arrow.set()
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        updateTrackingAreas()
+        hover?.trackingView?.scheduleRefresh()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -67,38 +132,28 @@ final class PanelLayoutDragSourceView: NSView, NSDraggingSource {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard completion == nil, let start = mouseDownPoint,
+        guard isDraggable, let nativeSource, !nativeSource.isDragging, let start = mouseDownPoint,
               hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) >= 4,
               let token = onBegin?() else { return }
         mouseDownPoint = nil
         // Capture this gesture's callback. SwiftUI may update or remove the source
         // view after a commit, and a late source callback must not end a newer drag.
         let end = onEnd
-        completion = { end?(token) }
+        nativeSource.begin { end?(token) }
         let item = NSDraggingItem(pasteboardWriter: PanelLayoutDragTransfer.pasteboardItem(token: token))
-        let point = convert(event.locationInWindow, from: nil)
+        // AppKit also tracks the initiating view. Keep it attached when a tab
+        // switch removes the original card, independently of the source delegate.
+        let dragView = window?.contentView ?? self
+        let point = dragView.convert(event.locationInWindow, from: nil)
         let image = draggingImage()
         item.setDraggingFrame(CGRect(x: point.x - 18, y: point.y - 18,
                                      width: image.size.width, height: image.size.height), contents: image)
-        let draggingSession = beginDraggingSession(with: [item], event: event, source: self)
+        let draggingSession = dragView.beginDraggingSession(with: [item], event: event, source: nativeSource)
         draggingSession.animatesToStartingPositionsOnCancelOrFail = false
     }
 
     override func mouseUp(with event: NSEvent) {
         mouseDownPoint = nil
-    }
-
-    func draggingSession(_ session: NSDraggingSession,
-                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        context == .withinApplication ? .move : []
-    }
-
-    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
-                         operation: NSDragOperation) {
-        let end = completion
-        completion = nil
-        mouseDownPoint = nil
-        end?()
     }
 
     private func draggingImage() -> NSImage {
@@ -116,5 +171,30 @@ final class PanelLayoutDragSourceView: NSView, NSDraggingSource {
         ])
         image.unlockFocus()
         return image
+    }
+}
+
+/// The panel owns the native source, so replacing a tab's content cannot end its drag.
+@MainActor
+final class PanelLayoutNativeDragSource: NSObject, NSDraggingSource {
+    private var completion: (() -> Void)?
+    var isDragging: Bool { completion != nil }
+
+    func begin(completion: @escaping () -> Void) { self.completion = completion }
+
+    func draggingSession(_ session: NSDraggingSession,
+                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .move : []
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                         operation: NSDragOperation) {
+        finish()
+    }
+
+    func finish() {
+        let end = completion
+        completion = nil
+        end?()
     }
 }

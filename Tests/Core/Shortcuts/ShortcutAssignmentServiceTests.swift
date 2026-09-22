@@ -614,6 +614,7 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
         )
         let binding = ShortcutBinding(keyCode: 12, modifiers: [.command, .option])
         var didPersistCount = 0
+        XCTAssertFalse(store.hasMigratedLegacyAppAssignments)
 
         XCTAssertEqual(
             store.migrateLegacyAppAssignments([(reference, binding)]) {
@@ -629,8 +630,31 @@ final class ShortcutAssignmentServiceTests: XCTestCase {
             .alreadyMigrated
         )
         XCTAssertEqual(didPersistCount, 1)
+        XCTAssertTrue(store.hasMigratedLegacyAppAssignments)
         XCTAssertEqual(store.assignments().map(\.reference), [reference])
         XCTAssertEqual(store.assignments().map(\.binding), [binding])
+    }
+
+    func testPluginMigrationCompletionTracksDurableStateAndRetry() {
+        let defaults = RejectingActionShortcutDefaults()
+        let store = ActionShortcutAssignmentStore(defaults: defaults)
+        let marker = "action-shortcuts.migrated-plugin.fixture"
+        defaults.blockedSetKeys = [marker]
+        var cleanups = 0
+        XCTAssertEqual(store.migrateLegacyPluginAssignments(pluginID: "fixture", assignments: []) {
+            cleanups += 1
+        }, .rejected(rollbackSucceeded: true))
+        XCTAssertFalse(store.hasMigratedLegacyPluginAssignments(pluginID: "fixture"))
+        XCTAssertEqual(cleanups, 0)
+        defaults.blockedSetKeys = []
+        XCTAssertEqual(store.migrateLegacyPluginAssignments(pluginID: "fixture", assignments: []) {
+            cleanups += 1
+        }, .migrated)
+        XCTAssertTrue(ActionShortcutAssignmentStore(defaults: defaults)
+            .hasMigratedLegacyPluginAssignments(pluginID: "fixture"))
+        XCTAssertEqual(cleanups, 1)
+        defaults.removeObject(forKey: marker)
+        XCTAssertFalse(store.hasMigratedLegacyPluginAssignments(pluginID: "fixture"))
     }
 
     func testStoredActionReferenceAliasesConvergeWithoutDroppingBindings() throws {

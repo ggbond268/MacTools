@@ -20,9 +20,34 @@ private struct EmptyTrashPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
-    PluginActionProviding, PluginActionPermissionProviding
-{
+final class EmptyTrashPlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            )
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("quick-control") }
+                    else { self?.panelItemDidBecomeHidden("quick-control") }
+                },
+        ]
+    }
+
     private enum PermissionID {
         static let automation = "automation"
     }
@@ -32,7 +57,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -46,7 +71,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     private var itemCount: Int = 0
     private var isEmptying = false
     private var lastErrorMessage: String?
-    private var isPrimaryPanelVisible = false
+    private var visiblePanelItems: Set<String> = []
     private var countRefreshTask: Task<Void, Never>?
 
     init(
@@ -76,20 +101,19 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
                 defaultValue: "清空废纸篓中的所有项目"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
             buttonTitleProvider: { localization.string("panel.button.empty", defaultValue: "清空") }
         )
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: subtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: !isEmptying && itemCount > 0,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )
@@ -152,24 +176,22 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     func deactivate(reason _: PluginDeactivationReason) {
         countRefreshTask?.cancel()
         countRefreshTask = nil
-        isPrimaryPanelVisible = false
+        visiblePanelItems.removeAll()
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .primary else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "control" || surface == "quick-control" else {
             return
         }
-
-        isPrimaryPanelVisible = true
-        scheduleCountRefresh()
+        let wasHidden = visiblePanelItems.isEmpty
+        visiblePanelItems.insert(surface)
+        if wasHidden { scheduleCountRefresh() }
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .primary else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard visiblePanelItems.remove(surface) != nil, visiblePanelItems.isEmpty else {
             return
         }
-
-        isPrimaryPanelVisible = false
         countRefreshTask?.cancel()
         countRefreshTask = nil
     }
@@ -250,7 +272,7 @@ final class EmptyTrashPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
     }
 
     private func scheduleCountRefreshIfVisible() {
-        guard isPrimaryPanelVisible else {
+        guard !visiblePanelItems.isEmpty else {
             return
         }
 

@@ -1,9 +1,34 @@
+import Combine
 import MacToolsPluginKit
 import XCTest
 @testable import MacTools
 
 @MainActor
 final class ActionRegistryTests: XCTestCase {
+    func testUnchangedCatalogKeepsPublicationsQuietAndRefreshesProviderCallbacks() {
+        let registry = ActionRegistry(), provider = ActionRegistryTestProvider()
+        let definition = makeActionDefinition()
+        let reference = ActionReference(key: definition.key)
+        func registration(_ availability: ActionAvailability, title: String = "Toggle") -> ActionProviderRegistration {
+            ActionProviderRegistration(providerID: definition.key.providerID, identity: ObjectIdentifier(provider),
+                definitions: [definition], catalogEntries: [.init(reference: reference, title: title)],
+                availability: { _ in availability },
+                begin: { _ in .success(ActionExecutionHandle { .succeeded() }) })
+        }
+        registry.synchronize([registration(.available)])
+        var catalogPublications = 0, issuePublications = 0
+        let catalog = registry.$catalogEntries.dropFirst().sink { _ in catalogPublications += 1 }
+        let issues = registry.$issues.dropFirst().sink { _ in issuePublications += 1 }
+        registry.synchronize([registration(.unavailable("Busy"))])
+        XCTAssertEqual(catalogPublications, 0)
+        XCTAssertEqual(issuePublications, 0)
+        XCTAssertEqual(registry.availability(for: reference), .unavailable("Busy"))
+        registry.synchronize([registration(.available, title: "Renamed")])
+        XCTAssertEqual(catalogPublications, 1)
+        XCTAssertEqual(registry.availability(for: reference), .available)
+        withExtendedLifetime((catalog, issues)) {}
+    }
+
     func testCatalogPresentationStateRoundTripsAndLegacyPayloadDefaultsToNil() throws {
         let reference = ActionReference(
             key: ActionKey(providerID: "test-provider", actionID: "toggle")

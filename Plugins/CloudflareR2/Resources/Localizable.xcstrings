@@ -1,6 +1,7 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "widget.title": {"localizations":{"ar":{"stringUnit":{"state":"translated","value":"رفع R2"}},"de":{"stringUnit":{"state":"translated","value":"R2-Upload"}},"en":{"stringUnit":{"state":"translated","value":"R2 Upload"}},"es":{"stringUnit":{"state":"translated","value":"Subir a R2"}},"fr":{"stringUnit":{"state":"translated","value":"Envoi R2"}},"ja":{"stringUnit":{"state":"translated","value":"R2アップロード"}},"ko":{"stringUnit":{"state":"translated","value":"R2 업로드"}},"pt":{"stringUnit":{"state":"translated","value":"Enviar ao R2"}},"ru":{"stringUnit":{"state":"translated","value":"Загрузка в R2"}},"zh-Hans":{"stringUnit":{"state":"translated","value":"R2 上传"}},"zh-Hant":{"stringUnit":{"state":"translated","value":"R2 上傳"}}}},
     "action.upload.keyword": {
       "extractionState": "manual",
       "localizations": {

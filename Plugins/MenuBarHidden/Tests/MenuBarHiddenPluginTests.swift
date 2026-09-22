@@ -53,7 +53,7 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             XCTAssertEqual(result, .succeeded())
         }
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testActionDefersMutationUntilExecutionAndFailsClosedOnRejectedWrite() async throws {
@@ -64,7 +64,7 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             ActionInvocation(reference: enabled, source: .test, mode: .background)
         )
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         storage.enqueueWriteBehaviors([.ignore], forKey: "is-enabled")
 
         let result = await handle.result()
@@ -72,7 +72,7 @@ final class MenuBarHiddenPluginTests: XCTestCase {
         guard case .failed = result else {
             return XCTFail("Expected rejected persistence to fail the action")
         }
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertNil(storage.object(forKey: "is-enabled"))
     }
 
@@ -107,7 +107,7 @@ final class MenuBarHiddenPluginTests: XCTestCase {
             return XCTFail("Expected failed rollback to fail the action")
         }
         XCTAssertEqual(storage.object(forKey: "is-enabled") as? String, "corrupt")
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     private func makePlugin(storage providedStorage: MenuBarHiddenTestStorage? = nil) -> MenuBarHiddenPlugin {

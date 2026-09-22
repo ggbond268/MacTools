@@ -75,7 +75,7 @@ final class MacToolsSearchTests: XCTestCase {
             $0.kind == .command && $0.title == "让显示器休眠"
         })
         XCTAssertTrue(index.items.contains {
-            $0.kind == .command && $0.title == AppShortcutAction.toggleDashboard.title
+            $0.kind == .command && $0.title == host.menuBarPanels[0].title
         })
         XCTAssertFalse(index.items.contains {
             $0.kind == .command && $0.title == AppShortcutAction.openCommandPalette.title
@@ -147,7 +147,7 @@ final class MacToolsSearchTests: XCTestCase {
         host.appPresentationHandler = { requests.append($0) }
         let result = try XCTUnwrap(
             MacToolsSearchIndexBuilder.build(pluginHost: host).items.first {
-                $0.title == AppShortcutAction.toggleDashboard.title
+                $0.title == host.menuBarPanels[0].title
             }
         )
         guard case let .executeAction(reference) = result.action else {
@@ -167,7 +167,7 @@ final class MacToolsSearchTests: XCTestCase {
             pluginHost: makePluginHostForTests(plugins: [])
         )
 
-        for action in [AppShortcutAction.openSettings, .openCommandPalette] {
+        for action in AppShortcutAction.allCases {
             XCTAssertFalse(
                 index.results(matching: action.title).contains {
                     $0.id == "general-setting.appShortcuts"
@@ -221,7 +221,7 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertEqual(index.results(matching: "确认").first?.id, definition.id)
     }
 
-    func testModelAutomaticallyRebuildsAfterPluginVisibilityChanges() async throws {
+    func testSearchDoesNotOfferComponentLayoutCommands() async throws {
         let plugin = SurfaceOnlySearchTestPlugin()
         let host = makePluginHostForTests(plugins: [plugin])
         let suiteName = "MacToolsSearchModelTests-\(UUID().uuidString)"
@@ -240,50 +240,20 @@ final class MacToolsSearchTests: XCTestCase {
             recentStore: CommandPaletteRecentStore(userDefaults: defaults)
         )
         model.updateQuery(plugin.metadata.title)
-        let hideAction = AppHostCommandAction.setPluginVisibility(
-            pluginID: plugin.metadata.id,
-            surface: .featurePanel,
-            isVisible: false
-        )
-        let showAction = AppHostCommandAction.setPluginVisibility(
-            pluginID: plugin.metadata.id,
-            surface: .featurePanel,
-            isVisible: true
-        )
-        XCTAssertTrue(model.results.contains { result in
-            guard case let .appHostCommand(definition) = result.action else {
-                return false
-            }
-            return definition.action == hideAction
-        })
+        let entry = try XCTUnwrap(host.panelEntries(in: "features").first)
+        XCTAssertFalse(model.results.contains { $0.id.hasPrefix("host-command.") })
         let (rebuild, cancellable) = expectModelResults(
             model,
-            description: "Visibility change rebuilds the command index"
+            description: "Layout editing leaves layout commands out of search"
         ) { results in
-            results.contains { result in
-                guard case let .appHostCommand(definition) = result.action else {
-                    return false
-                }
-                return definition.action == showAction
-            }
+            !results.contains { $0.id.hasPrefix("host-command.") }
         }
 
-        host.setPluginVisible(false, id: plugin.metadata.id, on: .featurePanel)
+        host.removePanelEntry(entry, from: "features")
 
         await fulfillment(of: [rebuild], timeout: 1)
         withExtendedLifetime(cancellable) {}
-        XCTAssertTrue(model.results.contains { result in
-            guard case let .appHostCommand(definition) = result.action else {
-                return false
-            }
-            return definition.action == showAction
-        })
-        XCTAssertFalse(model.results.contains { result in
-            guard case let .appHostCommand(definition) = result.action else {
-                return false
-            }
-            return definition.action == hideAction
-        })
+        XCTAssertFalse(model.results.contains { $0.id.hasPrefix("host-command.") })
     }
 
     func testModelQueryBindingKeepsCanonicalQueryAndResultsInSync() {
@@ -543,27 +513,15 @@ final class MacToolsSearchTests: XCTestCase {
         )
     }
 
-    func testSurfaceOnlyPluginNavigatesToAndRevealsItsFeaturePanelRow() throws {
+    func testPanelOnlyPluginWithoutSettingsOrMarketplaceDoesNotCreateNavigationResult() {
         let plugin = SurfaceOnlySearchTestPlugin()
         let host = makePluginHostForTests(plugins: [plugin])
-        let result = try XCTUnwrap(
-            MacToolsSearchIndexBuilder.build(pluginHost: host).items.first {
-                $0.title == plugin.metadata.title
-            }
-        )
-
-        XCTAssertEqual(
-            result.action,
-            .navigate(
-                destination: .plugins(.featurePanelLayout),
-                target: .surface(
-                    SurfaceSettingsSearchTarget(
-                        surface: .featurePanel,
-                        pluginID: plugin.metadata.id
-                    )
-                )
-            )
-        )
+        XCTAssertTrue(host.pluginSettingsItems.isEmpty)
+        XCTAssertTrue(host.pluginManagementItems.isEmpty)
+        let index = MacToolsSearchIndexBuilder.build(pluginHost: host)
+        XCTAssertFalse(index.items.contains {
+            $0.kind == .navigation && $0.title == plugin.metadata.title
+        }, "A runtime-only plugin must not create a link to a removed or unavailable settings page")
     }
 
     func testSearchUsesTitleDescriptionAndKeywordsWithAllTokenMatching() {
@@ -591,8 +549,6 @@ final class MacToolsSearchTests: XCTestCase {
         XCTAssertEqual(
             results.map(\.id),
             [
-                "navigation.dashboard",
-                "navigation.feature-panel",
                 "navigation.actions-and-shortcuts",
                 "navigation.automation",
                 "navigation.marketplace",
@@ -1322,12 +1278,15 @@ private final class SearchTestLaunchAtLoginService: LaunchAtLoginServicing {
 
 @MainActor
 private final class SearchableTestPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginGroupedShortcutSettingsProviding,
-    PluginSettingsSearchProviding,
-    PluginCommandProviding
-{
+    MacToolsPlugin, PluginGroupedShortcutSettingsProviding, PluginSettingsSearchProviding, PluginCommandProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     static let customEntryID = "shortcut-target"
     var usesShortcutGroup = false
 
@@ -1339,7 +1298,7 @@ private final class SearchableTestPlugin:
         order: 1,
         defaultDescription: "管理内建和外接显示器亮度"
     )
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -1359,13 +1318,12 @@ private final class SearchableTestPlugin:
         )]
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
@@ -1581,7 +1539,15 @@ private final class MigratingRecentSearchTestPlugin: MacToolsPlugin, PluginActio
 }
 
 @MainActor
-private final class SurfaceOnlySearchTestPlugin: MacToolsPlugin, PluginPrimaryPanel {
+private final class SurfaceOnlySearchTestPlugin: MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     let metadata = PluginMetadata(
         id: "surface-only",
         title: "锁定屏幕",
@@ -1590,7 +1556,7 @@ private final class SurfaceOnlySearchTestPlugin: MacToolsPlugin, PluginPrimaryPa
         order: 2,
         defaultDescription: "立即锁定屏幕"
     )
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .button,
         menuActionBehavior: .dismissBeforeHandling
     )
@@ -1598,13 +1564,12 @@ private final class SurfaceOnlySearchTestPlugin: MacToolsPlugin, PluginPrimaryPa
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

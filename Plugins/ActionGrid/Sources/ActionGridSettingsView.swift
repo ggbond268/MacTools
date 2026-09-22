@@ -360,7 +360,7 @@ struct ActionGridSettingsView: View {
             .foregroundStyle(.secondary)
             .contentShape(Rectangle())
             .background(
-                PluginSettingsTheme.Palette.fieldBackground,
+                PluginSettingsTheme.Palette.recessedControlBackground,
                 in: RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.card)
             )
             .overlay {

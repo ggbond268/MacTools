@@ -271,7 +271,7 @@ public enum MenuBarControlItemDefaults {
     }
 }
 
-public struct PluginPrimaryPanelDescriptor {
+public struct PluginPanelRowDescriptor {
     public let controlStyle: PluginControlStyle
     public let menuActionBehavior: PluginMenuActionBehavior
     private let staticButtonTitle: String?
@@ -306,39 +306,50 @@ public struct PluginPrimaryPanelDescriptor {
     }
 }
 
-public struct PluginComponentSpan: Equatable, Hashable, Sendable {
+/// Width subdivisions of the same panel, independent of its height units.
+public enum PluginPanelWidgetGrid: Int, Sendable {
+    case standard = 4
+    case compact = 5
+}
+
+public struct PluginPanelWidgetSpan: Equatable, Hashable, Sendable {
+    /// The column count of the standard grid.
     public static let maximumWidth = 4
 
     public let width: Int
     public let height: Int
+    public let grid: PluginPanelWidgetGrid
 
-    public init?(width: Int, height: Int) {
-        guard Self.isValid(width: width, height: height) else {
+    public init?(width: Int, height: Int, grid: PluginPanelWidgetGrid = .standard) {
+        guard Self.isValid(width: width, height: height, grid: grid) else {
             return nil
         }
 
         self.width = width
         self.height = height
+        self.grid = grid
     }
 
     private init(uncheckedWidth width: Int, height: Int) {
         self.width = width
         self.height = height
+        self.grid = .standard
     }
 
-    public static let oneByOne = PluginComponentSpan(uncheckedWidth: 1, height: 1)
-    public static let oneByTwo = PluginComponentSpan(uncheckedWidth: 1, height: 2)
-    public static let twoByOne = PluginComponentSpan(uncheckedWidth: 2, height: 1)
-    public static let twoByTwo = PluginComponentSpan(uncheckedWidth: 2, height: 2)
-    public static let fourByTwo = PluginComponentSpan(uncheckedWidth: 4, height: 2)
+    public static let oneByOne = PluginPanelWidgetSpan(uncheckedWidth: 1, height: 1)
+    public static let oneByTwo = PluginPanelWidgetSpan(uncheckedWidth: 1, height: 2)
+    public static let twoByOne = PluginPanelWidgetSpan(uncheckedWidth: 2, height: 1)
+    public static let twoByTwo = PluginPanelWidgetSpan(uncheckedWidth: 2, height: 2)
+    public static let fourByTwo = PluginPanelWidgetSpan(uncheckedWidth: 4, height: 2)
 
-    public static func isValid(width: Int, height: Int) -> Bool {
-        (1...maximumWidth).contains(width) && height >= 1
+    public static func isValid(width: Int, height: Int, grid: PluginPanelWidgetGrid = .standard) -> Bool {
+        (1...grid.rawValue).contains(width) && height >= 1
     }
 }
 
-public struct PluginComponentPanelLayoutMetrics: Equatable, Sendable {
+public struct PluginPanelWidgetLayoutMetrics: Equatable, Sendable {
     public static let cardCornerRadius: CGFloat = 12
+    public static let compactSpacing: CGFloat = 10
 
     public let columns: Int
     public let cellWidth: CGFloat
@@ -363,11 +374,11 @@ public struct PluginComponentPanelLayoutMetrics: Equatable, Sendable {
         self.originalCellHeight = originalCellHeight
     }
 
-    public static let `default`: PluginComponentPanelLayoutMetrics = {
+    public static let `default`: PluginPanelWidgetLayoutMetrics = {
         let originalCellHeight: CGFloat = 94
         let verticalSpacing: CGFloat = 8
-        return PluginComponentPanelLayoutMetrics(
-            columns: PluginComponentSpan.maximumWidth,
+        return PluginPanelWidgetLayoutMetrics(
+            columns: PluginPanelWidgetSpan.maximumWidth,
             cellWidth: 70,
             cellHeight: 8,
             horizontalSpacing: 8,
@@ -382,6 +393,22 @@ public struct PluginComponentPanelLayoutMetrics: Equatable, Sendable {
 
     public func itemWidth(forSpanWidth width: Int) -> CGFloat {
         CGFloat(width) * cellWidth + CGFloat(max(width - 1, 0)) * horizontalSpacing
+    }
+
+    public func itemWidth(for span: PluginPanelWidgetSpan) -> CGFloat {
+        let spacing = span.grid == .compact ? Self.compactSpacing : horizontalSpacing
+        return (gridWidth + spacing) * CGFloat(span.width) / CGFloat(span.grid.rawValue) - spacing
+    }
+
+    /// Compact controls reserve space for an icon and a single-line title.
+    public var compactCellSize: CGSize {
+        let width = itemWidth(for: PluginPanelWidgetSpan(width: 1, height: 1, grid: .compact)!)
+        return CGSize(width: width, height: itemHeight(forSpanHeight: heightSpan(fittingContentHeight: 64)))
+    }
+
+    /// Keep neighboring compact hit targets equally spaced in both directions.
+    public var compactRowSpacing: CGFloat {
+        Self.compactSpacing
     }
 
     public func itemHeight(forSpanHeight height: Int) -> CGFloat {
@@ -423,124 +450,94 @@ public struct PluginComponentPanelLayoutMetrics: Equatable, Sendable {
     }
 }
 
-public struct PluginComponentDescriptor {
-    public let span: PluginComponentSpan
+public struct PluginPanelWidgetDescriptor {
+    public let span: PluginPanelWidgetSpan
 
-    public init(span: PluginComponentSpan) {
+    public init(span: PluginPanelWidgetSpan) {
         self.span = span
     }
 }
 
-public struct PluginComponentState {
+public struct PluginPanelWidgetState {
     public let subtitle: String
     public let isActive: Bool
     public let isEnabled: Bool
-    public let isVisible: Bool
+    public let isAvailable: Bool
     public let errorMessage: String?
 
     public init(
         subtitle: String,
         isActive: Bool,
         isEnabled: Bool,
-        isVisible: Bool,
+        isAvailable: Bool,
         errorMessage: String?
     ) {
         self.subtitle = subtitle
         self.isActive = isActive
         self.isEnabled = isEnabled
-        self.isVisible = isVisible
+        self.isAvailable = isAvailable
         self.errorMessage = errorMessage
     }
 }
 
-public struct PluginComponentContext {
+public struct PluginPanelWidgetContext {
     public let pluginID: String
+    public let itemID: String
+    public let placementID: UUID?
     public let dismiss: () -> Void
-    public let isPanelVisible: Bool
+    public let presentDetail: (String) -> Void
+    /// Reports intrinsic content height for this placement or isolated preview.
+    /// Measure content before applying the host's allocated frame.
+    public let reportContentHeight: (CGFloat) -> Void
 
-    public init(pluginID: String, dismiss: @escaping () -> Void, isPanelVisible: Bool) {
+    public var isPreview: Bool { placementID == nil }
+
+    public init(pluginID: String, itemID: String, placementID: UUID?,
+                dismiss: @escaping () -> Void, presentDetail: @escaping (String) -> Void = { _ in }) {
+        self.init(pluginID: pluginID, itemID: itemID, placementID: placementID,
+                  dismiss: dismiss, presentDetail: presentDetail, reportContentHeight: { _ in })
+    }
+
+    public init(pluginID: String, itemID: String, placementID: UUID?,
+                dismiss: @escaping () -> Void, presentDetail: @escaping (String) -> Void = { _ in },
+                reportContentHeight: @escaping (CGFloat) -> Void) {
         self.pluginID = pluginID
+        self.itemID = itemID
+        self.placementID = placementID
         self.dismiss = dismiss
-        self.isPanelVisible = isPanelVisible
+        self.presentDetail = presentDetail
+        self.reportContentHeight = reportContentHeight
     }
 }
 
-public struct PluginComponentViewItem: Identifiable {
-    public let id: String
-    public let content: AnyView
-
-    public init(id: String, content: AnyView) {
-        self.id = id
-        self.content = content
-    }
-}
-
-public struct PluginComponentItem: Identifiable {
-    public let id: String
-    public let title: String
-    public let iconName: String
-    public let iconTint: Color
-    public let description: String
-    public let helpText: String
-    public let descriptionTone: PluginPanelDescriptionTone
-    public let span: PluginComponentSpan
-    public let isActive: Bool
-    public let isEnabled: Bool
-
-    public init(
-        id: String,
-        title: String,
-        iconName: String,
-        iconTint: Color,
-        description: String,
-        helpText: String,
-        descriptionTone: PluginPanelDescriptionTone,
-        span: PluginComponentSpan,
-        isActive: Bool,
-        isEnabled: Bool
-    ) {
-        self.id = id
-        self.title = title
-        self.iconName = iconName
-        self.iconTint = iconTint
-        self.description = description
-        self.helpText = helpText
-        self.descriptionTone = descriptionTone
-        self.span = span
-        self.isActive = isActive
-        self.isEnabled = isEnabled
-    }
-}
-
-public struct PluginPanelState {
+public struct PluginPanelRowState {
+    public var indicator: PluginPanelRowIndicator?
+    public var compactIndicator: PluginPanelRowCompactIndicator?
     public let subtitle: String
     public let isOn: Bool
-    public let isExpanded: Bool
     public let isEnabled: Bool
-    public let isVisible: Bool
+    public let isAvailable: Bool
     public let detail: PluginPanelDetail?
     public let errorMessage: String?
 
     public init(
         subtitle: String,
         isOn: Bool,
-        isExpanded: Bool,
         isEnabled: Bool,
-        isVisible: Bool,
+        isAvailable: Bool,
         detail: PluginPanelDetail?,
         errorMessage: String?
     ) {
         self.subtitle = subtitle
         self.isOn = isOn
-        self.isExpanded = isExpanded
         self.isEnabled = isEnabled
-        self.isVisible = isVisible
+        self.isAvailable = isAvailable
         self.detail = detail
         self.errorMessage = errorMessage
     }
 }
 
-public struct PluginPrimaryPanelIndicator: Equatable {
+public struct PluginPanelRowIndicator: Equatable {
     public let text: String
     public let systemImage: String
 
@@ -550,16 +547,16 @@ public struct PluginPrimaryPanelIndicator: Equatable {
     }
 }
 
-public struct PluginPrimaryPanelCompactIndicator: Equatable {
-    public let icons: [PluginPrimaryPanelIndicatorIcon]
+public struct PluginPanelRowCompactIndicator: Equatable {
+    public let icons: [PluginPanelRowIndicatorIcon]
 
-    public init(icons: [PluginPrimaryPanelIndicatorIcon]) {
+    public init(icons: [PluginPanelRowIndicatorIcon]) {
         precondition(!icons.isEmpty, "Primary panel indicators require at least one icon.")
         self.icons = icons
     }
 }
 
-public struct PluginPrimaryPanelIndicatorIcon: Equatable {
+public struct PluginPanelRowIndicatorIcon: Equatable {
     public let systemImage: String
     public let label: String
     public let accessibilityLabel: String
@@ -750,101 +747,6 @@ public struct PluginPermissionState {
         self.statusText = statusText
         self.statusSystemImage = statusSystemImage
         self.statusTone = statusTone
-    }
-}
-
-public struct PluginPanelItem: Identifiable {
-    public let id: String
-    public let title: String
-    public let iconName: String
-    public let iconTint: Color
-    public let controlStyle: PluginControlStyle
-    public let menuActionBehavior: PluginMenuActionBehavior
-    public let description: String
-    public let helpText: String
-    public let descriptionTone: PluginPanelDescriptionTone
-    public let isOn: Bool
-    public let isExpanded: Bool
-    public let isEnabled: Bool
-    public let detail: PluginPanelDetail?
-    public let buttonActionID: String?
-    public let buttonTitle: String?
-
-    public init(
-        id: String,
-        title: String,
-        iconName: String,
-        iconTint: Color,
-        controlStyle: PluginControlStyle,
-        menuActionBehavior: PluginMenuActionBehavior,
-        description: String,
-        helpText: String,
-        descriptionTone: PluginPanelDescriptionTone,
-        isOn: Bool,
-        isExpanded: Bool,
-        isEnabled: Bool,
-        detail: PluginPanelDetail?,
-        buttonActionID: String?,
-        buttonTitle: String?
-    ) {
-        self.id = id
-        self.title = title
-        self.iconName = iconName
-        self.iconTint = iconTint
-        self.controlStyle = controlStyle
-        self.menuActionBehavior = menuActionBehavior
-        self.description = description
-        self.helpText = helpText
-        self.descriptionTone = descriptionTone
-        self.isOn = isOn
-        self.isExpanded = isExpanded
-        self.isEnabled = isEnabled
-        self.detail = detail
-        self.buttonActionID = buttonActionID
-        self.buttonTitle = buttonTitle
-    }
-}
-
-public enum PluginFeaturePresentation: Equatable {
-    case featurePanel
-    case componentPanel
-    case featureAndComponentPanel
-}
-
-public struct PluginFeatureManagementItem: Identifiable {
-    public let id: String
-    public let title: String
-    public let description: String
-    public let iconName: String
-    public let iconTint: Color
-    public let isVisible: Bool
-    public let isActive: Bool
-    public let presentation: PluginFeaturePresentation
-    public let category: String?
-    public let releaseChannel: String?
-
-    public init(
-        id: String,
-        title: String,
-        description: String,
-        iconName: String,
-        iconTint: Color,
-        isVisible: Bool,
-        isActive: Bool,
-        presentation: PluginFeaturePresentation,
-        category: String? = nil,
-        releaseChannel: String? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.description = description
-        self.iconName = iconName
-        self.iconTint = iconTint
-        self.isVisible = isVisible
-        self.isActive = isActive
-        self.presentation = presentation
-        self.category = category
-        self.releaseChannel = releaseChannel
     }
 }
 

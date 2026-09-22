@@ -249,6 +249,8 @@ struct DiskCleanCandidate: Identifiable, Equatable, Sendable {
     let notes: [DiskCleanCandidateNote]
     /// Size result. nil = not sized yet.
     let sizeResult: DiskCleanSizeResult?
+    /// Structured rule explanation for why found, consequences, and safety disclosures.
+    let explanation: DiskCleanRuleExplanation?
 
     /// Primary logical path (first alias, or the physical path when none differ).
     var logicalPath: String { logicalPaths.first ?? path }
@@ -264,7 +266,8 @@ struct DiskCleanCandidate: Identifiable, Equatable, Sendable {
         risk: DiskCleanRisk,
         safety: DiskCleanSafetyStatus,
         notes: [DiskCleanCandidateNote] = [],
-        sizeResult: DiskCleanSizeResult? = nil
+        sizeResult: DiskCleanSizeResult? = nil,
+        explanation: DiskCleanRuleExplanation? = nil
     ) {
         self.id = id
         self.targetID = targetID
@@ -282,6 +285,7 @@ struct DiskCleanCandidate: Identifiable, Equatable, Sendable {
         self.safety = safety
         self.notes = notes
         self.sizeResult = sizeResult
+        self.explanation = explanation
     }
 
     private static func uniquePaths(_ paths: [String]) -> [String] {
@@ -338,7 +342,8 @@ struct DiskCleanCandidate: Identifiable, Equatable, Sendable {
             risk: risk,
             safety: safety,
             notes: notes,
-            sizeResult: sizeResult
+            sizeResult: sizeResult,
+            explanation: explanation
         )
     }
 

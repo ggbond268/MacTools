@@ -18,7 +18,7 @@ final class PreferencesBackupTests: XCTestCase {
         let defaults = makeDefaults()
         defaults.set(AppAppearancePreference.dark.rawValue, forKey: AppAppearancePreference.userDefaultsKey)
         defaults.set(AppLanguagePreference.en.rawValue, forKey: AppLanguagePreference.userDefaultsKey)
-        defaults.set(MenuBarClickBehaviorPreference.swapped.rawValue, forKey: MenuBarClickBehaviorPreference.userDefaultsKey)
+        defaults.set("swapped", forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey)
         SettingsSidebarPreferencesStore.applyImportedPreferences(
             sortMode: .custom,
             customOrderedPluginIDs: ["second", "first"],
@@ -28,8 +28,9 @@ final class PreferencesBackupTests: XCTestCase {
 
         let firstPlugin = BackupTestPlugin(id: "first", order: 1, shortcutID: "toggle")
         let secondPlugin = BackupTestPlugin(id: "second", order: 2, shortcutID: "open")
+        PluginOrderingStore(userDefaults: defaults).setOrderedPluginIDs(
+            [secondPlugin.metadata.id, firstPlugin.metadata.id], defaultPluginIDs: ["first", "second"])
         let host = makeHost(plugins: [firstPlugin, secondPlugin], defaults: defaults)
-        host.moveFeatureManagementItem(id: secondPlugin.metadata.id, by: -1)
         host.setShortcutBinding(
             ShortcutBinding(keyCode: 12, modifiers: [.command, .shift]),
             for: "first.shortcut.toggle"
@@ -46,7 +47,9 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertEqual(decodedBackup.shortcutCustomizations, backup.shortcutCustomizations)
         XCTAssertEqual(backup.application.appearancePreference, AppAppearancePreference.dark.rawValue)
         XCTAssertEqual(backup.application.languagePreference, AppLanguagePreference.en.rawValue)
-        XCTAssertEqual(backup.application.menuBarClickBehavior, MenuBarClickBehaviorPreference.swapped.rawValue)
+        XCTAssertNil(backup.application.menuBarClickBehavior)
+        XCTAssertEqual(backup.pluginDisplay.panelConfiguration?.panels.map(\.id), ["features", "components"])
+        XCTAssertNil(defaults.object(forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey))
         XCTAssertEqual(
             backup.application.settingsSidebarPluginSortMode,
             SettingsSidebarPluginSortMode.custom.rawValue
@@ -57,8 +60,9 @@ final class PreferencesBackupTests: XCTestCase {
         )
         XCTAssertEqual(backup.pluginDisplay.orderedPluginIDs, ["second", "first"])
         XCTAssertTrue(backup.pluginDisplay.hiddenPluginIDs.isEmpty)
-        XCTAssertEqual(backup.pluginDisplay.dashboardOrderedPluginIDs, [])
-        XCTAssertEqual(backup.pluginDisplay.featurePanelOrderedPluginIDs, ["first", "second"])
+        XCTAssertNil(backup.pluginDisplay.dashboardOrderedPluginIDs)
+        XCTAssertNil(backup.pluginDisplay.featurePanelOrderedPluginIDs)
+        XCTAssertEqual(backup.pluginDisplay.panelConfiguration, host.menuBarPanelStore.configuration)
         XCTAssertEqual(
             backup.shortcutCustomizations["first.shortcut.toggle"],
             .custom(ShortcutBinding(keyCode: 12, modifiers: [.command, .shift]))
@@ -198,7 +202,7 @@ final class PreferencesBackupTests: XCTestCase {
         let legacyPreferences = PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+            menuBarClickBehavior: "standard"
         )
 
         XCTAssertTrue(backupStore.validates(legacyPreferences))
@@ -294,7 +298,7 @@ final class PreferencesBackupTests: XCTestCase {
 
         XCTAssertEqual(first.restoredPortablePreferences, Data("restore-first".utf8))
         XCTAssertNil(second.restoredPortablePreferences)
-        XCTAssertEqual(host.featureManagementItems.map(\.id), ["first", "second"])
+        XCTAssertEqual(host.pluginSettingsItems.map(\.pluginID), ["first", "second"])
     }
 
     func testImportCannotSelectCategoryThatWasNotExported() throws {
@@ -1372,7 +1376,7 @@ final class PreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: AppAppearancePreference.system.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: ["available", "unavailable"],
@@ -1418,6 +1422,17 @@ final class PreferencesBackupTests: XCTestCase {
         let preview = try host.preferencesImportPreview(for: legacyBackup)
 
         XCTAssertEqual(preview.unavailablePluginIDs, ["legacy-surface-only"])
+    }
+
+    func testPanelPlacementsContributeMissingDependenciesWithoutLegacyOrderFields() throws {
+        let host = makeHost(plugins: [], defaults: makeDefaults())
+        var layout = MenuBarPanelConfiguration()
+        layout.placementsByPanelID["components"] = [.init(item: .init(pluginID: "missing-view", itemID: "chart"))]
+        let backup = PreferencesBackup(application: validApplicationPreferences,
+            pluginDisplay: .init(orderedPluginIDs: [], hiddenPluginIDs: [], panelConfiguration: layout),
+            shortcutCustomizations: [:])
+        let preview = try host.preferencesImportPreview(for: backup)
+        XCTAssertEqual(preview.unavailablePluginIDs, ["missing-view"])
     }
 
     func testPreviewIgnoresTamperedPortablePreferenceActionIndex() throws {
@@ -1486,7 +1501,7 @@ final class PreferencesBackupTests: XCTestCase {
             dynamicPluginManager: dynamicManager,
             pluginCatalogManager: catalogManager,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             loadDynamicPluginsOnInit: false
@@ -1570,7 +1585,7 @@ final class PreferencesBackupTests: XCTestCase {
             application: PreferencesBackup.ApplicationPreferences(
                 appearancePreference: AppAppearancePreference.system.rawValue,
                 languagePreference: AppLanguagePreference.system.rawValue,
-                menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+                menuBarClickBehavior: "standard"
             ),
             pluginDisplay: PluginDisplayPreferencesBackup(
                 orderedPluginIDs: ["second", "unavailable", "first"],
@@ -1593,14 +1608,40 @@ final class PreferencesBackupTests: XCTestCase {
 
         _ = try host.importPreferences(backup)
 
-        XCTAssertEqual(host.featureManagementItems.map(\.id), ["second", "first"])
-        XCTAssertTrue(host.featureManagementItems.first(where: { $0.id == "first" })?.isVisible ?? false)
+        XCTAssertEqual(host.pluginSettingsItems.map(\.pluginID), ["second", "first"])
+        XCTAssertFalse(host.panelItems.contains { $0.pluginID == "first" })
         XCTAssertFalse(host.shortcutItems.first(where: { $0.id == "second.shortcut.open" })?.canClear ?? true)
         XCTAssertTrue(host.shortcutItems.first(where: { $0.id == "first.shortcut.toggle" })?.usesDefaultValue ?? false)
         XCTAssertEqual(
             host.appShortcutItems.first { $0.action == .openSettings }?.bindingText,
             ShortcutFormatter.displayString(for: openSettingsBinding)
         )
+    }
+
+    func testImportRecoversUnreadableLegacyLayoutAndManagementOrder() throws {
+        let source = makeHost(plugins: [
+            BackupTestPlugin(id: "second", order: 1, shortcutID: "open"),
+            BackupTestPlugin(id: "first", order: 2, shortcutID: "toggle"),
+        ], defaults: makeDefaults())
+        let backup = source.makePreferencesBackup()
+        let defaults = makeDefaults()
+        defaults.set(Data(#"{"version":99}"#.utf8), forKey: MenuBarPanelStore.legacyDisplayStorageKey)
+        let target = makeHost(plugins: [
+            BackupTestPlugin(id: "first", order: 1, shortcutID: "toggle"),
+            BackupTestPlugin(id: "second", order: 2, shortcutID: "open"),
+        ], defaults: defaults)
+        XCTAssertNotNil(target.menuBarPanelStore.loadError)
+
+        _ = try target.importPreferences(backup)
+
+        XCTAssertNil(target.menuBarPanelStore.loadError)
+        XCTAssertEqual(target.pluginSettingsItems.map(\.pluginID), ["second", "first"])
+        XCTAssertEqual(target.menuBarPanelStore.configuration, source.menuBarPanelStore.configuration)
+        let reloadedPanels = MenuBarPanelStore(userDefaults: defaults)
+        XCTAssertNil(reloadedPanels.loadError)
+        XCTAssertEqual(reloadedPanels.configuration, target.menuBarPanelStore.configuration)
+        XCTAssertEqual(PluginOrderingStore(userDefaults: defaults)
+            .orderedPluginIDs(defaultPluginIDs: ["first", "second"]), ["second", "first"])
     }
 
     func testExportAndImportPreserveSurfaceDisplayOrders() throws {
@@ -1613,17 +1654,16 @@ final class PreferencesBackupTests: XCTestCase {
             ],
             defaults: sourceDefaults
         )
-        sourceHost.movePlugin(id: "third", toOffset: 0, on: .dashboard)
-        sourceHost.movePlugin(id: "second", toOffset: 0, on: .featurePanel)
-        sourceHost.setPluginVisible(false, id: "first", on: .dashboard)
-        sourceHost.setPluginVisible(false, id: "third", on: .featurePanel)
+        sourceHost.reorderTestItem(pluginID: "third", kind: .widget, toOffset: 0)
+        sourceHost.reorderTestItem(pluginID: "second", kind: .row, toOffset: 0)
+        sourceHost.removeTestItem(pluginID: "first", kind: .widget)
+        sourceHost.removeTestItem(pluginID: "third", kind: .row)
 
         let backup = sourceHost.makePreferencesBackup()
 
-        XCTAssertEqual(backup.pluginDisplay.dashboardOrderedPluginIDs, ["third", "first", "second"])
-        XCTAssertEqual(backup.pluginDisplay.featurePanelOrderedPluginIDs, ["second", "first", "third"])
-        XCTAssertEqual(backup.pluginDisplay.dashboardHiddenPluginIDs, ["first"])
-        XCTAssertEqual(backup.pluginDisplay.featurePanelHiddenPluginIDs, ["third"])
+        XCTAssertEqual(backup.pluginDisplay.panelConfiguration, sourceHost.menuBarPanelStore.configuration)
+        XCTAssertNil(backup.pluginDisplay.dashboardOrderedPluginIDs)
+        XCTAssertNil(backup.pluginDisplay.featurePanelOrderedPluginIDs)
 
         let targetDefaults = makeDefaults()
         let targetHost = makeHost(
@@ -1637,12 +1677,12 @@ final class PreferencesBackupTests: XCTestCase {
 
         _ = try targetHost.importPreferences(backup)
 
-        XCTAssertEqual(targetHost.dashboardLayoutItems.map(\.id), ["third", "second"])
-        XCTAssertEqual(targetHost.dashboardHiddenLayoutItems.map(\.id), ["first"])
-        XCTAssertEqual(targetHost.componentItems.map(\.id), ["third", "second"])
-        XCTAssertEqual(targetHost.featurePanelLayoutItems.map(\.id), ["second", "first"])
-        XCTAssertEqual(targetHost.featurePanelHiddenLayoutItems.map(\.id), ["third"])
-        XCTAssertEqual(targetHost.panelItems.map(\.id), ["second", "first"])
+        XCTAssertEqual(targetHost.panelEntries(in: "components").map(\.pluginID), ["third", "second"])
+        XCTAssertTrue(targetHost.menuBarPanelStore.configuration.initializedItems.contains(.init(pluginID: "first", itemID: "widget")))
+        XCTAssertEqual(targetHost.componentItems.map(\.pluginID), ["third", "second"])
+        XCTAssertEqual(targetHost.panelEntries(in: "features").map(\.pluginID), ["second", "first"])
+        XCTAssertTrue(targetHost.menuBarPanelStore.configuration.initializedItems.contains(.init(pluginID: "third", itemID: "control")))
+        XCTAssertEqual(targetHost.panelItems.map(\.pluginID), ["second", "first"])
     }
 
     func testImportLegacyDisplayBackupSeedsSurfaceOrdersFromGeneralOrder() throws {
@@ -1666,8 +1706,8 @@ final class PreferencesBackupTests: XCTestCase {
 
         _ = try host.importPreferences(backup)
 
-        XCTAssertEqual(host.dashboardLayoutItems.map(\.id), ["third", "second", "first"])
-        XCTAssertEqual(host.featurePanelLayoutItems.map(\.id), ["third", "second", "first"])
+        XCTAssertEqual(host.panelEntries(in: "components").map(\.pluginID), ["third", "second", "first"])
+        XCTAssertEqual(host.panelEntries(in: "features").map(\.pluginID), ["third", "second", "first"])
     }
 
     func testInvalidShortcutImportLeavesAllShortcutCustomizationsUntouched() throws {
@@ -1739,7 +1779,7 @@ final class PreferencesBackupTests: XCTestCase {
             dynamicPluginManager: dynamicManager,
             pluginCatalogManager: catalogManager,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             loadDynamicPluginsOnInit: false
@@ -1769,8 +1809,8 @@ final class PreferencesBackupTests: XCTestCase {
             .installingPlugin(id: "installable", number: 1, total: 1),
             .restoringPreferences(completedPluginCount: 1, totalPluginCount: 1),
         ])
-        XCTAssertEqual(host.featurePanelHiddenLayoutItems.map(\.id), ["installable"])
-        XCTAssertFalse(host.panelItems.contains(where: { $0.id == "installable" }))
+        XCTAssertTrue(host.availablePanelItems.contains { $0.key == .init(pluginID: "installable", itemID: "control") })
+        XCTAssertFalse(host.panelItems.contains(where: { $0.pluginID == "installable" }))
         XCTAssertEqual(dynamicManager.pluginManagementItems.first(where: { $0.id == "installable" })?.state, .installed)
         XCTAssertEqual(loader.receivedRecordIDBatches, [["installable"]])
     }
@@ -2110,7 +2150,7 @@ final class PreferencesBackupTests: XCTestCase {
         PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
-            menuBarClickBehavior: MenuBarClickBehaviorPreference.standard.rawValue
+            menuBarClickBehavior: "standard"
         )
     }
 
@@ -2129,6 +2169,153 @@ final class PreferencesBackupTests: XCTestCase {
             .appendingPathComponent("PreferencesBackupTests-\(UUID().uuidString).json")
     }
 
+    func testCloudSyncWaitsForDynamicPluginPreferencesBeforeConsumingSnapshot() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CloudPluginStartup-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let defaults = makeDefaults()
+        let plugin = BackupTestPlugin(id: "trackpad-gestures", order: 1, shortcutID: "toggle")
+        let manager = DynamicPluginManager(
+            packageStore: PluginPackageStore(
+                rootDirectory: directory.appendingPathComponent("Installed"),
+                userDefaults: defaults,
+                hostVersion: "1.0.0"
+            ),
+            pluginLoader: BackupPreferencesPluginLoader(plugins: [plugin])
+        )
+        try manager.installPluginPackage(from: makeDynamicPluginPackage(
+            at: directory, id: plugin.metadata.id, version: "1.0.0"
+        ))
+        let payload = Data("synthetic-trackpad-settings".utf8)
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [plugin.metadata.id], hiddenPluginIDs: []),
+            shortcutCustomizations: [:],
+            pluginPreferences: [plugin.metadata.id: payload]
+        )
+        let snapshot = CloudPreferencesSnapshot(
+            generation: 9, deviceID: "remote-mac", deviceName: "Remote Mac", backup: backup
+        )
+        let snapshotURL = directory.appendingPathComponent(CloudPreferencesSnapshot.defaultFileName)
+        let originalData = try snapshot.encodedJSON()
+        try originalData.write(to: snapshotURL)
+        defaults.set(true, forKey: CloudPreferencesSyncCoordinator.enabledUserDefaultsKey)
+        defaults.set(directory.path, forKey: CloudPreferencesSyncCoordinator.directoryPathUserDefaultsKey)
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults, debounceDelay: .seconds(60))
+        defer { coordinator.setEnabled(false) }
+        let host = PluginHost(
+            plugins: [],
+            dynamicPluginManager: manager,
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator,
+            globalShortcutManager: GlobalShortcutManager(),
+            loadDynamicPluginsOnInit: false
+        )
+
+        await coordinator.checkForIncomingSnapshots()
+        try await coordinator.syncNow()
+        coordinator.flushPendingExportBeforeTermination()
+        XCTAssertEqual(coordinator.currentGeneration, 0)
+        XCTAssertNil(plugin.restoredPortablePreferences)
+        XCTAssertEqual(try Data(contentsOf: snapshotURL), originalData)
+
+        let importedAfterStartup = expectation(description: "Cloud settings apply automatically after plugin startup")
+        let originalStatusHandler = coordinator.statusHandler
+        coordinator.statusHandler = { status in
+            originalStatusHandler?(status)
+            if status.isSynced, plugin.restoredPortablePreferences == payload {
+                importedAfterStartup.fulfill()
+            }
+        }
+        host.loadDynamicPluginsIfNeeded()
+        await fulfillment(of: [importedAfterStartup], timeout: 5)
+        XCTAssertEqual(plugin.restoredPortablePreferences, payload)
+        XCTAssertEqual(coordinator.currentGeneration, 9)
+    }
+
+    func testCloudImportPreservesLocalRulesNestedDependenciesShortcutsAndRunLinks() throws {
+        let defaults = makeDefaults()
+        let provider = BackupActionProviderPlugin()
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults)
+        let host = PluginHost(
+            plugins: [provider], shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator, globalShortcutManager: GlobalShortcutManager()
+        )
+        let references = try provider.references()
+        let child = WorkflowDefinition(name: "Local dependency", steps: [WorkflowStep(reference: references[0])])
+        let parent = WorkflowDefinition(name: "Local parent", steps: [WorkflowStep(reference: child.actionReference)])
+        let localWorkflow = WorkflowDefinition(name: "Hardware workflow", steps: [WorkflowStep(reference: references[1])])
+        let oldPortable = WorkflowDefinition(name: "Deleted on other Mac")
+        let displayRule = AutomationRule(name: "Local display", workflowID: parent.id, trigger: .display(DisplayAutomationTrigger(event: .connected, displayIdentifier: "local-display")))
+        let calendarRule = AutomationRule(name: "Local calendar", workflowID: parent.id, trigger: .calendar(CalendarAutomationTrigger(phase: .starts, calendarIdentifier: "local-calendar")))
+        XCTAssertTrue(host.automationController.restorePreferences(workflows: [child, parent, localWorkflow, oldPortable], rules: [displayRule, calendarRule]))
+        guard case .success = host.setActionShortcutBinding(ShortcutBinding(keyCode: 31, modifiers: [.command, .control]), to: references[1]),
+              case .success = host.createActionRunLink(for: references[1]) else {
+            return XCTFail("Expected local shortcut and Run Link")
+        }
+        let localShortcuts = host.shortcutAssignmentService.assignments
+        let presetStore = ActionInvocationPresetStore(userDefaults: defaults)
+        let localPresets = presetStore.presets()
+        let remoteWorkflow = WorkflowDefinition(name: "New portable workflow")
+        let remoteRule = AutomationRule(name: "Portable rule", workflowID: remoteWorkflow.id, trigger: .display(DisplayAutomationTrigger(event: .connected)))
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:],
+            // Replacing this provider would destroy a preset used by the local child.
+            pluginPreferences: [provider.metadata.id: Data("replacement-without-local-preset".utf8)],
+            workflows: [remoteWorkflow], automationRules: [remoteRule]
+        )
+        try withExtendedLifetime(host) { try coordinator.importHandler?(backup) }
+        XCTAssertEqual(Set(host.automationController.workflows.map(\.id)), [child.id, parent.id, localWorkflow.id, remoteWorkflow.id])
+        XCTAssertEqual(host.automationController.workflows.first { $0.id == child.id }, child)
+        XCTAssertEqual(host.automationController.workflows.first { $0.id == parent.id }, parent)
+        XCTAssertEqual(Set(host.automationController.rules.map(\.id)), [displayRule.id, calendarRule.id, remoteRule.id])
+        XCTAssertEqual(host.automationController.rules.first { $0.id == displayRule.id }, displayRule)
+        XCTAssertEqual(host.automationController.rules.first { $0.id == calendarRule.id }, calendarRule)
+        XCTAssertEqual(host.shortcutAssignmentService.assignments, localShortcuts)
+        XCTAssertEqual(presetStore.presets(), localPresets)
+    }
+
+    func testCloudImportPreservesHardwareFieldsInPluginPayload() throws {
+        let local = Data(#"{"safe":"old","displayID":"local-display"}"#.utf8)
+        let plugin = BackupTestPlugin(id: "hardware-settings", order: 1, shortcutID: "toggle", portablePreferences: local)
+        let host = makeHost(plugins: [plugin], defaults: makeDefaults())
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:], pluginPreferences: [plugin.metadata.id: Data(#"{"safe":"new"}"#.utf8)]
+        )
+        let result = try host.importCloudPreferences(backup)
+        XCTAssertTrue(result.shortcutErrors.isEmpty)
+        let payload = try XCTUnwrap(plugin.restoredPortablePreferences)
+        let values = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: String])
+        XCTAssertEqual(values, ["safe": "new", "displayID": "local-display"])
+    }
+
+    func testCloudSyncReportsPluginPreferenceRestoreFailures() throws {
+        let defaults = makeDefaults()
+        let coordinator = CloudPreferencesSyncCoordinator(userDefaults: defaults)
+        let host = PluginHost(
+            plugins: [BackupActionProviderPlugin()],
+            shortcutStore: ShortcutStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
+            preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
+            cloudPreferencesSyncCoordinator: coordinator,
+            globalShortcutManager: GlobalShortcutManager()
+        )
+        try withExtendedLifetime(host) {
+            XCTAssertThrowsError(try coordinator.importHandler?(
+                makePluginImportBackup(payload: Data("invalid-settings".utf8))
+            ))
+        }
+    }
+
     private func makeHost(
         plugins: [any MacToolsPlugin],
         defaults: UserDefaults
@@ -2136,7 +2323,7 @@ final class PreferencesBackupTests: XCTestCase {
         PluginHost(
             plugins: plugins,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager()
         )
@@ -2174,7 +2361,7 @@ final class PreferencesBackupTests: XCTestCase {
             dynamicPluginManager: manager,
             pluginCatalogManager: catalogManager,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             loadDynamicPluginsOnInit: true
@@ -2209,7 +2396,7 @@ final class PreferencesBackupTests: XCTestCase {
             version: version,
             minHostVersion: "0.1.0",
             bundleRelativePath: bundleRelativePath,
-            capabilities: .init(primaryPanel: true)
+            capabilities: .init(panelItems: [.row])
         )
         try JSONEncoder().encode(manifest).write(to: packageURL.appending(path: "plugin.json"))
         return packageURL
@@ -2476,9 +2663,17 @@ private final class BackupPreferencesPluginLoader: DynamicPluginLoading {
 }
 
 @MainActor
-private final class BackupTestPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPortablePreferencesProviding {
+private final class BackupTestPlugin: MacToolsPlugin, PluginPortablePreferencesProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
     let shortcutDefinitions: [PluginShortcutDefinition]
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -2495,7 +2690,7 @@ private final class BackupTestPlugin: MacToolsPlugin, PluginPrimaryPanel, Plugin
             order: order,
             defaultDescription: id
         )
-        primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .switch,
             menuActionBehavior: .keepPresented
         )
@@ -2521,13 +2716,12 @@ private final class BackupTestPlugin: MacToolsPlugin, PluginPrimaryPanel, Plugin
         restoredPortablePreferences = data
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
@@ -2893,13 +3087,12 @@ private final class DynamicBackupShortcutPlugin: MacToolsPlugin, PluginPortableP
         receivedShortcutBinding = binding
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
@@ -2979,10 +3172,23 @@ private final class BackupLegacyActionShortcutPlugin:
     }
 }
 
-private final class BackupCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginComponentPanel {
+private final class BackupCombinedPlugin: MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    }),
+        ]
+    }
+
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
-    let descriptor = PluginComponentDescriptor(span: .oneByOne)
+    let rowDescriptor: PluginPanelRowDescriptor
+    let descriptor = PluginPanelWidgetDescriptor(span: .oneByOne)
     let shortcutDefinitions: [PluginShortcutDefinition]
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -2997,7 +3203,7 @@ private final class BackupCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Pl
             order: order,
             defaultDescription: id
         )
-        primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .switch,
             menuActionBehavior: .keepPresented
         )
@@ -3014,29 +3220,28 @@ private final class BackupCombinedPlugin: MacToolsPlugin, PluginPrimaryPanel, Pl
         ]
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
     }
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(
             subtitle: metadata.defaultDescription,
             isActive: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             errorMessage: nil
         )
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(Text(context.pluginID))
     }
 

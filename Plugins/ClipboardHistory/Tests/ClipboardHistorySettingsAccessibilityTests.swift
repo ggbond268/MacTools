@@ -49,7 +49,8 @@ final class ClipboardHistorySettingsAccessibilityTests: XCTestCase {
             controller: controller,
             savedLibraryController: library,
             localization: localization,
-            contentSections: [section]
+            contentSections: [section],
+            itemShortcutStore: ClipboardItemShortcutStore(storage: AccessibilityTestStorage())
         )
         .environment(\.pluginSettingsSearchTarget, PluginSettingsSearchTarget(
             pluginID: ClipboardHistoryPlugin.pluginID,

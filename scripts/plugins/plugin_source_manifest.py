@@ -409,6 +409,9 @@ def validate_runtime_envelope(
                 "primaryPanel", "componentPanel", "settings", "configuration"
             }
             required_capabilities = set()
+        elif plugin_kit_version >= 7:
+            allowed_capabilities = {"panelItems", "settings"}
+            required_capabilities = allowed_capabilities
         else:
             allowed_capabilities = {"primaryPanel", "componentPanel", "settings"}
             required_capabilities = allowed_capabilities
@@ -429,6 +432,10 @@ def validate_runtime_envelope(
         for key in ("primaryPanel", "componentPanel"):
             if key in capabilities and type(capabilities[key]) is not bool:
                 _fail(plugin_id, f"capabilities.{key}", "must be a boolean")
+        if "panelItems" in capabilities:
+            _unique_strings(capabilities["panelItems"], plugin_id, "capabilities.panelItems")
+            if set(capabilities["panelItems"]) - {"row", "widget"}:
+                _fail(plugin_id, "capabilities.panelItems", "contains an unsupported renderer")
         if "settings" in capabilities:
             settings = capabilities["settings"]
             if not isinstance(settings, str) or settings not in VALID_SETTINGS_CAPABILITIES:

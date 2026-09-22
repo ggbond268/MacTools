@@ -12,11 +12,11 @@ final class DisplayTrueColorPluginTests: XCTestCase {
             client: MockTrueToneClient(isSupported: false, isEnabled: nil)
         )
 
-        XCTAssertTrue(enabled.primaryPanelState.isOn)
-        XCTAssertTrue(enabled.primaryPanelState.isEnabled)
-        XCTAssertFalse(unsupported.primaryPanelState.isOn)
-        XCTAssertFalse(unsupported.primaryPanelState.isEnabled)
-        XCTAssertEqual(unsupported.primaryPanelState.subtitle, "不支持")
+        XCTAssertTrue(enabled.rowState.isOn)
+        XCTAssertTrue(enabled.rowState.isEnabled)
+        XCTAssertFalse(unsupported.rowState.isOn)
+        XCTAssertFalse(unsupported.rowState.isEnabled)
+        XCTAssertEqual(unsupported.rowState.subtitle, "不支持")
     }
 
     func testSwitchUpdatesClientAndPanelState() {
@@ -26,7 +26,7 @@ final class DisplayTrueColorPluginTests: XCTestCase {
         plugin.handleAction(.setSwitch(true))
 
         XCTAssertEqual(client.lastSetEnabled, true)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testSwitchIsIgnoredWhenUnsupported() {
@@ -45,7 +45,7 @@ final class DisplayTrueColorPluginTests: XCTestCase {
         client.stubbedEnabled = true
         plugin.refresh()
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testCanonicalActionUsesTheTrueToneClient() async throws {
@@ -87,7 +87,7 @@ final class DisplayTrueColorPluginTests: XCTestCase {
         guard case .failed = result else {
             return XCTFail("Expected True Tone write failure, got \(result)")
         }
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 }
 

@@ -128,9 +128,9 @@ final class PluginCatalogTests: XCTestCase {
     func testCurrentPluginKitUsesItsOwnVersionedCatalogURL() throws {
         XCTAssertEqual(
             PluginCatalogProviderConfiguration.productionCatalogURL(
-                forHostVersion: "1.3.0"
+                forHostVersion: "1.3.1"
             ),
-            URL(string: "https://mactools.ggbond.app/plugins/v6/catalog.json")
+            URL(string: "https://mactools.ggbond.app/plugins/v7/catalog.json")
         )
     }
 

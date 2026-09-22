@@ -74,6 +74,36 @@ final class IncrementalEncryptedClipboardHistoryStoreTests: XCTestCase {
         XCTAssertNotNil(loadedItem.payload)
     }
 
+    func testPlainTextShortcutClassificationSurvivesLazyReload() throws {
+        let fixture = try makeFixture()
+        let single = ClipboardHistoryItem(
+            id: UUID(), text: "One", capturedAt: Date(),
+            sourceApplication: nil, isPinned: false, lastUsedAt: nil
+        )
+        let multiple = ClipboardHistoryItem(
+            id: UUID(),
+            payload: ClipboardHistoryPayload(pasteboardItems: [
+                .init(representations: [
+                    .init(typeIdentifier: ClipboardRepresentationType.plainText, data: Data("First".utf8)),
+                ]),
+                .init(representations: [
+                    .init(typeIdentifier: ClipboardRepresentationType.plainText, data: Data("Second".utf8)),
+                ]),
+            ]),
+            capturedAt: Date(), sourceApplication: nil, isPinned: false, lastUsedAt: nil
+        )
+        try fixture.store.save([single, multiple])
+
+        let reopened = IncrementalEncryptedClipboardHistoryStore(
+            databaseURL: fixture.databaseURL, keyStore: fixture.keyStore
+        )
+        let loaded = try reopened.load()
+        XCTAssertNil(loaded.first { $0.id == single.id }?.payload)
+        XCTAssertTrue(loaded.first { $0.id == single.id }?.isPlainTextOnly == true)
+        XCTAssertFalse(loaded.first { $0.id == multiple.id }?.isPlainTextOnly == true)
+        XCTAssertNil(loaded.first { $0.id == multiple.id }?.payload)
+    }
+
     func testMetadataOnlyUpdateDoesNotRequirePreviouslyStoredPayloadToBeLoaded() throws {
         let fixture = try makeFixture()
         let item = sampleItem(index: 1)

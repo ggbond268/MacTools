@@ -27,7 +27,7 @@ final class AnnotationRendererTests: XCTestCase {
         let source = try makeImage(width: 160, height: 120)
         let renderer = AnnotationRenderer(image: source, scale: 2, size: NSSize(width: 80, height: 60))
         let selection = NSRect(x: 10, y: 5, width: 40, height: 30)
-        let png = try XCTUnwrap(renderer.render(selection: selection, items: [], radius: 0, shadowSize: 0, shadowColor: .black))
+        let png = try XCTUnwrap(renderer.renderPNG(selection: selection, items: [], radius: 0, shadowSize: 0, shadowColor: .black))
         let result = try XCTUnwrap(NSBitmapImageRep(data: png))
         XCTAssertTrue(result.pixelsWide == 80)
         XCTAssertTrue(result.pixelsHigh == 60)
@@ -41,19 +41,19 @@ final class AnnotationRendererTests: XCTestCase {
             XCTAssertTrue(abs(actual.greenComponent - expected.greenComponent) <= 0.02)
             XCTAssertTrue(abs(actual.blueComponent - expected.blueComponent) <= 0.02)
         }
-        XCTAssertTrue(renderer.render(selection: .zero, items: [], radius: 0, shadowSize: 10, shadowColor: .black) == nil)
+        XCTAssertTrue(renderer.renderPNG(selection: .zero, items: [], radius: 0, shadowSize: 10, shadowColor: .black) == nil)
     }
 
     func testRoundedCornersStayTransparentAndShadowGetsMargin() throws {
         let source = try makeImage(width: 160, height: 160)
         let renderer = AnnotationRenderer(image: source, scale: 2, size: NSSize(width: 80, height: 80))
         let selection = NSRect(x: 10, y: 10, width: 60, height: 60)
-        let rounded = try XCTUnwrap(renderer.render(selection: selection, items: [], radius: 12, shadowSize: 0, shadowColor: .black))
+        let rounded = try XCTUnwrap(renderer.renderPNG(selection: selection, items: [], radius: 12, shadowSize: 0, shadowColor: .black))
         let plain = try XCTUnwrap(NSBitmapImageRep(data: rounded))
         XCTAssertTrue(try XCTUnwrap(plain.colorAt(x: 0, y: 0)).alphaComponent == 0)
         XCTAssertTrue(try XCTUnwrap(plain.colorAt(x: 60, y: 60)).alphaComponent == 1)
 
-        let png = try XCTUnwrap(renderer.render(selection: selection, items: [], radius: 12, shadowSize: 6, shadowColor: .black))
+        let png = try XCTUnwrap(renderer.renderPNG(selection: selection, items: [], radius: 12, shadowSize: 6, shadowColor: .black))
         let shadowed = try XCTUnwrap(NSBitmapImageRep(data: png))
         XCTAssertTrue(AnnotationRenderer.shadowMargin(for: 0) == 0)
         XCTAssertTrue(AnnotationRenderer.shadowMargin(for: 6) == 14)
@@ -86,27 +86,57 @@ final class AnnotationRendererTests: XCTestCase {
         let items = shapes.map { Item(shape: $0, stroke: stroke) }
         let draft = Item(shape: .line(from: NSPoint(x: 10, y: 80), to: NSPoint(x: 140, y: 80)),
                          stroke: Stroke(color: .blue, width: 4))
-        let exported = try XCTUnwrap(renderer.render(selection: selection, items: items, draft: draft,
+        let exported = try XCTUnwrap(renderer.renderPNG(selection: selection, items: items, draft: draft,
                                                     radius: 0, shadowSize: 0, shadowColor: .black))
-        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 160, pixelsHigh: 160,
-                                                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
-        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+        let bitmapContext = try XCTUnwrap(CGContext(
+            data: nil,
+            width: 160,
+            height: 160,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: try XCTUnwrap(source.colorSpace),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let context = NSGraphicsContext(cgContext: bitmapContext, flipped: false)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
-        NSImage(cgImage: source, size: size).draw(in: selection)
+        NSImage(cgImage: source, size: size).draw(in: selection, from: .zero, operation: .copy, fraction: 1)
         renderer.drawItems(items, draft: draft, selection: selection)
         NSGraphicsContext.restoreGraphicsState()
-        rep.size = size
-        XCTAssertTrue(rep.representation(using: .png, properties: [:]) == exported)
 
         let result = try XCTUnwrap(NSBitmapImageRep(data: exported))
+        let expected = try XCTUnwrap(bitmapContext.makeImage())
+        let actual = try XCTUnwrap(result.cgImage)
+        XCTAssertEqual(try normalizedPixels(expected), try normalizedPixels(actual))
         let lineColor = try XCTUnwrap(result.colorAt(x: 75, y: 80)?.usingColorSpace(.deviceRGB))
         XCTAssertTrue(lineColor.blueComponent > 0.9)
         XCTAssertTrue(lineColor.redComponent < 0.1)
         renderer.clearCache()
-        XCTAssertTrue(renderer.render(selection: selection, items: items, draft: draft,
+        XCTAssertTrue(renderer.renderPNG(selection: selection, items: items, draft: draft,
                                 radius: 0, shadowSize: 0, shadowColor: .black) == exported)
+    }
+
+    func testPlainAndAnnotatedExportsRetainTheSourceColorSpace() throws {
+        let source = try makeImage(width: 80, height: 60, colorSpaceName: CGColorSpace.displayP3)
+        let size = NSSize(width: 80, height: 60)
+        let renderer = AnnotationRenderer(image: source, scale: 1, size: size)
+        let selection = NSRect(origin: .zero, size: size)
+        let annotation = Item(
+            shape: .rect(NSRect(x: 10, y: 10, width: 20, height: 20)),
+            stroke: Stroke(color: .red, width: 2)
+        )
+
+        for items in [[], [annotation]] {
+            let data = try XCTUnwrap(renderer.renderPNG(
+                selection: selection,
+                items: items,
+                radius: 0,
+                shadowSize: 0,
+                shadowColor: .black
+            ))
+            let exported = try XCTUnwrap(NSBitmapImageRep(data: data)?.cgImage)
+            XCTAssertEqual(exported.colorSpace?.name, CGColorSpace.displayP3)
+        }
     }
 
     func testQRMaskExportCannotDecodeOriginalPayloadAtEitherDisplayScale() throws {
@@ -142,7 +172,7 @@ final class AnnotationRendererTests: XCTestCase {
             let mosaic = Item(shape: .mosaic(rect), stroke: Stroke(color: .red, width: 2))
             let blur = Item(shape: .blur(rect), stroke: Stroke(color: .red, width: 2))
             for (items, draft) in [([mask], Optional<Item>.none), ([mask, mosaic], nil), ([mask, blur], mosaic)] {
-                let png = try XCTUnwrap(renderer.render(selection: NSRect(origin: .zero, size: size),
+                let png = try XCTUnwrap(renderer.renderPNG(selection: NSRect(origin: .zero, size: size),
                     items: items, draft: draft, radius: 0, shadowSize: 0, shadowColor: .black))
                 let exported = try XCTUnwrap(NSBitmapImageRep(data: png))
                 XCTAssertTrue(try decode(XCTUnwrap(exported.cgImage)).isEmpty)
@@ -162,7 +192,11 @@ final class AnnotationRendererTests: XCTestCase {
         XCTAssertTrue(Stroke(color: .red, width: 6).fontSize == 24)
     }
 
-    private func makeImage(width: Int, height: Int) throws -> CGImage {
+    private func makeImage(
+        width: Int,
+        height: Int,
+        colorSpaceName: CFString = CGColorSpace.sRGB
+    ) throws -> CGImage {
         var pixels = [UInt8](repeating: 255, count: width * height * 4)
         for y in 0..<height {
             for x in 0..<width {
@@ -174,10 +208,37 @@ final class AnnotationRendererTests: XCTestCase {
         }
         let provider = try XCTUnwrap(CGDataProvider(data: Data(pixels) as CFData))
 
-        let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let colorSpace = try XCTUnwrap(CGColorSpace(name: colorSpaceName))
         return try XCTUnwrap(CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
                                      bytesPerRow: width * 4, space: colorSpace,
                                      bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
                                      provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
+    }
+
+    private func normalizedPixels(_ image: CGImage) throws -> Data {
+        let bytesPerRow = image.width * 4
+        let context = try XCTUnwrap(CGContext(
+            data: nil,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB)),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setBlendMode(.copy)
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return Data(bytes: try XCTUnwrap(context.data), count: bytesPerRow * image.height)
+    }
+}
+
+
+@MainActor
+private extension AnnotationRenderer {
+    func renderPNG(selection: NSRect, items: [Item], draft: Item? = nil, radius: CGFloat,
+                   shadowSize: CGFloat, shadowColor: NSColor) -> Data? {
+        guard let raster = render(selection: selection, items: items, draft: draft, radius: radius,
+                                  shadowSize: shadowSize, shadowColor: shadowColor) else { return nil }
+        return try? ScreenshotImageEncoder.encodePNG(raster)
     }
 }

@@ -63,6 +63,7 @@ private struct MenuBarIconActionLabel: View {
 struct MenuBarIconSettingsView: View {
     @ObservedObject var iconSettings: MenuBarIconSettings
     @ObservedObject var gallery: MenuBarIconGalleryLibrary
+    @ObservedObject var iconCoordinator: PluginMenuBarIconCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.rowContentControl) {
@@ -91,13 +92,10 @@ struct MenuBarIconSettingsView: View {
                 Text(AppL10n.settings("menuBarIcon.title", defaultValue: "菜单栏图标"))
                     .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
 
-                Text(AppL10n.settings(
-                    "menuBarIcon.description",
-                    defaultValue: "统一设置菜单栏图标，自动适应浅色和深色外观。"
-                ))
+                Text(iconDescription)
                     .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -117,6 +115,27 @@ struct MenuBarIconSettingsView: View {
         }
         .frame(maxWidth: .infinity, minHeight: GeneralSettingsCardLayout.minRowHeight, alignment: .leading)
         .help(AppL10n.settings("menuBarIcon.help", defaultValue: "设置菜单栏图标"))
+    }
+
+    private var iconDescription: String {
+        guard let owner = iconCoordinator.primaryIconOwner else {
+            return AppL10n.settings(
+                "menuBarIcon.description",
+                defaultValue: "统一设置菜单栏图标，自动适应浅色和深色外观。"
+            )
+        }
+        if owner.requiresRestart {
+            return AppL10n.settingsFormat(
+                "menuBarIcon.pendingOwnerFormat",
+                defaultValue: "「%@」将在重启后恢复，当前使用下方设置的图标。",
+                owner.pluginTitle
+            )
+        }
+        return AppL10n.settingsFormat(
+            "menuBarIcon.activeOwnerFormat",
+            defaultValue: "当前由「%@」提供。以下设置在取消替换后生效。",
+            owner.pluginTitle
+        )
     }
 
     private var currentIconPreview: some View {

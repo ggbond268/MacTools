@@ -20,7 +20,7 @@ final class HideNotchPluginTests: XCTestCase {
         )
 
         let plugin = HideNotchPlugin(controller: controller)
-        let state = plugin.primaryPanelState
+        let state = plugin.rowState
 
         XCTAssertEqual(state.subtitle, "未检测到刘海屏")
         XCTAssertFalse(state.isEnabled)
@@ -43,9 +43,9 @@ final class HideNotchPluginTests: XCTestCase {
 
         let plugin = HideNotchPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "已开启")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertFalse(plugin.rowState.isEnabled)
     }
 
     func testPanelStateShowsManagedDisplayCountWhenEnabled() {
@@ -64,8 +64,8 @@ final class HideNotchPluginTests: XCTestCase {
 
         let plugin = HideNotchPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertEqual(plugin.rowState.subtitle, "已开启")
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testToggleOnForwardsToController() async {
@@ -89,7 +89,7 @@ final class HideNotchPluginTests: XCTestCase {
         }
 
         XCTAssertEqual(controller.setEnabledCalls, [true])
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testPanelStateShowsEnabledSubtitleWhileProcessing() {
@@ -108,8 +108,8 @@ final class HideNotchPluginTests: XCTestCase {
 
         let plugin = HideNotchPlugin(controller: controller)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "已开启")
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "已开启")
+        XCTAssertFalse(plugin.rowState.isEnabled)
     }
 
     func testCanonicalActionUsesTheWallpaperController() async throws {

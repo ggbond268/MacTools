@@ -83,7 +83,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: [item]),
-            NSSize(width: 316, height: 220)
+            NSSize(width: 316, height: 224)
         )
     }
 
@@ -215,7 +215,7 @@ final class MenuBarPanelLayoutTests: XCTestCase {
             MenuBarPanelLayout.preferredPanelHeight(for: items, screen: nil),
             MenuBarPanelLayout.featureListMaximumHeight
                 + MenuBarPanelLayout.contentVerticalPadding
-                + MenuBarPanelLayout.topChromeHeight
+                + MenuBarPanelLayout.panelChromeHeight
         )
         XCTAssertEqual(MenuBarPanelLayout.maximumPanelHeight(visibleFrameHeight: 1000), 750)
     }
@@ -223,8 +223,31 @@ final class MenuBarPanelLayoutTests: XCTestCase {
     func testEmptyContentSizeIncludesMarketplacePrompt() {
         XCTAssertEqual(
             MenuBarPanelLayout.contentSize(for: []),
-            NSSize(width: 316, height: 220)
+            NSSize(width: 316, height: 224)
         )
+    }
+
+    func testEditorDragFramesPreserveExpandedFeatureRowGeometry() {
+        let expandedEntry = MenuBarPanelEntry(placement: .init(item: .init(pluginID: "expanded", itemID: "control")), kind: .row)
+        let collapsedEntry = MenuBarPanelEntry(placement: .init(item: .init(pluginID: "collapsed", itemID: "control")), kind: .row)
+        let expanded = makeItem(id: expandedEntry.id, controlStyle: .disclosure, isExpanded: true,
+                                controls: [PluginPanelControl(
+                                    id: "enabled", kind: .switchRow, options: [], selectedOptionID: nil,
+                                    dateValue: nil, minimumDate: nil, displayedComponents: nil,
+                                    datePickerStyle: nil, sectionTitle: nil, actionTitle: "Enabled",
+                                    actionIconSystemName: "checkmark", isEnabled: true
+                                )])
+        let collapsed = makeItem(id: collapsedEntry.id, controlStyle: .disclosure, isExpanded: false)
+        let entries = [expandedEntry, collapsedEntry]
+        let placement = ConfiguredMenuBarPanelLayout.placement(entries: entries, components: [], features: [expanded, collapsed])
+        let frames = PanelLayoutEntryFrame.frames(entries: entries, placement: placement)
+        XCTAssertEqual(frames.count, 2)
+        XCTAssertEqual(frames[0].frame.height, MenuBarPanelLayout.rowHeight(for: expanded))
+        XCTAssertGreaterThan(frames[0].frame.height, frames[1].frame.height)
+        XCTAssertEqual(frames[1].frame.minY, frames[0].frame.maxY + MenuBarPanelLayout.featureRowSpacing)
+        XCTAssertEqual(placement.height, frames[1].frame.maxY)
+        XCTAssertEqual(PanelLayoutDropGeometry(frames: frames)
+            .target(at: CGPoint(x: 20, y: frames[0].frame.maxY - 1), rightToLeft: false).offset, 1)
     }
 
     private func makeItem(
@@ -232,8 +255,8 @@ final class MenuBarPanelLayoutTests: XCTestCase {
         controlStyle: PluginControlStyle,
         isExpanded: Bool,
         controls: [PluginPanelControl] = []
-    ) -> PluginPanelItem {
-        PluginPanelItem(
+    ) -> PluginPanelRowSnapshot {
+        PluginPanelRowSnapshot(
             id: id,
             title: "显示器分辨率",
             iconName: "display",
@@ -255,6 +278,22 @@ final class MenuBarPanelLayoutTests: XCTestCase {
 
 @MainActor
 final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
+    func testRepeatedActionRowsUseTheirOwnHoverAnchors() {
+        let coordinator = HoverSecondaryPanelCoordinator(activationDelay: nil)
+        let first = HoverSecondaryPanelCoordinator.Activation(placementID: "first", controlID: "list", optionID: "item")
+        let second = HoverSecondaryPanelCoordinator.Activation(placementID: "second", controlID: "list", optionID: "item")
+        let firstFrame = CGRect(x: 0, y: 0, width: 100, height: 40)
+        let secondFrame = CGRect(x: 0, y: 100, width: 100, height: 40)
+        coordinator.updateRowFrame(firstFrame, for: first)
+        coordinator.updateRowFrame(secondFrame, for: second)
+        coordinator.hoverBegan(placementID: "first", controlID: "list", optionID: "item")
+        XCTAssertEqual(coordinator.selectedRowFrame, firstFrame)
+        coordinator.hoverBegan(placementID: "second", controlID: "list", optionID: "item")
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+        coordinator.updateRowFrame(nil, for: first)
+        XCTAssertEqual(coordinator.selectedRowFrame, secondFrame)
+    }
+
     func testSwitchingActivationClearsPreviousAnchor() {
         let coordinator = HoverSecondaryPanelCoordinator(
             dismissDelay: .milliseconds(5),
@@ -264,7 +303,7 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
         let secondActivation = makeActivation(optionID: "3")
 
         coordinator.hoverBegan(
-            pluginID: firstActivation.pluginID,
+            placementID: firstActivation.placementID,
             controlID: firstActivation.controlID,
             optionID: firstActivation.optionID
         )
@@ -273,7 +312,7 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
             for: firstActivation
         )
         coordinator.hoverBegan(
-            pluginID: secondActivation.pluginID,
+            placementID: secondActivation.placementID,
             controlID: secondActivation.controlID,
             optionID: secondActivation.optionID
         )
@@ -292,12 +331,12 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
         coordinator.onDismissRequest = { dismissedActivation = $0 }
 
         coordinator.pin(
-            pluginID: activation.pluginID,
+            placementID: activation.placementID,
             controlID: activation.controlID,
             optionID: activation.optionID
         )
         coordinator.hoverEnded(
-            pluginID: activation.pluginID,
+            placementID: activation.placementID,
             controlID: activation.controlID,
             optionID: activation.optionID
         )
@@ -310,7 +349,7 @@ final class HoverSecondaryPanelCoordinatorTests: XCTestCase {
 
     private func makeActivation(optionID: String) -> HoverSecondaryPanelCoordinator.Activation {
         HoverSecondaryPanelCoordinator.Activation(
-            pluginID: "display-resolution",
+            placementID: "display-resolution",
             controlID: "display-navigation",
             optionID: optionID
         )

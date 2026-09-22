@@ -178,28 +178,13 @@ jobs:
           BUNDLE_IDENTIFIER_PREFIX = ${BUNDLE_IDENTIFIER_PREFIX}
           EOF
 
-      - name: Generate Xcode project
-        if: steps.nightly_gate.outputs.decision == 'publish'
-        run: make generate
-
       - name: Run contributor-testable validation
         if: steps.nightly_gate.outputs.decision == 'publish'
         run: |
-          make script-tests
-          /usr/bin/python3 scripts/changelog.py validate
-          xcodebuild \
-            -project "${PROJECT_NAME}.xcodeproj" \
-            -scheme "$SCHEME" \
-            -configuration Debug \
-            -destination "platform=macOS" \
-            -derivedDataPath "$DERIVED_DATA" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY= \
-            test \
-            -quiet
-          ./scripts/plugins/verify-plugin-kit-v6-binary-compatibility.sh \
-            "$DERIVED_DATA/Build/Products/Debug"
+          make ci \
+            DERIVED_DATA="$DERIVED_DATA" \
+            BUILD_DESTINATION="platform=macOS" \
+            XCODEBUILD=xcodebuild
 
       - name: Import Developer ID certificate
         if: steps.nightly_gate.outputs.decision == 'publish'

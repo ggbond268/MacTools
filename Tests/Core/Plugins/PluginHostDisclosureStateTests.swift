@@ -19,13 +19,13 @@ final class PluginHostDisclosureStateTests: XCTestCase {
         let host = makeHost(plugin: plugin)
 
         XCTAssertFalse(host.hasActivePlugin)
-        XCTAssertFalse(host.featureManagementItems[0].isActive)
+        XCTAssertFalse(host.panelItems[0].isOn)
         XCTAssertFalse(host.panelItems[0].isExpanded)
 
-        host.setDisclosureExpanded(true, for: plugin.metadata.id)
+        host.setDisclosureExpanded(true, for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id)
 
         XCTAssertTrue(host.panelItems[0].isExpanded)
-        XCTAssertFalse(host.featureManagementItems[0].isActive)
+        XCTAssertFalse(host.panelItems[0].isOn)
         XCTAssertFalse(host.hasActivePlugin)
     }
 
@@ -47,24 +47,24 @@ final class PluginHostDisclosureStateTests: XCTestCase {
         let host = makeHost(plugin: plugin)
         plugin.stateReadCount = 0
 
-        host.setDisclosureExpanded(true, for: plugin.metadata.id)
+        host.setDisclosureExpanded(true, for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id)
 
         XCTAssertEqual(plugin.stateReadCount, 1)
     }
 
     func testOptionalPrimaryPanelIndicatorMapsByPluginID() {
         let plugin = MockDisclosurePlugin()
-        plugin.indicator = PluginPrimaryPanelIndicator(text: "屏幕常亮", systemImage: "display")
+        plugin.indicator = PluginPanelRowIndicator(text: "屏幕常亮", systemImage: "display")
         let host = makeHost(plugin: plugin)
 
-        XCTAssertEqual(host.primaryPanelIndicatorsByID[plugin.metadata.id], plugin.indicator)
+        XCTAssertEqual(host.rowIndicator(for: host.panelItems[0].id), plugin.indicator)
     }
 
     func testOptionalCompactPrimaryPanelIndicatorMapsByPluginID() {
         let plugin = MockDisclosurePlugin()
-        plugin.compactIndicator = PluginPrimaryPanelCompactIndicator(
+        plugin.compactIndicator = PluginPanelRowCompactIndicator(
             icons: [
-                PluginPrimaryPanelIndicatorIcon(
+                PluginPanelRowIndicatorIcon(
                     systemImage: "display",
                     label: "屏幕",
                     accessibilityLabel: "屏幕常亮"
@@ -74,7 +74,7 @@ final class PluginHostDisclosureStateTests: XCTestCase {
         let host = makeHost(plugin: plugin)
 
         XCTAssertEqual(
-            host.primaryPanelCompactIndicatorsByID[plugin.metadata.id],
+            host.rowCompactIndicator(for: host.panelItems[0].id),
             plugin.compactIndicator
         )
     }
@@ -94,7 +94,7 @@ final class PluginHostDisclosureStateTests: XCTestCase {
 
         XCTAssertEqual(changingPlugin.indicatorReadCount, 1)
         XCTAssertEqual(stablePlugin.indicatorReadCount, 0)
-        XCTAssertTrue(host.primaryPanelIndicatorsByID.isEmpty)
+        XCTAssertTrue(host.panelItems.allSatisfy { host.rowIndicator(for: $0.id) == nil })
     }
 
     func testPrimaryPanelIndicatorChangesPublishDirectly() async throws {
@@ -103,17 +103,16 @@ final class PluginHostDisclosureStateTests: XCTestCase {
             plugins: [plugin],
             pluginStateChangeRebuildDelay: .milliseconds(20)
         )
-        let expectedIndicator = PluginPrimaryPanelIndicator(text: "屏幕常亮", systemImage: "display")
-        var publishedIndicators: [[String: PluginPrimaryPanelIndicator]] = []
-        let cancellable = host.$primaryPanelIndicatorsByID
-            .dropFirst()
-            .sink { publishedIndicators.append($0) }
+        let expectedIndicator = PluginPanelRowIndicator(text: "屏幕常亮", systemImage: "display")
+        var publishedIndicators: [PluginPanelRowIndicator?] = []
+        let cancellable = host.menuBarPanelContentDidChange
+            .sink { publishedIndicators.append(host.rowIndicator(for: host.panelItems[0].id)) }
 
         plugin.indicator = expectedIndicator
         plugin.onStateChange?()
         try await Task.sleep(for: .milliseconds(80))
 
-        XCTAssertEqual(publishedIndicators.last?[plugin.metadata.id], expectedIndicator)
+        XCTAssertEqual(publishedIndicators.last ?? nil, expectedIndicator)
         withExtendedLifetime(cancellable) {}
     }
 
@@ -131,7 +130,7 @@ final class PluginHostDisclosureStateTests: XCTestCase {
         return PluginHost(
             plugins: plugins,
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(),
             pluginStateChangeRebuildDelay: pluginStateChangeRebuildDelay
@@ -141,14 +140,21 @@ final class PluginHostDisclosureStateTests: XCTestCase {
 
 @MainActor
 private final class MockDisclosurePlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginPrimaryPanelIndicatorProviding,
-    PluginPrimaryPanelCompactIndicatorProviding
-{
+    MacToolsPlugin {
+    var panelItems: [PluginPanelItem] {
+        var state = rowState
+        state.indicator = rowIndicator
+        state.compactIndicator = rowCompactIndicator
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -158,8 +164,8 @@ private final class MockDisclosurePlugin:
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var isExpanded = false
     var errorMessage: String?
-    var indicator: PluginPrimaryPanelIndicator?
-    var compactIndicator: PluginPrimaryPanelCompactIndicator?
+    var indicator: PluginPanelRowIndicator?
+    var compactIndicator: PluginPanelRowCompactIndicator?
     var stateReadCount = 0
     var indicatorReadCount = 0
 
@@ -174,23 +180,22 @@ private final class MockDisclosurePlugin:
         )
     }
 
-    var primaryPanelIndicator: PluginPrimaryPanelIndicator? {
+    var rowIndicator: PluginPanelRowIndicator? {
         indicatorReadCount += 1
         return indicator
     }
 
-    var primaryPanelCompactIndicator: PluginPrimaryPanelCompactIndicator? {
+    var rowCompactIndicator: PluginPanelRowCompactIndicator? {
         compactIndicator
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         stateReadCount += 1
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: "Mock plugin",
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: errorMessage
         )

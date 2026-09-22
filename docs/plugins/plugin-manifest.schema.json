@@ -222,10 +222,9 @@
     },
     "capabilities": {
       "type": "object",
-      "required": ["primaryPanel", "componentPanel", "settings"],
+      "required": ["panelItems", "settings"],
       "properties": {
-        "primaryPanel": {"type": "boolean"},
-        "componentPanel": {"type": "boolean"},
+        "panelItems": {"type": "array", "uniqueItems": true, "items": {"enum": ["row", "widget"]}},
         "settings": {"enum": ["none", "form", "workspace"]}
       },
       "additionalProperties": false

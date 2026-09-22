@@ -29,7 +29,26 @@ private enum ControlID {
 // MARK: - Plugin
 
 @MainActor
-final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
+final class ZshConfigPlugin: MacToolsPlugin, PluginSettingsPresenting {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
 
     private enum PermissionID {
         static let automation = "automation"
@@ -39,13 +58,14 @@ final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     // MARK: Callbacks
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
+    var requestSettingsPresentation: (() -> Void)?
 
     // MARK: Private
 
@@ -70,7 +90,7 @@ final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
             order: 72,
             defaultDescription: localization.string("metadata.description", defaultValue: "快速编辑 zsh 配置文件")
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.edit", defaultValue: "编辑") }
@@ -88,22 +108,22 @@ final class ZshConfigPlugin: MacToolsPlugin, PluginPrimaryPanel {
         onStateChange?()
     }
 
-    // MARK: - PluginPrimaryPanel
+    // MARK: - Panel row
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )
     }
 
     func handleAction(_ action: PluginPanelAction) {
-        // The host intercepts the Edit button and navigates to this plugin's settings page.
+        guard case .invokeAction(controlID: "execute") = action else { return }
+        requestSettingsPresentation?()
     }
 
     var permissionRequirements: [PluginPermissionRequirement] {

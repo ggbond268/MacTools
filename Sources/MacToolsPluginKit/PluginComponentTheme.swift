@@ -435,7 +435,7 @@ public struct PluginComponentCardBackground: View {
 
     private let cornerRadius: CGFloat
 
-    public init(cornerRadius: CGFloat = PluginComponentPanelLayoutMetrics.cardCornerRadius) {
+    public init(cornerRadius: CGFloat = PluginPanelWidgetLayoutMetrics.cardCornerRadius) {
         self.cornerRadius = cornerRadius
     }
 

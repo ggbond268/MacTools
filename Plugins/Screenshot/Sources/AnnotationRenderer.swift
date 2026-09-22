@@ -207,30 +207,48 @@ final class AnnotationRenderer {
 
     /// Preview and export share drawing; only the destination context and scale differ.
     func render(selection: NSRect, items: [Item], draft: Item? = nil, radius: CGFloat,
-                shadowSize: CGFloat, shadowColor: NSColor) -> Data? {
+                shadowSize: CGFloat, shadowColor: NSColor) -> ScreenshotRaster? {
         guard !selection.isEmpty else { return nil }
+
+        // A plain screenshot needs no compositing. Encode the source crop directly so
+        // translucent windows retain their captured pixels and embedded color space.
+        if items.isEmpty, draft == nil, radius == 0, shadowSize == 0,
+           selection.intersection(bounds) == selection,
+           let (cropped, _) = crop(selection, selection: selection) {
+            return ScreenshotRaster(image: cropped, logicalSize: selection.size)
+        }
+
         let m = Self.shadowMargin(for: shadowSize)
         let size = NSSize(width: selection.width + m * 2, height: selection.height + m * 2)
         let w = Int((size.width * scale).rounded()), h = Int((size.height * scale).rounded())
-        guard w > 0, h > 0,
-              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-              let ctx = NSGraphicsContext(bitmapImageRep: rep)
+        let sourceColorSpace = cgImage.colorSpace
+        let colorSpace = sourceColorSpace?.model == .rgb
+            ? sourceColorSpace
+            : CGColorSpace(name: CGColorSpace.sRGB)
+        guard w > 0, h > 0, let colorSpace,
+              let bitmapContext = CGContext(
+                  data: nil,
+                  width: w,
+                  height: h,
+                  bitsPerComponent: 8,
+                  bytesPerRow: 0,
+                  space: colorSpace,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
         else { return nil }
 
+        let context = NSGraphicsContext(cgContext: bitmapContext, flipped: false)
         NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = ctx
-        ctx.cgContext.scaleBy(x: scale, y: scale)
-        ctx.cgContext.translateBy(x: m - selection.minX, y: m - selection.minY)
+        NSGraphicsContext.current = context
+        bitmapContext.scaleBy(x: scale, y: scale)
+        bitmapContext.translateBy(x: m - selection.minX, y: m - selection.minY)
         drawShadow(for: selection, radius: radius, shadowSize: shadowSize, shadowColor: shadowColor, deviceScale: scale)
         NSBezierPath(roundedRect: selection, xRadius: radius, yRadius: radius).setClip()
-        frozen.draw(in: bounds)
+        frozen.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
         drawItems(items, draft: draft, selection: selection)
         NSGraphicsContext.restoreGraphicsState()
 
-        // Preserve logical dimensions in PNG DPI metadata instead of doubling document size on Retina.
-        rep.size = size
-        return rep.representation(using: .png, properties: [:])
+        guard let rendered = bitmapContext.makeImage() else { return nil }
+        return ScreenshotRaster(image: rendered, logicalSize: size)
     }
 }

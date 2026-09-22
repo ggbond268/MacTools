@@ -43,11 +43,6 @@ enum AppHostCommandAction: Hashable {
     case appShortcut(AppShortcutAction)
     case setAppearance(AppAppearancePreference)
     case setLaunchAtLogin(Bool)
-    case setPluginVisibility(
-        pluginID: String,
-        surface: PluginDisplaySurface,
-        isVisible: Bool
-    )
     case resetCommandPalettePosition
 }
 
@@ -83,7 +78,7 @@ enum AppHostCommandCatalog {
         let currentAppearance = AppAppearancePreference.stored(
             in: context.appearanceUserDefaults
         )
-        let fixed = fixedDefinitions().filter { definition in
+        return fixedDefinitions().filter { definition in
             switch definition.action {
             case .appShortcut:
                 return true
@@ -93,37 +88,8 @@ enum AppHostCommandCatalog {
                 return isEnabled != context.launchAtLoginController.isEnabled
             case .resetCommandPalettePosition:
                 return true
-            case .setPluginVisibility:
-                return false
             }
         }
-
-        return fixed + pluginVisibilityDefinitions(pluginHost: context.pluginHost)
-    }
-
-    static func pluginVisibility(
-        pluginID: String,
-        surface: PluginDisplaySurface,
-        pluginHost: PluginHost
-    ) -> Bool? {
-        let visibleItems: [PluginSurfaceLayoutItem]
-        let hiddenItems: [PluginSurfaceLayoutItem]
-        switch surface {
-        case .dashboard:
-            visibleItems = pluginHost.dashboardLayoutItems
-            hiddenItems = pluginHost.dashboardHiddenLayoutItems
-        case .featurePanel:
-            visibleItems = pluginHost.featurePanelLayoutItems
-            hiddenItems = pluginHost.featurePanelHiddenLayoutItems
-        }
-
-        if visibleItems.contains(where: { $0.id == pluginID }) {
-            return true
-        }
-        if hiddenItems.contains(where: { $0.id == pluginID }) {
-            return false
-        }
-        return nil
     }
 
     private static func fixedDefinitions() -> [AppHostCommandDefinition] {
@@ -284,89 +250,6 @@ enum AppHostCommandCatalog {
         )
     }
 
-    private static func pluginVisibilityDefinitions(
-        pluginHost: PluginHost
-    ) -> [AppHostCommandDefinition] {
-        visibilityDefinitions(
-            surface: .dashboard,
-            visibleItems: pluginHost.dashboardLayoutItems,
-            hiddenItems: pluginHost.dashboardHiddenLayoutItems
-        ) + visibilityDefinitions(
-            surface: .featurePanel,
-            visibleItems: pluginHost.featurePanelLayoutItems,
-            hiddenItems: pluginHost.featurePanelHiddenLayoutItems
-        )
-    }
-
-    private static func visibilityDefinitions(
-        surface: PluginDisplaySurface,
-        visibleItems: [PluginSurfaceLayoutItem],
-        hiddenItems: [PluginSurfaceLayoutItem]
-    ) -> [AppHostCommandDefinition] {
-        visibleItems.map {
-            visibilityDefinition(item: $0, surface: surface, isVisible: false)
-        } + hiddenItems.map {
-            visibilityDefinition(item: $0, surface: surface, isVisible: true)
-        }
-    }
-
-    private static func visibilityDefinition(
-        item: PluginSurfaceLayoutItem,
-        surface: PluginDisplaySurface,
-        isVisible: Bool
-    ) -> AppHostCommandDefinition {
-        let surfaceTitle = surface.title
-        let title = isVisible
-            ? AppL10n.searchFormat(
-                "search.command.pluginVisibility.show.titleFormat",
-                defaultValue: "在%1$@中显示“%2$@”",
-                surfaceTitle,
-                item.title
-            )
-            : AppL10n.searchFormat(
-                "search.command.pluginVisibility.hide.titleFormat",
-                defaultValue: "在%1$@中隐藏“%2$@”",
-                surfaceTitle,
-                item.title
-            )
-        let description = isVisible
-            ? AppL10n.searchFormat(
-                "search.command.pluginVisibility.show.descriptionFormat",
-                defaultValue: "让“%1$@”出现在%2$@中。",
-                item.title,
-                surfaceTitle
-            )
-            : AppL10n.searchFormat(
-                "search.command.pluginVisibility.hide.descriptionFormat",
-                defaultValue: "从%1$@中隐藏“%2$@”，但保留插件安装。",
-                surfaceTitle,
-                item.title
-            )
-        let visibilityKeywords = isVisible
-            ? ["show", "visible", "显示", "可见"]
-            : ["hide", "hidden", "隐藏", "不可见"]
-
-        return AppHostCommandDefinition(
-            id: "host-command.plugin-visibility.\(item.id).\(surface.idComponent).\(isVisible ? "show" : "hide")",
-            title: title,
-            description: description,
-            keywords: [item.title, item.id, surfaceTitle]
-                + surface.searchKeywords
-                + visibilityKeywords
-                + MacToolsSearchIndexBuilder.pluginMetadataKeywords(
-                    pluginID: item.id,
-                    category: item.category,
-                    releaseChannel: item.releaseChannel
-                ),
-            systemImage: isVisible ? "eye" : "eye.slash",
-            confirmation: nil,
-            action: .setPluginVisibility(
-                pluginID: item.id,
-                surface: surface,
-                isVisible: isVisible
-            )
-        )
-    }
 }
 
 @MainActor
@@ -402,48 +285,12 @@ enum AppHostCommandExecutor {
             }
             return .performed(.refreshIndex)
 
-        case let .setPluginVisibility(pluginID, surface, isVisible):
-            context.pluginHost.setPluginVisible(isVisible, id: pluginID, on: surface)
-            guard AppHostCommandCatalog.pluginVisibility(
-                pluginID: pluginID,
-                surface: surface,
-                pluginHost: context.pluginHost
-            ) == isVisible else {
-                return .failed
-            }
-            return .performed(.refreshIndex)
-
         case .resetCommandPalettePosition:
             guard let resetAction = context.resetCommandPalettePosition else {
                 return .failed
             }
             resetAction()
             return .performed(.refreshIndex)
-        }
-    }
-}
-
-private extension PluginDisplaySurface {
-    var idComponent: String {
-        switch self {
-        case .dashboard: "dashboard"
-        case .featurePanel: "feature-panel"
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .dashboard:
-            AppL10n.settings("plugins.sidebar.dashboard", defaultValue: "仪表盘")
-        case .featurePanel:
-            AppL10n.settings("plugins.sidebar.featurePanel", defaultValue: "功能面板")
-        }
-    }
-
-    var searchKeywords: [String] {
-        switch self {
-        case .dashboard: ["dashboard", "仪表盘"]
-        case .featurePanel: ["feature panel", "功能面板"]
         }
     }
 }

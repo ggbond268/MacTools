@@ -5,6 +5,19 @@
       "frameCount": 1,
       "frameDuration": 1.0,
       "framePaths": [
+        "assets/static-mactools-legacy-t/frames/frame-000.png"
+      ],
+      "id": "static-mactools-legacy-t",
+      "previewPath": "assets/static-mactools-legacy-t/preview.png",
+      "title": "MacTools Original",
+      "version": "1",
+      "renderingMode": "template"
+    },
+    {
+      "categoryID": "featured",
+      "frameCount": 1,
+      "frameDuration": 1.0,
+      "framePaths": [
         "assets/static-sleeping-cat/frames/frame-000.png"
       ],
       "id": "static-sleeping-cat",

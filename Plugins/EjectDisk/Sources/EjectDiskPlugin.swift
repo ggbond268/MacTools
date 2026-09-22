@@ -19,16 +19,41 @@ private struct EjectDiskPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
-    PluginActionProviding
-{
+final class EjectDiskPlugin: MacToolsPlugin, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            )
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("quick-control") }
+                    else { self?.panelItemDidBecomeHidden("quick-control") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let ejectAll = "eject-all"
     }
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -43,6 +68,7 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurf
     private var ejectableVolumes: [EjectableVolume] = []
     private var lastErrorMessage: String?
     private var discoveryTask: Task<Void, Never>?
+    private var visiblePanelItems: Set<String> = []
 
     init(
         localization: PluginLocalization = PluginLocalization(bundle: .main),
@@ -60,20 +86,19 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurf
             order: 92,
             defaultDescription: localization.string("metadata.description", defaultValue: "推出所有可移动磁盘")
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
             buttonTitleProvider: { localization.string("panel.button.eject", defaultValue: "推出") }
         )
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: subtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: !isDetecting && !isEjecting && !ejectableVolumes.isEmpty,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )
@@ -115,21 +140,23 @@ final class EjectDiskPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurf
     func refresh() {}
 
     func deactivate(reason _: PluginDeactivationReason) {
+        visiblePanelItems.removeAll()
         discoveryTask?.cancel()
         discoveryTask = nil
         isDetecting = false
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .primary else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "control" || surface == "quick-control" else {
             return
         }
-
-        discoverEjectableVolumes()
+        let wasHidden = visiblePanelItems.isEmpty
+        visiblePanelItems.insert(surface)
+        if wasHidden { discoverEjectableVolumes() }
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .primary else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard visiblePanelItems.remove(surface) != nil, visiblePanelItems.isEmpty else {
             return
         }
 

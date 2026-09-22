@@ -1851,7 +1851,7 @@ private struct SystemStatusMenuBarDetailPanelView: View {
                 localization: localization
             )
         }
-        .padding(12)
+        .padding(10)
         .background(theme.surfaces.panel)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }

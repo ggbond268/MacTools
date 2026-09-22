@@ -166,7 +166,7 @@ final class SystemSoftRestartPluginTests: XCTestCase {
         let plugin = makePlugin(runner: runner)
         let definition = try XCTUnwrap(plugin.actionDefinitions.first)
 
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isEnabled)
         XCTAssertFalse(plugin.actionAvailability(for: ActionReference(key: definition.key)).isAvailable)
     }
 

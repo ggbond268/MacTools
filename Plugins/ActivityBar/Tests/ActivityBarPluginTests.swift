@@ -1,12 +1,94 @@
+import AppKit
+import SwiftUI
 import XCTest
 import MacToolsPluginKit
 @testable import ActivityBarPlugin
 
 @MainActor
 final class ActivityBarPluginTests: XCTestCase {
+    func testPlacementsRetainIndependentPresentationWithoutLeakingRetiredCopies() {
+        let harness = makeHarness()
+        let id = UUID()
+        var first: ActivityBarComponentPresentation? = harness.plugin.presentation(for: id)
+        weak var retired = first
+        first?.selectedDateOffset = -4
+        XCTAssertTrue(first === harness.plugin.presentation(for: id))
+        XCTAssertEqual(harness.plugin.presentation(for: UUID()).selectedDateOffset, 0)
+        XCTAssertEqual(harness.plugin.presentation(for: nil).selectedDateOffset, 0)
+        first = nil
+        XCTAssertNil(retired)
+        XCTAssertEqual(harness.plugin.presentation(for: id).selectedDateOffset, 0)
+    }
+
+    func testAnotherCopyDoesNotReopenACollapsedAppRow() {
+        let presentation = ActivityBarComponentPresentation()
+        presentation.selectInitialApp(nil)
+        presentation.selectInitialApp("Terminal")
+        XCTAssertEqual(presentation.expandedAppName, "Terminal")
+        presentation.expandedAppName = nil
+        presentation.selectInitialApp("Terminal")
+        XCTAssertNil(presentation.expandedAppName)
+    }
+
+    func testLivePresentationSurvivesViewRemountAndPreviewIsIndependent() async throws {
+        let harness = makeHarness()
+        let presentation = ActivityBarComponentPresentation()
+        presentation.selectInitialTrend(hasCodingToolsData: false)
+        presentation.trendMode = .codingTools
+        presentation.selectedDateOffset = -1
+        presentation.expandedAppName = "Terminal"
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 600),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        PluginPresentationSafety.prepareForWindowOrdering(window)
+        window.orderFront(nil)
+        defer { window.close() }
+        for _ in 0..<2 {
+            window.contentView = NSHostingView(rootView: ActivityBarComponentView(
+                controller: harness.controller, presentation: presentation).frame(width: 304, height: 600))
+            try await Task.sleep(for: .milliseconds(80))
+            window.contentView = nil
+        }
+        let preview = ActivityBarComponentPresentation()
+        window.contentView = NSHostingView(rootView: ActivityBarComponentView(
+            controller: harness.controller, presentation: preview).frame(width: 304, height: 600))
+        try await Task.sleep(for: .milliseconds(80))
+        XCTAssertEqual(preview.trendMode, .input)
+        XCTAssertEqual(preview.selectedDateOffset, 0)
+        XCTAssertEqual(presentation.trendMode, .codingTools)
+        XCTAssertEqual(presentation.selectedDateOffset, -1)
+        XCTAssertEqual(presentation.expandedAppName, "Terminal")
+    }
+
+    func testLibraryPreviewDoesNotRefreshBusinessDataOrResizeLiveCards() async throws {
+        let harness = makeHarness()
+        let span = harness.plugin.descriptor.span
+        var changes = 0
+        var previewHeight: CGFloat?
+        harness.plugin.onStateChange = { changes += 1 }
+        let content = harness.plugin.makeView(context: PluginPanelWidgetContext(
+            pluginID: harness.plugin.metadata.id, itemID: "widget", placementID: nil, dismiss: {},
+            reportContentHeight: { previewHeight = $0 }))
+        let root = NSHostingView(rootView: content.frame(width: 304, height: 504))
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 304, height: 504),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        PluginPresentationSafety.prepareForWindowOrdering(window)
+        window.orderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(160))
+        root.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(try XCTUnwrap(previewHeight), 0)
+        XCTAssertEqual(harness.plugin.descriptor.span, span)
+        XCTAssertEqual(changes, 0)
+        harness.plugin.panelItemDidBecomeVisible("widget")
+        XCTAssertGreaterThan(changes, 0, "Foreground refresh belongs to the plugin lifecycle")
+    }
+
     func testDashboardUsesReducedFallbackHeight() {
         let harness = makeHarness()
-        let metrics = PluginComponentPanelLayoutMetrics.default
+        let metrics = PluginPanelWidgetLayoutMetrics.default
 
         XCTAssertEqual(
             metrics.itemHeight(forSpanHeight: harness.plugin.descriptor.span.height),
@@ -14,37 +96,14 @@ final class ActivityBarPluginTests: XCTestCase {
         )
     }
 
-    func testDashboardAdaptsToMeasuredContentHeight() {
-        let harness = makeHarness()
-        let metrics = PluginComponentPanelLayoutMetrics.default
-        var notificationCount = 0
-        harness.plugin.onStateChange = {
-            notificationCount += 1
-        }
-
-        harness.plugin.dashboardContentHeightDidChange(501)
-
-        XCTAssertEqual(
-            metrics.itemHeight(forSpanHeight: harness.plugin.descriptor.span.height),
-            504
-        )
-        XCTAssertEqual(notificationCount, 1)
-
-        harness.plugin.dashboardContentHeightDidChange(503)
-        harness.plugin.dashboardContentHeightDidChange(.nan)
-
-        XCTAssertEqual(notificationCount, 1)
-    }
-
     func testPrimaryPanelExpandsWithTrackingSwitchAndActions() throws {
         let harness = makeHarness()
 
         harness.plugin.handleAction(.setDisclosureExpanded(true))
 
-        let state = harness.plugin.primaryPanelState
+        let state = harness.plugin.rowState
         let controls = try XCTUnwrap(state.detail?.primaryControls)
 
-        XCTAssertTrue(state.isExpanded)
         XCTAssertEqual(controls.map(\.id), [
             "tracking-enabled",
             "open-input-monitoring",
@@ -70,7 +129,7 @@ final class ActivityBarPluginTests: XCTestCase {
         harness.controller.installHooks()
         harness.plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(harness.plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(harness.plugin.rowState.detail?.primaryControls)
 
         XCTAssertEqual(controls.map(\.id), [
             "tracking-enabled",
@@ -88,7 +147,7 @@ final class ActivityBarPluginTests: XCTestCase {
         XCTAssertTrue(harness.controller.isTrackingEnabled)
         XCTAssertEqual(harness.inputMonitor.startCallCount, 1)
         XCTAssertEqual(harness.socketServer.startCallCount, 0)
-        XCTAssertTrue(harness.plugin.primaryPanelState.isOn)
+        XCTAssertTrue(harness.plugin.rowState.isOn)
 
         harness.plugin.handleAction(.setSwitch(false))
 
@@ -252,8 +311,8 @@ final class ActivityBarPluginTests: XCTestCase {
         XCTAssertEqual(harness.inputMonitor.startCallCount, 0)
         XCTAssertEqual(harness.socketServer.startCallCount, 1)
         XCTAssertTrue(harness.socketServer.isRunning)
-        XCTAssertTrue(harness.plugin.componentPanelState.isActive)
-        XCTAssertEqual(harness.plugin.componentPanelState.subtitle, "AI 监听中")
+        XCTAssertTrue(harness.plugin.widgetState.isActive)
+        XCTAssertEqual(harness.plugin.widgetState.subtitle, "AI 监听中")
     }
 
     func testInstallHooksStartsSocketWithoutTrackingSwitch() throws {
@@ -318,7 +377,7 @@ final class ActivityBarPluginTests: XCTestCase {
         XCTAssertEqual(harness.controller.hookInstallState, .notInstalled)
         XCTAssertEqual(harness.socketServer.stopCallCount, 1)
         XCTAssertFalse(harness.socketServer.isRunning)
-        XCTAssertFalse(harness.plugin.componentPanelState.isActive)
+        XCTAssertFalse(harness.plugin.widgetState.isActive)
     }
 
     func testDeactivateForUpdatingStopsHookSocket() {
@@ -354,10 +413,10 @@ final class ActivityBarPluginTests: XCTestCase {
         harness.plugin.handleAction(.setDisclosureExpanded(true))
         harness.plugin.handleAction(.setSwitch(true))
 
-        let controls = try XCTUnwrap(harness.plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(harness.plugin.rowState.detail?.primaryControls)
 
         XCTAssertEqual(controls.first?.kind, .switchRow)
-        XCTAssertTrue(harness.plugin.primaryPanelState.isOn)
+        XCTAssertTrue(harness.plugin.rowState.isOn)
     }
 
     func testMonitorEventsUpdateComponentSubtitle() {
@@ -368,7 +427,7 @@ final class ActivityBarPluginTests: XCTestCase {
         harness.inputMonitor.emit(.pointerClick(app: "Terminal"))
 
         XCTAssertEqual(harness.controller.todayInputStats.totalInputs, 2)
-        XCTAssertEqual(harness.plugin.componentPanelState.subtitle, "2 次输入")
+        XCTAssertEqual(harness.plugin.widgetState.subtitle, "2 次输入")
     }
 
     func testMonitorEventsBatchPluginStateNotifications() {
@@ -392,6 +451,38 @@ final class ActivityBarPluginTests: XCTestCase {
 
         XCTAssertEqual(notificationCount, 1)
         XCTAssertEqual(harness.storage.setCallCount(forKey: "activity-bar.input.days.v1"), 1)
+    }
+
+    func testHiddenInputCollectionSkipsHostUpdatesAndBothPanelSurfacesCatchUp() async throws {
+        let harness = makeHarness(inputEventNotificationDelay: .milliseconds(1))
+        defer { harness.plugin.deactivate(reason: .hostShutdown) }
+        harness.plugin.handleAction(.setSwitch(true))
+        var changes = 0
+        harness.plugin.onStateChange = { changes += 1 }
+        harness.inputMonitor.emit(.keystroke(app: "Terminal"))
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(harness.controller.todayInputStats.totalInputs, 1)
+        XCTAssertEqual(changes, 0)
+
+        harness.plugin.panelItemDidBecomeVisible("control")
+        XCTAssertEqual(changes, 1)
+        XCTAssertEqual(harness.storage.setCallCount(forKey: "activity-bar.input.days.v1"), 0)
+        harness.plugin.panelItemDidBecomeVisible("widget")
+        XCTAssertEqual(changes, 2)
+        harness.plugin.panelItemDidBecomeHidden("control")
+        harness.inputMonitor.emit(.pointerClick(app: "Terminal"))
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(changes, 3)
+        harness.plugin.panelItemDidBecomeHidden("widget")
+        harness.inputMonitor.emit(.scroll(app: "Terminal"))
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(changes, 3)
+        XCTAssertEqual(harness.controller.todayInputStats.totalInputs, 3)
+        harness.plugin.panelItemDidBecomeVisible("control")
+        XCTAssertEqual(changes, 4)
+        harness.plugin.deactivate(reason: .hostShutdown)
+        let restored = ActivityBarStatsStore(storage: harness.storage)
+        XCTAssertEqual(restored.today.totalInputs, 3)
     }
 
     func testHostShutdownFlushesPendingInputStats() {

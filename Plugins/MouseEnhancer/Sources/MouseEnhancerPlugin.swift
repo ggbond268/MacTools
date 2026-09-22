@@ -58,12 +58,26 @@ enum MouseEnhancerHostCompatibility {
 
 @MainActor
 final class MouseEnhancerPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    AccessibilityPermissionRefreshing,
-    PluginApplicationActivityStateHandling,
-    DisplayTopologyRefreshing,
-    PluginSettingsPresenting {
+    MacToolsPlugin, AccessibilityPermissionRefreshing, PluginApplicationActivityStateHandling, DisplayTopologyRefreshing, PluginSettingsPresenting {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum PermissionID {
         static let accessibility = "accessibility"
         static let inputMonitoring = "input-monitoring"
@@ -76,6 +90,8 @@ final class MouseEnhancerPlugin:
         static let trackpadHorizontal = "trackpad-horizontal"
         static let middleClick = "middle-click"
         static let middleClickFingerCount = "middle-click-finger-count"
+        static let mouseSmoothScrolling = "mouse-smooth-scrolling"
+        static let mouseScrollDuration = "mouse-scroll-duration"
         static let mouseScrollStep = "mouse-scroll-step"
         static let mouseScrollGain = "mouse-scroll-gain"
         static let trackpadScrollStep = "trackpad-scroll-step"
@@ -83,7 +99,7 @@ final class MouseEnhancerPlugin:
     }
 
     let metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -137,7 +153,7 @@ final class MouseEnhancerPlugin:
         self.inputMonitoringAuthorizationStatus = inputMonitoringAuthorizationStatus
         self.openURL = openURL
         self.isAccessibilityGranted = accessibilityTrusted()
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
             buttonTitleProvider: { localization.string("panel.button.settings", defaultValue: "设置") }
@@ -195,13 +211,12 @@ final class MouseEnhancerPlugin:
         session.displayTopologyDidChange()
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastErrorMessage
         )
@@ -338,6 +353,25 @@ final class MouseEnhancerPlugin:
                                 defaultValue: "鼠标滚动距离的增益倍数，1.0× 为不调整。"
                             ),
                             value: store.configuration.mouseScrollGain
+                        ),
+                        toggleRow(
+                            id: SettingsID.mouseSmoothScrolling,
+                            title: localization.string("settings.mouse.smooth.title", defaultValue: "平滑滚动"),
+                            description: localization.string(
+                                "settings.mouse.smooth.description",
+                                defaultValue: "鼠标滚轮滚动改为平滑过渡，而非逐格跳动。"
+                            ),
+                            icon: "scroll",
+                            isOn: store.configuration.smoothScrollingEnabled
+                        ),
+                        scrollDurationRow(
+                            id: SettingsID.mouseScrollDuration,
+                            title: localization.string("settings.mouse.smoothDuration.title", defaultValue: "滚动时长"),
+                            description: localization.string(
+                                "settings.mouse.smoothDuration.description",
+                                defaultValue: "平滑滚动时每次滚动完成过渡所需的时间。"
+                            ),
+                            value: store.configuration.mouseScrollDuration
                         )
                     ]
                 ),
@@ -404,6 +438,8 @@ final class MouseEnhancerPlugin:
                 store.setReverseTrackpadHorizontal(value)
             case SettingsID.middleClick:
                 store.setMiddleClickEnabled(value)
+            case SettingsID.mouseSmoothScrolling:
+                store.setSmoothScrollingEnabled(value)
             default:
                 return
             }
@@ -426,6 +462,8 @@ final class MouseEnhancerPlugin:
                 store.setTrackpadScrollStep(value)
             case SettingsID.trackpadScrollGain:
                 store.setTrackpadScrollGain(value)
+            case SettingsID.mouseScrollDuration:
+                store.setMouseScrollDuration(value)
             default:
                 return
             }
@@ -488,6 +526,28 @@ final class MouseEnhancerPlugin:
                 range: MouseEnhancerConfiguration.scrollGainRange,
                 step: 0.1,
                 valueFormat: PluginSettingsSliderValueFormat(suffix: "×", fractionDigits: 1)
+            )
+        )
+    }
+
+    private func scrollDurationRow(
+        id: String,
+        title: String,
+        description: String,
+        value: Double
+    ) -> PluginSettingsRow {
+        PluginSettingsRow(
+            id: id,
+            title: title,
+            description: description,
+            systemImage: "timer",
+            isEnabled: store.configuration.smoothScrollingEnabled,
+            isVisible: store.configuration.smoothScrollingEnabled,
+            control: .slider(
+                value: value,
+                range: MouseEnhancerConfiguration.scrollDurationRange,
+                step: 0.1,
+                valueFormat: PluginSettingsSliderValueFormat(suffix: " s", fractionDigits: 1)
             )
         )
     }

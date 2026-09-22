@@ -9,9 +9,8 @@ final class FanControlPluginTests: XCTestCase {
 
         XCTAssertEqual(plugin.metadata.id, "fan-control")
         XCTAssertEqual(plugin.metadata.title, "风扇控制")
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .disclosure)
-        XCTAssertFalse(plugin.primaryPanelState.isExpanded)
-        XCTAssertTrue(plugin.primaryPanelState.subtitle.contains("自动"))
+        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .disclosure)
+        XCTAssertTrue(plugin.rowState.subtitle.contains("自动"))
     }
 
     func testRefreshShowsFanSpeedInSubtitle() {
@@ -25,7 +24,7 @@ final class FanControlPluginTests: XCTestCase {
 
         plugin.refresh()
 
-        XCTAssertTrue(plugin.primaryPanelState.subtitle.contains("3600 RPM"))
+        XCTAssertTrue(plugin.rowState.subtitle.contains("3600 RPM"))
     }
 
     func testSelectingBuiltInPresetAppliesStrategy() {
@@ -55,10 +54,10 @@ final class FanControlPluginTests: XCTestCase {
 
         plugin.handleAction(.setDisclosureExpanded(true))
         plugin.handleAction(.setSelection(controlID: "fan-preset-list", optionID: FanPresetBuiltInID.fullSpeed))
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
 
         plugin.handleAction(.setDisclosureExpanded(false))
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testDisclosureNoOpDoesNotNotifyStateChange() {
@@ -323,7 +322,7 @@ final class FanControlPluginTests: XCTestCase {
 
         XCTAssertEqual(plugin.presetStore.activePresetID, preset.id)
         XCTAssertEqual(writer.appliedStrategies.count, appliedCount)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         storage.blockedSetKeys = []
         let reloaded = makePlugin(storage: storage)
         XCTAssertEqual(reloaded.presetStore.activePresetID, preset.id)
@@ -403,7 +402,7 @@ final class FanControlPluginTests: XCTestCase {
         XCTAssertFalse(plugin.restorePortablePreferencesReportingResult(from: autoBackup))
         XCTAssertEqual(plugin.presetStore.activePresetID, FanPresetBuiltInID.fullSpeed)
         XCTAssertEqual(writer.appliedStrategies.suffix(2), [.auto, .fullSpeed])
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
 
         plugin.deactivate(reason: .hostShutdown)
     }
@@ -531,11 +530,11 @@ final class FanControlPluginTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(45))
         let expandedWhileHiddenReadCount = reader.readCount
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         try await Task.sleep(for: .milliseconds(45))
         let visibleReadCount = reader.readCount
 
-        plugin.panelSurfaceDidBecomeHidden(.primary)
+        plugin.panelItemDidBecomeHidden("control")
         try await Task.sleep(for: .milliseconds(45))
         let hiddenReadCount = reader.readCount
 

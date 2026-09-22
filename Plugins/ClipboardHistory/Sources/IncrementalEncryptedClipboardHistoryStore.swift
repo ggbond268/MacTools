@@ -20,6 +20,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
         var fileReferenceCount: Int?
         var linkURLs: [String]?
         var representationTypeIdentifiers: [String]?
+        var hasSinglePlainTextRepresentation: Bool?
         var payloadDigest: Data
         // These summary fields were added while the incremental store was already in use by
         // development builds. Keep them optional so older encrypted rows remain decodable.
@@ -46,6 +47,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
             fileReferenceCount = item.fileReferenceCount
             linkURLs = item.linkURLs.map(\.absoluteString)
             representationTypeIdentifiers = item.representationTypeIdentifiers
+            hasSinglePlainTextRepresentation = item.hasSinglePlainTextRepresentation
             payloadDigest = item.payloadDigest
             allowsRichTextImport = item.allowsRichTextImport
             textCharacterCount = item.textCharacterCount
@@ -459,6 +461,7 @@ final class IncrementalEncryptedClipboardHistoryStore:
             fileReferenceCount: metadata.fileReferenceCount ?? decodedFileURLs.count,
             linkURLs: boundedLinkURLs,
             representationTypeIdentifiers: boundedRepresentationTypes,
+            hasSinglePlainTextRepresentation: metadata.hasSinglePlainTextRepresentation,
             payloadDigest: metadata.payloadDigest,
             allowsRichTextImport: metadata.allowsRichTextImport ?? false,
             textCharacterCount: metadata.textCharacterCount ?? metadata.text.count,

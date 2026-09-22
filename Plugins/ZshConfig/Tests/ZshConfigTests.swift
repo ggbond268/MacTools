@@ -1,7 +1,26 @@
 import XCTest
+import MacToolsPluginKit
 @testable import ZshConfigPlugin
 
 final class ZshConfigTests: XCTestCase {
+    @MainActor
+    func testPanelEntryRequestsSettingsWithoutHostSpecificRouting() throws {
+        let plugin = ZshConfigPlugin()
+        var requests = 0
+        plugin.requestSettingsPresentation = { requests += 1 }
+        let items = plugin.panelItems
+        guard case let .row(row) = items.first?.content else { return XCTFail("Missing row") }
+        row.action(.invokeAction(controlID: "execute"))
+        XCTAssertEqual(requests, 1)
+        plugin.handleAction(.invokeAction(controlID: "execute"))
+        XCTAssertEqual(requests, 2, "The shared widget action must open the same settings page")
+        plugin.handleAction(.invokeAction(controlID: "unknown"))
+        plugin.handleAction(.setSwitch(true))
+        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(items.map(\.id), ["control", "quick-control"])
+        XCTAssertNil(items.last?.initialPlacement)
+    }
+
     @MainActor
     func testPublishesOptionalAutomationRequirement() {
         let plugin = ZshConfigPlugin()

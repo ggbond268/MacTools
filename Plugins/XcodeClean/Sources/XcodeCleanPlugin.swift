@@ -106,12 +106,15 @@ final class XcodeCleanConfirmWindowPresenter: XcodeCleanConfirmationPresenting {
 
 @MainActor
 final class XcodeCleanPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    DropZoneAnchorProviding,
-    PluginSettingsPresenting,
-    PluginActionProviding
-{
+    MacToolsPlugin, DropZoneAnchorProviding, PluginSettingsPresenting, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ActionID {
         static let scanAndReview = "scan-and-review"
     }
@@ -124,7 +127,7 @@ final class XcodeCleanPlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -188,14 +191,13 @@ final class XcodeCleanPlugin:
         controller.updateXcodeRunningState(runningMonitor.isXcodeRunning)
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         let snapshot = controller.snapshot
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: subtitle(for: snapshot),
             isOn: snapshot.isBusy,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? buildDetail(for: snapshot) : nil,
             errorMessage: snapshot.errorMessage
         )

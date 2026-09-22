@@ -25,11 +25,26 @@ private struct LaunchpadPluginProvider: PluginProvider {
 
 @MainActor
 final class LaunchpadPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginActionProviding,
-    PluginLegacyActionShortcutProviding
-{
+    MacToolsPlugin, PluginActionProviding, PluginLegacyActionShortcutProviding {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("metadata.title", defaultValue: metadata.title),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum ControlID {
         static let execute = "execute"
     }
@@ -42,7 +57,7 @@ final class LaunchpadPlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -76,7 +91,7 @@ final class LaunchpadPlugin:
                 defaultValue: "唤出应用网格，搜索并启动"
             )
         )
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitleProvider: { localization.string("panel.button.open", defaultValue: "打开") }
@@ -193,13 +208,12 @@ final class LaunchpadPlugin:
         ])
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: metadata.defaultDescription,
             isOn: false,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

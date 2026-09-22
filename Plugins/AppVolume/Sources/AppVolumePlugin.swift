@@ -24,9 +24,15 @@ private struct AppVolumePluginProvider: PluginProvider {
 }
 
 @MainActor
-final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding,
-    PluginActionPermissionProviding
-{
+final class AppVolumePlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ActionID {
         static let setVolume = "set-volume"
     }
@@ -51,7 +57,7 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -121,16 +127,15 @@ final class AppVolumePlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionPro
         }
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         rebuildControlApplicationIDs()
         let applications = snapshot.applications
 
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: applications.contains { !Self.isUnity(volume(for: $0.id)) },
-            isExpanded: isExpanded,
             isEnabled: router.isSupported,
-            isVisible: true,
+            isAvailable: true,
             detail: panelDetail(applications: applications),
             errorMessage: panelErrorMessage
         )

@@ -1,3 +1,4 @@
+import EventKit
 import XCTest
 @testable import MacTools
 @testable import CalendarPlugin
@@ -13,7 +14,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let sundayRequest = expectation(description: "Sunday-first event range loaded")
         service.onEventsRequest = sundayRequest.fulfill
@@ -46,7 +48,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             eventService: service,
             holidayProvider: .empty,
             calendar: calendar,
-            today: targetDate
+            today: targetDate,
+            now: { targetDate }
         )
         let initialRequest = expectation(description: "Visible calendar loads events")
         service.onEventsRequest = initialRequest.fulfill
@@ -110,7 +113,8 @@ final class CalendarComponentViewModelTests: XCTestCase {
             id: "20260429",
             date: targetDate,
             dayNumber: "29",
-            lunarText: "十三",
+            alternateCalendarText: "十三",
+            alternateCalendarDateText: "四月十三",
             isInDisplayedMonth: true,
             isToday: true,
             isWeekend: false,
@@ -124,12 +128,294 @@ final class CalendarComponentViewModelTests: XCTestCase {
         XCTAssertEqual(service.openedDates, [targetDate])
     }
 
+    func testSelectingDayDoesNotChangeTheTodayDetailSource() throws {
+        let calendar = Self.makeCalendar()
+        let service = MockCalendarEventService()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let targetDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 29)))
+        let event = CalendarEventSummary(
+            id: "event-1",
+            title: "Planning",
+            timeText: "10:00",
+            startDate: targetDate,
+            endDate: targetDate,
+            isAllDay: false,
+            color: .accent
+        )
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today
+        )
+        let targetDay = CalendarDayModel(
+            id: "20260429",
+            date: targetDate,
+            dayNumber: "29",
+            alternateCalendarText: "十三",
+            alternateCalendarDateText: "四月十三",
+            isInDisplayedMonth: true,
+            isToday: false,
+            isWeekend: false,
+            holidayKind: nil,
+            events: [event]
+        )
+
+        viewModel.select(targetDay)
+
+        XCTAssertEqual(viewModel.selectedDay, targetDay)
+        XCTAssertEqual(viewModel.todayDay?.id, "20260415")
+        XCTAssertNotEqual(viewModel.todayDay?.id, targetDay.id)
+    }
+
+    func testRefreshUpdatesTodayDetailAfterDayBoundary() throws {
+        let calendar = Self.makeCalendar()
+        var now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let viewModel = CalendarComponentViewModel(
+            eventService: MockCalendarEventService(),
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: now,
+            now: { now }
+        )
+        now = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: now))
+
+        viewModel.refresh()
+
+        XCTAssertEqual(viewModel.todayDay?.id, "20260416")
+    }
+
+    func testCrossDayEventAppearsOnceWhenTodayIsOutsideTheMonthGrid() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 25)))
+        let endDate = try XCTUnwrap(calendar.date(byAdding: .day, value: 3, to: today))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [CalendarEventInput(
+            id: "vacation",
+            title: "Vacation",
+            startDate: today,
+            endDate: endDate,
+            isAllDay: true,
+            color: .accent
+        )]
+        let requests = expectation(description: "Month grid and today loaded")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 1)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Vacation"])
+        let nextDay = try XCTUnwrap(viewModel.month.days.first { $0.id == "20260426" })
+        XCTAssertEqual(nextDay.events.map(\.title), ["Vacation"])
+    }
+
+    func testDistantMonthKeepsQueriesBoundedAndPreservesTodaysEvents() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let distantDate = try XCTUnwrap(calendar.date(byAdding: .year, value: 10, to: today))
+        let distantEnd = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: distantDate))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [
+            CalendarEventInput(id: "today", title: "Today", startDate: today,
+                               endDate: tomorrow, isAllDay: true, color: .accent),
+            CalendarEventInput(id: "future", title: "Future", startDate: distantDate,
+                               endDate: distantEnd, isAllDay: true, color: .accent)
+        ]
+        let requests = expectation(description: "Only the month grid and today are queried")
+        requests.expectedFulfillmentCount = 2
+        service.onEventsRequest = requests.fulfill
+        let viewModel = CalendarComponentViewModel(
+            eventService: service,
+            holidayProvider: .empty,
+            calendar: calendar,
+            today: today,
+            now: { today }
+        )
+        defer { viewModel.stop() }
+
+        viewModel.moveMonth(by: 120)
+        await fulfillment(of: [requests], timeout: 1)
+
+        XCTAssertEqual(service.eventRanges.count, 2)
+        XCTAssertEqual(service.eventRanges.map {
+            calendar.dateComponents([.day], from: $0.start, to: $0.end).day
+        }, [42, 3])
+        XCTAssertEqual(viewModel.todayDay?.events.map(\.title), ["Today"])
+        let distantDay = try XCTUnwrap(viewModel.month.days.first {
+            calendar.isDate($0.date, inSameDayAs: distantDate)
+        })
+        XCTAssertEqual(distantDay.events.map(\.title), ["Future"])
+    }
+
     private static func makeCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         calendar.locale = Locale(identifier: "en_US_POSIX")
         calendar.firstWeekday = 1
         return calendar
+    }
+
+    func testAgendaGroupsAllEventsByDayAndReconfiguresWhileVisible() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 12, day: 31)))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = (-3...3).map { offset in
+            let date = calendar.date(byAdding: .day, value: offset, to: today)!
+            return CalendarEventInput(id: "\(offset)", title: "Event \(offset)", startDate: date,
+                                      endDate: date.addingTimeInterval(3600), isAllDay: false, color: .accent,
+                                      calendarTitle: "Work")
+        }
+        let model = CalendarComponentViewModel(eventService: service, holidayProvider: .empty,
+                                                calendar: calendar, today: today, now: { today })
+        defer { model.stop() }
+        let initial = expectation(description: "Future agenda loaded")
+        service.onEventsRequest = initial.fulfill
+        model.start()
+        await fulfillment(of: [initial], timeout: 1)
+        XCTAssertEqual(model.agendaDays.map(\.id), ["20261231", "20270101", "20270102"])
+        XCTAssertEqual(model.agendaDays.first?.events.first?.calendarTitle, "Work")
+
+        let changed = expectation(description: "Surrounding agenda loaded")
+        service.onEventsRequest = changed.fulfill
+        model.configureAgenda(range: CalendarAgendaRange(dayCount: 3, direction: .surrounding), isVisible: true)
+        await fulfillment(of: [changed], timeout: 1)
+        XCTAssertEqual(model.agendaDays.map(\.id), ["20261230", "20261231", "20270101"])
+        model.select(try XCTUnwrap(model.month.days.first))
+        XCTAssertEqual(model.agendaDays.map(\.id), ["20261230", "20261231", "20270101"])
+        model.open(try XCTUnwrap(model.agendaDays.last))
+        XCTAssertEqual(service.openedDates.last, model.agendaDays.last?.date)
+    }
+
+    func testEventStoreNotificationsRefreshAndStopWithVisibility() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        let center = NotificationCenter()
+        let model = CalendarComponentViewModel(eventService: service, holidayProvider: .empty, calendar: calendar,
+                                                notificationCenter: center, today: today, now: { today })
+        let initial = expectation(description: "Initial request")
+        service.onEventsRequest = initial.fulfill
+        model.start()
+        await fulfillment(of: [initial], timeout: 1)
+
+        service.eventInputs = [CalendarEventInput(id: "new", title: "New", startDate: today,
+            endDate: today.addingTimeInterval(3600), isAllDay: false, color: .accent)]
+        let updated = expectation(description: "Store change reloads agenda")
+        service.onEventsRequest = updated.fulfill
+        for _ in 0..<3 { center.post(name: .EKEventStoreChanged, object: nil) }
+        await fulfillment(of: [updated], timeout: 1)
+        XCTAssertEqual(service.eventRanges.count, 2, "Store notifications should coalesce")
+        XCTAssertEqual(model.agendaDays.first?.events.map(\.title), ["New"])
+
+        model.stop()
+        let hidden = expectation(description: "Hidden calendar should not reload")
+        hidden.isInverted = true
+        service.onEventsRequest = hidden.fulfill
+        center.post(name: .EKEventStoreChanged, object: nil)
+        await fulfillment(of: [hidden], timeout: 0.25)
+    }
+
+    func testHiddenAgendaDoesNotQueryDistantDates() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        let model = CalendarComponentViewModel(eventService: service, holidayProvider: .empty,
+            calendar: calendar, showsRecentAgenda: false, today: today, now: { today })
+        let request = expectation(description: "Only the month grid loads")
+        service.onEventsRequest = request.fulfill
+        model.moveMonth(by: 120)
+        await fulfillment(of: [request], timeout: 1)
+        XCTAssertEqual(service.eventRanges.count, 1)
+        XCTAssertTrue(model.agendaDays.isEmpty)
+        model.stop()
+    }
+
+    func testRegionChangesRefreshBadgesWithoutChangingSelectedAlternateCalendar() async throws {
+        var regionalCalendar = Self.makeCalendar()
+        let today = try XCTUnwrap(regionalCalendar.date(from: DateComponents(year: 2026, month: 1, day: 4)))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.eventInputs = [CalendarEventInput(id: "event", title: "Planning", startDate: today,
+            endDate: today.addingTimeInterval(3600), isAllDay: false, color: .accent)]
+        let center = NotificationCenter()
+        let holidays = try CalendarHolidayProvider(data: Data(#"{"2026":{"0104":1}}"#.utf8))
+        let model = CalendarComponentViewModel(eventService: service, holidayProvider: holidays,
+            calendar: regionalCalendar, calendarProvider: { regionalCalendar }, notificationCenter: center,
+            today: today, now: { today })
+        defer { model.stop() }
+        let initial = expectation(description: "Initial events loaded")
+        service.onEventsRequest = initial.fulfill
+        model.start()
+        await fulfillment(of: [initial], timeout: 1)
+        XCTAssertTrue(try XCTUnwrap(model.agendaDays.first).alternateCalendarText.isEmpty)
+
+        regionalCalendar.locale = Locale(identifier: "en_CN")
+        let changed = expectation(description: "Region change reloads calendar")
+        service.onEventsRequest = changed.fulfill
+        center.post(name: NSLocale.currentLocaleDidChangeNotification, object: nil)
+        await fulfillment(of: [changed], timeout: 1)
+        for day in [model.selectedDay, model.todayDay, model.agendaDays.first] {
+            XCTAssertTrue(try XCTUnwrap(day).alternateCalendarText.isEmpty)
+            XCTAssertEqual(day?.holidayKind, .workday)
+        }
+        let requestCount = service.eventRanges.count
+        model.setAlternateCalendar(.chinese)
+        XCTAssertTrue(model.month.days.allSatisfy { !$0.alternateCalendarText.isEmpty && !$0.alternateCalendarDateText.isEmpty })
+        XCTAssertFalse(try XCTUnwrap(model.agendaDays.first).alternateCalendarText.isEmpty)
+        XCTAssertEqual(model.agendaDays.first?.events.first?.title, "Planning")
+        XCTAssertEqual(model.todayDay?.holidayKind, .workday)
+        XCTAssertEqual(service.eventRanges.count, requestCount, "A presentation preference must not requery events")
+
+        model.stop()
+        regionalCalendar.locale = Locale(identifier: "en_US")
+        let resumed = expectation(description: "New region applied on reopening")
+        service.onEventsRequest = resumed.fulfill
+        model.start()
+        await fulfillment(of: [resumed], timeout: 1)
+        XCTAssertFalse(try XCTUnwrap(model.todayDay).alternateCalendarText.isEmpty)
+        XCTAssertNil(model.todayDay?.holidayKind)
+    }
+
+    func testQueryFailureClearsAgendaAndRetryRecovers() async throws {
+        let calendar = Self.makeCalendar()
+        let today = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 15)))
+        let service = MockCalendarEventService()
+        service.authorization = .fullAccess
+        service.shouldFail = true
+        let model = CalendarComponentViewModel(eventService: service, holidayProvider: .empty,
+                                                calendar: calendar, today: today, now: { today })
+        let failed = expectation(description: "Request failed")
+        service.onEventsRequest = failed.fulfill
+        model.start()
+        await fulfillment(of: [failed], timeout: 1)
+        XCTAssertNotNil(model.eventLoadingError)
+        XCTAssertTrue(model.agendaDays.isEmpty)
+        XCTAssertTrue(model.hasAgendaContent, "Read failures must retain retry guidance")
+
+        let retry = expectation(description: "Retry succeeds")
+        service.onEventsRequest = retry.fulfill
+        service.shouldFail = false
+        model.refresh()
+        await fulfillment(of: [retry], timeout: 1)
+        XCTAssertNil(model.eventLoadingError)
+        XCTAssertFalse(model.hasAgendaContent, "A successfully loaded empty agenda must leave only the month")
+        model.stop()
     }
 }
 
@@ -139,6 +425,8 @@ private final class MockCalendarEventService: CalendarEventServicing {
     private(set) var openedDates: [Date] = []
     private(set) var eventRanges: [(start: Date, end: Date)] = []
     var onEventsRequest: (() -> Void)?
+    var eventInputs: [CalendarEventInput] = []
+    var shouldFail = false
 
     func requestAccess() async -> CalendarEventAuthorization {
         authorization
@@ -147,7 +435,8 @@ private final class MockCalendarEventService: CalendarEventServicing {
     func events(from startDate: Date, to endDate: Date) async throws -> [CalendarEventInput] {
         eventRanges.append((startDate, endDate))
         onEventsRequest?()
-        return []
+        if shouldFail { throw CocoaError(.fileReadUnknown) }
+        return eventInputs.filter { $0.startDate < endDate && $0.endDate > startDate }
     }
 
     func openSystemCalendar(at date: Date) {

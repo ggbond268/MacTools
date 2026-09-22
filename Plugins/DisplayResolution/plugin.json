@@ -70,8 +70,8 @@
     }
   },
   "version": "1.2.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "DisplayResolution.bundle",
   "factoryClass": "DisplayResolutionPlugin.DisplayResolutionPluginFactory",
   "build": {
@@ -79,8 +79,7 @@
     "scheme": "DisplayResolutionPlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": false,
+    "panelItems": ["row"],
     "settings": "none"
   },
   "permissions": [],

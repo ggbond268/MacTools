@@ -32,7 +32,7 @@ final class PluginHostActionExecutionContextTests: XCTestCase {
             controller.toggleFavorite(record.id)
             let plugin = MacSettingsPlugin(controller: controller)
             let host = makePluginHostForTests(plugins: [plugin])
-            host.setDisclosureExpanded(true, for: plugin.metadata.id)
+            host.setDisclosureExpanded(true, for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id)
             try await Task.sleep(for: .milliseconds(350))
             controller.cancelRefresh()
             XCTAssertEqual(host.panelItems.first?.detail?.controls.first?.isEnabled, true)

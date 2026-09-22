@@ -21,7 +21,7 @@ final class AppVolumePluginTests: XCTestCase {
 
         XCTAssertEqual(plugin.metadata.id, "app-volume")
         XCTAssertEqual(plugin.metadata.title, "应用音量")
-        XCTAssertEqual(plugin.primaryPanelDescriptor.controlStyle, .disclosure)
+        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .disclosure)
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["system-audio-recording"])
     }
 
@@ -36,7 +36,7 @@ final class AppVolumePluginTests: XCTestCase {
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let state = plugin.primaryPanelState
+        let state = plugin.rowState
         let sliders = state.detail?.controls.filter { $0.kind == .slider } ?? []
         XCTAssertEqual(sliders.map(\.sectionTitle), ["Browser", "Music"])
         XCTAssertEqual(sliders.compactMap(\.sliderValue), [1, 1])
@@ -53,7 +53,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 51),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.35, phase: .ended))
         await Task.yield()
@@ -63,7 +63,7 @@ final class AppVolumePluginTests: XCTestCase {
         let target = try XCTUnwrap(router.lastTargets.first)
         XCTAssertEqual(target.id, "com.example.music")
         XCTAssertEqual(target.gain, 0.35, accuracy: 0.001)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testReturningSliderToUnityStopsProcessing() async throws {
@@ -75,11 +75,11 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 61),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.5, phase: .ended))
         for _ in 0 ..< 100 {
-            let control = plugin.primaryPanelState.detail?.controls.first
+            let control = plugin.rowState.detail?.controls.first
             if !router.updates.isEmpty,
                control?.sliderValue == 0.5,
                control?.isEnabled == true {
@@ -89,15 +89,15 @@ final class AppVolumePluginTests: XCTestCase {
         }
         plugin.handleAction(.setSlider(controlID: sliderID, value: 1, phase: .ended))
         for _ in 0 ..< 100 {
-            if !plugin.primaryPanelState.isOn,
-               plugin.primaryPanelState.detail?.controls.first?.isEnabled == true {
+            if !plugin.rowState.isOn,
+               plugin.rowState.detail?.controls.first?.isEnabled == true {
                 break
             }
             await Task.yield()
         }
 
         XCTAssertTrue(router.lastTargets.isEmpty)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testVolumePreferenceIsRestoredForMatchingApplication() async throws {
@@ -110,7 +110,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 71),
         ]))
         firstPlugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(firstPlugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(firstPlugin.rowState.detail?.controls.first?.id)
         firstPlugin.handleAction(.setSlider(controlID: sliderID, value: 0.2, phase: .ended))
         for _ in 0 ..< 100 where router.updates.isEmpty {
             await Task.yield()
@@ -125,7 +125,7 @@ final class AppVolumePluginTests: XCTestCase {
         ]))
         secondPlugin.handleAction(.setDisclosureExpanded(true))
 
-        XCTAssertEqual(secondPlugin.primaryPanelState.detail?.controls.first?.sliderValue, 0.2)
+        XCTAssertEqual(secondPlugin.rowState.detail?.controls.first?.sliderValue, 0.2)
     }
 
     func testRestoredVolumeDoesNotRequestAccessUntilUserChangesIt() async throws {
@@ -137,7 +137,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 81),
         ]))
         firstPlugin.handleAction(.setDisclosureExpanded(true))
-        let firstSliderID = try XCTUnwrap(firstPlugin.primaryPanelState.detail?.controls.first?.id)
+        let firstSliderID = try XCTUnwrap(firstPlugin.rowState.detail?.controls.first?.id)
         firstPlugin.handleAction(.setSlider(controlID: firstSliderID, value: 0.2, phase: .ended))
 
         let restoredMonitor = AppVolumeMonitorMock()
@@ -163,15 +163,15 @@ final class AppVolumePluginTests: XCTestCase {
 
         XCTAssertFalse(monitor.isRunning)
         XCTAssertTrue(router.didStop)
-        XCTAssertTrue(plugin.primaryPanelState.detail?.controls.isEmpty ?? true)
+        XCTAssertTrue(plugin.rowState.detail?.controls.isEmpty ?? true)
     }
 
     func testUnsupportedSystemDisablesPlugin() {
         let router = AppVolumeRouterMock(isSupported: false)
         let plugin = makePlugin(router: router)
 
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "需要 macOS 15 或更高版本")
+        XCTAssertFalse(plugin.rowState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "需要 macOS 15 或更高版本")
         XCTAssertTrue(plugin.permissionRequirements.isEmpty)
     }
 
@@ -338,7 +338,7 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertEqual(router.updates[updateCountBeforeAction].first?.gain, 0)
         XCTAssertEqual(router.updates[updateCountBeforeAction + 1].first?.gain, 1)
         plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.sliderValue, 1)
 
         let restoredMonitor = AppVolumeMonitorMock()
         let restored = makePlugin(storage: storage, monitor: restoredMonitor)
@@ -347,7 +347,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 95),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     func testCanonicalRouteFailureReportsFailedRollback() async throws {
@@ -401,7 +401,7 @@ final class AppVolumePluginTests: XCTestCase {
         XCTAssertEqual(router.updates[updateCountBeforeAction].first?.gain, 0)
         XCTAssertEqual(router.updates[updateCountBeforeAction + 1].first?.gain, 1)
         plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.sliderValue, 1)
 
         let restoredMonitor = AppVolumeMonitorMock()
         let restored = makePlugin(storage: storage, monitor: restoredMonitor)
@@ -410,7 +410,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 101),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     func testCanonicalPersistenceFailurePreservesWrongTypedRawValue() async throws {
@@ -451,7 +451,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 105),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.5, phase: .changed))
         for _ in 0 ..< 100 where !router.hasSuspendedAccessRequest {
@@ -468,7 +468,7 @@ final class AppVolumePluginTests: XCTestCase {
             let appliedRequestedGain = router.updates.contains {
                 $0.first?.gain == 0.5
             }
-            let sliderIsEnabled = plugin.primaryPanelState.detail?.controls.first?.isEnabled == true
+            let sliderIsEnabled = plugin.rowState.detail?.controls.first?.isEnabled == true
             if appliedRequestedGain, sliderIsEnabled {
                 break
             }
@@ -476,7 +476,7 @@ final class AppVolumePluginTests: XCTestCase {
         }
         XCTAssertEqual(router.accessRequestCount, 1)
         XCTAssertTrue(router.updates.contains { $0.first?.gain == 0.5 })
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.isEnabled, true)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.isEnabled, true)
     }
 
     func testCanonicalRouteIgnoresStaleSnapshotUpdateQueuedWhileAwaitingApply() async throws {
@@ -519,7 +519,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 98),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 0)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 0)
     }
 
     func testPanelEditIsDisabledAndIgnoredWhileCanonicalRouteIsSuspended() async throws {
@@ -533,7 +533,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 100),
         ]))
         plugin.handleAction(.setDisclosureExpanded(true))
-        let sliderID = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first?.id)
+        let sliderID = try XCTUnwrap(plugin.rowState.detail?.controls.first?.id)
         let reference = try XCTUnwrap(plugin.actionCatalogEntries.first?.reference)
 
         let resultTask = Task {
@@ -547,7 +547,7 @@ final class AppVolumePluginTests: XCTestCase {
             await Task.yield()
         }
         XCTAssertTrue(router.hasSuspendedApply)
-        XCTAssertFalse(plugin.primaryPanelState.detail?.controls.first?.isEnabled ?? true)
+        XCTAssertFalse(plugin.rowState.detail?.controls.first?.isEnabled ?? true)
 
         plugin.handleAction(.setSlider(controlID: sliderID, value: 0.7, phase: .ended))
         router.completeSuspendedApply(.succeeded)
@@ -563,7 +563,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 101),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 0)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 0)
     }
 
     func testDeactivationCancelsSuspendedCanonicalRouteWithoutPersisting() async throws {
@@ -611,7 +611,7 @@ final class AppVolumePluginTests: XCTestCase {
             application(id: "com.example.music", name: "Music", objectID: 104),
         ]))
         restored.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(restored.primaryPanelState.detail?.controls.first?.sliderValue, 1)
+        XCTAssertEqual(restored.rowState.detail?.controls.first?.sliderValue, 1)
     }
 
     @available(macOS 15.0, *)

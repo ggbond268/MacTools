@@ -492,7 +492,7 @@ def main() -> None:
             "version": packaged["version"],
             "minimumHostVersion": packaged.get("minHostVersion", minimum_host_version),
             "pluginKitVersion": manifest_plugin_kit_version,
-            "capabilities": packaged.get("capabilities", {
+            "capabilities": packaged.get("capabilities", {"panelItems": [], "settings": "none"} if manifest_plugin_kit_version >= 7 else {
                 "primaryPanel": False, "componentPanel": False, "settings": "none"
             }),
             "permissions": packaged.get("permissions", []),

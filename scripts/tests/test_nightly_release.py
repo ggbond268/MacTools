@@ -156,11 +156,11 @@ class NightlyReleaseTests(unittest.TestCase):
             f"build/nightly/nightly-512-3/mactools-cli-{version}-512.3-macos-arm64.zip.sha256",
         )
         self.assertNotIn("PROJECT_NAME", metadata)
-        self.assertEqual(metadata["PLUGIN_KIT_VERSION"], "6")
+        self.assertEqual(metadata["PLUGIN_KIT_VERSION"], "7")
         self.assertNotIn("PLUGIN_CATALOG_MINIMUM_HOST_VERSION", metadata)
         self.assertEqual(
             metadata["NIGHTLY_PLUGIN_CATALOG_RELATIVE_PATH"],
-            "docs/nightly/plugins/v6/catalog.json",
+            "docs/nightly/plugins/v7/catalog.json",
         )
 
     def test_release_warning_is_first(self) -> None:
@@ -614,6 +614,35 @@ class NightlyCLIArchiveTests(unittest.TestCase):
         )
         signature.assert_called_once_with(
             extracted, "com.example.mactools.nightly.cli", "TEAM123",
+        )
+        dependencies.assert_called_once_with(extracted)
+        version_output.assert_called_once_with(extracted, "1.2.1", "512.1")
+
+    def test_stable_archive_uses_stable_identity_and_keeps_all_checks(self) -> None:
+        self.package()
+        with mock.patch.object(
+            nightly_release, "verify_cli_slice_metadata",
+        ) as metadata, mock.patch.object(
+            nightly_release, "verify_cli_architectures",
+        ) as architectures, mock.patch.object(
+            nightly_release, "verify_cli_deployment_target",
+        ) as deployment, mock.patch.object(
+            nightly_release, "verify_cli_signature",
+        ) as signature, mock.patch.object(
+            nightly_release, "verify_cli_dependencies",
+        ) as dependencies, mock.patch.object(
+            nightly_release, "verify_cli_version_output",
+        ) as version_output:
+            nightly_release.verify_cli_archive(
+                self.archive, self.checksum, "com.example", "TEAM123", "1.2.1", "512.1", channel="stable",
+            )
+        extracted = architectures.call_args.args[0]
+        deployment.assert_called_once_with(extracted)
+        metadata.assert_called_once_with(
+            extracted, "com.example.mactools.cli", "1.2.1", "512.1",
+        )
+        signature.assert_called_once_with(
+            extracted, "com.example.mactools.cli", "TEAM123",
         )
         dependencies.assert_called_once_with(extracted)
         version_output.assert_called_once_with(extracted, "1.2.1", "512.1")

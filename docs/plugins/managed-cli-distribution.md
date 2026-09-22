@@ -1,31 +1,75 @@
-# Managed Nightly CLI distribution
+# Managed CLI installation
 
-The managed installer is limited to Apple silicon and the Nightly release channel. Stable, Intel, unsigned, and manifest-less builds cannot use it. The CLI remains a separate optional artifact. Plugin packages and manual CLI installation retain their existing workflows.
+MacTools can install and maintain a separate Apple silicon CLI using metadata sealed inside the signed app. Nightly publishes this metadata. Stable support exists in source, but normal stable publication remains disabled; see [CLI release gates](cli-release.md). Intel, development, unsigned, and manifest-less builds cannot complete managed installation.
 
-## Authentication and publication
+For installation steps, use the [Nightly guide](../testing/cli-nightly-distribution.md#install-from-settings). For commands and JSON responses, see [CLI agent usage](../cli/agent-usage.md).
 
-`scripts/cli-install-manifest.py` writes schema-1 `cli-install.json` both beside the CLI ZIP and into `MacTools Nightly.app/Contents/Resources/`. It records app and CLI version/build, channel, architecture, source commit, immutable source release and asset URL, ZIP SHA-256 and byte count, signing identifier, Team ID, and protocol range. Generate it **after signing and packaging the CLI, before signing the outer app**. Do not repackage the CLI afterward. Publish only after the existing app and CLI notarization gates succeed.
+## Channels and ownership
 
-The trusted input is the resource in the locally validated Developer ID app signature. The public JSON is informational and is never fetched as an authority. A hash in unsigned remote metadata is insufficient. This binds every app build to one exact archive without a new release signing key. App updates replace the sealed manifest along with the app. The CLI is checked against the same developer identity and its separate `.cli` signing identifier, with a Developer ID certificate requirement and notarization requirement. Quarantine is set on downloaded/extracted files and is never removed; failures are not repaired by re-signing or bypassing macOS checks.
+| Channel | Public command | Private store |
+| --- | --- | --- |
+| Stable candidate | `~/.local/bin/mactools` | `~/Library/Application Support/MacTools/CLI/<owner>/` |
+| Nightly | `~/.local/bin/mactools-nightly` | `~/Library/Application Support/MacTools Nightly/CLI/<owner>/` |
 
-Official GitHub uses `https://github.com/<owner>/<repo>/releases/download/nightly-<run>-<attempt>`. Personal publishers use `https://<host>/releases/<build>`. Both are immutable source-release directories. Redirects must retain HTTPS without credentials. The ephemeral download session has no cookie, credential, or persistent URL cache; it sends no app/plugin data, command history, or repository credentials. Downloads have a 30-second request timeout, 120-second resource deadline, and a maximum of the manifest size (capped at 64 MiB). The archive parser requires exactly two regular entries, `mactools` (0755) and `LICENSE` (0644), validates local and central records, and rejects traversal, symlinks, encryption, extra records, unsupported ZIP forms, and oversized content. System decompression and CLI validation have bounded output and deadlines.
+The owner hash binds the signing identity, Team ID, and publisher release URL prefix. Different publishers cannot adopt each other's installations. A public-command collision is reported rather than overwritten. Stable and Nightly keep separate commands, stores, and broker identities.
 
-## Ownership and recovery
+Each version directory contains `mactools`, `LICENSE`, and an ownership receipt with the manifest, executable hash, managed path, and public link path. The public command points to `<root>/current/mactools`; updates change only the private relative `current` symlink. Initial public-link creation is exclusive, and later updates preserve its inode.
 
-The private root is `~/Library/Application Support/MacTools Nightly/CLI/<owner>/`, where the owner hash binds the signing identity, team, and publisher release URL prefix. Official and personal publishers therefore cannot adopt each other's installations. They share the human-friendly command name and report a collision when another publisher already owns it. Stable roots and command identities remain separate.
+## Packaging and trust
 
-Each version directory contains `mactools`, `LICENSE`, and a receipt recording the owner, complete release manifest, executable hash, absolute managed path, and public link path. The public `~/.local/bin/mactools-nightly` symlink points to `<root>/current/mactools`; only the private relative `current` symlink changes on updates. Initial link creation uses the exclusive symlink syscall. Updates leave the public symlink inode unchanged. Managed operations reject redirected parent directories, unrecognized children, hard-linked executables, changed executable hashes, and receipts from other owners.
+`scripts/cli-install-manifest.py` creates schema-1 `cli-install.json` beside the CLI ZIP and inside `Contents/Resources/` of the app. It records versions/builds, channel, architecture, source commit, immutable release and asset URLs, archive digest/size, signing identity, and protocol range.
 
-A private flock serializes operations across processes. Before activation, a durable state journal records the candidate, prior version, release-specific rollback hold, and pending validation. After activation, `version --json` must pass and `doctor --json` must pass when the broker is enabled. No action commands are run or replayed. A failure or interrupted activation restores the prior private pointer. If external filesystem interference prevents recovery, the journal remains and the app reports the ownership/filesystem problem without deleting the foreign entry. Successful activation retains the previous version. Pruning runs before the next managed operation and preserves the active version, journal rollback version, and any matching retained candidate; at most three versions remain after an update. A retention error therefore leaves the active CLI unchanged. Pruning and removal validate receipts before atomically retiring unreferenced versions into `.delete-<version>` directories. Recovery accepts partial contents only in these deletion directories, revalidates any remaining receipt and payloads, and persists payload deletion before removing the receipt last. Interrupted cleanup resumes on launch or the next managed operation; active and rollback versions, foreign entries, and symlinks remain protected. Completed staging directories without an owner marker use the same deletion journal. The app never recursively deletes arbitrary directories.
+The packaging order is:
 
-First installation requires explicit confirmation and includes automatic updates with MacTools; there is no separate update switch. The managed receipt records consent to an app-managed installation. On launch, an active owned installation reconciles with the app build, including installations with the legacy update preference disabled. App launch never installs a CLI for users without an active owned receipt, including after removal. An explicit rollback holds the retained version across restarts of the same app release; the next app release or an explicit Update resumes the matching CLI. A matching retained build avoids another download during a downgrade. Protocol negotiation in the existing CLI/broker/host continues to block incompatible actions while permitting local commands.
+1. Sign the CLI and package exactly `mactools` and `LICENSE`.
+2. Generate and embed the installation manifest from those exact archive bytes.
+3. Sign the outer app, then complete app and CLI notarization and verification.
+4. Publish the verified artifacts without repackaging the CLI or changing the sealed manifest.
 
-## Personal publisher integration
+Only the manifest inside the locally verified Developer ID app signature is authoritative. The public JSON is informational. The CLI must match the developer identity and its separate `.cli` signing identifier, pass notarization checks, and support a compatible protocol. Downloaded and extracted files retain quarantine; verification failures are not repaired by re-signing or removing quarantine.
 
-Keep the installed publisher and live release untouched while preparing this migration. In the publisher's build routine, create the release directory, run `prepare_cli`, and invoke the source snapshot's `scripts/cli-install-manifest.py` with the app, archive, source commit, configured team, immutable source release URL, and `release/cli-install.json` output. Then sign and verify the app. Include the JSON in the release checksum manifest. An optional `cli.install_manifest` field can declare it without invalidating existing schema-2 manual-only releases. Validate its version/build, hash, size, architecture, and source against the release before promotion. Never append it to an already published release or re-sign an already notarized app.
+GitHub release URLs are immutable `/releases/download/nightly-<run>-<attempt>` or `/releases/download/v<version>` directories. Personal publishers may use immutable HTTPS `/releases/<build>` directories.
 
-When updating the local Nightly skill, replace its manual-only guidance with the capability distinction: legacy builds support manual installation; builds with sealed metadata also support managed installation and automatic CLI updates after app updates (with explicit rollback retained until the next app release). Keep system approval and signed broker acceptance separate from archive and HTTP checks.
+## Download and archive limits
 
-## Acceptance evidence
+| Boundary | Validation |
+| --- | --- |
+| Network | HTTPS redirects without credentials; ephemeral session without persistent cookies, credentials, or URL cache |
+| Deadline | 30-second request timeout and 120-second resource deadline |
+| Download size | Manifest byte count, capped at 64 MiB |
+| Archive entries | Exactly two regular entries: `mactools` (0755) and `LICENSE` (0644) |
+| Archive structure | Checked local/central records; no traversal, symlinks, encryption, extra records, unsupported ZIP forms, or oversized content |
+| Verification subprocesses | Bounded output and deadlines |
 
-Run focused `CLIManagedInstallationTests`, `CLIArchiveTests`, and `CLIInstallerTests`, the repository script tests, and `make ci` before publishing the implementation PR. The tests use temporary directories and injected verifier/download failures; they do not substitute for signed release acceptance. Follow the [macOS 26 and 27 test checklist](../testing/cli-nightly-distribution.md#install-from-settings) before marking this feature ready for release. A locally prepared publisher patch does not change the live channel, and unsigned Debug tests do not validate Login Item prompts, notarization propagation, or the complete installed app-to-CLI broker path.
+Requests contain no app/plugin data, action history, or repository credentials. Managed filesystem operations reject redirected parents, unrecognized children, hard-linked or changed executables, and receipts belonging to other owners.
+
+## Updates, rollback, and removal
+
+The first installation requires confirmation and includes automatic updates with MacTools. App launch reconciles an active owned installation with the app build; it never installs for users without an active receipt, including after removal. Legacy installations with automatic updates disabled also reconcile under this policy.
+
+| Operation or failure | Result |
+| --- | --- |
+| Activation | A durable journal records the candidate, previous version, rollback hold, and pending validation before changing `current` |
+| Validation | `version --json` must pass; `doctor --json` must also pass when the broker is enabled. No action is executed or replayed |
+| Failed or interrupted activation | Restore the previous pointer; retain the journal and report an ownership/filesystem problem if external changes prevent recovery |
+| Explicit rollback | Keep the retained version for the current app release; an explicit Update or the next app release resumes matching updates |
+| Downgrade | Reuse a matching retained build when available |
+| Cleanup | Validate ownership before retiring unused versions; preserve the active, rollback, and matching retained candidate versions |
+
+A private file lock serializes managed operations across processes. At most three versions remain after an update. Retention failure leaves the active CLI unchanged.
+
+Cleanup first moves validated unused versions into `.delete-<version>` directories. Recovery accepts partial contents only there, revalidates remaining payloads, and removes the receipt last after durable payload deletion. Interrupted cleanup resumes on launch or the next operation. The app never recursively deletes arbitrary directories, foreign entries, or protected active/rollback versions.
+
+Protocol negotiation remains authoritative after installation: incompatible app/CLI pairs cannot execute actions, while local commands remain available.
+
+## Personal publishers
+
+Generate the manifest in the candidate release directory after `prepare_cli` and before app signing. Pass the source commit, publisher team, exact archive, and immutable release URL to `scripts/cli-install-manifest.py`. Include the resulting JSON in the release checksum manifest; schema-2 manual releases may optionally declare it as `cli.install_manifest`.
+
+Verify version/build, source, architecture, hash, and size before promotion. Never append metadata to an existing published release or re-sign an already notarized app. Legacy builds without sealed metadata retain manual installation only.
+
+## Verification
+
+Use the affected cases in `CLIManagedInstallationTests`, `CLIArchiveTests`, and `CLIInstallerTests` for ownership, activation, rollback, and malformed archives. They use temporary stores and injected failures. Follow the shared [validation policy](../../CONTRIBUTING.md#validation) for script or cross-module changes.
+
+Before publishing installer changes, complete the relevant signed installation, background-item approval, update, rollback, and channel-coexistence checks in the [distribution guide](../testing/cli-nightly-distribution.md). Unit tests and unsigned Debug builds do not establish notarization or the installed app-to-CLI broker path.

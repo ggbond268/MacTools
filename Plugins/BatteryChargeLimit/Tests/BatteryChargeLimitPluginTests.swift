@@ -75,14 +75,14 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
     func testPanelHiddenWhenNoBattery() {
         let plugin = makePlugin(reader: MockBatteryReader(snapshot: .empty))
 
-        XCTAssertFalse(plugin.primaryPanelState.isVisible)
+        XCTAssertFalse(plugin.rowState.isAvailable)
     }
 
     func testPanelVisibleWhenBatteryPresent() {
         let plugin = makePlugin(reader: MockBatteryReader(snapshot: makeSnapshot(level: 65)))
         plugin.refresh()
 
-        XCTAssertTrue(plugin.primaryPanelState.isVisible)
+        XCTAssertTrue(plugin.rowState.isAvailable)
     }
 
     // MARK: Enable / Disable
@@ -131,7 +131,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(writer.dischargeCalls, [false, true])
         XCTAssertEqual(writer.inhibitCalls, [BatteryChargeLimits.defaultPercent])
         XCTAssertEqual(writer.resumeCalls, 1)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testFailedDisableFromHoldReappliesInhibitAndReportsRollbackFailure() {
@@ -154,7 +154,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(writer.dischargeCalls, [false, false])
         XCTAssertEqual(writer.inhibitCalls, [BatteryChargeLimits.defaultPercent])
         XCTAssertEqual(writer.resumeCalls, 1)
-        XCTAssertTrue(plugin.primaryPanelState.errorMessage?.contains("恢复先前状态失败") == true)
+        XCTAssertTrue(plugin.rowState.errorMessage?.contains("恢复先前状态失败") == true)
     }
 
     func testEnableWithUnsupportedHardwareSurfacesError() {
@@ -165,7 +165,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         plugin.handleAction(.invokeAction(controlID: "battery-enable-action"))
 
         XCTAssertFalse(plugin.store.isEnabled)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testFailedEnableRestoresDisabledStateAndReportsFailure() async throws {
@@ -193,7 +193,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         }
         XCTAssertFalse(plugin.store.isEnabled)
         XCTAssertEqual(plugin.store.mode, .holdAtLimit)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertTrue(writer.dischargeCalls.contains(false))
         XCTAssertGreaterThan(writer.resumeCalls, 0)
     }
@@ -258,7 +258,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         }
         XCTAssertEqual(disableResult, .succeeded())
         XCTAssertFalse(plugin.store.isEnabled)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testCanonicalLimitWhileDisabledClearsEarlierEnableFailure() async throws {
@@ -295,7 +295,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(limitResult, .succeeded())
         XCTAssertFalse(plugin.store.isEnabled)
         XCTAssertEqual(plugin.store.limitPercent, 70)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testActivateWhenDisabledReadsOnceWithoutStartingMonitoring() async {
@@ -659,7 +659,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertFalse(plugin.store.isEnabled)
         XCTAssertFalse(writer.inhibitCalls.isEmpty)
         XCTAssertGreaterThan(writer.resumeCalls, 0)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
         XCTAssertFalse(BatteryChargeLimitStore(storage: storage).isEnabled)
     }
 
@@ -765,7 +765,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(plugin.store.mode, .holdAtLimit)
         XCTAssertTrue(writer.dischargeCalls.contains(true))
         XCTAssertTrue(writer.dischargeCalls.contains(false))
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testPanelDischargeFailureRestoresPreviousMode() {
@@ -784,7 +784,7 @@ final class BatteryChargeLimitPluginTests: XCTestCase {
         XCTAssertEqual(plugin.store.mode, .holdAtLimit)
         XCTAssertTrue(writer.dischargeCalls.contains(true))
         XCTAssertTrue(writer.dischargeCalls.contains(false))
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testForceDischargeStopsWhenReachingLimit() {

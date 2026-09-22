@@ -38,7 +38,15 @@ private enum ControlID {
 // MARK: - Plugin
 
 @MainActor
-final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginActionProviding {
+final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ActionID {
         static let setEnabled = "set-enabled"
         static let setLimit = "set-limit"
@@ -56,7 +64,7 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel, Plugin
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -136,15 +144,14 @@ final class BatteryChargeLimitPlugin: MacToolsPlugin, PluginPrimaryPanel, Plugin
         onStateChange?()
     }
 
-    // MARK: - PluginPrimaryPanel
+    // MARK: - Panel row
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: store.isEnabled,
-            isExpanded: isExpanded,
             isEnabled: batterySnapshot.hasBattery,
-            isVisible: batterySnapshot.hasBattery,
+            isAvailable: batterySnapshot.hasBattery,
             detail: isExpanded ? buildDetail() : nil,
             errorMessage: lastErrorMessage
         )

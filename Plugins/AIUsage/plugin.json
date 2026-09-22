@@ -1,0 +1,184 @@
+{
+  "id": "ai-usage",
+  "displayName": "AI 用量",
+  "summary": "查看 Codex 与 Claude Code 订阅额度和重置时间",
+  "localizedMetadata": {
+    "en": {
+      "displayName": "AI Usage",
+      "summary": "View Codex and Claude Code subscription quotas and reset times."
+    },
+    "zh-Hans": {
+      "displayName": "AI 用量",
+      "summary": "查看 Codex 与 Claude Code 订阅额度和重置时间"
+    },
+    "zh-Hant": {
+      "displayName": "AI 用量",
+      "summary": "查看 Codex 與 Claude Code 訂閱額度和重置時間"
+    },
+    "ja": {
+      "displayName": "AI 使用量",
+      "summary": "Codex と Claude Code の利用枠とリセット時刻を確認します。"
+    },
+    "ko": {
+      "displayName": "AI 사용량",
+      "summary": "Codex 및 Claude Code 구독 한도와 초기화 시간을 확인합니다."
+    },
+    "de": {
+      "displayName": "KI-Nutzung",
+      "summary": "Abonnementkontingente und Rücksetzzeiten für Codex und Claude Code anzeigen."
+    },
+    "fr": {
+      "displayName": "Utilisation IA",
+      "summary": "Consultez les quotas et les heures de réinitialisation de Codex et Claude Code."
+    },
+    "es": {
+      "displayName": "Uso de IA",
+      "summary": "Consulta las cuotas y los tiempos de reinicio de Codex y Claude Code."
+    },
+    "pt": {
+      "displayName": "Uso de IA",
+      "summary": "Veja as cotas e os horários de redefinição de Codex e Claude Code."
+    },
+    "ru": {
+      "displayName": "Использование ИИ",
+      "summary": "Просматривайте квоты подписок Codex и Claude Code и время их сброса."
+    },
+    "ar": {
+      "displayName": "استخدام الذكاء الاصطناعي",
+      "summary": "عرض حصص اشتراك Codex وClaude Code وأوقات إعادة التعيين."
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary"
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
+  "bundleRelativePath": "AIUsage.bundle",
+  "factoryClass": "AIUsagePlugin.AIUsagePluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "AIUsagePlugin"
+  },
+  "capabilities": {
+    "panelItems": ["widget"],
+    "settings": "form"
+  },
+  "permissions": [],
+  "category": "monitoring",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "ai",
+      "usage",
+      "quota",
+      "codex",
+      "claude",
+      "subscription"
+    ],
+    "localizedSynonyms": {
+      "en": [
+        "AI Usage"
+      ],
+      "zh-Hans": [
+        "AI 用量"
+      ],
+      "zh-Hant": [
+        "AI 用量"
+      ],
+      "ja": [
+        "AI 使用量"
+      ],
+      "ko": [
+        "AI 사용량"
+      ],
+      "de": [
+        "KI-Nutzung"
+      ],
+      "fr": [
+        "Utilisation IA"
+      ],
+      "es": [
+        "Uso de IA"
+      ],
+      "pt": [
+        "Uso de IA"
+      ],
+      "ru": [
+        "Использование ИИ"
+      ],
+      "ar": [
+        "استخدام الذكاء الاصطناعي"
+      ]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "monitoring"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "hardware": [],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "simple",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "subscription-quota",
+      "local-cli-credentials"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "required",
+    "networkDomains": [
+      "chatgpt.com",
+      "api.anthropic.com"
+    ],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": true,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  }
+}

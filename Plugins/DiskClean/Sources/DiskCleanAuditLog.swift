@@ -11,10 +11,13 @@ final class DiskCleanAuditLog: @unchecked Sendable {
             case delete
             /// Scan-level events: circuit breakers, thread abandonment, reconciliation results.
             case scanEvent
+            /// Run-level summary event.
+            case runSummary
         }
 
         let timestamp: Date
         let action: Action
+        let runID: String?
         let targetID: String?
         let legacyRuleID: String?
         let category: String?
@@ -26,9 +29,17 @@ final class DiskCleanAuditLog: @unchecked Sendable {
         let skipReason: String?
         let error: String?
 
+        // Run-level summary fields
+        let categoriesCleaned: [String]?
+        let itemsRemoved: Int?
+        let bytesRemoved: Int64?
+        let errorsEncountered: [String]?
+        let isTrash: Bool?
+
         init(
             timestamp: Date,
             action: Action,
+            runID: String? = nil,
             targetID: String? = nil,
             legacyRuleID: String? = nil,
             category: String? = nil,
@@ -37,10 +48,16 @@ final class DiskCleanAuditLog: @unchecked Sendable {
             estimatedBytes: Int64? = nil,
             status: String,
             skipReason: String? = nil,
-            error: String? = nil
+            error: String? = nil,
+            categoriesCleaned: [String]? = nil,
+            itemsRemoved: Int? = nil,
+            bytesRemoved: Int64? = nil,
+            errorsEncountered: [String]? = nil,
+            isTrash: Bool? = nil
         ) {
             self.timestamp = timestamp
             self.action = action
+            self.runID = runID
             self.targetID = targetID
             self.legacyRuleID = legacyRuleID
             self.category = category
@@ -50,6 +67,11 @@ final class DiskCleanAuditLog: @unchecked Sendable {
             self.status = status
             self.skipReason = skipReason
             self.error = error
+            self.categoriesCleaned = categoriesCleaned
+            self.itemsRemoved = itemsRemoved
+            self.bytesRemoved = bytesRemoved
+            self.errorsEncountered = errorsEncountered
+            self.isTrash = isTrash
         }
     }
 
@@ -100,7 +122,7 @@ final class DiskCleanAuditLog: @unchecked Sendable {
     }
 
     /// Read recent records newest-first (cleanup history UI). Spans the current file and one rotated `.1` generation.
-    func recentRecords(limit: Int) -> [Record] {
+    func recentRecords(limit: Int, excludingRunSummaries: Bool = false) -> [Record] {
         lock.lock()
         defer { lock.unlock() }
 
@@ -113,7 +135,178 @@ final class DiskCleanAuditLog: @unchecked Sendable {
                 }
             }
         }
-        return Array(records.sorted { $0.timestamp > $1.timestamp }.prefix(limit))
+        return Array(records.filter { !excludingRunSummaries || $0.action != .runSummary }
+            .sorted { $0.timestamp > $1.timestamp }.prefix(max(0, limit)))
+    }
+
+    /// Read cleanup runs with attention-needed entries pinned, then newest-first within each group.
+    func recentRuns(limit: Int) -> [DiskCleanRunHistoryEntry] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        var allRecords: [Record] = []
+        for url in [fileURL, rotatedFileURL] {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            for lineData in data.split(separator: UInt8(ascii: "\n")) {
+                if let record = try? decoder.decode(Record.self, from: Data(lineData)) {
+                    allRecords.append(record)
+                }
+            }
+        }
+
+        let summaryRecords = allRecords.filter { $0.action == .runSummary }
+        let itemRecords = allRecords.filter { $0.action == .trash || $0.action == .delete }
+        let summarizedRunIDs = Set(
+            summaryRecords.compactMap(\.runID).filter { !$0.isEmpty }
+        )
+
+        var itemRecordsByRunID: [String: [Record]] = [:]
+        var unassignedRecords: [Record] = []
+
+        for record in itemRecords {
+            if let runID = record.runID, !runID.isEmpty {
+                itemRecordsByRunID[runID, default: []].append(record)
+            } else {
+                unassignedRecords.append(record)
+            }
+        }
+
+        // Recovery is recorded independently of cleanup runs and may have no run ID.
+        // Preserve its path and staged name without counting it as another deletion.
+        var runs = allRecords.enumerated().compactMap { index, record -> DiskCleanRunHistoryEntry? in
+            guard record.action == .scanEvent,
+                  record.path != nil || record.stagedName != nil else { return nil }
+            let entries = DiskCleanCleanupHistoryEntry.entries(from: [record])
+            return DiskCleanRunHistoryEntry(
+                id: "recovery-\(index)-\(record.timestamp.timeIntervalSince1970)",
+                timestamp: record.timestamp,
+                isTrash: false,
+                status: record.status,
+                categoriesCleaned: [],
+                itemsRemoved: 0,
+                bytesRemoved: 0,
+                errorsEncountered: record.error.map { [$0] } ?? [],
+                needsAttention: entries.contains(where: \.needsAttention),
+                itemEntries: entries,
+                isRecovery: true
+            )
+        }
+
+        for summary in summaryRecords {
+            let runID = summary.runID ?? "run-\(summary.timestamp.timeIntervalSince1970)"
+            let matchedRecords = itemRecordsByRunID[runID] ?? []
+            let matchedItems = DiskCleanCleanupHistoryEntry.entries(from: matchedRecords)
+            let hasAttention = (summary.errorsEncountered?.isEmpty == false)
+                || summary.status == "partiallyDeleted"
+                || summary.status == "rollbackBlocked"
+                || matchedItems.contains(where: \.needsAttention)
+
+            runs.append(
+                DiskCleanRunHistoryEntry(
+                    id: runID,
+                    timestamp: summary.timestamp,
+                    isTrash: summary.isTrash ?? (summary.action == .trash),
+                    status: summary.status,
+                    categoriesCleaned: summary.categoriesCleaned ?? [],
+                    itemsRemoved: summary.itemsRemoved ?? matchedRecords.filter { $0.status == "ok" }.count,
+                    bytesRemoved: summary.bytesRemoved ?? verifiedRemovedBytes(in: matchedRecords),
+                    errorsEncountered: summary.errorsEncountered ?? [],
+                    needsAttention: hasAttention,
+                    itemEntries: matchedItems
+                )
+            )
+        }
+
+        // A process can stop after appending item records but before its final summary. Keep each
+        // unmatched run visible so a partial deletion or blocked rollback is never hidden in the
+        // default history view. A run ID is supplied by the executor and is therefore stable across
+        // refreshes; completed runs remain represented by their authoritative summary above.
+        for (runID, records) in itemRecordsByRunID where !summarizedRunIDs.contains(runID) {
+            let sortedRecords = records.sorted { $0.timestamp > $1.timestamp }
+            guard let latestRecord = sortedRecords.first else { continue }
+
+            let entries = DiskCleanCleanupHistoryEntry.entries(from: sortedRecords)
+            let categories = Array(Set(sortedRecords.compactMap(\.category))).sorted()
+            let errors = sortedRecords.compactMap(\.error)
+
+            runs.append(
+                DiskCleanRunHistoryEntry(
+                    id: runID,
+                    timestamp: latestRecord.timestamp,
+                    isTrash: sortedRecords.allSatisfy { $0.action == .trash },
+                    status: "interrupted",
+                    categoriesCleaned: categories,
+                    itemsRemoved: sortedRecords.filter { $0.status == "ok" }.count,
+                    bytesRemoved: verifiedRemovedBytes(in: sortedRecords),
+                    errorsEncountered: errors,
+                    needsAttention: entries.contains(where: \.needsAttention),
+                    itemEntries: entries
+                )
+            )
+        }
+
+        if !unassignedRecords.isEmpty {
+            let sortedRecords = unassignedRecords.sorted { $0.timestamp > $1.timestamp }
+            var clusters: [[Record]] = []
+            var currentCluster: [Record] = []
+
+            for record in sortedRecords {
+                if let last = currentCluster.last {
+                    if abs(record.timestamp.timeIntervalSince(last.timestamp)) <= 3.0 {
+                        currentCluster.append(record)
+                    } else {
+                        clusters.append(currentCluster)
+                        currentCluster = [record]
+                    }
+                } else {
+                    currentCluster = [record]
+                }
+            }
+            if !currentCluster.isEmpty {
+                clusters.append(currentCluster)
+            }
+
+            for cluster in clusters {
+                guard let first = cluster.first else { continue }
+                let clusterEntries = DiskCleanCleanupHistoryEntry.entries(from: cluster)
+                let isTrash = cluster.contains { $0.action == .trash }
+                let categories = Array(Set(cluster.compactMap(\.category))).sorted()
+                let removed = cluster.filter { $0.status == "ok" }.count
+                let bytes = verifiedRemovedBytes(in: cluster)
+                let errors = cluster.compactMap(\.error)
+                let hasAttention = clusterEntries.contains(where: \.needsAttention)
+                let runID = "session-\(Int(first.timestamp.timeIntervalSince1970))"
+
+                runs.append(
+                    DiskCleanRunHistoryEntry(
+                        id: runID,
+                        timestamp: first.timestamp,
+                        isTrash: isTrash,
+                        status: errors.isEmpty ? "ok" : "completedWithErrors",
+                        categoriesCleaned: categories,
+                        itemsRemoved: removed,
+                        bytesRemoved: bytes,
+                        errorsEncountered: errors,
+                        needsAttention: hasAttention,
+                        itemEntries: clusterEntries
+                    )
+                )
+            }
+        }
+
+        return Array(runs.sorted {
+            if $0.needsAttention != $1.needsAttention { return $0.needsAttention }
+            return $0.timestamp > $1.timestamp
+        }.prefix(max(0, limit)))
+    }
+
+    /// Audit records carry estimated source sizes. Only a verified `ok` record proves that those
+    /// bytes were removed; failed, skipped, and partial results must not inflate history totals.
+    private func verifiedRemovedBytes(in records: [Record]) -> Int64 {
+        records.reduce(into: 0) { total, record in
+            guard record.status == "ok", let bytes = record.estimatedBytes else { return }
+            total += max(bytes, 0)
+        }
     }
 
     private func rotateIfNeeded() {
@@ -123,5 +316,48 @@ final class DiskCleanAuditLog: @unchecked Sendable {
 
         try? FileManager.default.removeItem(at: rotatedFileURL)
         try? FileManager.default.moveItem(at: fileURL, to: rotatedFileURL)
+    }
+}
+
+
+// MARK: - Run-level cleanup history model
+
+struct DiskCleanRunHistoryEntry: Identifiable, Equatable, Sendable {
+    let id: String
+    let timestamp: Date
+    let isTrash: Bool
+    let status: String
+    let categoriesCleaned: [String]
+    let itemsRemoved: Int
+    let bytesRemoved: Int64
+    let errorsEncountered: [String]
+    let needsAttention: Bool
+    let itemEntries: [DiskCleanCleanupHistoryEntry]
+    let isRecovery: Bool
+
+    init(
+        id: String,
+        timestamp: Date,
+        isTrash: Bool,
+        status: String,
+        categoriesCleaned: [String],
+        itemsRemoved: Int,
+        bytesRemoved: Int64,
+        errorsEncountered: [String] = [],
+        needsAttention: Bool = false,
+        itemEntries: [DiskCleanCleanupHistoryEntry] = [],
+        isRecovery: Bool = false
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.isTrash = isTrash
+        self.status = status
+        self.categoriesCleaned = categoriesCleaned
+        self.itemsRemoved = itemsRemoved
+        self.bytesRemoved = bytesRemoved
+        self.errorsEncountered = errorsEncountered
+        self.needsAttention = needsAttention
+        self.itemEntries = itemEntries
+        self.isRecovery = isRecovery
     }
 }

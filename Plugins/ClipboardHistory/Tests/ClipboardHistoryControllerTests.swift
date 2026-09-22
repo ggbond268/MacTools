@@ -43,6 +43,26 @@ final class ClipboardHistoryControllerTests: XCTestCase {
         fixture.controller.stop()
     }
 
+    func testShortcutRetentionChangesDoNotPruneFreshlyRestoredHistory() async throws {
+        let expired = item(text: "restored old history", pinned: false, capturedAt: Date(timeIntervalSince1970: 1))
+        let fixture = makeFixture()
+        fixture.controller.start()
+        await waitUntilLoaded(fixture.controller)
+        fixture.controller.suspendForBackup()
+        try fixture.persistence.save([expired])
+        fixture.controller.resumeAfterBackup(restored: true)
+        await waitUntilLoaded(fixture.controller)
+
+        fixture.controller.updateShortcutRetainedItemIDs([expired.id])
+        fixture.controller.updateShortcutRetainedItemIDs([])
+        fixture.controller.processRetentionExpiration()
+        XCTAssertEqual(fixture.controller.items.map(\.id), [expired.id])
+
+        fixture.controller.settingsDidChange()
+        XCTAssertTrue(fixture.controller.items.isEmpty)
+        fixture.controller.stop()
+    }
+
     func testCollectionSummaryTracksHistoryAndSavedMembership() async throws {
         let fixture = makeFixture()
         fixture.controller.start()

@@ -144,7 +144,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             "阻止休眠 · 5h",
         ])
         XCTAssertEqual(result, .succeeded())
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(factory.sessions.count, 1)
     }
 
@@ -172,7 +172,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertEqual(stopResult, .succeeded())
         XCTAssertEqual(plugin.actionCatalogEntries.first?.title, "切换阻止休眠")
         XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .inactive)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertEqual(
             Set(plugin.actionCatalogEntries.map(\.title)).count,
             plugin.actionCatalogEntries.count
@@ -198,8 +198,8 @@ final class KeepAwakePreferenceTests: XCTestCase {
         guard case .failed = result else {
             return XCTFail("Expected cleanup failure, got \(result)")
         }
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertFalse(plugin.rowState.isOn)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testDurationActionsStartBoundedKeepAwakeSessions() async throws {
@@ -338,7 +338,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.sessions[0].isPreventingDisplaySleep)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "合盖运行已暂停 · 正在等待电源")
+        XCTAssertEqual(plugin.rowState.subtitle, "合盖运行已暂停 · 正在等待电源")
 
         factory.powerSourceMonitor.send(
             KeepAwakePowerSourceState(
@@ -368,7 +368,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
         XCTAssertFalse(factory.sessions[0].isPreventingDisplaySleep)
         XCTAssertEqual(factory.sessions[0].lidCloseSleepPreventionUpdates.last, false)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
     }
 
     func testStoppingSessionPreservesBehavior() async {
@@ -381,7 +381,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(false))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertEqual(
             storage.string(forKey: StorageKey.behavior),
             "keep-screen-based-tools-working"
@@ -395,14 +395,14 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         firstPlugin.handleAction(.setSwitch(true))
 
-        XCTAssertTrue(firstPlugin.primaryPanelState.isOn)
+        XCTAssertTrue(firstPlugin.rowState.isOn)
         XCTAssertEqual(storage.values["persistent-enabled"] as? Bool, true)
         XCTAssertEqual(firstFactory.sessions.count, 1)
         XCTAssertNil(firstFactory.sessions[0].startedConfigurations.last?.endDate)
 
         firstPlugin.deactivate(reason: .hostShutdown)
 
-        XCTAssertFalse(firstPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(firstPlugin.rowState.isOn)
         XCTAssertEqual(storage.values["persistent-enabled"] as? Bool, true)
         XCTAssertEqual(firstFactory.sessions[0].stopRequestCount, 1)
 
@@ -412,7 +412,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             context: PluginRuntimeContext(pluginID: "keep-awake", storage: storage)
         )
 
-        XCTAssertTrue(secondPlugin.primaryPanelState.isOn)
+        XCTAssertTrue(secondPlugin.rowState.isOn)
         XCTAssertEqual(secondFactory.sessions.count, 1)
         XCTAssertNil(secondFactory.sessions[0].startedConfigurations.last?.endDate)
     }
@@ -427,7 +427,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             .setSelection(controlID: "duration", optionID: "oneHour")
         )
 
-        XCTAssertTrue(firstPlugin.primaryPanelState.isOn)
+        XCTAssertTrue(firstPlugin.rowState.isOn)
         XCTAssertNil(storage.values["persistent-enabled"])
         XCTAssertNotNil(firstFactory.sessions[0].startedConfigurations.last?.endDate)
 
@@ -439,7 +439,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             context: PluginRuntimeContext(pluginID: "keep-awake", storage: storage)
         )
 
-        XCTAssertFalse(secondPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(secondPlugin.rowState.isOn)
         XCTAssertTrue(secondFactory.sessions.isEmpty)
     }
 
@@ -453,7 +453,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         firstPlugin.handleAction(.setSwitch(false))
 
-        XCTAssertFalse(firstPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(firstPlugin.rowState.isOn)
         XCTAssertNil(storage.values["persistent-enabled"])
         XCTAssertEqual(firstFactory.sessions[0].stopRequestCount, 1)
 
@@ -463,7 +463,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             context: PluginRuntimeContext(pluginID: "keep-awake", storage: storage)
         )
 
-        XCTAssertFalse(secondPlugin.primaryPanelState.isOn)
+        XCTAssertFalse(secondPlugin.rowState.isOn)
         XCTAssertTrue(secondFactory.sessions.isEmpty)
     }
 
@@ -667,7 +667,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法声明用户活动。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法声明用户活动。")
         XCTAssertEqual(storage.integer(forKey: StorageKey.version), 99)
         XCTAssertEqual(
             storage.string(forKey: StorageKey.behavior),
@@ -803,8 +803,8 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法更新屏幕状态。")
+        XCTAssertTrue(plugin.rowState.isOn)
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法更新屏幕状态。")
     }
 
     func testInitialLidCloseFailureFallsBackWithoutStoppingBaseSession() {
@@ -818,7 +818,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertTrue(plugin.primaryPanelState.isOn)
+        XCTAssertTrue(plugin.rowState.isOn)
         XCTAssertEqual(factory.sessions.count, 1)
         XCTAssertEqual(
             factory.sessions[0].startedConfigurations.last,
@@ -832,7 +832,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法更新合盖状态。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法更新合盖状态。")
     }
 
     func testUserActivityFailureFallsBackToKeepDisplayOn() async {
@@ -866,7 +866,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertEqual(storage.string(forKey: StorageKey.behavior), "keep-display-on")
         XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法声明用户活动。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法声明用户活动。")
 
         factory.userActivityMaintainer.startError = nil
         plugin.setBehavior(.keepScreenBasedToolsWorking)
@@ -909,7 +909,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.refresh()
@@ -919,7 +919,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             "keep-screen-based-tools-working"
         )
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
 
         factory.powerSourceMonitor.send(
             KeepAwakePowerSourceState(
@@ -954,7 +954,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             "keep-screen-based-tools-working"
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.setBehavior(.keepDisplayOn)
@@ -962,7 +962,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         XCTAssertEqual(storage.string(forKey: StorageKey.behavior), "keep-display-on")
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testSessionEndReportsAndRefreshRetriesUserActivityRelease() {
@@ -980,15 +980,15 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(false))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.refresh()
 
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testFailedReenableKeepsCleanupFailureVisibleAndRetryable() {
@@ -1010,15 +1010,15 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
         plugin.handleAction(.setSwitch(true))
 
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.refresh()
 
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testOffSessionBehaviorChangeRetriesPendingUserActivityRelease() {
@@ -1042,7 +1042,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             "keep-screen-based-tools-working"
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.setBehavior(.allowDisplayToTurnOff)
@@ -1052,7 +1052,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
             "allow-display-to-turn-off"
         )
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNil(plugin.rowState.errorMessage)
     }
 
     func testVirtualDisplayFailureDoesNotCommitFallbackWhenUserActivityReleaseFails() async {
@@ -1072,7 +1072,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.refresh()
@@ -1080,7 +1080,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertEqual(storage.string(forKey: StorageKey.behavior), "keep-display-on")
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法创建软件显示器。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法创建软件显示器。")
     }
 
     func testVirtualDisplayTerminationDoesNotCommitFallbackWhenUserActivityReleaseFails() async {
@@ -1100,7 +1100,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.userActivityMaintainer.stopError = nil
         plugin.refresh()
@@ -1109,7 +1109,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
         XCTAssertEqual(
-            plugin.primaryPanelState.errorMessage,
+            plugin.rowState.errorMessage,
             "软件显示器已停止；已切换为保持屏幕常亮。"
         )
     }
@@ -1138,7 +1138,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertTrue(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法恢复自动锁定。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法恢复自动锁定。")
 
         factory.sessions[0].displayUpdateError = nil
         factory.userActivityMaintainer.stopError = nil
@@ -1150,7 +1150,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         )
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
         XCTAssertFalse(factory.virtualDisplayManager.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法更新屏幕状态。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法更新屏幕状态。")
     }
 
     func testVirtualDisplayFailureFallsBackToKeepDisplayOn() async {
@@ -1166,7 +1166,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertEqual(storage.string(forKey: StorageKey.behavior), "keep-display-on")
         XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
         XCTAssertFalse(factory.userActivityMaintainer.isActive)
-        XCTAssertEqual(plugin.primaryPanelState.errorMessage, "无法创建软件显示器。")
+        XCTAssertEqual(plugin.rowState.errorMessage, "无法创建软件显示器。")
     }
 
     func testUnexpectedVirtualDisplayTerminationFallsBackToKeepDisplayOn() async {
@@ -1245,16 +1245,51 @@ final class KeepAwakePreferenceTests: XCTestCase {
         XCTAssertTrue(row.helpItems.allSatisfy { !$0.contains("\n") })
     }
 
-    func testFeaturePanelOnlyShowsDurationControl() throws {
+    func testFeaturePanelExposesBehaviorChoicesWhileKeepAwakeIsEnabled() throws {
         let storage = KeepAwakeMemoryStorage()
         let plugin = KeepAwakeSessionFactory().makePlugin(storage: storage)
         plugin.handleAction(.setSwitch(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
 
-        XCTAssertEqual(controls.map(\.id), ["duration"])
+        XCTAssertEqual(controls.map(\.id), ["duration", "behavior"])
         XCTAssertEqual(controls[0].selectedOptionID, "forever")
         XCTAssertFalse(controls[0].showsLeadingDivider)
+        guard case .segmented = controls[1].kind else {
+            return XCTFail("Expected behavior choices to use a segmented control")
+        }
+        XCTAssertEqual(
+            controls[1].options.map(\.id),
+            KeepAwakeBehavior.allCases.map(\.rawValue)
+        )
+        XCTAssertEqual(controls[1].selectedOptionID, KeepAwakeBehavior.allowDisplayToTurnOff.rawValue)
+        XCTAssertTrue(controls[1].showsLeadingDivider)
+        XCTAssertEqual(controls[1].options.map(\.title), ["默认", "屏幕常亮", "屏幕工具"])
+        XCTAssertTrue(controls[1].options.allSatisfy { !($0.subtitle ?? "").isEmpty })
+    }
+
+    func testFeaturePanelBehaviorSelectionUpdatesAnActiveSession() throws {
+        let storage = KeepAwakeMemoryStorage()
+        let factory = KeepAwakeSessionFactory(
+            powerSourceState: KeepAwakePowerSourceState(
+                isPortableMac: false,
+                isOnExternalPower: true
+            )
+        )
+        let plugin = factory.makePlugin(storage: storage)
+        plugin.handleAction(.setSwitch(true))
+
+        plugin.handleAction(.setSelection(
+            controlID: "behavior",
+            optionID: KeepAwakeBehavior.keepDisplayOn.rawValue
+        ))
+
+        XCTAssertEqual(storage.string(forKey: StorageKey.behavior), KeepAwakeBehavior.keepDisplayOn.rawValue)
+        XCTAssertTrue(factory.sessions[0].isPreventingDisplaySleep)
+        XCTAssertEqual(
+            plugin.rowState.detail?.primaryControls.last?.selectedOptionID,
+            KeepAwakeBehavior.keepDisplayOn.rawValue
+        )
     }
 
     func testCompactBadgeReflectsHighestPriorityActivePreference() throws {
@@ -1284,7 +1319,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         ).makePlugin(storage: KeepAwakeMemoryStorage())
         plugin.setBehavior(.keepDisplayOn)
 
-        XCTAssertNil(plugin.primaryPanelCompactIndicator)
+        XCTAssertNil(plugin.rowCompactIndicator)
     }
 
     func testTimedSessionKeepsEndDateWhenPreferenceChanges() {
@@ -1303,7 +1338,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
 
     private func compactIndicator(
         behavior: KeepAwakeBehavior
-    ) -> PluginPrimaryPanelCompactIndicator? {
+    ) -> PluginPanelRowCompactIndicator? {
         let plugin = KeepAwakeSessionFactory(
             powerSourceState: KeepAwakePowerSourceState(
                 isPortableMac: false,
@@ -1312,7 +1347,7 @@ final class KeepAwakePreferenceTests: XCTestCase {
         ).makePlugin(storage: KeepAwakeMemoryStorage())
         plugin.setBehavior(behavior)
         plugin.handleAction(.setSwitch(true))
-        return plugin.primaryPanelCompactIndicator
+        return plugin.rowCompactIndicator
     }
 }
 

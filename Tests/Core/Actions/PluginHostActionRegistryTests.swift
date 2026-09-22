@@ -574,8 +574,8 @@ final class PluginHostActionRegistryTests: XCTestCase {
         XCTAssertEqual(
             requests,
             [
-                .settings(.feature(.dashboardLayout)),
-                .settings(.feature(.featurePanelLayout)),
+                .settings(.feature(.actionsAndShortcuts)),
+                .settings(.feature(.actionsAndShortcuts)),
                 .settings(.general),
                 .settings(.feature(.automation)),
             ]
@@ -994,7 +994,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
         let host = PluginHost(
             plugins: [plugin],
             shortcutStore: shortcutStore,
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(
+            pluginOrderingStore: PluginOrderingStore(
                 userDefaults: defaults
             ),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
@@ -1215,7 +1215,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
         let host = PluginHost(
             plugins: [],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: GlobalShortcutManager(registrar: FakeCarbonHotKeyRegistrar()),
             loadDynamicPluginsOnInit: false
@@ -1245,7 +1245,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
         let firstHost = PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(
+            pluginOrderingStore: PluginOrderingStore(
                 userDefaults: defaults
             ),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
@@ -1257,7 +1257,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
         let reloadedHost = PluginHost(
             plugins: [],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(
+            pluginOrderingStore: PluginOrderingStore(
                 userDefaults: defaults
             ),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
@@ -1346,7 +1346,7 @@ final class PluginHostActionRegistryTests: XCTestCase {
         PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: defaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: defaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: defaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: defaults),
             globalShortcutManager: shortcutManager,
             pluginStateChangeRebuildDelay: pluginStateChangeRebuildDelay,

@@ -701,7 +701,16 @@ struct TrackpadGesturesSettingsView: View {
             }
         }
         .pluginSettingsListRowPadding(interactive: true)
-        .pluginSettingsCardBackground(.standard)
+        .background(
+            PluginSettingsTheme.Palette.fieldBackground,
+            in: RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: PluginSettingsTheme.Radius.control, style: .continuous)
+                .strokeBorder(PluginSettingsTheme.Palette.separator, lineWidth: PluginSettingsTheme.Stroke.hairline)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
@@ -728,7 +737,6 @@ struct TrackpadGesturesSettingsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, PluginSettingsTheme.Spacing.pagePadding)
-        .pluginSettingsCardBackground(.standard)
     }
 
     private var mappingList: some View {

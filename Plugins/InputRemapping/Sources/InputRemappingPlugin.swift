@@ -195,9 +195,26 @@ final class InputRemappingButtonCaptureCoordinator: ObservableObject {
 }
 
 @MainActor
-final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
-    AccessibilityPermissionRefreshing, PluginSettingsPresenting, PluginRuntimeLocalizationRefreshing,
-    TrackpadGestureEventConsuming {
+final class InputRemappingPlugin: MacToolsPlugin, AccessibilityPermissionRefreshing, PluginSettingsPresenting, PluginRuntimeLocalizationRefreshing, TrackpadGestureEventConsuming {
+    var panelItems: [PluginPanelItem] {
+        let state = rowState
+        let descriptor = rowDescriptor
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: descriptor, state: state,
+                 action: { [weak self] in self?.handleAction($0) }),
+            .iconWidget(
+                id: "quick-control",
+                title: localization.string("widget.title", defaultValue: "快捷操作"),
+                systemImage: metadata.iconName,
+                control: .button,
+                state: state,
+                menuActionBehavior: descriptor.menuActionBehavior,
+                action: { [weak self] in self?.handleAction($0) }
+            ),
+        ]
+    }
+
     private enum PermissionID {
         static let accessibility = "accessibility"
         static let inputMonitoring = "input-monitoring"
@@ -208,7 +225,7 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
     }
 
     private(set) var metadata: PluginMetadata
-    let primaryPanelDescriptor: PluginPrimaryPanelDescriptor
+    let rowDescriptor: PluginPanelRowDescriptor
 
     var onStateChange: (() -> Void)?
     var requestPermissionGuidance: ((String) -> Void)?
@@ -269,7 +286,7 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
         self.notificationCenter = notificationCenter
         self.isAccessibilityGranted = accessibilityTrusted()
         self.inputMonitoringState = inputMonitoringStatus()
-        self.primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+        self.rowDescriptor = PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .keepPresented,
             buttonTitleProvider: {
@@ -353,7 +370,7 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
         _ = tap.execute(rule.action)
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         let enabledRuleCount = store.rules.filter(\.isRunnable).count
         let subtitle = enabledRuleCount == 0
             ? localization.string("panel.subtitle.noRules", defaultValue: "无规则")
@@ -363,12 +380,11 @@ final class InputRemappingPlugin: MacToolsPlugin, PluginPrimaryPanel,
                 enabledRuleCount
             )
 
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: subtitle,
             isOn: enabledRuleCount > 0 && errorMessage == nil,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: errorMessage
         )

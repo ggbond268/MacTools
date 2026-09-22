@@ -47,7 +47,7 @@ final class DiskCleanPluginTests: XCTestCase {
 
         plugin.handleAction(.setDisclosureExpanded(true))
 
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
 
         XCTAssertEqual(
             controls.map(\.id),
@@ -246,13 +246,13 @@ final class DiskCleanPluginTests: XCTestCase {
         ]
 
         controller.snapshot = makeScannedSnapshot(candidates: candidates)
-        let plain = plugin.primaryPanelState.subtitle
+        let plain = plugin.rowState.subtitle
 
         controller.snapshot = makeScannedSnapshot(
             candidates: candidates,
             limitations: [.fdaRestricted(skippedTargetIDs: ["cache.system"])]
         )
-        let limited = plugin.primaryPanelState.subtitle
+        let limited = plugin.rowState.subtitle
 
         XCTAssertFalse(plain.hasSuffix("（受限）"))
         XCTAssertEqual(limited, plain + "（受限）")
@@ -273,7 +273,7 @@ final class DiskCleanPluginTests: XCTestCase {
         )
 
         plugin.handleAction(.setDisclosureExpanded(true))
-        let controls = plugin.primaryPanelState.detail?.primaryControls ?? []
+        let controls = plugin.rowState.detail?.primaryControls ?? []
 
         XCTAssertEqual(controls.first { $0.id == DiskCleanPlugin.ControlID.clean }?.isEnabled, false)
     }
@@ -286,7 +286,7 @@ final class DiskCleanPluginTests: XCTestCase {
         controller.snapshot = makeConfirmingSnapshot(itemCount: 3, totalEstimatedBytes: 5_368_709_120)
 
         plugin.handleAction(.setDisclosureExpanded(true))
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.primaryControls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
 
         XCTAssertEqual(
             controls.map(\.id),
@@ -340,7 +340,7 @@ final class DiskCleanPluginTests: XCTestCase {
             errorMessage: nil
         )
 
-        let subtitle = plugin.primaryPanelState.subtitle
+        let subtitle = plugin.rowState.subtitle
         XCTAssertTrue(subtitle.hasPrefix("已移到废纸篓约"), "actual: \(subtitle)")
         XCTAssertFalse(subtitle.contains("已释放"), "objects in Trash have not truly freed space")
         XCTAssertTrue(subtitle.hasSuffix(DiskCleanFormat.bytes(1_024)), "actual: \(subtitle)")
@@ -383,7 +383,7 @@ final class DiskCleanPluginTests: XCTestCase {
     }
 
     private func cleanControl(of plugin: DiskCleanPlugin) throws -> PluginPanelControl {
-        let controls = plugin.primaryPanelState.detail?.primaryControls ?? []
+        let controls = plugin.rowState.detail?.primaryControls ?? []
         return try XCTUnwrap(controls.first { $0.id == DiskCleanPlugin.ControlID.clean })
     }
 

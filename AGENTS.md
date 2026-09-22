@@ -36,10 +36,11 @@
 - Generate the project with `make generate`. Do not run bare `xcodegen generate`, because it can miss the latest generated plugin configuration.
 - Validate compilation with `make build`.
 - Run locally with `make run`; it syncs the latest Debug plugin packages and generates the local development catalog.
-- Sync only already-built Debug plugin packages and the local development catalog with `make sync-debug-plugins`.
+- Build and sync Debug plugin packages and the local development catalog without launching the app with `make sync-debug-plugins`.
 - Build the local plugin packages and generate the Debug catalog with `make build-plugin`.
 - Build one plugin with `make build-plugin PLUGIN=<plugin directory name or plugin ID>`.
-- Run repository script tests with `make script-tests`; these checks are separate from XCTest and include PluginKit minimum-host compatibility validation.
+- Run repository script tests with `make script-tests`; these checks are separate from XCTest and include pending changelog validation and PluginKit minimum-host compatibility validation.
+- Whenever `changes/unreleased/*.md` changes, run `make validate-changelog` before committing or pushing, even when only focused XCTest is otherwise needed. Each entry must stay within 220 characters and two sentences. `make script-tests` and `make ci` include this check; XCTest and `git diff --check` do not.
 - Run the full test suite with `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
 - Run one test class by appending `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
 - Run the CI-equivalent local validation with `make ci` before pushing cross-module or PluginKit changes.
@@ -47,11 +48,11 @@
 
 ## Architecture Conventions
 - Add new plugins under `Plugins/<PluginName>/` with at least `plugin.json`, `Sources/`, and `Bundle/`.
-- Plugins implement `MacToolsPlugin`; menu-bar primary panels implement `PluginPrimaryPanel`, and component panels implement `PluginComponentPanel`.
+- Plugins implement `MacToolsPlugin` and declare their views through `panelItems: [PluginPanelItem]`. Each stable item uses the host row or widget renderer; `initialPlacement` optionally suggests a built-in panel once. See `docs/plugins/panel-items.md`.
 - `plugin.json.id` must be stable, readable, and exactly match the runtime `PluginMetadata.id`; each `.mactoolsplugin` package must return exactly one plugin instance.
 - `PluginHost` owns plugin ordering, visibility, shortcuts, permission cards, and derived display state. Individual plugins should not manipulate host UI directly.
-- Plugin UI should be expressed through declarative models such as `PluginPanelState`, `PluginPanelDetail`, and `PluginPanelControl`. Except for `PluginComponentPanel.makeView`, avoid bypassing the existing panel framework with custom menu-bar UI.
-- Plugin state and UI-related code should normally run on `@MainActor`. Long-running scans, filesystem work, or system calls should not block the main thread for extended periods. `primaryPanelState` and `componentPanelState` should read existing snapshots whenever possible, not synchronously scan hardware, filesystems, or networks from getters.
+- Plugin UI should be expressed through declarative models such as `PluginPanelRowState`, `PluginPanelDetail`, and `PluginPanelControl`. Except for widget content factories, avoid bypassing the existing panel framework with custom menu-bar UI.
+- Plugin state and UI-related code should normally run on `@MainActor`. Long-running scans, filesystem work, or system calls should not block the main thread for extended periods. `panelItems` should read existing snapshots whenever possible, not synchronously scan hardware, filesystems, or networks from getters.
 - `PluginHost` is responsible only for deriving common display state such as panel items, component items, and settings items. It caches component views and coalesces short-window state rebuilds; business-data snapshots, cache invalidation, and refresh timing remain the plugin or component's responsibility.
 - After plugin state changes, call `onStateChange?()` so the host can rebuild derived state. If state can change due to external system events such as display hot-plugging, permission changes, filesystem changes, or calendar authorization changes, wire an explicit observer or refresh entry point with debounce/throttling. Do not depend on users expanding a panel, switching settings pages, or a full `refreshAll()` to get fresh data. Exception: high-frequency event sources such as input statistics or sampling counters may update only their own snapshots instead of calling `onStateChange?()` for every event; they must throttle UI notifications by visibility or a fixed time window and ensure `refresh()` or user panel opening can read the latest snapshot.
 - External state changes with cross-plugin value should be abstracted into Core-layer protocols or observers first. For example, display-topology changes should use `DisplayConfigurationObserving` to notify the host, then refresh display-related plugins that implement `DisplayTopologyRefreshing`.
@@ -87,11 +88,12 @@
 - Update release: keep Sparkle appcast, version, signing, and notarization changes small and careful; avoid committing local release artifacts.
 
 ## Testing Requirements
-- Behavior changes should prefer adjacent XCTest additions or updates. Test files should use `<TypeName>Tests.swift`.
+- Cover core outcomes, regressions, and consequential boundaries affected by the change. Reuse existing coverage; add or update adjacent XCTest only where it leaves a meaningful gap. There is no per-change test-count or coverage-percentage target. Test files should use `<TypeName>Tests.swift`.
+- Do not add tests that merely repeat implementation logic, private call sequences, or fixed wording, colors, and spacing. Documentation and cosmetic-only changes normally need review and visual verification, not new automated tests.
 - Local and agent validation should default to the smallest relevant test method or class, such as `-only-testing:MacToolsTests/<TestClassName>` or `-only-testing:MacToolsTests/<TestClassName>/<testMethod>`. Do not run the full suite for narrow changes unless the scope justifies it.
 - Plugin tests should prefer `Plugins/<PluginName>/Tests/`; shared Core/App tests should live under the corresponding `Tests/Core/` or `Tests/App/` path.
 - Filesystem tests must use temporary directories or fake stores, and must never delete real user directories.
-- Plugin interaction tests should cover `PluginPanelAction`, derived `PluginPanelState`, permission state, and error state.
+- Plugin interaction tests should protect the affected action outcomes, derived state, and important permission/error boundaries. Do not exhaustively test every field or duplicate unchanged host behavior in each plugin.
 - Changes that make a public PluginKit type newly consumable by plugins must run `make script-tests` so minimum-host inventory checks are not skipped.
 - If tests cannot be run, explicitly state the reason and suggest the local verification command in the final response.
 

@@ -124,13 +124,15 @@ private struct DisplayBrightnessShortcutSession {
 
 @MainActor
 final class DisplayBrightnessPlugin:
-    MacToolsPlugin,
-    PluginPrimaryPanel,
-    PluginShortcutEventHandling,
-    DisplayTopologyRefreshing,
-    PluginSettingsSearchProviding,
-    PluginActionProviding
-{
+    MacToolsPlugin, PluginShortcutEventHandling, DisplayTopologyRefreshing, PluginSettingsSearchProviding, PluginActionProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum Constants {
         static let displayControlPrefix = "display."
         static let brightnessControlSuffix = ".brightness"
@@ -143,7 +145,7 @@ final class DisplayBrightnessPlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -200,31 +202,28 @@ final class DisplayBrightnessPlugin:
         }
     }
 
-    var primaryPanelState: PluginPanelState {
+    var rowState: PluginPanelRowState {
         let snapshot = controller.snapshot()
 
         guard !snapshot.displays.isEmpty else {
-            isExpanded = false
-            return PluginPanelState(
+            return PluginPanelRowState(
                 subtitle: localization.string(
                     "panel.subtitle.noDisplays",
                     defaultValue: "未检测到可调节亮度的显示器"
                 ),
                 isOn: false,
-                isExpanded: false,
                 isEnabled: false,
-                isVisible: true,
+                isAvailable: true,
                 detail: nil,
                 errorMessage: snapshot.errorMessage
             )
         }
 
-        return PluginPanelState(
+        return PluginPanelRowState(
             subtitle: subtitle(for: snapshot.displays),
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? buildDetail(for: snapshot.displays) : nil,
             errorMessage: snapshot.errorMessage
         )

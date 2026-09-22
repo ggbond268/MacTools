@@ -11,7 +11,7 @@ final class TranslatorPluginTests: XCTestCase {
         XCTAssertEqual(plugin.metadata.id, "translator")
         XCTAssertEqual(plugin.metadata.title, "翻译")
         XCTAssertEqual(plugin.metadata.defaultDescription, "划词与截图快捷键翻译")
-        XCTAssertNotNil(plugin.primaryPanel)
+        XCTAssertTrue(plugin.panelItems.contains { $0.kind == .row })
         XCTAssertNotNil(plugin.settingsPage)
     }
 
@@ -40,7 +40,7 @@ final class TranslatorPluginTests: XCTestCase {
 
     func testPrimaryPanelReflectsPermissionAndSetupState() {
         XCTAssertEqual(
-            makePlugin(accessibilityTrustProvider: { false }).primaryPanelState.subtitle,
+            makePlugin(accessibilityTrustProvider: { false }).rowState.subtitle,
             "启用前需要辅助功能授权"
         )
 
@@ -57,7 +57,7 @@ final class TranslatorPluginTests: XCTestCase {
         )
 
         XCTAssertEqual(message, "API Key 不能为空。")
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "需要配置翻译服务")
+        XCTAssertEqual(plugin.rowState.subtitle, "需要配置翻译服务")
     }
 
     func testSavingBlankAPIKeyPreservesExistingKey() {
@@ -76,7 +76,7 @@ final class TranslatorPluginTests: XCTestCase {
 
         XCTAssertNil(message)
         XCTAssertEqual(secretStore.saveCount, 0)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "按 ⌥D 划词，⌥S 截图")
+        XCTAssertEqual(plugin.rowState.subtitle, "按 ⌥D 划词，⌥S 截图")
     }
 
     func testPrimaryPanelTogglePersistsDisabledStateAndNotifies() {
@@ -89,7 +89,7 @@ final class TranslatorPluginTests: XCTestCase {
 
         XCTAssertEqual(storage.bool(forKey: "translator.shortcut.enabled"), false)
         XCTAssertTrue(didNotify)
-        XCTAssertFalse(plugin.primaryPanelState.isOn)
+        XCTAssertFalse(plugin.rowState.isOn)
     }
 
     func testActionsReuseTranslationStartersAndMigrateLegacyBindings() async throws {

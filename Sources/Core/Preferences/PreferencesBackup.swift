@@ -36,14 +36,15 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
     struct ApplicationPreferences: Codable, Equatable, Sendable {
         let appearancePreference: String
         let languagePreference: String
-        let menuBarClickBehavior: String
+        // Decode older backups only; current exports store the panel order instead.
+        let menuBarClickBehavior: String?
         let settingsSidebarPluginSortMode: String?
         let settingsSidebarCustomPluginOrder: [String]?
 
         init(
             appearancePreference: String,
             languagePreference: String,
-            menuBarClickBehavior: String,
+            menuBarClickBehavior: String? = nil,
             settingsSidebarPluginSortMode: String? = nil,
             settingsSidebarCustomPluginOrder: [String]? = nil
         ) {
@@ -269,6 +270,16 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
     }
 
     static func decodeJSON(_ data: Data) throws -> PreferencesBackup {
+        do {
+            return try PreferencesArchiveDocument.decodeJSON(data).backup
+        } catch let validationError as PreferencesBackupError {
+            throw validationError
+        } catch {
+            return try decodePayloadJSON(data)
+        }
+    }
+
+    static func decodePayloadJSON(_ data: Data) throws -> PreferencesBackup {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup = try decoder.decode(PreferencesBackup.self, from: data)
@@ -286,7 +297,7 @@ struct PreferencesBackup: Codable, Equatable, Sendable {
         }.value
     }
 
-    private static func readFile(at url: URL, maximumSize: Int) throws -> Data {
+    static func readFile(at url: URL, maximumSize: Int = maximumFileSize) throws -> Data {
         precondition(maximumSize > 0)
 
         let file = try FileHandle(forReadingFrom: url)
@@ -357,13 +368,56 @@ struct PreferencesBackupSelection: Codable, Equatable, Sendable {
 
 struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
     let orderedPluginIDs: [String]
-    /// Compatibility projection for app versions that only understood global
-    /// visibility. New imports prefer the two per-surface collections below.
+    /// Read-only compatibility fields for pre-multiview backup payloads.
     let hiddenPluginIDs: [String]
     let dashboardOrderedPluginIDs: [String]?
     let featurePanelOrderedPluginIDs: [String]?
     let dashboardHiddenPluginIDs: [String]?
     let featurePanelHiddenPluginIDs: [String]?
+    let panelConfiguration: MenuBarPanelConfiguration?
+
+    private enum CodingKeys: String, CodingKey {
+        case orderedPluginIDs, hiddenPluginIDs, dashboardOrderedPluginIDs, featurePanelOrderedPluginIDs
+        case dashboardHiddenPluginIDs, featurePanelHiddenPluginIDs, panelConfiguration
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        orderedPluginIDs = try values.decodeIfPresent([String].self, forKey: .orderedPluginIDs) ?? []
+        hiddenPluginIDs = try values.decodeIfPresent([String].self, forKey: .hiddenPluginIDs) ?? []
+        dashboardOrderedPluginIDs = try values.decodeIfPresent([String].self, forKey: .dashboardOrderedPluginIDs)
+        featurePanelOrderedPluginIDs = try values.decodeIfPresent([String].self, forKey: .featurePanelOrderedPluginIDs)
+        dashboardHiddenPluginIDs = try values.decodeIfPresent([String].self, forKey: .dashboardHiddenPluginIDs)
+        featurePanelHiddenPluginIDs = try values.decodeIfPresent([String].self, forKey: .featurePanelHiddenPluginIDs)
+        struct Version: Decodable { let version: Int }
+        if let version = try values.decodeIfPresent(Version.self, forKey: .panelConfiguration), version.version < 3 {
+            let legacy = try values.decode(LegacyPanelLayout.self, forKey: .panelConfiguration)
+            let preferences = Self(orderedPluginIDs: orderedPluginIDs, hiddenPluginIDs: hiddenPluginIDs,
+                dashboardOrderedPluginIDs: dashboardOrderedPluginIDs,
+                featurePanelOrderedPluginIDs: featurePanelOrderedPluginIDs,
+                dashboardHiddenPluginIDs: dashboardHiddenPluginIDs,
+                featurePanelHiddenPluginIDs: featurePanelHiddenPluginIDs)
+            panelConfiguration = PanelLayoutMigrator.migrate(legacy,
+                preferences: LegacyPanelDisplayPreferences(backup: preferences))
+        } else {
+            panelConfiguration = try values.decodeIfPresent(MenuBarPanelConfiguration.self, forKey: .panelConfiguration)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(orderedPluginIDs, forKey: .orderedPluginIDs)
+        try values.encodeIfPresent(panelConfiguration, forKey: .panelConfiguration)
+        // Current exports always have a canonical layout. Preserve a legacy
+        // envelope when re-encoding an old backup before importing it.
+        if panelConfiguration == nil {
+            try values.encode(hiddenPluginIDs, forKey: .hiddenPluginIDs)
+            try values.encodeIfPresent(dashboardOrderedPluginIDs, forKey: .dashboardOrderedPluginIDs)
+            try values.encodeIfPresent(featurePanelOrderedPluginIDs, forKey: .featurePanelOrderedPluginIDs)
+            try values.encodeIfPresent(dashboardHiddenPluginIDs, forKey: .dashboardHiddenPluginIDs)
+            try values.encodeIfPresent(featurePanelHiddenPluginIDs, forKey: .featurePanelHiddenPluginIDs)
+        }
+    }
 
     init(
         orderedPluginIDs: [String],
@@ -371,7 +425,8 @@ struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
         dashboardOrderedPluginIDs: [String]? = nil,
         featurePanelOrderedPluginIDs: [String]? = nil,
         dashboardHiddenPluginIDs: [String]? = nil,
-        featurePanelHiddenPluginIDs: [String]? = nil
+        featurePanelHiddenPluginIDs: [String]? = nil,
+        panelConfiguration: MenuBarPanelConfiguration? = nil
     ) {
         self.orderedPluginIDs = orderedPluginIDs
         self.hiddenPluginIDs = hiddenPluginIDs
@@ -379,6 +434,7 @@ struct PluginDisplayPreferencesBackup: Codable, Equatable, Sendable {
         self.featurePanelOrderedPluginIDs = featurePanelOrderedPluginIDs
         self.dashboardHiddenPluginIDs = dashboardHiddenPluginIDs
         self.featurePanelHiddenPluginIDs = featurePanelHiddenPluginIDs
+        self.panelConfiguration = panelConfiguration
     }
 }
 
@@ -423,6 +479,8 @@ struct PreferencesImportPreview: Equatable {
             .union(backup.pluginDisplay.featurePanelOrderedPluginIDs ?? [])
             .union(backup.pluginDisplay.dashboardHiddenPluginIDs ?? [])
             .union(backup.pluginDisplay.featurePanelHiddenPluginIDs ?? [])
+            .union(backup.pluginDisplay.panelConfiguration?.placementsByPanelID.values.flatMap { $0.map(\.item.pluginID) } ?? [])
+            .union(backup.pluginDisplay.panelConfiguration?.legacySeed?.pluginIDs ?? [])
             : []
         let selectedActionReferences = (selection.includesShortcuts
             ? backup.actionShortcutAssignments.map(\.reference)
@@ -549,5 +607,4 @@ protocol PreferencesBackupApplicationStoring: AnyObject {
     func apply(_ preferences: PreferencesBackup.ApplicationPreferences)
     func setAppearancePreference(rawValue: String) -> Bool
     func setLanguagePreference(rawValue: String) -> Bool
-    func setMenuBarClickBehavior(rawValue: String) -> Bool
 }

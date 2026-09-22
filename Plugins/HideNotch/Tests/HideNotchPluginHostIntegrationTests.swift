@@ -23,12 +23,12 @@ final class HideNotchPluginHostIntegrationTests: XCTestCase {
         let host = PluginHost(
             plugins: [plugin],
             shortcutStore: ShortcutStore(userDefaults: userDefaults),
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(userDefaults: userDefaults),
+            pluginOrderingStore: PluginOrderingStore(userDefaults: userDefaults),
             preferencesBackupStore: PreferencesBackupStore(userDefaults: userDefaults),
             globalShortcutManager: GlobalShortcutManager()
         )
 
-        XCTAssertEqual(host.panelItems.map(\.id), ["hide-notch"])
+        XCTAssertEqual(host.panelItems.map(\.pluginID), ["hide-notch"])
         XCTAssertEqual(host.panelItems.first?.title, "隐藏刘海")
         XCTAssertEqual(host.panelItems.first?.description, "自动遮挡刘海屏顶部区域")
     }

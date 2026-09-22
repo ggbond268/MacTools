@@ -4,6 +4,28 @@ import MacToolsPluginKit
 
 @MainActor
 final class EmptyTrashPluginTests: XCTestCase {
+    func testRowAndWidgetShareVisibleRefreshLifetime() async throws {
+        let counter = TrashCountProbe(itemCount: 3)
+        let plugin = EmptyTrashPlugin(countItems: { await counter.countItems() }, countRefreshDelay: .zero)
+        let items = plugin.panelItems
+        let rowVisibility = try XCTUnwrap(items.first { $0.id == "control" }?.visibilityHandler)
+        let widgetVisibility = try XCTUnwrap(items.first { $0.id == "quick-control" }?.visibilityHandler)
+        widgetVisibility(true)
+        await waitForRequestCount(1, counter: counter)
+        rowVisibility(true)
+        widgetVisibility(false)
+        plugin.refresh()
+        await waitForRequestCount(2, counter: counter)
+        rowVisibility(false)
+        plugin.refresh()
+        try await Task.sleep(for: .milliseconds(20))
+        let hiddenCount = await counter.requestCountValue()
+        XCTAssertEqual(hiddenCount, 2, "Hiding one view must not stop another; hiding both stops refresh work")
+        widgetVisibility(true)
+        await waitForRequestCount(3, counter: counter)
+        widgetVisibility(false)
+    }
+
     func testRefreshDoesNotCountItemsWhilePrimaryPanelIsHidden() async {
         let counter = TrashCountProbe(itemCount: 3)
         let plugin = EmptyTrashPlugin(
@@ -16,7 +38,7 @@ final class EmptyTrashPluginTests: XCTestCase {
 
         let requestCount = await counter.requestCountValue()
         XCTAssertEqual(requestCount, 0)
-        XCTAssertFalse(plugin.primaryPanelState.isEnabled)
+        XCTAssertFalse(plugin.rowState.isEnabled)
     }
 
     func testPrimaryPanelVisibilityRefreshesTrashCount() async {
@@ -26,13 +48,13 @@ final class EmptyTrashPluginTests: XCTestCase {
             countRefreshDelay: .zero
         )
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
 
         await waitForRequestCount(1, counter: counter)
         let requestCount = await counter.requestCountValue()
         XCTAssertEqual(requestCount, 1)
-        XCTAssertTrue(plugin.primaryPanelState.isEnabled)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "3 个项目")
+        XCTAssertTrue(plugin.rowState.isEnabled)
+        XCTAssertEqual(plugin.rowState.subtitle, "3 个项目")
     }
 
     func testVisibleCountRefreshesAreDebounced() async {
@@ -42,7 +64,7 @@ final class EmptyTrashPluginTests: XCTestCase {
             countRefreshDelay: .zero
         )
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         plugin.refresh()
         plugin.refresh()
 
@@ -83,7 +105,7 @@ final class EmptyTrashPluginTests: XCTestCase {
         XCTAssertEqual(result, .succeeded())
         let emptyCount = await emptyProbe.emptyCount()
         XCTAssertEqual(emptyCount, 1)
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "废纸篓为空")
+        XCTAssertEqual(plugin.rowState.subtitle, "废纸篓为空")
     }
 
     func testCanonicalActionFailsWhenTrashCannotBeCounted() async throws {

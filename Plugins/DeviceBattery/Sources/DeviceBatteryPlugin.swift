@@ -25,9 +25,21 @@ enum DeviceBatteryInputMonitoringAuthorizationStatus {
 }
 
 @MainActor
-final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
-    PluginPanelSurfaceLifecycleHandling,
-    PluginApplicationActivityStateHandling {
+final class DeviceBatteryPlugin: MacToolsPlugin, PluginApplicationActivityStateHandling {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .widget(id: "widget", initialPlacement: .dashboard,
+                    descriptor: descriptor, state: widgetState,
+                    content: { [weak self] context in
+                        self?.makeView(context: context) ?? AnyView(EmptyView())
+                    })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("widget") }
+                    else { self?.panelItemDidBecomeHidden("widget") }
+                },
+        ]
+    }
+
     private enum ControlID {
         static let openInputMonitoring = "open-input-monitoring"
     }
@@ -38,8 +50,8 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
 
     let metadata: PluginMetadata
 
-    var descriptor: PluginComponentDescriptor {
-        PluginComponentDescriptor(span: componentSpan)
+    var descriptor: PluginPanelWidgetDescriptor {
+        PluginPanelWidgetDescriptor(span: componentSpan)
     }
 
     private let viewModel: DeviceBatteryViewModel
@@ -48,9 +60,9 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
     private let inputMonitoringAuthorizationStatus: () -> DeviceBatteryInputMonitoringAuthorizationStatus
     private let lowBatteryNotificationController: DeviceBatteryLowBatteryNotificationController
 
-    private var componentSpan: PluginComponentSpan {
+    private var componentSpan: PluginPanelWidgetSpan {
         let visibleItemCount = viewModel.snapshot.visibleItems.count
-        return PluginComponentSpan(
+        return PluginPanelWidgetSpan(
             width: DeviceBatteryComponentLayout.width,
             height: DeviceBatteryComponentLayout.spanHeight(
                 mode: store.layoutMode,
@@ -128,12 +140,12 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
 
-    var componentPanelState: PluginComponentState {
-        PluginComponentState(
+    var widgetState: PluginPanelWidgetState {
+        PluginPanelWidgetState(
             subtitle: viewModel.snapshot.subtitle(localization: localization),
             isActive: !viewModel.snapshot.visibleItems.isEmpty,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             errorMessage: viewModel.snapshot.errorMessage(localization: localization)
         )
     }
@@ -248,16 +260,16 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
         onStateChange?()
     }
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
         viewModel.setComponentPanelVisible(true)
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .component else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard surface == "widget" else {
             return
         }
 
@@ -268,7 +280,7 @@ final class DeviceBatteryPlugin: MacToolsPlugin, PluginComponentPanel,
         viewModel.setApplicationActivityState(state)
     }
 
-    func makeView(context: PluginComponentContext) -> AnyView {
+    func makeView(context: PluginPanelWidgetContext) -> AnyView {
         AnyView(
             DeviceBatteryComponentView(
                 viewModel: viewModel,

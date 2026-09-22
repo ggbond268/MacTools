@@ -21,11 +21,11 @@ Typed parameters, `--parameter`, `--input-json`, standard-input values, saved pr
 ## Preconditions
 
 1. Use an Apple silicon Mac with an active graphical user session.
-2. Install MacTools Nightly and the CLI ZIP from the same `nightly-*` GitHub prerelease by following the [download and verification guide](../testing/cli-nightly-distribution.md).
+2. Install MacTools Nightly, then install its matching CLI from **Settings → General** when managed installation is available. For manual installation, use the ZIP from the same `nightly-*` release and follow the [download and verification guide](../testing/cli-nightly-distribution.md).
 3. Enable **Command-Line Integration** in **MacTools Nightly > Settings > General** and approve its background item if macOS requests it.
-4. Invoke the downloaded executable by absolute path first. If it is later placed on `PATH`, use the Nightly-specific name `mactools-nightly`; never replace an existing `mactools` command.
+4. Managed installation creates `~/.local/bin/mactools-nightly`. For manual installation, verify the executable by absolute path first, then use the same Nightly-specific name on `PATH`; preserve any existing command.
 
-The examples below use `mactools-nightly`. Substitute the verified absolute path to the downloaded executable when it is not installed on `PATH`.
+The examples use `mactools-nightly`. Substitute its verified absolute path if the command is not on `PATH`. Stable installer support is separately gated by the [release workflow](../plugins/cli-release.md#stable-publication); these examples use the published Nightly channel.
 
 ## Safe request sequence
 

@@ -32,12 +32,19 @@ private enum ControlID {
 // MARK: - Plugin
 
 @MainActor
-final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSurfaceLifecycleHandling,
-    PluginActionProviding, PluginPortablePreferencesProviding,
-    PluginPersistentPreferencesChangeSignaling,
-    PluginPortablePreferencesRestorationReporting,
-    PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding
-{
+final class FanControlPlugin: MacToolsPlugin, PluginActionProviding, PluginPortablePreferencesProviding, PluginPersistentPreferencesChangeSignaling, PluginPortablePreferencesRestorationReporting, PluginPortablePreferencesActionReferencesProviding, PluginActionReferenceBackupProviding {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) })
+                .onVisibilityChange { [weak self] visible in
+                    if visible { self?.panelItemDidBecomeVisible("control") }
+                    else { self?.panelItemDidBecomeHidden("control") }
+                },
+        ]
+    }
+
     private enum ActionID {
         static let applyPreset = "apply-preset"
     }
@@ -50,7 +57,7 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .disclosure,
         menuActionBehavior: .keepPresented
     )
@@ -154,15 +161,14 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
         onStateChange?()
     }
 
-    // MARK: - PluginPrimaryPanel
+    // MARK: - Panel row
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: false,
-            isExpanded: isExpanded,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: isExpanded ? buildDetail() : nil,
             errorMessage: lastErrorMessage
         )
@@ -406,10 +412,10 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
         onStateChange?()
     }
 
-    // MARK: - PluginPanelSurfaceLifecycleHandling
+    // MARK: - Panel visibility
 
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {
-        guard surface == .primary, !isPrimaryPanelVisible else {
+    func panelItemDidBecomeVisible(_ surface: String) {
+        guard surface == "control", !isPrimaryPanelVisible else {
             return
         }
 
@@ -417,8 +423,8 @@ final class FanControlPlugin: MacToolsPlugin, PluginPrimaryPanel, PluginPanelSur
         restartMonitoringIfRunning()
     }
 
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {
-        guard surface == .primary, isPrimaryPanelVisible else {
+    func panelItemDidBecomeHidden(_ surface: String) {
+        guard surface == "control", isPrimaryPanelVisible else {
             return
         }
 

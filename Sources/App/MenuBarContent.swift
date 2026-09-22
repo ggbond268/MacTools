@@ -12,16 +12,29 @@ enum MenuBarPanelLayout {
     static let baseWidth: CGFloat = 316
     static let secondaryPanelWidth: CGFloat = 216
     static let maximumPanelHeight: CGFloat = 720
-    static let minimumPanelHeight: CGFloat = 220
+    static let minimumPanelHeight: CGFloat = 224
     static let featureListMaximumHeight: CGFloat = 860
     static let featurePanelScreenHeightRatio: CGFloat = 0.75
     static let screenVerticalMargin: CGFloat = 48
     static let cornerRadius: CGFloat = 12
     static let panelSpacing: CGFloat = 10
     static let outerPadding: CGFloat = 6
+    static let panelTopPadding: CGFloat = 4
     static let contentTopPadding: CGFloat = 4
+    static let contentBottomPadding: CGFloat = 2
+    static let panelBottomPadding: CGFloat = outerPadding - contentBottomPadding
+    static let editingPanelBottomPadding: CGFloat = 2
     static let rootSpacing: CGFloat = 0
-    static let toolbarHeight: CGFloat = 30
+    static let tabIconSize: CGFloat = 12
+    static let tabItemHeight: CGFloat = 26
+    static let tabCapsuleInset: CGFloat = 2
+    static let headerHeight: CGFloat = tabItemHeight + tabCapsuleInset * 2
+    static let headerAccessoryWidth: CGFloat = 26
+    static let headerAccessoryHeight: CGFloat = 26
+    static let headerAccessorySpacing: CGFloat = 0
+    static let editingButtonHeight: CGFloat = 28
+    static let editingActionBarVerticalPadding: CGFloat = 8
+    static let editingActionBarHeight = editingButtonHeight + editingActionBarVerticalPadding * 2
     static let featureRowSpacing: CGFloat = 5
     static let rowHeaderHeight: CGFloat = 31
     static let rowVerticalPadding: CGFloat = 16
@@ -44,16 +57,19 @@ enum MenuBarPanelLayout {
         baseWidth - (outerPadding * 2)
     }
 
-    static var topChromeHeight: CGFloat {
-        outerPadding + toolbarHeight + rootSpacing
-    }
-
-    static var contentBottomPadding: CGFloat {
-        outerPadding
+    static var panelChromeHeight: CGFloat {
+        panelTopPadding
+            + headerHeight
+            + panelBottomPadding
+            + rootSpacing
     }
 
     static var contentVerticalPadding: CGFloat {
         contentTopPadding + contentBottomPadding
+    }
+
+    static var editingPanelChromeHeight: CGFloat {
+        panelChromeHeight - panelBottomPadding + editingPanelBottomPadding
     }
 
     static func contentBodyHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
@@ -61,36 +77,41 @@ enum MenuBarPanelLayout {
     }
 
     static var minimumContentHeight: CGFloat {
-        max(0, minimumPanelHeight - topChromeHeight)
+        max(0, minimumPanelHeight - panelChromeHeight)
     }
 
     static func maximumContentHeight(for screen: NSScreen?) -> CGFloat {
         max(
             minimumContentHeight,
-            maximumPanelHeight(for: screen) - topChromeHeight
+            maximumPanelHeight(for: screen) - panelChromeHeight
         )
     }
 
-    static func panelHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
-        topChromeHeight + contentHeight
+    static func panelHeight(
+        forContentHeight contentHeight: CGFloat,
+        showsEditingActionBar: Bool = false
+    ) -> CGFloat {
+        (showsEditingActionBar ? editingPanelChromeHeight : panelChromeHeight)
+            + contentHeight
+            + (showsEditingActionBar ? editingActionBarHeight : 0)
     }
 
-    static func width(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func width(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         baseWidth
     }
 
-    static func contentSize(for panelItems: [PluginPanelItem]) -> NSSize {
+    static func contentSize(for panelItems: [PluginPanelRowSnapshot]) -> NSSize {
         NSSize(
             width: width(for: panelItems),
             height: preferredPanelHeight(for: panelItems, screen: nil)
         )
     }
 
-    static func height(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func height(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         preferredPanelHeight(for: panelItems, screen: nil)
     }
 
-    static func featureContentHeight(for panelItems: [PluginPanelItem]) -> CGFloat {
+    static func featureContentHeight(for panelItems: [PluginPanelRowSnapshot]) -> CGFloat {
         let rowContentHeight = panelItems.reduce(CGFloat(0)) { partialResult, item in
             partialResult + rowHeight(for: item)
         }
@@ -101,23 +122,23 @@ enum MenuBarPanelLayout {
     }
 
     static func availableFeatureHeight(forPanelHeight panelHeight: CGFloat) -> CGFloat {
-        max(0, panelHeight - topChromeHeight - contentVerticalPadding)
+        max(0, panelHeight - panelChromeHeight - contentVerticalPadding)
     }
 
-    static func preferredPanelHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func preferredPanelHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         panelHeight(
             forContentHeight: preferredFeatureContentHeight(for: panelItems, screen: screen)
         )
     }
 
-    static func preferredFeatureContentHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func preferredFeatureContentHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         max(
             featureListHeight(for: panelItems, screen: screen) + contentVerticalPadding,
             minimumContentHeight
         )
     }
 
-    static func featureListHeight(for panelItems: [PluginPanelItem], screen: NSScreen?) -> CGFloat {
+    static func featureListHeight(for panelItems: [PluginPanelRowSnapshot], screen: NSScreen?) -> CGFloat {
         min(featureContentHeight(for: panelItems), maximumFeatureListHeight(for: screen))
     }
 
@@ -160,7 +181,7 @@ enum MenuBarPanelLayout {
         }
 
         let screenMaximum = (visibleFrameHeight * featurePanelScreenHeightRatio)
-            - topChromeHeight
+            - panelChromeHeight
             - contentVerticalPadding
         return max(0, min(featureListMaximumHeight, screenMaximum))
     }
@@ -177,7 +198,7 @@ enum MenuBarPanelLayout {
         return max(minimumPanelHeight, visibleFrameHeight * featurePanelScreenHeightRatio)
     }
 
-    private static func rowHeight(for item: PluginPanelItem) -> CGFloat {
+    static func rowHeight(for item: PluginPanelRowSnapshot) -> CGFloat {
         guard let detail = displayedDetail(for: item) else {
             return rowHeaderHeight + rowVerticalPadding
         }
@@ -188,7 +209,7 @@ enum MenuBarPanelLayout {
             + rowVerticalPadding
     }
 
-    private static func displayedDetail(for item: PluginPanelItem) -> PluginPanelDetail? {
+    private static func displayedDetail(for item: PluginPanelRowSnapshot) -> PluginPanelDetail? {
         guard let detail = item.detail else {
             return nil
         }
@@ -213,10 +234,39 @@ enum MenuBarPanelLayout {
         }
     }
 
+    // Match the feature row's available width when estimating the panel's height.
+    static var segmentedContentWidth: CGFloat {
+        surfaceWidth - FeatureRowLayout.rowHorizontalPadding * 2 - FeatureRowLayout.detailLeadingInset
+    }
+
+    static func segmentedUsesList(_ control: PluginPanelControl) -> Bool {
+        // Existing compact controls keep their layout. Descriptive choices can fall
+        // back to a list when translated labels would be compressed or truncated.
+        guard control.options.contains(where: { $0.subtitle != nil }) else { return false }
+        let width = control.options.reduce(CGFloat(0)) { result, option in
+            result + (option.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width + 20
+        }
+        return width > segmentedContentWidth
+    }
+
+    static func segmentedSubtitleHeight(_ control: PluginPanelControl) -> CGFloat {
+        guard let subtitle = control.options.first(where: { $0.id == control.selectedOptionID })?.subtitle,
+              !subtitle.isEmpty else { return 0 }
+        let rect = (subtitle as NSString).boundingRect(
+            with: CGSize(width: segmentedContentWidth - 10, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: NSFont.systemFont(ofSize: 11)]
+        )
+        return ceil(rect.height) + 2
+    }
+
     private static func controlHeight(for control: PluginPanelControl) -> CGFloat {
         switch control.kind {
         case .segmented:
-            return 24
+            let titleHeight = control.sectionTitle == nil ? CGFloat(0) : CGFloat(19)
+            let choicesHeight = segmentedUsesList(control) ? CGFloat(control.options.count) * 26 : 24
+            let subtitleHeight = segmentedSubtitleHeight(control)
+            return titleHeight + choicesHeight + (subtitleHeight > 0 ? subtitleHeight + 4 : 0)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -324,7 +374,7 @@ private enum MenuBarHoverStyle {
 @MainActor
 final class HoverSecondaryPanelCoordinator: ObservableObject {
     struct Activation: Equatable, Hashable {
-        let pluginID: String
+        let placementID: String
         let controlID: String
         let optionID: String
     }
@@ -352,12 +402,12 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func hoverBegan(
-        pluginID: String,
+        placementID: String,
         controlID: String,
         optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
             optionID: optionID
         )
@@ -393,12 +443,12 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func pin(
-        pluginID: String,
+        placementID: String,
         controlID: String,
         optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
             optionID: optionID
         )
@@ -418,12 +468,12 @@ final class HoverSecondaryPanelCoordinator: ObservableObject {
     }
 
     func hoverEnded(
-        pluginID: String,
+        placementID: String,
         controlID: String,
         optionID: String
     ) {
         let activation = Activation(
-            pluginID: pluginID,
+            placementID: placementID,
             controlID: controlID,
             optionID: optionID
         )
@@ -536,8 +586,6 @@ struct MenuBarContent: View {
     static let launchControlOpenManagerActionID = "launch-control-open-manager"
     static let fanControlPluginID = "fan-control"
     static let fanControlManagePresetsActionID = "fan-add-preset"
-    static let zshConfigPluginID = "zsh-config"
-    static let zshConfigOpenSettingsActionID = "execute"
     static let batteryChargeLimitPluginID = "battery-charge-limit"
     static let batteryChargeLimitManageSettingsActionID = "battery-manage-settings"
 
@@ -546,7 +594,8 @@ struct MenuBarContent: View {
     @StateObject private var deferredActionDispatcher = DeferredPanelActionDispatcher()
     @Environment(\.menuBarPanelTheme) private var theme
 
-    @ObservedObject var pluginHost: PluginHost
+    let pluginHost: PluginHost
+    @EnvironmentObject private var presentation: MenuBarPanelPresentationModel
     let contentBodyHeight: CGFloat
     let maximumFeatureListHeight: CGFloat
     let isPanelVisible: Bool
@@ -554,8 +603,15 @@ struct MenuBarContent: View {
     let onOpenSettings: () -> Void
     let onPresentDiskCleanConfiguration: () -> Void
     let onPresentLaunchControlConfiguration: () -> Void
+    var suppliedItems: [PluginPanelRowSnapshot]? = nil
+    var embedded = false
+    var suppliedRowOffsets: [String: CGFloat]? = nil
+    var onInlinePresentationChange: (Bool) -> Void = { _ in }
+
+    private var items: [PluginPanelRowSnapshot] { suppliedItems ?? pluginHost.panelItems }
 
     var body: some View {
+        let _ = presentation.revision
         content
         .background(
             MenuWindowAccessor { window in
@@ -564,12 +620,13 @@ struct MenuBarContent: View {
                     syncSecondaryPanelWindow()
                 }
             }
+            .allowsHitTesting(false)
         )
         .onAppear {
             hoverCoordinator.onDismissRequest = { activation in
                 pluginHost.clearPanelNavigationSelection(
                     controlID: activation.controlID,
-                    for: activation.pluginID
+                    for: activation.placementID
                 )
             }
 
@@ -578,6 +635,9 @@ struct MenuBarContent: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: activeSecondaryPanelSignature)
+        .onChange(of: secondaryPanelController.isPresentingInline) { _, inline in
+            onInlinePresentationChange(inline)
+        }
         .onChange(of: activeSecondaryPanelSignature) {
             syncSecondaryPanelWindowIfVisible()
         }
@@ -602,6 +662,7 @@ struct MenuBarContent: View {
             }
         }
         .onDisappear {
+            onInlinePresentationChange(false)
             flushDeferredActionsIfNeeded()
             hoverCoordinator.dismissImmediately()
             hoverCoordinator.onDismissRequest = nil
@@ -685,11 +746,13 @@ struct MenuBarContent: View {
 
     @ViewBuilder
     private var featureList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        if embedded {
             featureCards
+        } else {
+            ScrollView(.vertical, showsIndicators: false) { featureCards }
+                .scrollDisabled(!isFeatureListScrollable)
+                .background(ScrollViewScrollerVisibilityConfigurator())
         }
-        .scrollDisabled(!isFeatureListScrollable)
-        .background(ScrollViewScrollerVisibilityConfigurator())
     }
 
     private var featureListHeight: CGFloat {
@@ -700,7 +763,7 @@ struct MenuBarContent: View {
     }
 
     private var visibleFeatureListHeight: CGFloat {
-        if pluginHost.panelItems.isEmpty {
+        if items.isEmpty {
             return contentBodyHeight
         }
 
@@ -712,7 +775,8 @@ struct MenuBarContent: View {
     }
 
     private var featureContentHeight: CGFloat {
-        MenuBarPanelLayout.featureContentHeight(for: pluginHost.panelItems)
+        guard suppliedRowOffsets == nil else { return contentBodyHeight }
+        return MenuBarPanelLayout.featureContentHeight(for: items)
     }
 
     private func presentSettings() {
@@ -720,14 +784,14 @@ struct MenuBarContent: View {
         onDismiss()
     }
 
-    private func handlePanelSwitchChange(_ newValue: Bool, for item: PluginPanelItem) -> Bool {
+    private func handlePanelSwitchChange(_ newValue: Bool, for item: PluginPanelRowSnapshot) -> Bool {
         switch item.menuActionBehavior {
         case .keepPresented:
             pluginHost.setSwitchValue(newValue, for: item.id)
             return pluginHost.isSwitchOn(for: item.id)
         case .dismissBeforeHandling:
             deferredActionDispatcher.deferPanelSwitch(
-                pluginID: item.id,
+                placementID: item.id,
                 isOn: newValue
             )
             onDismiss()
@@ -738,29 +802,23 @@ struct MenuBarContent: View {
 
     private func handleActionInvoke(
         controlID: String,
-        for item: PluginPanelItem,
+        for item: PluginPanelRowSnapshot,
         behavior: PluginMenuActionBehavior
     ) {
-        if isDiskCleanOpenDetailsAction(pluginID: item.id, controlID: controlID) {
+        if isDiskCleanOpenDetailsAction(pluginID: item.pluginID, controlID: controlID) {
             presentDiskCleanDetails()
             onDismiss()
             return
         }
 
-        if isLaunchControlOpenManagerAction(pluginID: item.id, controlID: controlID) {
+        if isLaunchControlOpenManagerAction(pluginID: item.pluginID, controlID: controlID) {
             presentLaunchControlManager()
             onDismiss()
             return
         }
 
-        if isFanControlManagePresetsAction(pluginID: item.id, controlID: controlID) {
+        if isFanControlManagePresetsAction(pluginID: item.pluginID, controlID: controlID) {
             pluginHost.presentPluginSettings(pluginID: Self.fanControlPluginID)
-            onDismiss()
-            return
-        }
-
-        if isZshConfigOpenSettingsAction(pluginID: item.id, controlID: controlID) {
-            pluginHost.presentPluginSettings(pluginID: Self.zshConfigPluginID)
             onDismiss()
             return
         }
@@ -771,7 +829,8 @@ struct MenuBarContent: View {
         case .dismissBeforeHandling:
             // Dismiss the popover before running actions that may open a new window.
             deferredActionDispatcher.deferActionInvocation(
-                pluginID: item.id,
+                placementID: item.id,
+                pluginID: item.pluginID,
                 controlID: controlID
             )
             onDismiss()
@@ -796,7 +855,7 @@ struct MenuBarContent: View {
     private func performDeferredPanelSwitchAction(_ action: DeferredPanelActionDispatcher.PanelSwitchAction) {
         pluginHost.setSwitchValue(
             action.isOn,
-            for: action.pluginID
+            for: action.placementID
         )
     }
 
@@ -816,11 +875,6 @@ struct MenuBarContent: View {
             return
         }
 
-        if isZshConfigOpenSettingsAction(pluginID: action.pluginID, controlID: action.controlID) {
-            pluginHost.presentPluginSettings(pluginID: Self.zshConfigPluginID)
-            return
-        }
-
         if isBatteryChargeLimitManageSettingsAction(pluginID: action.pluginID, controlID: action.controlID) {
             pluginHost.presentPluginSettings(pluginID: Self.batteryChargeLimitPluginID)
             return
@@ -828,7 +882,7 @@ struct MenuBarContent: View {
 
         pluginHost.invokePanelAction(
             controlID: action.controlID,
-            for: action.pluginID
+            for: action.placementID
         )
     }
 
@@ -842,10 +896,6 @@ struct MenuBarContent: View {
 
     private func isFanControlManagePresetsAction(pluginID: String, controlID: String) -> Bool {
         pluginID == Self.fanControlPluginID && controlID == Self.fanControlManagePresetsActionID
-    }
-
-    private func isZshConfigOpenSettingsAction(pluginID: String, controlID: String) -> Bool {
-        pluginID == Self.zshConfigPluginID && controlID == Self.zshConfigOpenSettingsActionID
     }
 
     private func isBatteryChargeLimitManageSettingsAction(pluginID: String, controlID: String) -> Bool {
@@ -905,7 +955,7 @@ struct MenuBarContent: View {
                     optionID: optionID
                 ) != nil {
                     hoverCoordinator.pin(
-                        pluginID: activeSecondaryPanel.item.id,
+                        placementID: activeSecondaryPanel.item.id,
                         controlID: controlID,
                         optionID: optionID
                     )
@@ -945,7 +995,7 @@ struct MenuBarContent: View {
     ) {
         if isHovering {
             hoverCoordinator.hoverBegan(
-                pluginID: pluginID,
+                placementID: pluginID,
                 controlID: controlID,
                 optionID: optionID
             )
@@ -953,7 +1003,7 @@ struct MenuBarContent: View {
         }
 
         hoverCoordinator.hoverEnded(
-            pluginID: pluginID,
+            placementID: pluginID,
             controlID: controlID,
             optionID: optionID
         )
@@ -969,13 +1019,13 @@ struct MenuBarContent: View {
         }
 
         let controlIDs = activeSecondaryPanel.panel.controls.map(\.id).joined(separator: ",")
-        return "\(activeSecondaryPanel.activation.pluginID)|\(activeSecondaryPanel.activation.optionID)|\(activeSecondaryPanel.panel.title)|\(controlIDs)"
+        return "\(activeSecondaryPanel.activation.placementID)|\(activeSecondaryPanel.activation.optionID)|\(activeSecondaryPanel.panel.title)|\(controlIDs)"
     }
 
     private var activeSecondaryPanel: ActiveSecondaryPanel? {
         guard
             let activation = hoverCoordinator.activeActivation,
-            let item = pluginHost.panelItems.first(where: { $0.id == activation.pluginID }),
+            let item = items.first(where: { $0.id == activation.placementID }),
             let panel = item.detail?.secondaryPanel(
                 controlID: activation.controlID,
                 optionID: activation.optionID
@@ -993,26 +1043,34 @@ struct MenuBarContent: View {
 
     private struct ActiveSecondaryPanel {
         let activation: HoverSecondaryPanelCoordinator.Activation
-        let item: PluginPanelItem
+        let item: PluginPanelRowSnapshot
         let panel: PluginPanelSecondaryPanel
     }
 
+    @ViewBuilder
     private var featureCards: some View {
-        VStack(spacing: MenuBarPanelLayout.featureRowSpacing) {
-            if pluginHost.panelItems.isEmpty {
-                PanelPluginEmptyState(
-                    tab: .features,
-                    onInstall: {
-                        pluginHost.presentPluginMarketplace()
-                    }
-                )
+        let templates = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let placement = ConfiguredMenuBarPanelLayout.placement(features: items)
+        let offsets = suppliedRowOffsets ?? placement.featureOffsets
+        let retainedIDs = Set(hoverCoordinator.activeActivation.map { [$0.placementID] } ?? [])
+        let frames = items.compactMap { item -> PanelItemFrame? in
+            guard let y = offsets[item.id] else { return nil }
+            return PanelItemFrame(id: item.id,
+                frame: CGRect(x: 0, y: y, width: MenuBarPanelLayout.surfaceWidth,
+                              height: MenuBarPanelLayout.rowHeight(for: item)))
+        }
+        if items.isEmpty {
+            PanelPluginEmptyState(tab: .features, onInstall: { pluginHost.presentPluginMarketplace() })
                 .frame(height: contentBodyHeight)
-            } else {
-                ForEach(pluginHost.panelItems) { item in
+        } else {
+            PanelViewportStack(frames: frames, width: MenuBarPanelLayout.surfaceWidth,
+                               height: suppliedRowOffsets == nil ? placement.height : contentBodyHeight,
+                               retainedIDs: retainedIDs) { id in
+                if let item = templates[id] {
                     FeatureRowView(
                         item: item,
-                        indicator: pluginHost.primaryPanelIndicatorsByID[item.id],
-                        compactIndicator: pluginHost.primaryPanelCompactIndicatorsByID[item.id],
+                        indicator: pluginHost.rowIndicator(for: item.id),
+                        compactIndicator: pluginHost.rowCompactIndicator(for: item.id),
                         onDisclosureToggle: { isExpanded in
                             pluginHost.setDisclosureExpanded(isExpanded, for: item.id)
                         },
@@ -1032,7 +1090,7 @@ struct MenuBarContent: View {
 
                             if item.detail?.secondaryPanel(controlID: controlID, optionID: optionID) != nil {
                                 hoverCoordinator.pin(
-                                    pluginID: item.id,
+                                    placementID: item.id,
                                     controlID: controlID,
                                     optionID: optionID
                                 )
@@ -1053,7 +1111,7 @@ struct MenuBarContent: View {
                             hoverCoordinator.updateRowFrame(
                                 frame,
                                 for: HoverSecondaryPanelCoordinator.Activation(
-                                    pluginID: item.id,
+                                    placementID: item.id,
                                     controlID: controlID,
                                     optionID: optionID
                                 )
@@ -1084,7 +1142,6 @@ struct MenuBarContent: View {
                 }
             }
         }
-        .frame(width: MenuBarPanelLayout.surfaceWidth, alignment: .leading)
     }
 
 }
@@ -1092,11 +1149,12 @@ struct MenuBarContent: View {
 @MainActor
 final class DeferredPanelActionDispatcher: ObservableObject {
     struct PanelSwitchAction: Equatable {
-        let pluginID: String
+        let placementID: String
         let isOn: Bool
     }
 
     struct ActionInvocation: Equatable {
+        let placementID: String
         let pluginID: String
         let controlID: String
     }
@@ -1105,12 +1163,12 @@ final class DeferredPanelActionDispatcher: ObservableObject {
     private(set) var pendingActionInvocation: ActionInvocation?
     private var flushTask: Task<Void, Never>?
 
-    func deferPanelSwitch(pluginID: String, isOn: Bool) {
-        pendingPanelSwitchAction = PanelSwitchAction(pluginID: pluginID, isOn: isOn)
+    func deferPanelSwitch(placementID: String, isOn: Bool) {
+        pendingPanelSwitchAction = PanelSwitchAction(placementID: placementID, isOn: isOn)
     }
 
-    func deferActionInvocation(pluginID: String, controlID: String) {
-        pendingActionInvocation = ActionInvocation(pluginID: pluginID, controlID: controlID)
+    func deferActionInvocation(placementID: String, pluginID: String, controlID: String) {
+        pendingActionInvocation = ActionInvocation(placementID: placementID, pluginID: pluginID, controlID: controlID)
     }
 
     func flushAfterDismiss(
@@ -1215,9 +1273,9 @@ private struct MenuBarPanelSwitchControl: View {
 }
 
 struct FeatureRowView: View {
-    let item: PluginPanelItem
-    let indicator: PluginPrimaryPanelIndicator?
-    let compactIndicator: PluginPrimaryPanelCompactIndicator?
+    let item: PluginPanelRowSnapshot
+    let indicator: PluginPanelRowIndicator?
+    let compactIndicator: PluginPanelRowCompactIndicator?
     let onDisclosureToggle: (Bool) -> Void
     let onSelectionChange: (String, String) -> Void
     let onNavigationSelectionChange: (String, String) -> Void
@@ -1454,7 +1512,7 @@ struct FeatureRowView: View {
         }
     }
 
-    private func primaryPanelIndicator(_ indicator: PluginPrimaryPanelIndicator) -> some View {
+    private func primaryPanelIndicator(_ indicator: PluginPanelRowIndicator) -> some View {
         HStack(spacing: 3) {
             if indicator.systemImage == "progress.indicator" {
                 ProgressView()
@@ -1474,7 +1532,7 @@ struct FeatureRowView: View {
     }
 
     private func primaryPanelCompactIndicator(
-        _ indicator: PluginPrimaryPanelCompactIndicator
+        _ indicator: PluginPanelRowCompactIndicator
     ) -> some View {
         HStack(spacing: 4) {
             ForEach(indicator.icons.indices, id: \.self) { index in
@@ -1818,9 +1876,9 @@ private extension View {
 }
 
 enum IPOverviewFeatureRowModel {
-    static func values(for item: PluginPanelItem) -> [IPOverviewFeatureRowValue] {
+    static func values(for item: PluginPanelRowSnapshot) -> [IPOverviewFeatureRowValue] {
         guard
-            item.id == IPOverviewFeatureRowContract.pluginID,
+            item.pluginID == IPOverviewFeatureRowContract.pluginID,
             let controls = item.detail?.primaryControls
         else {
             return []
@@ -1905,8 +1963,8 @@ private struct PluginPanelDetailView: View {
     private func panelControl(_ control: PluginPanelControl) -> some View {
         switch control.kind {
         case .segmented:
-            PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            DescriptiveSegmentedControl(control: control, onSelectionChange: onSelectionChange)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case .datePicker:
             switch control.datePickerStyle ?? .compact {
             case .compact:
@@ -1980,6 +2038,38 @@ private struct PluginPanelDetailView: View {
     }
 }
 
+private struct DescriptiveSegmentedControl: View {
+    let control: PluginPanelControl
+    let onSelectionChange: (String, String) -> Void
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if MenuBarPanelLayout.segmentedUsesList(control) {
+                SelectListControl(control: control) { optionID in
+                    onSelectionChange(control.id, optionID)
+                }
+            } else {
+                if let title = control.sectionTitle {
+                    Text(title)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
+                        .padding(.leading, 5)
+                }
+                PluginPanelSegmentedControl(control: control, onSelectionChange: onSelectionChange)
+            }
+            if let subtitle = control.options.first(where: { $0.id == control.selectedOptionID })?.subtitle,
+               !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 5)
+            }
+        }
+    }
+}
+
 private struct PluginPanelSegmentedControl: NSViewRepresentable {
     let control: PluginPanelControl
     let onSelectionChange: (String, String) -> Void
@@ -2009,12 +2099,14 @@ private struct PluginPanelSegmentedControl: NSViewRepresentable {
             if nsView.label(forSegment: index) != option.title {
                 nsView.setLabel(option.title, forSegment: index)
             }
-            nsView.setToolTip(option.title, forSegment: index)
+            nsView.setToolTip(option.subtitle ?? option.title, forSegment: index)
         }
         let selectedIndex = control.options.firstIndex { $0.id == control.selectedOptionID } ?? -1
         if nsView.selectedSegment != selectedIndex {
             nsView.selectedSegment = selectedIndex
         }
+        nsView.font = .systemFont(ofSize: control.options.contains(where: { $0.subtitle != nil }) ? 12 : 13)
+        nsView.setAccessibilityLabel(control.sectionTitle)
         nsView.isEnabled = control.isEnabled
         nsView.selectedSegmentBezelColor = NSColor(theme.accent)
         nsView.userInterfaceLayoutDirection = context.environment.layoutDirection == .rightToLeft

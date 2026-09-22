@@ -2,13 +2,13 @@
 
 MacTools dynamic plugins use one catalog-driven flow for both production distribution and local development.
 
-- PluginKit 2 production builds read the legacy `catalog.json` URL. PluginKit 3 and later builds read versioned URLs. MacTools through 1.1.6 remains on the immutable PluginKit v4 catalog at `v4/catalog.json`; MacTools 1.2.0 remains on the PluginKit v5/schema-2 catalog at `v5/catalog.json`; MacTools 1.3.0 and later use PluginKit v6/schema 3 at `v6/catalog.json`.
+- PluginKit 2 production builds read the legacy `catalog.json` URL. PluginKit 3 and later builds read versioned URLs. MacTools through 1.1.6 remains on the immutable PluginKit v4 catalog at `v4/catalog.json`; MacTools 1.2.0 remains on the PluginKit v5/schema-2 catalog at `v5/catalog.json`; Released PluginKit v6 builds retain `v6/catalog.json`; the current source uses PluginKit v7/schema 3 at `v7/catalog.json`.
 - Each catalog contains packages for one PluginKit ABI line. The legacy v2 catalog is kept unchanged when a new ABI is released, so older app builds continue to work.
 - `minimumHostVersion` at the catalog root is the oldest host that can parse that catalog schema. Each entry declares its own install requirement; older hosts keep the catalog available and show newer entries as incompatible instead of rejecting the whole marketplace.
 - Local development reads a Debug-only `file://` catalog, usually configured with `MACTOOLS_PLUGIN_CATALOG_URL`.
 - Both flows resolve catalog entries into local staged packages, verify checksum and manifest compatibility, then install through the same package store. The marketplace can update one plugin at a time or run a batch update for every currently updateable plugin.
 
-## Catalog v2 and v3
+## Catalog format
 
 ```json
 {
@@ -16,7 +16,7 @@ MacTools dynamic plugins use one catalog-driven flow for both production distrib
   "catalogID": "com.ggbond.mactools.plugins",
   "generatedAt": "2026-05-16T12:00:00Z",
   "minimumHostVersion": "1.2.1",
-  "pluginKitVersion": 6,
+  "pluginKitVersion": 7,
   "plugins": [
     {
       "id": "com.ggbond.mactools.demo",
@@ -33,11 +33,10 @@ MacTools dynamic plugins use one catalog-driven flow for both production distrib
         }
       },
       "version": "1.0.0",
-      "minimumHostVersion": "1.3.0",
-      "pluginKitVersion": 6,
+      "minimumHostVersion": "1.3.1",
+      "pluginKitVersion": 7,
       "capabilities": {
-        "primaryPanel": true,
-        "componentPanel": false,
+        "panelItems": ["row"],
         "settings": "form"
       },
       "permissions": [],
@@ -63,7 +62,7 @@ MacTools dynamic plugins use one catalog-driven flow for both production distrib
 
 Catalog schema 2 follows PluginKit 4 and later manifests: `capabilities.settings` is `none`, `form`, or `workspace`. Schema 1 and its boolean `configuration` capability remain in older ABI catalogs and are not rewritten. A newer host may decode an installed package from an older ABI only far enough to identify and update it; it never loads or renders an incompatible settings API.
 
-Catalog schema 3 is additive. It preserves every schema-2 package field and may also project `presentation`, `discovery`, `requirements`, `privacy`, `actions`, `setup`, and `relationships` from the checked-in source manifest. Schema-3 hosts accept both schema 2 and schema 3, so existing sparse catalogs and caches continue to work. The schema-3 catalog keeps its schema parsing floor of 1.2.1. PluginKit v6 entries require MacTools 1.3.0 or later and are published at a separate v6 endpoint, leaving the released 1.2.0 endpoint unchanged. The catalog signature covers every enriched field.
+Catalog schema 3 is additive. It preserves every schema-2 package field and may also project `presentation`, `discovery`, `requirements`, `privacy`, `actions`, `setup`, and `relationships` from the checked-in source manifest. Schema-3 hosts accept both schema 2 and schema 3, so existing sparse catalogs and caches continue to work. The schema-3 catalog keeps its schema parsing floor of 1.2.1. PluginKit v7 entries require MacTools 1.3.1 or later and use a separate v7 endpoint. Released v4, v5, and v6 endpoints remain unchanged. The catalog signature covers every enriched field.
 
 ## Product and Capability Metadata
 
@@ -76,6 +75,8 @@ Catalog schema 3 is additive. It preserves every schema-2 package field and may 
 - `actions`: static descriptors, dynamic templates, parameters, permissions, risk, supported surfaces, automatic eligibility, and external-invocation policy.
 - `setup`: localized first-use steps, a suggested static test action, optional next surfaces, and missing-dependency help.
 - `relationships`: related plugins, packs, recipes, and superseded plugin IDs.
+
+### Localization
 
 Localized product copy is declared once in the source-only `productStrings` table. Each entry either contains `ar`, `de`, `en`, `es`, `fr`, `ja`, `ko`, `pt`, `ru`, `zh-Hans`, and `zh-Hant`, reuses the plugin's complete localized metadata with `@displayName` or `@summary`, imports an existing `Resources/Localizable.xcstrings` entry with `@localizable.<key>`, uses a standard `@standardAction.toggle.*` or `@standardAction.set-enabled.*` label, or renders declared permission, hardware, application, and executable requirements with `@standardSetup.requirements.*`. Every localized field in `presentation`, `discovery`, `privacy`, `actions`, and `setup` references `@productStrings.<key>`; inline locale objects and direct base references are rejected. Validation expands these references before package and catalog projection, rejects missing and unused entries, and removes `productStrings` from generated artifacts. Every repository plugin follows this source shape, while `Appearance`, `AppVolume`, `IPOverview`, and `WindowSwitcher` remain useful examples of fully hand-authored entries rather than inherited baseline copy.
 
@@ -104,9 +105,19 @@ Localized product copy is declared once in the source-only `productStrings` tabl
 }
 ```
 
+### Action metadata
+
 Static action entries describe fixed runtime `ActionDefinition` identities. Dynamic templates describe machine-local entries without putting local application IDs, devices, paths, or other discovered values in the signed catalog. A provider declares `static`, `dynamic`, or `mixed` and must populate the matching collections. `automatic-rule` is valid only for safe automatic actions, while `app-intent` additionally requires portable identity and parameters. External invocation is `unavailable`, `allowed`, `confirmAlways`, or `configurable` when each generated action owns the setting. A dynamic template whose generated entries can differ in risk or automatic eligibility declares `riskVariesByEntry` or `automaticEligibilityVariesByEntry`; its surfaces are the complete set that any generated entry may support, while fixed fields remain exact. Repository-wide XCTest coverage compares static identities and dynamic families, fixed and variable safety policy, external policy, supported surfaces, permissions, system images, and parameter policy against runtime definitions and focused dynamic-provider fixtures.
 
+### Screenshots
+
 Screenshot sources live under `Plugins/<PluginName>/MarketplaceAssets/`. The generator rejects traversal, missing or unsupported files, files over 10 MiB, and images over 7680 pixels per dimension. It adds media type, size, dimensions where available, and SHA-256 to the signed projection. Asset bytes are never embedded in `plugin.json`.
+
+## Website projection
+
+The public Astro site is generated from the same validated `Plugins/*/plugin.json` source manifests and their repository-local `Resources/Localizable.xcstrings` references; it does not fetch a production catalog while building. Run `cd site && npm run generate:plugins` after changing a manifest, referenced localization string, or Marketplace asset; commit `site/src/generated/*.json` and any checksum-named files under `site/public/generated/plugin-assets/`. `npm run check:generated-plugins` fails when JSON or expected assets are stale, missing, or orphaned. Plugin pages use `mactools://app/settings/plugins/marketplace/<plugin-id>` links, and static-action pages add a paired `provider` and `action` highlight; neither link installs or executes an action.
+
+## Verification and release order
 
 Release catalogs must include an Ed25519 signature. Debug local catalogs may omit `signature`, but they still go through package checksum, manifest, staging, and same-team code signature validation. Catalog verification validates every entry's identity and PluginKit ABI without requiring every package to support the current host. Package installation and loading continue to enforce the entry's `minimumHostVersion` strictly.
 
@@ -122,6 +133,7 @@ PluginKit 3 -> https://mactools.ggbond.app/plugins/v3/catalog.json
 PluginKit 4 -> https://mactools.ggbond.app/plugins/v4/catalog.json
 PluginKit 5 / schema 2 -> https://mactools.ggbond.app/plugins/v5/catalog.json
 PluginKit 6 / schema 3 -> https://mactools.ggbond.app/plugins/v6/catalog.json
+PluginKit 7 / schema 3 -> https://mactools.ggbond.app/plugins/v7/catalog.json
 PluginKit N -> https://mactools.ggbond.app/plugins/vN/catalog.json
 ```
 
@@ -195,7 +207,7 @@ make run MACTOOLS_PLUGIN_CATALOG_URL=file:///path/to/catalog.dev.json
 For Debug runs, the catalog URL scheme selects the verification mode. A `file://` URL uses the local development catalog policy, where signatures are optional. An `https://` URL uses the production catalog policy, where the catalog signature is required:
 
 ```bash
-make run MACTOOLS_PLUGIN_CATALOG_URL=https://mactools.ggbond.app/plugins/catalog.json
+make run MACTOOLS_PLUGIN_CATALOG_URL=https://mactools.ggbond.app/plugins/v7/catalog.json
 ```
 
 The app copies the package into its own staging and installed directories. Uninstall deletes only the installed copy under MacTools application support; it never deletes the plugin source directory or the local build directory.
@@ -208,15 +220,9 @@ Each publishing Nightly workflow run performs one aggregate `Nightly` app build,
 
 Nightly package versions are generated artifacts using `source-major.run.attempt`, where `source-major` comes from the plugin's committed manifest and `run.attempt` comes from the producing GitHub Actions build. Retrying verification or publication reuses that build's artifact ID and version metadata, including catalog URLs; only rebuilding creates a new candidate. This produces valid, monotonically increasing versions without changing or pre-bumping source `plugin.json` files. Stable plugin releases continue to own committed manifest version bumps.
 
-The workflow signs the complete catalog with the existing catalog key, verifies every package URL and PluginKit version, and publishes it together with the dedicated Nightly appcast. See `docs/github-actions.md` for the maintainer enablement and two-run update validation procedure.
+The workflow signs the complete catalog with the existing catalog key, verifies every package URL and PluginKit version, and publishes it together with the dedicated Nightly appcast. See [Nightly releases](../github-actions.md#nightly-releases) for enablement and update validation.
 
-Fan Control and Battery Charge Limit preserve their stable helper paths and append `.nightly` to the system-wide installation paths in the Nightly host. Their Nightly helper targets embed a `.nightly` bundle identifier so package signing uses a separate code-signing identifier. Bundled helper filenames remain unchanged inside the already isolated plugin packages. Generated Nightly manifests update the localized setup descriptions to match the installed paths; source manifests and stable output remain unchanged.
-
-Translator and Cloudflare R2 append `.nightly` to their Keychain service names when the host's `MTReleaseChannel` is `nightly`. All lookup, update, and deletion queries use that service; there is no fallback or migration from stable secrets. The existing PluginKit interface is unchanged.
-
-Activity Bar uses `/tmp/mactools-nightly-activity-bar.sock` and `mactools-nightly-activity-<tool>-hook.sh` for Nightly. These filenames deliberately do not contain the original stable filenames, so older stable versions cannot remove Nightly hook registrations by substring. New installers match their own script path when registering or removing entries in the shared Claude, Cursor, and Codex configuration files. Plugin IDs remain unchanged; the host already isolates plugin data, caches, and temporary directories. The trackpad listener lock remains shared to prevent competing hardware listeners.
-
-The embedded CLI broker uses `<host-bundle-identifier>.cli-broker`, including Nightly's `.nightly` component. Its LaunchAgent label, Mach service, embedded Info.plist, and signing identity must agree. The separately built Apple silicon CLI similarly uses `<host-bundle-identifier>.cli`; it is signed and notarized as its own Nightly release asset rather than added to the app. Its archive includes the unchanged root GPL license, which the release verifier checks before executing or publishing the CLI. The workflow performs static release checks in the signing job, executes the immutable archived CLI in a credential-free verification job, and publishes only after that job succeeds. The Nightly workflow explicitly signs the broker executable before signing the app.
+Nightly isolates app, catalog, helper, credential, hook, and CLI identities. See [channel isolation](../github-actions.md#channel-isolation) for the ownership boundaries and coexistence checks.
 
 ## Release Flow
 
@@ -231,7 +237,7 @@ Recommended production flow is an incremental batch plugin release:
 7. If package-relevant files changed inside a plugin or shared PluginKit code changed but that plugin version did not increase, the workflow fails before signing or uploading. A `pluginKitVersion` change automatically becomes a full `mode=all` rebuild and replaces the catalog for that ABI line; other exceptional shared paths can still be supplied explicitly with `--shared-path`.
 8. The workflow builds, signs, zips, and uploads only the selected plugin packages.
 9. For an ABI migration, the workflow generates a complete catalog from all rebuilt packages. For later releases within an ABI line, it generates a delta catalog and merges it into that line's catalog, keeping unchanged entries pointing at their existing assets.
-10. The signed catalog is committed to its compatibility path. The released PluginKit v5/schema-2 catalog remains at `docs/plugins/v5/catalog.json`; PluginKit v6/schema 3 is written to `docs/plugins/v6/catalog.json`.
+10. The signed catalog is committed to its compatibility path. The released PluginKit v5/schema-2 catalog remains at `docs/plugins/v5/catalog.json`; Released PluginKit v6/schema 3 remains at `docs/plugins/v6/catalog.json`; new PluginKit v7 packages go to `docs/plugins/v7/catalog.json`.
 11. `Deploy Pages` publishes the signed catalog to GitHub Pages.
 
 The batch tag is stored per plugin entry through `package.url` and `releaseNotesURL`, so one catalog can point different plugins to different release tags without changing host code.
@@ -251,7 +257,7 @@ GitHub Release: plugins-1.0.1
 
 Unchanged plugin entries remain valid because the catalog preserves their previous URLs, checksums, and versions. They are not shown as updates in the app unless their catalog version is higher than the installed version.
 
-The v6 migration sets only the host ABI version and each source manifest's `pluginKitVersion` and `minHostVersion`. Keep individual package `version` fields unchanged until `make release` prepares the plugin batch. It selects every plugin, bumps versions that have not already advanced, and uses the immutable v5 catalog only as a comparison baseline. Do not hand-generate a v6 catalog before that release. After the signed catalog is committed and deployed, prepare the 1.3.0 app release; the helper owns its build number and compiled changelog.
+The v7 migration changes the host ABI and source manifests’ `pluginKitVersion`, `minHostVersion`, and panel capabilities. Keep package versions unchanged until `make release` prepares a complete rebuilt batch. Do not hand-generate or overwrite signed catalogs. Publish the v7 batch and catalog, wait for deployment verification, and only then prepare the matching app release; release tooling owns version bumps and compiled changelogs.
 
 `pluginKitVersion` is the PluginKit ABI boundary. When it changes, every plugin package must be rebuilt and each plugin's manifest version must increase during release so installed users see an update. The standard `make release` flow handles these manifest bumps automatically. The new host reads the new catalog and updates all installed plugins before loading any dynamic bundle. The catalog merge step rejects mixed PluginKit versions.
 
@@ -274,13 +280,14 @@ appearance.mactoolsplugin/
       _CodeSignature/
 ```
 
-Local dry-run packaging uses the same release asset script:
+For authorized local signing validation, use the release asset script with an output path outside the published catalogs. This builds and signs packages; it does not publish a release:
 
 ```bash
 make package-plugins-release \
   PLUGIN_CODE_SIGN_IDENTITY="Developer ID Application: Example (TEAMID)" \
   PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$PLUGIN_CATALOG_PRIVATE_KEY_BASE64" \
-  PLUGIN_RELEASE_TAG=plugins-1.0.1
+  PLUGIN_RELEASE_TAG=plugins-1.0.1 \
+  PLUGIN_RELEASE_SIGNED_CATALOG=build/PluginRelease/catalog.signed.json
 ```
 
 Generated local output:
@@ -289,43 +296,20 @@ Generated local output:
 build/PluginRelease/
   Assets/*.mactoolsplugin.zip
   catalog.json
-docs/plugins/v6/catalog.json
+  catalog.signed.json
 ```
 
-The lower-level scripts are still useful for external plugin repositories. `build-plugin-release-assets.sh` can build all plugins or a subset with repeated `--plugin` arguments:
+External plugin repositories can use the lower-level tools directly. Run each with `--help` for its supported arguments:
 
-```bash
-scripts/plugins/plan-plugin-release.py \
-  --mode all \
-  --previous-catalog docs/plugins/catalog.json \
-  --output build/PluginRelease/plan.json
+| Script under `scripts/plugins/` | Purpose |
+| --- | --- |
+| `plan-plugin-release.py` | Compare manifests and package-relevant changes with a previous catalog |
+| `build-plugin-release-assets.sh` | Build and sign all packages, or a subset selected with repeated `--plugin` arguments |
+| `generate-plugin-catalog.sh` | Project validated packages and source metadata into a catalog |
+| `merge-plugin-catalog.py` | Merge a delta into the same ABI line; use `--plugin-kit-version 7` for the current line |
+| `sign-plugin-catalog.sh` | Sign the merged catalog with the configured Ed25519 key |
 
-scripts/plugins/build-plugin-release-assets.sh \
-  --base-url https://github.com/ggbond268/MacTools/releases/download/plugins-1.0.1 \
-  --catalog-output build/PluginRelease/catalog.delta.json \
-  --sign-identity "Developer ID Application: Example (TEAMID)"
-
-scripts/plugins/merge-plugin-catalog.py \
-  --previous docs/plugins/catalog.json \
-  --updates build/PluginRelease/catalog.delta.json \
-  --plan build/PluginRelease/plan.json \
-  --plugin-kit-version 3 \
-  --output build/PluginRelease/catalog.merged.json
-
-scripts/plugins/generate-plugin-catalog.sh \
-  --mode release \
-  --base-url https://github.com/ggbond268/MacTools/releases/download/plugins-1.0.1 \
-  --output dist/catalog.json \
-  --plugins-root Plugins \
-  --website-output dist/website/plugins.json \
-  --package dist/Demo.mactoolsplugin.zip \
-  --release-notes-url https://github.com/ggbond268/MacTools/releases/tag/plugins-1.0.1
-
-PLUGIN_CATALOG_PRIVATE_KEY_BASE64="$PLUGIN_CATALOG_PRIVATE_KEY_BASE64" \
-scripts/plugins/sign-plugin-catalog.sh \
-  --input build/PluginRelease/catalog.merged.json \
-  --output docs/plugins/v3/catalog.json
-```
+Use the selected compatibility line's catalog as the merge input. A previous ABI is only a version-comparison baseline for a complete rebuild, never a source of package entries to retain in the new catalog.
 
 `--website-output` writes a package-URL-free deterministic projection for website builds. Referenced screenshots are copied beside it under `assets/` with checksum-based names. Use `--generated-at` in fixtures or reproducibility checks when the catalog timestamp must also be stable.
 
@@ -339,8 +323,8 @@ The catalog private key, Developer ID identity, and GitHub token must come from 
 
 Install, update, and uninstall are immediate at the UI contribution level:
 
-- Installed plugins contribute every panel, component, settings, permission, and shortcut surface they support.
-- Uninstalled plugins are removed from UI immediately and package files are deleted. Scoped plugin data is retained so a later reinstall can recover it; a separate destructive data-removal flow may be added in the future.
+- Installed plugins contribute their declared panel items, settings, permissions, and shortcuts.
+- Uninstalled plugins are removed from UI immediately and package files are deleted. Scoped data is preserved by default. A manifest declaring `uninstallDataPolicy: "removePrivateData"` requires a destructive warning and host-owned cleanup of private directories, preferences, and the standardized Keychain item. See [local native plugins](local-native-plugins.md#package-layout) for cleanup and recovery rules.
 - Batch updates resolve the currently updateable catalog entries and rebuild plugin management state once after successful package replacements.
 - A declared feature-extraction migration may install its replacement package before updating the installed source package that retires the feature. Automatic migration requires the legacy preference marker; manually installing the destination also coordinates an older source even when that preference is not yet present. The host resolves both catalog packages before mutation, suspends a loaded source, installs and runtime-validates/activates the replacement, then retires the source. A validation or paired-update failure removes the new destination and restores the old loaded source. A completion marker makes the bridge one-time; completion is persisted before the write-ahead journal is cleared, and startup reconciles a stale journal left beside durable completion. If the source is explicitly uninstalled during recovery, the host durably records that intent before deleting its package; a later launch finishes the removal instead of reinstalling the source.
 - Already-loaded native code is not force-unloaded in-process. The executable code is fully released after the app restarts.

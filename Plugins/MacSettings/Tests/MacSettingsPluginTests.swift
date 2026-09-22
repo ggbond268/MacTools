@@ -20,7 +20,7 @@ final class MacSettingsPluginTests: XCTestCase {
 
         XCTAssertEqual(controller.visibleRecords.count, 44)
         XCTAssertEqual(controller.favoriteIDs, [retainedID])
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.count, 2)
+        XCTAssertEqual(plugin.rowState.detail?.controls.count, 2)
         let draftIDs = Set(controller.makeDraft().items.map(\.settingID))
         XCTAssertTrue(draftIDs.isDisjoint(with: catalog.deferredDefinitions.keys))
         let settingActions = plugin.actionCatalogEntries.filter {
@@ -60,7 +60,7 @@ final class MacSettingsPluginTests: XCTestCase {
         controller.toggleFavorite(record.id)
         let plugin = MacSettingsPlugin(controller: controller)
         plugin.handleAction(.setDisclosureExpanded(true))
-        let control = try XCTUnwrap(plugin.primaryPanelState.detail?.controls.first)
+        let control = try XCTUnwrap(plugin.rowState.detail?.controls.first)
         XCTAssertEqual(control.kind, .selectList)
         XCTAssertEqual(control.options.map(\.id), options.map(\.id))
         XCTAssertEqual(control.selectedOptionID, "4")
@@ -137,8 +137,8 @@ final class MacSettingsPluginTests: XCTestCase {
         XCTAssertEqual(plugin.settingsPage?.body.layout, .workspace)
         controller.toggleFavorite(record.id)
         plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.count, 2)
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.actionTitle, "Favorite · Off")
+        XCTAssertEqual(plugin.rowState.detail?.controls.count, 2)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.actionTitle, "Favorite · Off")
     }
 
     func testSearchActionKeepsResultsInControllableWorkspace() async throws {
@@ -309,7 +309,7 @@ final class MacSettingsPluginTests: XCTestCase {
             plugin.actionAvailability(for: reference),
             .unavailable("This setting is currently unavailable.")
         )
-        XCTAssertEqual(plugin.primaryPanelState.detail?.controls.first?.isEnabled, false)
+        XCTAssertEqual(plugin.rowState.detail?.controls.first?.isEnabled, false)
         guard case .hardwareUnavailable? = controller.rowStates[record.id]?.availability else {
             return XCTFail("Expected a shared hardware-unavailable state")
         }

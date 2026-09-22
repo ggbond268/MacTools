@@ -10,9 +10,9 @@ This inventory records the current migration boundary. It prevents a plugin from
 
 The following plugin source directories publish canonical actions:
 
-- Core action surfaces: `ActionGrid`, `SavedScripts`.
+- Core action surfaces: `ActionGrid`, `SavedScripts`, `Siri`.
 - App and input control: `AppHotkey`, `AppVolume`, `AutoInput`, `MiddleClick`, `WindowSwitcher`.
-- Display and workspace control: `Appearance`, `DisplayBrightness`, `DisplayResolution`, `DisplaySleep`, `DisplayTrueColor`, `DockLock`, `HideNotch`, `NightShift`, `Sidecar`, `StageManager`.
+- Display and workspace control: `Appearance`, `DisplayBrightness`, `DisplayResolution`, `DisplaySleep`, `DisplayTrueColor`, `DisplayVolume`, `DockLock`, `HideNotch`, `NightShift`, `Sidecar`, `StageManager`.
 - Menu bar and Dock control: `AutoHideDock`, `AutoHideMenuBar`, `MenuBarHidden`.
 - System and device control: `BatteryChargeLimit`, `FanControl`, `KeepAwake`, `LockScreen`, `MicrophoneMute`, `SystemMute`, `SystemPower`, `SystemSoftRestart`.
 - Productivity and maintenance: `ActivityBar`, `AppleShortcuts`, `ClipboardClear`, `ClipboardHistory`, `CloudflareR2`, `DiskClean`, `EjectDisk`, `EmptyTrash`, `FixDamagedApp`, `Homebrew`, `IPOverview`, `LaunchControl`, `Launchpad`, `PhysicalCleanMode`, `QuitApps`, `Screenshot`, `Translator`, `WindowLayouts`, `XcodeClean`.
@@ -41,6 +41,8 @@ The maintenance providers use deliberately narrow contracts:
 
 These plugins should not publish a canonical action merely to appear in action pickers:
 
+- `AIUsage` presents subscription quota snapshots. Credential authorization and refresh controls remain in its settings and Dashboard component; it does not expose account access through automation or Run Links.
+- `DuoStatus` displays battery and network snapshots in a standalone or host-primary menu-bar icon. Its settings request exclusive placement through the host; it has no repeatable system mutation to publish as an action.
 - `Calendar`, `DeviceBattery`, and `SystemStatus` primarily present information without a stable repeatable mutation. Calendar's selected-date context belongs in its view, while app launching is already covered by App Hotkeys.
 - `MacSettings`, `MouseEnhancer`, and `ZshConfig` are configuration editors. Mac Settings consumes existing canonical providers for settings that already have one, while runnable shell tasks belong in Saved Scripts.
 - `InputRemapping` is an input-lifecycle and configuration surface rather than one stable repeatable operation. If it adopts canonical MacTools actions as mapping outputs, it remains an action consumer rather than publishing a parallel provider surface.

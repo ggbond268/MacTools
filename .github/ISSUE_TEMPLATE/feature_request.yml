@@ -1,0 +1,38 @@
+name: Feature or plugin request
+description: Propose a focused improvement or a new plugin.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Explain the user need before implementation details.
+        English and Chinese are welcome. Keep each proposal focused on one use case.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+      description: What are you trying to do, who needs it, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the entry point, interaction, and expected outcome. For a new plugin, suggest which controls or widgets it would provide.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and current workaround
+      description: Can an existing plugin, workflow, shortcut, or macOS feature help? What is still missing?
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements and tradeoffs
+      description: If known, include macOS/hardware constraints, permissions, network or account access, and background work. Estimates are not required.
+  - type: textarea
+    id: references
+    attributes:
+      label: References or sketches
+      description: Link related issues or examples, or attach a sketch. Identify third-party sources and remove private content.

@@ -5,8 +5,7 @@ import SwiftUI
 @MainActor
 public protocol MacToolsPlugin: AnyObject {
     var metadata: PluginMetadata { get }
-    var primaryPanel: (any PluginPrimaryPanel)? { get }
-    var componentPanel: (any PluginComponentPanel)? { get }
+    var panelItems: [PluginPanelItem] { get }
     var permissionRequirements: [PluginPermissionRequirement] { get }
     var shortcutDefinitions: [PluginShortcutDefinition] { get }
     var settingsPage: PluginSettingsPage? { get }
@@ -23,13 +22,6 @@ public protocol MacToolsPlugin: AnyObject {
     func handleShortcutAction(id: String)
 }
 
-@MainActor
-public protocol PluginPrimaryPanel: AnyObject {
-    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor { get }
-    var primaryPanelState: PluginPanelState { get }
-
-    func handleAction(_ action: PluginPanelAction)
-}
 
 /// Optional capability for a plugin settings page with its own contextual search field.
 /// The Settings host invokes this when the user presses Command-F on that page.
@@ -72,14 +64,16 @@ public protocol PluginShortcutBindingValidating: AnyObject {
     ) -> String?
 }
 
-public extension MacToolsPlugin {
-    var primaryPanel: (any PluginPrimaryPanel)? {
-        nil
-    }
+/// Lets dynamic shortcut owners reset several definitions in one host update.
+/// IDs are local shortcut definition IDs belonging to the requesting plugin.
+/// The host completes binding validation and registration before returning.
+@MainActor
+public protocol PluginShortcutResetRequesting: AnyObject {
+    var resetShortcutCustomizations: (([String]) -> Void)? { get set }
+}
 
-    var componentPanel: (any PluginComponentPanel)? {
-        nil
-    }
+public extension MacToolsPlugin {
+    var panelItems: [PluginPanelItem] { [] }
 
     var permissionRequirements: [PluginPermissionRequirement] {
         []
@@ -108,41 +102,6 @@ public extension MacToolsPlugin {
     func handleShortcutAction(id: String) {}
 }
 
-public extension MacToolsPlugin where Self: PluginPrimaryPanel {
-    var primaryPanel: (any PluginPrimaryPanel)? {
-        self
-    }
-}
-
-@MainActor
-public protocol PluginComponentPanel: AnyObject {
-    var descriptor: PluginComponentDescriptor { get }
-    var componentPanelState: PluginComponentState { get }
-
-    func makeView(context: PluginComponentContext) -> AnyView
-}
-
-public extension MacToolsPlugin where Self: PluginComponentPanel {
-    var componentPanel: (any PluginComponentPanel)? {
-        self
-    }
-}
-
-public enum PluginPanelSurface: CaseIterable, Hashable, Sendable {
-    case component
-    case primary
-}
-
-@MainActor
-public protocol PluginPanelSurfaceLifecycleHandling: AnyObject {
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface)
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface)
-}
-
-public extension PluginPanelSurfaceLifecycleHandling {
-    func panelSurfaceDidBecomeVisible(_ surface: PluginPanelSurface) {}
-    func panelSurfaceDidBecomeHidden(_ surface: PluginPanelSurface) {}
-}
 
 @MainActor
 public protocol PluginProvider {
@@ -170,19 +129,6 @@ public protocol PluginFeatureExtractionReadinessProviding: AnyObject {
     func validateFeatureExtractionReadiness() throws
 }
 
-/// Optional protocol for plugins that expose a compact, read-only status in the primary panel row.
-/// Does not change the `MacToolsPlugin` witness table, so installed legacy plugins are unaffected.
-@MainActor
-public protocol PluginPrimaryPanelIndicatorProviding: AnyObject {
-    var primaryPanelIndicator: PluginPrimaryPanelIndicator? { get }
-}
-
-/// Optional protocol for plugins that expose one or more icon-only statuses in the primary panel row.
-/// Does not change the `MacToolsPlugin` witness table, so installed legacy plugins are unaffected.
-@MainActor
-public protocol PluginPrimaryPanelCompactIndicatorProviding: AnyObject {
-    var primaryPanelCompactIndicator: PluginPrimaryPanelCompactIndicator? { get }
-}
 
 /// Optional protocol for plugins that need a floating-window anchor.
 /// Does not change the `MacToolsPlugin` witness table, so installed legacy plugins are unaffected.
@@ -215,8 +161,8 @@ public protocol PluginDashboardPresenting: AnyObject {
     var requestDashboardPresentation: (() -> Void)? { get set }
 }
 
-/// Content for a host-owned detail panel launched from a Dashboard component.
-public struct PluginComponentDetailContent {
+/// Content for a host-owned detail panel launched from a widget placement.
+public struct PluginPanelDetailContent {
     public let id: String
     public let title: String
     public let content: AnyView
@@ -228,17 +174,6 @@ public struct PluginComponentDetailContent {
     }
 }
 
-/// Optional protocol for Dashboard components that provide a pinned secondary detail surface.
-/// The host owns window placement and dismissal; the plugin owns the detail content.
-@MainActor
-public protocol PluginComponentDetailPresenting: AnyObject {
-    var requestComponentDetailPresentation: ((String) -> Void)? { get set }
-
-    func makeComponentDetailContent(
-        detailID: String,
-        dismiss: @escaping () -> Void
-    ) -> PluginComponentDetailContent?
-}
 
 /// An exact host-selected window target for commands that may outlive a temporary MacTools surface.
 /// `preferredWindowNumber` is required when the target belongs to MacTools so plugins can exclude

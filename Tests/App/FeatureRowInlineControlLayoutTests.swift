@@ -63,6 +63,40 @@ final class FeatureRowInlineControlLayoutTests: XCTestCase {
         XCTAssertEqual(model.selections, ["duration:one-hour"])
     }
 
+    func testBehaviorSegmentsFitAndExposeDescriptionsWithoutChangingSelection() throws {
+        let model = InlineControlFixtureModel()
+        model.enabled = true
+        model.behaviorOptions = [
+            .init(id: "forever", title: "Default", subtitle: "Keep your Mac awake while allowing the display to turn off."),
+            .init(id: "display", title: "Display On", subtitle: "Keep the display on. Automatic locking follows macOS settings."),
+            .init(id: "tools", title: "Screen Tools", subtitle: "Keep screen-based tools running and prevent automatic locking. Manual locking still works.")
+        ]
+        let (host, window) = makeHost(model)
+        defer { window.close() }
+        settle(host)
+        let segmented = try XCTUnwrap(segmentedControl(in: host))
+        XCTAssertEqual(segmented.segmentCount, 3)
+        XCTAssertEqual(segmented.label(forSegment: 0), "Default")
+        XCTAssertEqual(segmented.toolTip(forSegment: 0), model.behaviorOptions?[0].subtitle)
+        let frame = segmented.convert(segmented.bounds, to: host)
+        XCTAssertLessThanOrEqual(segmented.intrinsicContentSize.width, frame.width + 0.5)
+        segmented.selectedSegment = 2
+        segmented.sendAction(try XCTUnwrap(segmented.action), to: segmented.target)
+        settle(host)
+        XCTAssertEqual(model.selectedID, "tools")
+        let control = try XCTUnwrap(model.item(0).detail?.primaryControls.first)
+        XCTAssertGreaterThan(MenuBarPanelLayout.segmentedSubtitleHeight(control), 20)
+        XCTAssertFalse(MenuBarPanelLayout.segmentedUsesList(control))
+
+        model.behaviorOptions = model.behaviorOptions?.map {
+            .init(id: $0.id, title: String(repeating: $0.title, count: 4), subtitle: $0.subtitle)
+        }
+        settle(host)
+        XCTAssertNil(segmentedControl(in: host))
+        XCTAssertEqual(model.selectedID, "tools")
+        XCTAssertTrue(MenuBarPanelLayout.segmentedUsesList(try XCTUnwrap(model.item(0).detail?.primaryControls.first)))
+    }
+
     private func makeHost(_ model: InlineControlFixtureModel) -> (NSHostingView<InlineControlFixture>, NSWindow) {
         let host = NSHostingView(rootView: InlineControlFixture(model: model))
         host.sizingOptions = []
@@ -90,6 +124,7 @@ final class FeatureRowInlineControlLayoutTests: XCTestCase {
 
 @MainActor
 private final class InlineControlFixtureModel: ObservableObject {
+    @Published var behaviorOptions: [PluginPanelControlOption]?
     @Published var enabled = false
     @Published var selectedID = "forever"
     @Published var controlEnabled = true
@@ -98,10 +133,10 @@ private final class InlineControlFixtureModel: ObservableObject {
     var rowFrames: [Int: [CGRect]] = [:]
     var selections: [String] = []
 
-    func item(_ index: Int) -> PluginPanelItem {
+    func item(_ index: Int) -> PluginPanelRowSnapshot {
         let detail = PluginPanelDetail(primaryControls: [PluginPanelControl(
             id: "duration", kind: .segmented,
-            options: [
+            options: behaviorOptions ?? [
                 .init(id: "forever", title: foreverTitle),
                 .init(id: "thirty-minutes", title: "30min"),
                 .init(id: "one-hour", title: "1h"),
@@ -110,9 +145,9 @@ private final class InlineControlFixtureModel: ObservableObject {
             ],
             selectedOptionID: selectedID,
             dateValue: nil, minimumDate: nil, displayedComponents: nil,
-            datePickerStyle: nil, sectionTitle: nil, isEnabled: controlEnabled
+            datePickerStyle: nil, sectionTitle: behaviorOptions == nil ? nil : "Behavior", isEnabled: controlEnabled
         )], secondaryPanel: nil)
-        return PluginPanelItem(
+        return PluginPanelRowSnapshot(
             id: "fixture-\(index)", title: "Keep Awake", iconName: "cup.and.saucer",
             iconTint: .blue, controlStyle: .switch, menuActionBehavior: .keepPresented,
             description: enabled ? "No automatic stop" : "Keep your Mac awake",

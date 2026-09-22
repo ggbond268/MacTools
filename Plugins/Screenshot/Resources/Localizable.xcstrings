@@ -1,6 +1,90 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "capture.invalidRegion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The capture region is invalid. Select it again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "截图区域无效，请重新选择" } }
+      }
+    },
+    "capture.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Preparing…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在准备…" } }
+      }
+    },
+    "capture.stopping": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Stopping…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在停止…" } }
+      }
+    },
+    "capture.stoppingSlowly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Waiting for capture to stop…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在等待系统停止…" } }
+      }
+    },
+    "record.saving": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Saving…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在保存…" } }
+      }
+    },
+    "record.savingSlowly": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Still saving. Please wait…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在保存，请稍候…" } }
+      }
+    },
+    "record.unsupportedResolution": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This region exceeds hardware encoding limits. Select a smaller region." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前区域超出硬件编码能力，请缩小录制范围" } }
+      }
+    },
+    "scroll.unmatched": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No matching content. Scroll more slowly or go back slightly." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未找到连续内容，请放慢滚动或回滚少许" } }
+      }
+    },
+    "scroll.finishing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Finishing scrolling screenshot…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在完成长截图…" } }
+      }
+    },
+    "capture.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Unable to capture the screen. Check Screen Recording permission and try again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法获取屏幕图像，请检查录屏权限后重试" } }
+      }
+    },
+    "capture.timedOut": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Screen capture timed out. Please try again." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "获取屏幕图像超时，请重试" } }
+      }
+    },
+    "capture.displayChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The display configuration changed. Start a new capture." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示器配置已变化，请重新截图" } }
+      }
+    },
     "scroll.outputTooLarge": {
       "extractionState": "manual",
       "localizations": {
@@ -26,6 +110,17 @@
         },
         "zh-Hans": {
           "stringUnit": { "state": "translated", "value": "截图控制窗口尚未就绪，请重试" }
+        }
+      }
+    },
+    "overlay.mode.move": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": { "state": "translated", "value": "Move mode bar horizontally" }
+        },
+        "zh-Hans": {
+          "stringUnit": { "state": "translated", "value": "左右移动模式栏" }
         }
       }
     },
@@ -115,23 +210,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "截图失败：%@"
-          }
-        }
-      }
-    },
-    "capture.noDisplay": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No display is available for capture"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有可截图的显示器"
           }
         }
       }
@@ -584,13 +662,81 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d, %d   %@"
+            "value": "Position: %d, %d"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d, %d   %@"
+            "value": "坐标：%d, %d"
+          }
+        }
+      }
+    },
+    "overlay.magnifier.rgb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RGB: %d, %d, %d"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RGB: %d, %d, %d"
+          }
+        }
+      }
+    },
+    "overlay.magnifier.hex": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEX: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEX: %@"
+          }
+        }
+      }
+    },
+    "overlay.magnifier.copyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command + C  Copy color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command + C 复制色值"
+          }
+        }
+      }
+    },
+    "overlay.magnifier.formatHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab  Switch RGB / HEX"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab 切换 RGB、HEX"
           }
         }
       }
@@ -1394,23 +1540,6 @@
         }
       }
     },
-    "record.endedDuringStartup": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recording ended before startup completed"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "录屏在启动完成前结束"
-          }
-        }
-      }
-    },
     "record.failed": {
       "extractionState": "manual",
       "localizations": {
@@ -1445,23 +1574,6 @@
         }
       }
     },
-    "record.finishTimedOut": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Timed out waiting for the recording file to finish; the file may be incomplete"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等待录屏文件写入完成超时，文件可能不完整"
-          }
-        }
-      }
-    },
     "record.requiresNewerSystem": {
       "extractionState": "manual",
       "localizations": {
@@ -1492,23 +1604,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "录屏已保存到「%@」"
-          }
-        }
-      }
-    },
-    "record.startFailed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not start recording: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "录屏启动失败：%@"
           }
         }
       }
@@ -1581,23 +1676,6 @@
         }
       }
     },
-    "scroll.startFailed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not start scrolling capture: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "滚动截图启动失败：%@"
-          }
-        }
-      }
-    },
     "settings.folder.choose": {
       "extractionState": "manual",
       "localizations": {
@@ -1662,6 +1740,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存"
+          }
+        }
+      }
+    },
+    "settings.shortcuts.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set global shortcuts for Screenshot and Quick Capture."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置截图和快速截图的全局快捷键。"
+          }
+        }
+      }
+    },
+    "settings.shortcuts.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
           }
         }
       }

@@ -84,7 +84,8 @@ public enum PluginSettingsTheme {
 
     public enum Palette {
         public static var recessedControlBackground: Color {
-            Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+            // Inset containers are neutral surfaces, not inactive selections.
+            Color(nsColor: .underPageBackgroundColor)
         }
 
         public static var fieldBackground: Color {
@@ -124,16 +125,16 @@ public enum PluginSettingsTheme {
     public enum Surface {
         /// A raised control inside a recessed surface, such as the selected
         /// segment in a custom tab strip. Outer settings cards must use
-        /// `pluginSettingsCardBackground(_:)` so their material and clipping
+        /// `pluginSettingsCardBackground(_:)` so their background and clipping
         /// stay consistent across appearances.
         public static var raisedControl: AnyShapeStyle {
             AnyShapeStyle(.background)
         }
 
         fileprivate static var standardCard: AnyShapeStyle {
-            // Match the subtle adaptive separation of macOS grouped Form
-            // cards without introducing fixed light/dark color branches.
-            AnyShapeStyle(.ultraThinMaterial)
+            // Use the system's secondary content background for standalone
+            // cards. Grouped Form continues to own its native section surface.
+            AnyShapeStyle(.background.secondary)
         }
     }
 }

@@ -214,7 +214,7 @@ final class MouseEnhancerPluginTests: XCTestCase {
 
         XCTAssertTrue(didRequestPermission)
         XCTAssertTrue(session.activatedConfigurations.isEmpty)
-        XCTAssertNotNil(plugin.primaryPanelState.errorMessage)
+        XCTAssertNotNil(plugin.rowState.errorMessage)
     }
 
     func testTurningOffAllDirectionsStopsSession() {
@@ -1069,6 +1069,160 @@ final class MouseEnhancerPluginTests: XCTestCase {
         let configuration = session.updatedConfigurations.last
         XCTAssertEqual(configuration?.mouseScrollStep, 40)
         XCTAssertEqual(configuration?.mouseScrollGain, 2)
+    }
+
+    func testSmoothSettingsActionsPropagateToSessionConfiguration() {
+        let session = MockMouseEnhancerSession()
+        let plugin = makePlugin(session: session, accessibilityTrusted: true)
+
+        plugin.handleSettingsAction(.setBoolean(controlID: "mouse-smooth-scrolling", value: true))
+        plugin.handleSettingsAction(.setNumber(
+            controlID: "mouse-scroll-duration",
+            value: 2.4,
+            phase: .committed
+        ))
+
+        let configuration = session.updatedConfigurations.last
+        XCTAssertTrue(configuration?.smoothScrollingEnabled == true)
+        XCTAssertEqual(configuration?.mouseScrollDuration, 2.4)
+    }
+
+    func testStorePersistsAndNormalizesSmoothScrollingSettings() {
+        let storage = MouseEnhancerMemoryStorage()
+        let store = MouseEnhancerStore(storage: storage)
+
+        XCTAssertFalse(store.configuration.smoothScrollingEnabled)
+        XCTAssertEqual(store.configuration.mouseScrollDuration, MouseEnhancerConfiguration.defaultScrollDuration)
+
+        store.setSmoothScrollingEnabled(true)
+        store.setMouseScrollDuration(0.01)
+        XCTAssertEqual(store.configuration.mouseScrollDuration, MouseEnhancerConfiguration.scrollDurationRange.lowerBound)
+        store.setMouseScrollDuration(99)
+        XCTAssertEqual(store.configuration.mouseScrollDuration, MouseEnhancerConfiguration.scrollDurationRange.upperBound)
+
+        let reloaded = MouseEnhancerStore(storage: storage)
+        XCTAssertTrue(reloaded.configuration.smoothScrollingEnabled)
+    }
+
+    func testGlideAccumulatorAccumulatesSameDirectionAndResetsOnReverse() {
+        var accumulator = MouseScrollGlideAccumulator()
+
+        accumulator.add(tickY: 40, tickX: 0)
+        accumulator.add(tickY: 30, tickX: 0)
+        XCTAssertEqual(accumulator.bufferY, 70)
+        XCTAssertEqual(accumulator.currentY, 0)
+
+        accumulator.add(tickY: -25, tickX: 0)
+        XCTAssertEqual(accumulator.bufferY, -25)
+        XCTAssertEqual(accumulator.currentY, 0)
+
+        accumulator.add(tickY: 0, tickX: 12)
+        XCTAssertEqual(accumulator.bufferY, 0)
+        XCTAssertEqual(accumulator.bufferX, 12)
+
+        accumulator.reset()
+        XCTAssertTrue(accumulator.isDrained)
+    }
+
+    func testGlideAccumulatorAdvanceDecaysTowardBufferAndDrains() {
+        var accumulator = MouseScrollGlideAccumulator()
+        accumulator.add(tickY: 120, tickX: 0)
+
+        var emitted = 0.0
+        var frames = 0
+        while !accumulator.isDrained && frames < 10_000 {
+            let frame = accumulator.advance(framePeriod: 1.0 / 60.0, duration: 1.5)
+            emitted += frame.y
+            XCTAssertGreaterThanOrEqual(frame.y, 0)
+            XCTAssertEqual(frame.y, frame.y.rounded())
+            frames += 1
+        }
+
+        XCTAssertTrue(accumulator.isDrained)
+        XCTAssertEqual(emitted, 120)
+        // The glide spans a few multiples of the configured duration, not a
+        // couple of frames and not forever.
+        let elapsed = Double(frames) / 60.0
+        XCTAssertTrue((1.0...4.0).contains(elapsed), "drain took \(elapsed)s")
+    }
+
+    func testGlideAccumulatorAdvanceIsFrameRateIndependent() {
+        func drainTime(framePeriod: TimeInterval, duration: TimeInterval) -> TimeInterval {
+            var accumulator = MouseScrollGlideAccumulator()
+            accumulator.add(tickY: 200, tickX: 0)
+            var frames = 0
+            while !accumulator.isDrained && frames < 100_000 {
+                _ = accumulator.advance(framePeriod: framePeriod, duration: duration)
+                frames += 1
+            }
+            return Double(frames) * framePeriod
+        }
+
+        for duration in [0.3, 1.5, 5.0] {
+            let at60Hz = drainTime(framePeriod: 1.0 / 60.0, duration: duration)
+            for rate in [120.0, 144.0, 240.0] {
+                let atHighRefresh = drainTime(framePeriod: 1 / rate, duration: duration)
+                XCTAssertEqual(at60Hz, atHighRefresh, accuracy: 1.0 / 60.0)
+            }
+        }
+    }
+
+    func testGlidePreservesSmallPixelMotionAndResetsRoundingOnReversal() {
+        for rate in [60.0, 120.0, 240.0] {
+            var accumulator = MouseScrollGlideAccumulator()
+            accumulator.add(tickY: 10, tickX: -1)
+            var totalY = 0.0
+            var totalX = 0.0
+            for _ in 0..<10_000 {
+                let frame = accumulator.advance(framePeriod: 1 / rate, duration: 1.5)
+                totalY += frame.y
+                totalX += frame.x
+                if accumulator.isDrained { break }
+            }
+            XCTAssertTrue(accumulator.isDrained)
+            XCTAssertEqual(totalY, 10)
+            XCTAssertEqual(totalX, -1)
+
+            accumulator.add(tickY: -3, tickX: 2)
+            totalY = 0
+            totalX = 0
+            for _ in 0..<10_000 {
+                let frame = accumulator.advance(framePeriod: 1 / rate, duration: 1.5)
+                XCTAssertLessThanOrEqual(frame.y, 0)
+                XCTAssertGreaterThanOrEqual(frame.x, 0)
+                totalY += frame.y
+                totalX += frame.x
+                if accumulator.isDrained { break }
+            }
+            XCTAssertTrue(accumulator.isDrained)
+            XCTAssertEqual(totalY, -3)
+            XCTAssertEqual(totalX, 2)
+        }
+    }
+
+    func testSmoothEventDeltasMatchNativePixelEventsIncludingTerminalZero() throws {
+        let source = try XCTUnwrap(CGEventSource(stateID: .hidSystemState))
+        for pixelsPerLine in [10.0, 20.0] {
+            source.pixelsPerLine = pixelsPerLine
+            let event = try XCTUnwrap(CGEvent(
+                scrollWheelEvent2Source: source, units: .line, wheelCount: 2,
+                wheel1: 1, wheel2: -1, wheel3: 0
+            ))
+            event.flags = .maskShift
+            for delta: Int32 in [-29, -2, -1, 1, 2, 29, 0] {
+                event.applySmoothScrollDeltas(
+                    deltaY: Double(delta), deltaX: -Double(delta), pixelsPerLine: pixelsPerLine
+                )
+                let native = try XCTUnwrap(CGEvent(
+                    scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2,
+                    wheel1: delta, wheel2: -delta, wheel3: 0
+                ))
+                XCTAssertEqual(MouseScrollDeltas(event: event), MouseScrollDeltas(event: native))
+                XCTAssertEqual(event.flags, .maskShift)
+                XCTAssertEqual(event.getIntegerValueField(.scrollWheelEventIsContinuous), 1)
+                XCTAssertEqual(event.getIntegerValueField(.eventSourceUserData), MouseScrollSmoother.syntheticEventMarker)
+            }
+        }
     }
 
     private func makePlugin(

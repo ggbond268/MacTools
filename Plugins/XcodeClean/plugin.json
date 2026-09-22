@@ -50,13 +50,11 @@
   },
   "productStrings": {
     "display-name": "@displayName",
-    "summary": "@summary",
-    "setup.requirements.title": "@standardSetup.requirements.title",
-    "setup.requirements.description": "@standardSetup.requirements.description"
+    "summary": "@summary"
   },
   "version": "1.2.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "XcodeClean.bundle",
   "factoryClass": "XcodeCleanPlugin.XcodeCleanPluginFactory",
   "build": {
@@ -64,8 +62,7 @@
     "scheme": "XcodeCleanPlugin"
   },
   "capabilities": {
-    "primaryPanel": true,
-    "componentPanel": false,
+    "panelItems": ["row"],
     "settings": "workspace"
   },
   "permissions": [],
@@ -145,15 +142,10 @@
       "x86_64"
     ],
     "hardware": [],
-    "applications": [
-      {
-        "bundleID": "com.apple.dt.Xcode",
-        "name": "Xcode"
-      }
-    ],
+    "applications": [],
     "executables": [],
     "permissionIDs": [],
-    "setupComplexity": "guided",
+    "setupComplexity": "simple",
     "requiresRelaunch": false
   },
   "privacy": {
@@ -175,13 +167,7 @@
     "diagnosticExportsContainUserData": false
   },
   "setup": {
-    "steps": [
-      {
-        "id": "review-requirements",
-        "title": "@productStrings.setup.requirements.title",
-        "description": "@productStrings.setup.requirements.description"
-      }
-    ],
+    "steps": [],
     "optionalSurfaces": []
   },
   "relationships": {

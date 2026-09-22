@@ -1,0 +1,236 @@
+{
+  "id": "display-volume",
+  "displayName": "显示器音量",
+  "summary": "快速调节每个显示器的音量",
+  "localizedMetadata": {
+    "ar": {
+      "displayName": "مستوى صوت الشاشة",
+      "summary": "اضبط مستوى الصوت لكل شاشة بسرعة."
+    },
+    "de": {
+      "displayName": "Displaylautstärke",
+      "summary": "Passen Sie die Lautstärke für jedes Display schnell an."
+    },
+    "en": {
+      "displayName": "Display Volume",
+      "summary": "Adjust volume for each display quickly."
+    },
+    "es": {
+      "displayName": "Volumen de pantalla",
+      "summary": "Ajuste el volumen de cada pantalla rápidamente."
+    },
+    "fr": {
+      "displayName": "Volume de l'écran",
+      "summary": "Ajustez rapidement le volume de chaque écran."
+    },
+    "ja": {
+      "displayName": "ディスプレイ音量",
+      "summary": "各ディスプレイの音量を素早く調整します。"
+    },
+    "ko": {
+      "displayName": "디스플레이 볼륨",
+      "summary": "각 디스플레이의 볼륨을 빠르게 조정하세요."
+    },
+    "pt": {
+      "displayName": "Volume da tela",
+      "summary": "Ajuste o volume de cada tela rapidamente."
+    },
+    "ru": {
+      "displayName": "Громкость дисплея",
+      "summary": "Быстро отрегулируйте громкость каждого дисплея."
+    },
+    "zh-Hans": {
+      "displayName": "显示器音量",
+      "summary": "快速调节每个显示器的音量"
+    },
+    "zh-Hant": {
+      "displayName": "顯示器音量",
+      "summary": "快速調節每個顯示器的音量"
+    }
+  },
+  "productStrings": {
+    "display-name": "@displayName",
+    "summary": "@summary",
+    "setup.requirements.title": "@standardSetup.requirements.title",
+    "setup.requirements.description": "@standardSetup.requirements.description",
+    "action.display-volume.decrease.title": "@localizable.shortcut.direction.decrease",
+    "action.display-volume.decrease.description": "@localizable.shortcut.direction.decrease",
+    "action.display-volume.increase.title": "@localizable.shortcut.direction.increase",
+    "action.display-volume.increase.description": "@localizable.shortcut.direction.increase"
+  },
+  "version": "1.0.0",
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
+  "bundleRelativePath": "DisplayVolume.bundle",
+  "factoryClass": "DisplayVolumePlugin.DisplayVolumePluginFactory",
+  "build": {
+    "project": "../../MacTools.xcodeproj",
+    "scheme": "DisplayVolumePlugin"
+  },
+  "capabilities": {
+    "panelItems": ["row"],
+    "settings": "form"
+  },
+  "permissions": [],
+  "category": "display",
+  "presentation": {
+    "longDescription": "@productStrings.summary",
+    "examples": [
+      {
+        "id": "primary-use",
+        "text": "@productStrings.summary"
+      }
+    ],
+    "screenshots": [],
+    "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+    "supportURL": "https://github.com/ggbond268/MacTools/issues",
+    "publisher": "MacTools",
+    "license": "GPL-3.0-only"
+  },
+  "discovery": {
+    "keywords": [
+      "display",
+      "volume"
+    ],
+    "localizedSynonyms": {
+      "ar": ["مستوى صوت الشاشة"],
+      "de": ["Displaylautstärke"],
+      "en": ["Display Volume"],
+      "es": ["Volumen de pantalla"],
+      "fr": ["Volume de l'écran"],
+      "ja": ["ディスプレイ音量"],
+      "ko": ["디스플레이 볼륨"],
+      "pt": ["Volume da tela"],
+      "ru": ["Громкость дисплея"],
+      "zh-Hans": ["显示器音量"],
+      "zh-Hant": ["顯示器音量"]
+    },
+    "useCases": [
+      {
+        "id": "primary-use",
+        "title": "@productStrings.display-name"
+      }
+    ],
+    "goalCategories": [
+      "display"
+    ],
+    "relatedPluginIDs": [],
+    "alternativePluginIDs": []
+  },
+  "requirements": {
+    "minimumMacOSVersion": "14.0",
+    "architectures": [
+      "arm64"
+    ],
+    "hardware": [
+      "connected display"
+    ],
+    "applications": [],
+    "executables": [],
+    "permissionIDs": [],
+    "setupComplexity": "guided",
+    "requiresRelaunch": false
+  },
+  "privacy": {
+    "dataObserved": [
+      "display-state"
+    ],
+    "dataPersisted": [
+      "plugin-configuration"
+    ],
+    "retention": {
+      "policy": "user-controlled"
+    },
+    "networkUse": "none",
+    "networkDomains": [],
+    "allowsUserConfiguredDomains": false,
+    "telemetry": "none",
+    "processesSensitiveUserContent": false,
+    "diagnosticExportsContainUserData": false
+  },
+  "setup": {
+    "steps": [
+      {
+        "id": "review-requirements",
+        "title": "@productStrings.setup.requirements.title",
+        "description": "@productStrings.setup.requirements.description"
+      }
+    ],
+    "optionalSurfaces": []
+  },
+  "relationships": {
+    "relatedPluginIDs": [],
+    "includedPackIDs": [],
+    "suggestedRecipeIDs": [],
+    "supersedesPluginIDs": []
+  },
+  "actions": {
+    "providers": [
+      {
+        "id": "display-volume",
+        "kind": "static",
+        "staticActions": [
+          {
+            "id": "display-volume.decrease",
+            "title": "@productStrings.action.display-volume.decrease.title",
+            "description": "@productStrings.action.display-volume.decrease.description",
+            "keywords": [
+              "显示器音量",
+              "降低",
+              "display",
+              "volume",
+              "decrease"
+            ],
+            "systemImage": "speaker.wave.1.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          },
+          {
+            "id": "display-volume.increase",
+            "title": "@productStrings.action.display-volume.increase.title",
+            "description": "@productStrings.action.display-volume.increase.description",
+            "keywords": [
+              "显示器音量",
+              "增加",
+              "display",
+              "volume",
+              "increase"
+            ],
+            "systemImage": "speaker.wave.3.fill",
+            "parameters": [],
+            "permissionIDs": [],
+            "risk": "safe",
+            "surfaces": [
+              "unified-search",
+              "global-shortcut",
+              "run-link",
+              "workflow",
+              "automatic-rule",
+              "action-grid",
+              "trackpad-gesture",
+              "app-intent",
+              "manual"
+            ],
+            "automaticEligible": true,
+            "externalInvocation": "allowed"
+          }
+        ],
+        "dynamicTemplates": []
+      }
+    ]
+  }
+}

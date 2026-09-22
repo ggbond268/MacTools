@@ -2,27 +2,61 @@ import AppKit
 import MacToolsPluginKit
 
 @MainActor
-final class OverlayWindow: NSWindow {
+final class OverlayWindow: NSPanel {
     var onComplete: ((Data, SaveMode) -> Void)?
     var onPin: ((Data, NSRect, Bool) -> Void)?
     var onRecord: ((NSRect) -> Void)?
     var onScroll: ((NSRect) -> Void)?
     var onCancel: (() -> Void)?
 
-    init(screen: NSScreen, frozen: CGImage, windows: [NSRect], quick: Bool, environment: ScreenshotEnvironment) {
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
-        level = .screenSaver
-        isOpaque = false
-        backgroundColor = .clear
+    init(screen: NSScreen, environment: ScreenshotEnvironment) {
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered, defer: false)
+        isFloatingPanel = true
+        becomesKeyOnlyIfNeeded = false
+        isOpaque = true
+        // The native backing must also be opaque so screen-edge clicks cannot pass through.
+        backgroundColor = .black
         hasShadow = false
+        isMovable = false
+        isMovableByWindowBackground = false
+        // Full-display panels must not use AppKit's inferred ordering animation.
+        animationBehavior = .none
+        hidesOnDeactivate = false
+        sharingType = .none
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // Set the final level after panel flags; isFloatingPanel resets it to .floating.
+        level = .screenSaver
 
         let view = OverlayView(frame: NSRect(origin: .zero, size: screen.frame.size),
-                               frozen: frozen, scale: screen.backingScaleFactor, windows: windows,
-                               menuBarHeight: screen.frame.maxY - screen.visibleFrame.maxY, quick: quick,
                                environment: environment)
+        contentView = view
+        setFrame(screen.frame, display: false)
+        view.layoutSubtreeIfNeeded()
+    }
+
+    convenience init(screen: NSScreen, frozen: CGImage, windows: [NSRect], quick: Bool, environment: ScreenshotEnvironment) {
+        self.init(screen: screen, environment: environment)
+        prepare(screen: screen, frozen: frozen, windows: windows, quick: quick)
+    }
+
+    func prepare(screen: NSScreen, frozen: CGImage, windows: [NSRect], quick: Bool) {
+        guard let view = contentView as? OverlayView else { return }
+        setFrame(screen.frame, display: false)
+        colorSpace = frozen.colorSpace.flatMap(NSColorSpace.init(cgColorSpace:)) ?? screen.colorSpace
+        let obscuredArea: NSRect?
+        if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea,
+           !left.isEmpty, !right.isEmpty, right.minX > left.maxX {
+            obscuredArea = NSRect(x: left.maxX - screen.frame.minX,
+                                  y: min(left.minY, right.minY) - screen.frame.minY,
+                                  width: right.minX - left.maxX,
+                                  height: max(left.height, right.height))
+        } else {
+            obscuredArea = nil
+        }
+        view.prepare(frozen: frozen, windows: windows, quick: quick, topObscuredArea: obscuredArea)
         view.onComplete = { [weak self] png, mode in self?.onComplete?(png, mode) }
         view.onPin = { [weak self] png, rect, shadowed in
             guard let self else { return }
@@ -31,13 +65,19 @@ final class OverlayWindow: NSWindow {
         view.onRecord = { [weak self] rect in self?.onRecord?(rect) }
         view.onScroll = { [weak self] rect in self?.onScroll?(rect) }
         view.onCancel = { [weak self] in self?.onCancel?() }
-        contentView = view
-        setFrame(screen.frame, display: true)
         makeFirstResponder(view)
     }
 
+    /// Finish layout and drawing while hidden, before the coordinator orders any display.
+    func prepareForPresentation() {
+        (contentView as? OverlayView)?.prepareForPresentation()
+        contentView?.layoutSubtreeIfNeeded()
+        contentView?.displayIfNeeded()
+        displayIfNeeded()
+    }
+
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 
     /// Text editors work without replacing the host application's Edit menu.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -65,8 +105,14 @@ final class OverlayWindow: NSWindow {
     }
 
     func dismiss() {
-        (contentView as? OverlayView)?.stop()
         orderOut(nil)
+        makeFirstResponder(nil)
+        (contentView as? OverlayView)?.stop()
+        onComplete = nil
+        onPin = nil
+        onRecord = nil
+        onScroll = nil
+        onCancel = nil
     }
 
     override func close() {
@@ -98,12 +144,33 @@ private enum Drag {
     case draw
 }
 
+enum MagnifierColorFormat: Equatable {
+    case rgb
+    case hex
+
+    mutating func toggle() {
+        self = self == .rgb ? .hex : .rgb
+    }
+}
+
+struct MagnifierColorValue: Equatable {
+    let red: Int
+    let green: Int
+    let blue: Int
+
+    var rgb: String { "\(red), \(green), \(blue)" }
+    var hex: String { String(format: "#%02X%02X%02X", red, green, blue) }
+
+    func value(for format: MagnifierColorFormat) -> String {
+        format == .rgb ? rgb : hex
+    }
+}
+
 @MainActor
-private final class DragHandle: NSView {
+final class DragHandle: NSView {
     var color: NSColor = .tertiaryLabelColor
-    weak var target: NSView?
-    var onDrag: (() -> Void)?
-    private var last = NSPoint.zero
+    var onDrag: ((NSSize) -> Void)?
+    private var last: NSPoint?
 
     override var intrinsicContentSize: NSSize { NSSize(width: 18, height: 28) }
 
@@ -116,21 +183,25 @@ private final class DragHandle: NSView {
     override func mouseDown(with event: NSEvent) { last = event.locationInWindow }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let bar = target ?? superview else { return }
+        guard let last else { return }
         let p = event.locationInWindow
-        bar.setFrameOrigin(NSPoint(x: bar.frame.minX + p.x - last.x, y: bar.frame.minY + p.y - last.y))
-        last = p
-        onDrag?()
+        self.last = p
+        onDrag?(NSSize(width: p.x - last.x, height: p.y - last.y))
     }
+
+    override func mouseUp(with event: NSEvent) { last = nil }
 }
 
 @MainActor
-private final class BarButton: NSButton {
+final class BarButton: NSButton {
     var isSelectedLook = false { didSet { refresh() } }
     var isHovered = false { didSet { refresh() } }
     var tint: NSColor = .labelColor { didSet { refresh() } }
     var selectedUsesAccent = true
+    var usesCircularBackground = false { didSet { refresh() } }
+    var backgroundVerticalInset: CGFloat = 0 { didSet { refresh() } }
     private var pressed = false
+    private var backgroundFill: NSColor?
 
     override func mouseDown(with event: NSEvent) {
         pressed = true
@@ -140,22 +211,48 @@ private final class BarButton: NSButton {
         refresh()
     }
 
+    override func draw(_ dirtyRect: NSRect) {
+        if let backgroundFill {
+            backgroundFill.setFill()
+            backgroundPath.fill()
+        }
+        super.draw(dirtyRect)
+    }
+
+    private var backgroundPath: NSBezierPath {
+        let backgroundBounds = bounds.insetBy(dx: 0, dy: backgroundVerticalInset)
+        if usesCircularBackground {
+            let diameter = min(backgroundBounds.width, backgroundBounds.height)
+            return NSBezierPath(ovalIn: NSRect(
+                x: backgroundBounds.midX - diameter / 2,
+                y: backgroundBounds.midY - diameter / 2,
+                width: diameter,
+                height: diameter
+            ))
+        }
+        return NSBezierPath(
+            roundedRect: backgroundBounds,
+            xRadius: backgroundBounds.height / 2,
+            yRadius: backgroundBounds.height / 2
+        )
+    }
+
     func refresh() {
         let selectedFill = selectedUsesAccent ? NSColor.controlAccentColor.withAlphaComponent(0.18)
                                               : NSColor.labelColor.withAlphaComponent(0.12)
-        let fill: NSColor? = isSelectedLook ? selectedFill
+        backgroundFill = isSelectedLook ? selectedFill
             : pressed ? NSColor.labelColor.withAlphaComponent(0.16)
             : isHovered ? NSColor.labelColor.withAlphaComponent(0.08)
             : nil
-        layer?.backgroundColor = fill?.cgColor
         let color: NSColor = isSelectedLook && selectedUsesAccent ? .controlAccentColor : tint
         contentTintColor = color
         if image == nil, !title.isEmpty {
             attributedTitle = NSAttributedString(string: title, attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: isSelectedLook ? .semibold : .medium),
+                .font: NSFont.systemFont(ofSize: font?.pointSize ?? 13, weight: isSelectedLook ? .semibold : .medium),
                 .foregroundColor: color,
             ])
         }
+        needsDisplay = true
     }
 }
 
@@ -166,16 +263,22 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     var onRecord: ((NSRect) -> Void)?
     var onScroll: ((NSRect) -> Void)?
     var onCancel: (() -> Void)?
+    var onPointerActivity: (() -> Void)?
 
-    private let cgImage: CGImage
-    private let scale: CGFloat
-    private let frozen: NSImage
-    private let renderer: AnnotationRenderer
+    private var cgImage: CGImage?
+    private var scale: CGFloat = 1
+    private var renderer: AnnotationRenderer?
+    private var exportTask: Task<Void, Never>?
+    private var backdrop: CaptureBackdrop?
+    private var selectionChrome: CaptureSelectionChrome?
+    private let annotationView = CaptureAnnotationView()
+    private let sizeBadge: CaptureSizeBadge
+    private let magnifier: CaptureMagnifierView
     private let environment: ScreenshotEnvironment
 
-    private let windowRects: [NSRect]
-    private let menuBarHeight: CGFloat
-    private let quick: Bool
+    private var windowRects: [NSRect] = []
+    private var topObscuredArea: NSRect?
+    private var quick = false
     private var tips: [NSButton: String] = [:]
     private var tipView: NSView!
     private let tipLabel = NSTextField(labelWithString: "")
@@ -184,7 +287,6 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     private var clickMonitor: Any?
     private var hoverRect: NSRect?
     private var lastMouse: NSPoint?
-    private lazy var sampler = NSBitmapImageRep(cgImage: cgImage)
     private var qrRects: [NSRect] = []
     private var resultURL: URL?
     private lazy var maskButton = NSButton(title: environment.string("overlay.recognition.mask", "打码"), target: nil, action: nil)
@@ -227,6 +329,8 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     private var textField: NSTextField?
 
     private var modeBar: NSView!
+    private var modeBarSize = NSSize.zero
+    private var modeBarPreferredX: CGFloat?
     private var modeButtons: [BarButton] = []
     private static let segmentModes: [Mode] = [.shot, .scroll, .record, .ocr]
     private let toolbar = NSStackView()
@@ -247,6 +351,8 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     private let recognition = RecognitionSession()
     private var recognitionKind: RecognitionKind?
     private var ocrShowing: Bool { recognitionKind != nil }
+    private var pointerInside = false
+    private var magnifierColorFormat: MagnifierColorFormat = .rgb
 
     private static let palette: [NSColor] = [.systemRed, .systemOrange, .systemYellow, .systemGreen,
                                              .systemBlue, .systemPurple, .black, .white]
@@ -259,53 +365,156 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     private static let widths: [CGFloat] = [2, 4, 6]
     private weak var hoverButton: BarButton?
 
-    init(frame: NSRect, frozen image: CGImage, scale: CGFloat, windows: [NSRect], menuBarHeight: CGFloat,
-         quick: Bool, environment: ScreenshotEnvironment) {
+    init(frame: NSRect, environment: ScreenshotEnvironment) {
         self.environment = environment
+        sizeBadge = CaptureSizeBadge(environment: environment)
+        magnifier = CaptureMagnifierView(environment: environment)
         cornerRadius = min(80, max(0, CGFloat((environment.storage.object(forKey: "cornerRadius") as? NSNumber)?.doubleValue ?? 0)))
         shadowSize = min(60, max(0, CGFloat((environment.storage.object(forKey: "shadowSize") as? NSNumber)?.doubleValue ?? 0)))
         shadowColorIndex = environment.storage.object(forKey: "shadowColor") == nil
             ? 6 : environment.storage.integer(forKey: "shadowColor")
-        cgImage = image
-        self.scale = scale
-        self.menuBarHeight = menuBarHeight
-        self.quick = quick
-        windowRects = windows.map { $0.intersection(frame) }
-        frozen = NSImage(cgImage: image, size: frame.size)
-        renderer = AnnotationRenderer(image: image, scale: scale, size: frame.size)
         super.init(frame: frame)
         wantsLayer = true
+        if let layer {
+            backdrop = CaptureBackdrop(parent: layer)
+            selectionChrome = CaptureSelectionChrome(parent: layer)
+        }
+        annotationView.frame = bounds
+        annotationView.autoresizingMask = [.width, .height]
+        annotationView.wantsLayer = true
+        annotationView.drawContent = { [weak self] dirtyRect in self?.drawAnnotations(in: dirtyRect) }
+        addSubview(annotationView)
+        addSubview(sizeBadge)
+        addSubview(magnifier)
         buildModeBar()
         buildToolbar()
         buildRecordBar()
         buildScrollBar()
         buildTip()
+    }
+
+    func prepare(frozen image: CGImage, windows: [NSRect], quick: Bool, topObscuredArea: NSRect? = nil) {
+        stop()
+        cgImage = image
+        scale = CGFloat(image.width) / bounds.width
+        renderer = AnnotationRenderer(image: image, scale: scale, size: bounds.size)
+        magnifier.prepare(image: image, size: bounds.size)
+        sizeBadge.prepare()
+        windowRects = windows.map { $0.intersection(bounds) }
+        self.topObscuredArea = topObscuredArea
+        self.quick = quick
+        cornerRadius = min(80, max(0, CGFloat((environment.storage.object(forKey: "cornerRadius") as? NSNumber)?.doubleValue ?? 0)))
+        shadowSize = min(60, max(0, CGFloat((environment.storage.object(forKey: "shadowSize") as? NSNumber)?.doubleValue ?? 0)))
+        shadowColorIndex = environment.storage.object(forKey: "shadowColor") == nil
+            ? 6 : environment.storage.integer(forKey: "shadowColor")
+        radiusSlider.doubleValue = Double(cornerRadius)
+        radiusLabel.stringValue = "\(Int(cornerRadius))"
+        shadowSlider.doubleValue = Double(shadowSize)
+        shadowLabel.stringValue = "\(Int(shadowSize))"
+        radiusRow.isHidden = cornerRadius == 0 && shadowSize == 0
+        refreshShadowButtons()
+        refreshStyleButtons()
+        for button in modeButtons { button.isSelectedLook = button.tag == 0 }
+        for button in toolButtons { button.isSelectedLook = false }
+        backdrop?.prepare(image: image, bounds: bounds, scale: scale)
+        updateTrackingAreas()
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             self?.hideTip()
             return event
         }
+        invalidateAnnotations()
     }
 
-    /// The coordinator calls this before discarding an overlay, including plugin shutdown.
+    func prepareForPresentation() {
+        updateSelectionPresentation()
+    }
+
+    /// Remove session state while keeping the native controls available for reuse.
     func stop() {
+        exportTask?.cancel()
+        exportTask = nil
         cancelRecognition()
         hideTip()
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil
         trackingAreas.forEach(removeTrackingArea)
         ocrSpinner.stopAnimation(nil)
-        renderer.clearCache()
+        textField?.delegate = nil
+        textField?.removeFromSuperview()
+        textField = nil
+        ocrTextView?.string = ""
+        ocrStatus.stringValue = ""
+        ocrPanel?.isHidden = true
+        [modeBar, recordBar, scrollBar, tipView].forEach { $0?.isHidden = true }
+        toolbar.isHidden = true
+        styleRow.isHidden = true
+        setHover(nil)
+        tipButton = nil
+        pointerInside = false
+        hoverRect = nil
+        lastMouse = nil
+        anchor = nil
+        dragMode = nil
+        origSelection = .zero
+        draft = nil
+        penPoints.removeAll()
+        selection = .zero
+        items.removeAll()
+        editing = false
+        toolbarPinned = false
+        modeBarPreferredX = nil
+        topObscuredArea = nil
+        tool = .none
+        mode = .shot
+        magnifierColorFormat = .rgb
+        stroke = Stroke(color: .systemRed, width: 2)
+        windowRects.removeAll()
+        renderer = nil
+        cgImage = nil
+        backdrop?.clear()
+        selectionChrome?.clear()
+        sizeBadge.isHidden = true
+        magnifier.clear()
+        annotationView.needsDisplay = true
+        annotationView.displayIfNeeded()
         onComplete = nil
         onPin = nil
         onRecord = nil
         onScroll = nil
         onCancel = nil
+        onPointerActivity = nil
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
     private func invalidate(_ rects: NSRect...) {
-        for r in rects where !r.isEmpty { setNeedsDisplay(r.insetBy(dx: -2, dy: -2)) }
+        updateSelectionPresentation()
+        for r in rects where !r.isEmpty { annotationView.setNeedsDisplay(r.insetBy(dx: -2, dy: -2)) }
+    }
+
+    private func invalidateAnnotations() {
+        updateSelectionPresentation()
+        annotationView.needsDisplay = true
+    }
+
+    private func updateSelectionPresentation() {
+        guard cgImage != nil else { return }
+        // AppKit may invalidate transparent siblings when chrome moves. Keep the
+        // annotation surface out of drawing until there are handles or marks.
+        annotationView.isHidden = !editing && items.isEmpty && draft == nil
+        let hole = selection.isEmpty ? (pointerInside ? hoverRect : nil) : selection
+        backdrop?.update(bounds: bounds, selection: hole, radius: selection.isEmpty ? 0 : radius)
+        selectionChrome?.update(bounds: bounds, selection: hole, radius: selection.isEmpty ? 0 : radius,
+                                shadowSize: selection.isEmpty ? 0 : shadowBlur, shadowColor: shadowColor,
+                                scale: window?.backingScaleFactor ?? 1)
+        sizeBadge.update(selection: hole, radius: selection.isEmpty ? 0 : radius,
+                         shadowSize: selection.isEmpty ? 0 : shadowBlur, in: bounds)
+        updateMagnifier()
+    }
+
+    private func updateMagnifier() {
+        magnifier.update(at: pointerInside && !editing ? lastMouse : nil,
+                         format: magnifierColorFormat, in: bounds)
     }
 
     private var selectionDirty: NSRect {
@@ -313,35 +522,57 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     override var acceptsFirstResponder: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseEntered(with event: NSEvent) {
-        if let window, !window.isKeyWindow { window.makeKey() }
+        onPointerActivity?()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onPointerActivity?()
     }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+        guard cgImage != nil else { return }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways,
+                                                            .inVisibleRect, .enabledDuringMouseDrag],
                                        owner: self, userInfo: nil))
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        NSCursor.crosshair.set()
-        if let w = window { updateHover(at: convert(w.mouseLocationOutsideOfEventStream, from: nil)) }
+        guard cgImage != nil else { return }
+        if window == nil { updatePointer(at: nil) }
+        else { onPointerActivity?() }
     }
 
     override func mouseMoved(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        let old = lastMouse
-        lastMouse = p
-        if dragMode == nil { updateHover(at: p) }
-        if !editing {
-            if let old { invalidate(magnifierRect(at: old)) }
-            invalidate(magnifierRect(at: p))
+        onPointerActivity?()
+    }
+
+    /// Only the session's pointer tracker supplies a location; nil clears transient hover UI.
+    func updatePointer(at point: NSPoint?) {
+        guard cgImage != nil else { return }
+        guard let p = point, isMousePoint(p, in: bounds) else {
+            setPointerInside(false)
+            lastMouse = nil
+            setHoverRect(nil)
+            updateMagnifier()
+            setHover(nil)
+            tipButton = nil
+            hideTip()
+            return
         }
+        let wasInside = pointerInside
+        setPointerInside(true)
+        guard dragMode == nil, !wasInside || lastMouse != p else { return }
+        lastMouse = p
+        updateHover(at: p)
+        updateMagnifier()
         cursor(at: p).set()
         trackTip(at: p)
     }
@@ -403,13 +634,25 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     private func updateHover(at p: NSPoint) {
-        guard !editing else { return }
-        let rect = windowRects.first { $0.contains(p) } ?? bounds
-        if rect != hoverRect {
-            if let h = hoverRect { invalidate(h.insetBy(dx: -40, dy: -40)) }
-            invalidate(rect.insetBy(dx: -40, dy: -40))
-            hoverRect = rect
-        }
+        guard pointerInside, !editing else { return }
+        setHoverRect(Self.hoverTarget(at: p, in: bounds, windowRects: windowRects))
+    }
+
+    static func hoverTarget(at point: NSPoint, in bounds: NSRect, windowRects: [NSRect]) -> NSRect? {
+        guard NSMouseInRect(point, bounds, false) else { return nil }
+        return windowRects.first { NSMouseInRect(point, $0, false) } ?? bounds
+    }
+
+    private func setHoverRect(_ rect: NSRect?) {
+        guard rect != hoverRect else { return }
+        hoverRect = rect
+        updateSelectionPresentation()
+    }
+
+    private func setPointerInside(_ isInside: Bool) {
+        guard pointerInside != isInside else { return }
+        pointerInside = isInside
+        if modeBar != nil { placeModeBar() }
     }
 
     private func cursor(at p: NSPoint) -> NSCursor {
@@ -440,114 +683,19 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         return .crosshair
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        frozen.draw(in: bounds)
-        NSColor.black.withAlphaComponent(0.4).setFill()
-        bounds.fill()
-
-        if !editing, selection.isEmpty, let hover = hoverRect {
-            drawFrame(hover, withItems: false)
-        } else if !selection.isEmpty {
-            drawShadow(for: selection, deviceScale: 1)
-            drawFrame(selection, withItems: true, radius: radius)
-            if editing, tool == .none { drawHandles() }
+    private func drawAnnotations(in dirtyRect: NSRect) {
+        guard cgImage != nil, !selection.isEmpty else { return }
+        if selection.intersects(dirtyRect), !items.isEmpty || draft != nil {
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(roundedRect: selection, xRadius: radius, yRadius: radius).setClip()
+            drawItems()
+            NSGraphicsContext.restoreGraphicsState()
         }
-        if !editing, let p = lastMouse { drawMagnifier(at: p) }
+        if editing, tool == .none, selectionDirty.intersects(dirtyRect) { drawHandles() }
     }
 
-    private func drawShadow(for rect: NSRect, deviceScale: CGFloat) {
-        renderer.drawShadow(for: rect, radius: radius, shadowSize: shadowBlur,
-                            shadowColor: shadowColor, deviceScale: deviceScale)
-    }
-
-    private func drawFrame(_ rect: NSRect, withItems: Bool, radius r: CGFloat = 0) {
-        NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).setClip()
-        frozen.draw(in: bounds)
-        if withItems { drawItems() }
-        NSGraphicsContext.restoreGraphicsState()
-
-        let outer = NSBezierPath(roundedRect: rect.insetBy(dx: -1, dy: -1), xRadius: r + 1, yRadius: r + 1)
-        outer.lineWidth = 1
-        NSColor.black.withAlphaComponent(0.35).setStroke()
-        outer.stroke()
-        let inner = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: r, yRadius: r)
-        inner.lineWidth = 1
-        NSColor.white.setStroke()
-        inner.stroke()
-        drawSizeBadge(for: rect, radius: r)
-    }
-
-    private static let magnifierSpan: CGFloat = 20, magnifierZoom: CGFloat = 6, magnifierFooter: CGFloat = 22
-
-    private func magnifierRect(at p: NSPoint) -> NSRect {
-        let size = Self.magnifierSpan * Self.magnifierZoom, footer = Self.magnifierFooter
-        var origin = NSPoint(x: p.x + 20, y: p.y - 20 - size - footer)
-        if origin.x + size > bounds.maxX { origin.x = p.x - 20 - size }
-        if origin.y < 0 { origin.y = p.y + 20 }
-        return NSRect(x: origin.x, y: origin.y, width: size, height: size + footer)
-    }
-
-    private func drawMagnifier(at p: NSPoint) {
-        let span = Self.magnifierSpan, footer = Self.magnifierFooter
-        let box = magnifierRect(at: p)
-        let src = NSRect(x: p.x - span / 2, y: p.y - span / 2, width: span, height: span)
-        let px = Geometry.cropRect(viewRect: src, scale: scale, imagePixelHeight: CGFloat(cgImage.height))
-        guard let cg = NSGraphicsContext.current?.cgContext, let sub = cgImage.cropping(to: px) else { return }
-
-        let shape = NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8)
-        NSColor(white: 0.08, alpha: 0.88).setFill()
-        shape.fill()
-        let imageRect = NSRect(x: box.minX, y: box.minY + footer, width: box.width, height: box.width)
-        cg.saveGState()
-        cg.interpolationQuality = .none
-        cg.draw(sub, in: imageRect)
-        cg.restoreGState()
-
-        NSColor.white.withAlphaComponent(0.85).setStroke()
-        let cross = NSBezierPath()
-        cross.move(to: NSPoint(x: imageRect.midX, y: imageRect.minY))
-        cross.line(to: NSPoint(x: imageRect.midX, y: imageRect.maxY))
-        cross.move(to: NSPoint(x: imageRect.minX, y: imageRect.midY))
-        cross.line(to: NSPoint(x: imageRect.maxX, y: imageRect.midY))
-        cross.lineWidth = 1
-        cross.stroke()
-        NSColor.separatorColor.setStroke()
-        shape.lineWidth = 1
-        shape.stroke()
-
-        NSAttributedString(string: environment.format("overlay.magnifier.position", "%d, %d   %@",
-                                                       Int(p.x), Int(bounds.maxY - p.y), pixelHex(at: p)), attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white,
-        ]).draw(at: NSPoint(x: box.minX + 8, y: box.minY + 5))
-    }
-
-    private func pixelHex(at p: NSPoint) -> String {
-        let x = Int(p.x * scale), y = Int(CGFloat(cgImage.height) - p.y * scale)
-        guard x >= 0, y >= 0, x < cgImage.width, y < cgImage.height,
-              let c = sampler.colorAt(x: x, y: y)?.usingColorSpace(.sRGB)
-        else { return "" }
-        return String(format: "#%02X%02X%02X", Int((c.redComponent * 255).rounded()),
-                      Int((c.greenComponent * 255).rounded()), Int((c.blueComponent * 255).rounded()))
-    }
-
-    private func drawSizeBadge(for rect: NSRect, radius r: CGFloat = 0) {
-        let suffix = (r > 0 ? environment.format("overlay.selection.radius", "  R%d", Int(r)) : "")
-            + (rect == selection && shadowBlur > 0 ? environment.format("overlay.selection.shadow", "  S%d", Int(shadowBlur)) : "")
-        let text = NSAttributedString(string: environment.format("overlay.selection.size", "%d × %d%@",
-                                                                 Int(rect.width), Int(rect.height), suffix), attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium), .foregroundColor: NSColor.white,
-        ])
-        let pad = NSSize(width: 10, height: 4)
-        let size = text.size()
-        let box = NSSize(width: size.width + pad.width * 2, height: size.height + pad.height * 2)
-        var origin = NSPoint(x: rect.minX, y: rect.maxY + 6)
-        if origin.y + box.height > bounds.maxY {
-            origin = NSPoint(x: rect.minX + 6, y: rect.maxY - 6 - box.height)
-        }
-        NSColor(white: 0.08, alpha: 0.85).setFill()
-        NSBezierPath(roundedRect: NSRect(origin: origin, size: box), xRadius: box.height / 2, yRadius: box.height / 2).fill()
-        text.draw(at: NSPoint(x: origin.x + pad.width, y: origin.y + pad.height))
+    private func pixelColor(at point: NSPoint) -> MagnifierColorValue? {
+        magnifier.color(at: point)
     }
 
     private func drawHandles() {
@@ -569,16 +717,32 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     private func drawItems() {
-        renderer.drawItems(items, draft: draft, selection: selection)
+        renderer?.drawItems(items, draft: draft, selection: selection)
     }
 
     private func cropFrozen(_ rect: NSRect) -> (CGImage, NSRect)? {
-        renderer.crop(rect, selection: selection)
+        renderer?.crop(rect, selection: selection)
     }
 
-    private func render() -> Data? {
-        renderer.render(selection: selection, items: items, draft: draft, radius: radius,
-                        shadowSize: shadowBlur, shadowColor: shadowColor)
+    private func render(completion: @escaping (Data) -> Void) {
+        guard exportTask == nil else { return }
+        guard let raster = renderer?.render(selection: selection, items: items, draft: draft, radius: radius,
+                                            shadowSize: shadowBlur, shadowColor: shadowColor) else {
+            environment.showToast(environment.string("overlay.export.failed", "截图导出失败"))
+            return
+        }
+        exportTask = Task { [weak self] in
+            do {
+                let png = try await ScreenshotImageEncoder.png(raster)
+                guard let self, !Task.isCancelled else { return }
+                exportTask = nil
+                completion(png)
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                exportTask = nil
+                environment.showToast(environment.string("overlay.export.failed", "截图导出失败"))
+            }
+        }
     }
 
     private func handlePoints() -> [NSPoint] {
@@ -621,6 +785,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     override func mouseDown(with event: NSEvent) {
+        onPointerActivity?()
         commitText()
         hideTip()
         let p = convert(event.locationInWindow, from: nil)
@@ -647,7 +812,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             dragMode = nil
             let count = items.filter { if case .tag = $0.shape { return true } else { return false } }.count
             items.append(Item(shape: .tag(count + 1, at: p), stroke: stroke))
-            needsDisplay = true
+            invalidateAnnotations()
         default:
             dragMode = .draw
             if tool == .pen { penPoints = [p] }
@@ -655,12 +820,16 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        onPointerActivity?()
+        updateDrag(at: convert(event.locationInWindow, from: nil))
+    }
+
+    private func updateDrag(at p: NSPoint) {
         guard let a = anchor, let mode = dragMode else { return }
-        let p = convert(event.locationInWindow, from: nil)
-        let old = lastMouse
         lastMouse = p
         let dx = p.x - a.x, dy = p.y - a.y
         let before = selectionDirty
+        let hadAnnotations = editing || !items.isEmpty || draft != nil
 
         switch mode {
         case .draw:
@@ -689,26 +858,25 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
                 toolbarPinned = false
                 hideOcrPanel()
                 items.removeAll()
-                renderer.clearCache()
+                renderer?.clearCache()
                 placeModeBar()
             }
-            if let h = hoverRect {
-                invalidate(h.insetBy(dx: -40, dy: -40))
-                hoverRect = nil
-            }
+            hoverRect = nil
             selection = NSRect(x: min(a.x, p.x), y: min(a.y, p.y), width: abs(dx), height: abs(dy))
         }
-        invalidate(before, selectionDirty)
-        if !editing {
-            if let old { invalidate(magnifierRect(at: old)) }
-            invalidate(magnifierRect(at: p))
-        }
+        if hadAnnotations || draft != nil { invalidate(before, selectionDirty) }
+        else { updateSelectionPresentation() }
     }
 
     override func mouseUp(with event: NSEvent) {
-        defer { anchor = nil; draft = nil; dragMode = nil }
+        defer {
+            anchor = nil; draft = nil; dragMode = nil
+            onPointerActivity?()
+        }
         let p = convert(event.locationInWindow, from: nil)
         guard let mode = dragMode else { return }
+        // Event coalescing must not leave the final selection at the last drag sample.
+        if lastMouse != p { updateDrag(at: p) }
 
         switch mode {
         case .draw:
@@ -731,7 +899,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             }
         }
         cursor(at: p).set()
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     private func primaryAction() {
@@ -746,6 +914,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     private func confirmSelection() {
         hoverRect = nil
         editing = true
+        invalidateAnnotations()
         if quick { export(.clipboard); return }
         placeModeBar()
         switch mode {
@@ -787,6 +956,14 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         switch event.keyCode {
         case 53: onCancel?(); return
         case 36, 76: if editing { primaryAction() }; return
+        case 48:
+            guard !editing, lastMouse != nil else {
+                super.keyDown(with: event)
+                return
+            }
+            magnifierColorFormat.toggle()
+            updateMagnifier()
+            return
         case 123, 124, 125, 126:
             guard editing else { return }
             let step: CGFloat = flags.contains(.shift) ? 10 : 1
@@ -795,7 +972,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             selection = clamped(selection.offsetBy(dx: dx, dy: dy))
             layoutBars()
             if ocrShowing { rerunRecognition() }
-            needsDisplay = true
+            invalidateAnnotations()
             return
         default: break
         }
@@ -803,7 +980,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             switch key {
             case "z": undoLast()
             case "s": if editing { export(flags.contains(.shift) ? .ask : .folder) }
-            case "c": if editing { finish() }
+            case "c": copy(nil)
             default: super.keyDown(with: event)
             }
             return
@@ -818,6 +995,9 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     private func buildModeBar() {
+        let handle = DragHandle()
+        handle.setAccessibilityLabel(environment.string("overlay.mode.move", "左右移动模式栏"))
+        handle.onDrag = { [weak self] delta in self?.moveModeBar(by: delta.width) }
         let titles = [environment.string("overlay.mode.screenshot", "截图"),
                       environment.string("overlay.mode.scroll", "滚动截图"),
                       environment.string("overlay.mode.record", "录屏"),
@@ -826,13 +1006,12 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             let button = BarButton(title: title, target: self, action: #selector(pickMode(_:)))
             button.isBordered = false
             (button.cell as? NSButtonCell)?.highlightsBy = []
-            button.font = .systemFont(ofSize: 13, weight: .medium)
+            button.font = .systemFont(ofSize: 14, weight: .medium)
             button.selectedUsesAccent = false
+            button.backgroundVerticalInset = 3
             button.tag = i
-            button.wantsLayer = true
-            button.layer?.cornerRadius = 14
-            button.heightAnchor.constraint(equalToConstant: 28).isActive = true
-            button.widthAnchor.constraint(equalToConstant: button.intrinsicContentSize.width + 24).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+            button.widthAnchor.constraint(equalToConstant: button.intrinsicContentSize.width + 28).isActive = true
             button.setAccessibilityLabel(title)
             if Self.segmentModes[i] == .record, #unavailable(macOS 15) {
                 button.isEnabled = false
@@ -843,19 +1022,65 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
             button.isSelectedLook = i == 0
             modeButtons.append(button)
         }
-        modeBar = capsule(modeButtons, spacing: 2, inset: 4)
+        modeBar = capsule([handle] + modeButtons, spacing: 2, inset: 4)
+        modeBar.identifier = NSUserInterfaceItemIdentifier("screenshot.modeBar")
+        modeBarSize = modeBar.fittingSize
         addSubview(modeBar)
         placeModeBar()
     }
 
     private func placeModeBar() {
-        guard !quick else { modeBar.isHidden = true; return }
-        let size = modeBar.fittingSize
-        var frame = NSRect(x: 16, y: bounds.maxY - menuBarHeight - 12 - size.height, width: size.width, height: size.height)
+        guard Self.modeBarShouldBeVisible(quick: quick, pointerInside: pointerInside, overlapsSelection: false) else {
+            modeBar.isHidden = true
+            return
+        }
+        var frame = Self.modeBarFrame(size: modeBarSize, in: bounds,
+                                      preferredX: modeBarPreferredX ?? bounds.minX + 16,
+                                      obscuredArea: topObscuredArea)
         let busy = editing ? selection.insetBy(dx: -8, dy: -8) : .zero
-        if busy.intersects(frame) { frame.origin.x = bounds.maxX - 16 - size.width }
+        if busy.intersects(frame), modeBarPreferredX == nil {
+            frame = Self.modeBarFrame(size: modeBarSize, in: bounds,
+                                      preferredX: bounds.maxX - 16 - modeBarSize.width,
+                                      obscuredArea: topObscuredArea)
+        }
         modeBar.frame = frame
-        modeBar.isHidden = busy.intersects(frame)
+        modeBar.isHidden = !Self.modeBarShouldBeVisible(
+            quick: quick,
+            pointerInside: pointerInside,
+            overlapsSelection: busy.intersects(frame)
+        )
+    }
+
+    private func moveModeBar(by deltaX: CGFloat) {
+        guard deltaX != 0, !modeBar.isHidden else { return }
+        // Keep the unclipped horizontal preference so a single drag can cross the notch.
+        let proposedX = (modeBarPreferredX ?? modeBar.frame.minX) + deltaX
+        let bounded = Self.modeBarFrame(size: modeBarSize, in: bounds, preferredX: proposedX)
+        modeBarPreferredX = bounded.minX
+        let frame = Self.modeBarFrame(size: modeBarSize, in: bounds,
+                                      preferredX: bounded.minX, obscuredArea: topObscuredArea)
+        if modeBar.frame.origin != frame.origin { modeBar.setFrameOrigin(frame.origin) }
+    }
+
+    static func modeBarFrame(size: NSSize, in bounds: NSRect, preferredX: CGFloat,
+                             obscuredArea: NSRect? = nil) -> NSRect {
+        let inset: CGFloat = 4
+        let minX = bounds.minX + inset
+        let maxX = max(minX, bounds.maxX - inset - size.width)
+        var frame = NSRect(x: min(max(preferredX, minX), maxX),
+                           y: bounds.maxY - inset - size.height, width: size.width, height: size.height)
+        if let obscuredArea, frame.intersects(obscuredArea.insetBy(dx: -inset, dy: 0)) {
+            let candidates = [obscuredArea.minX - inset - size.width, obscuredArea.maxX + inset]
+                .filter { $0 >= minX && $0 <= maxX }
+            if let nearest = candidates.min(by: { abs($0 - frame.minX) < abs($1 - frame.minX) }) {
+                frame.origin.x = nearest
+            }
+        }
+        return frame
+    }
+
+    static func modeBarShouldBeVisible(quick: Bool, pointerInside: Bool, overlapsSelection: Bool) -> Bool {
+        !quick && pointerInside && !overlapsSelection
     }
 
     @objc private func pickMode(_ sender: BarButton) {
@@ -873,12 +1098,17 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         let hint = NSTextField(labelWithString: environment.string("overlay.scroll.hint", "框住要滚的内容，开始后自己往下滚"))
         hint.font = .systemFont(ofSize: 12)
         hint.textColor = .secondaryLabelColor
-        let start = NSButton(title: environment.string("overlay.scroll.start", "开始滚动截图"), target: self, action: #selector(startScroll))
-        start.bezelStyle = .rounded
-        start.image = NSImage(systemSymbolName: "arrow.down.doc", accessibilityDescription: nil)
-        start.imagePosition = .imageLeading
-        start.keyEquivalent = "\r"
-        scrollBar = capsule([hint, start, NSButton(title: environment.string("overlay.action.cancel", "取消"), target: self, action: #selector(cancel))], spacing: 8, inset: 10)
+        let start = sessionButton(
+            title: environment.string("overlay.scroll.start", "开始滚动截图"),
+            symbol: "arrow.down.doc",
+            action: #selector(startScroll),
+            isPrimary: true
+        )
+        let cancel = sessionButton(
+            title: environment.string("overlay.action.cancel", "取消"),
+            action: #selector(cancel)
+        )
+        scrollBar = CaptureActionBar.make([hint, start, cancel])
         scrollBar.isHidden = true
         addSubview(scrollBar)
     }
@@ -889,15 +1119,39 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     private func buildRecordBar() {
-        let start = NSButton(title: environment.string("overlay.record.start", "开始录制"), target: self, action: #selector(startRecord))
-        start.bezelStyle = .rounded
-        start.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
-        start.imagePosition = .imageLeading
-        start.contentTintColor = .systemRed
-        start.keyEquivalent = "\r"
-        recordBar = capsule([start, NSButton(title: environment.string("overlay.action.cancel", "取消"), target: self, action: #selector(cancel))], spacing: 8, inset: 10)
+        let start = sessionButton(
+            title: environment.string("overlay.record.start", "开始录制"),
+            symbol: "record.circle",
+            tint: .systemRed,
+            action: #selector(startRecord),
+            isPrimary: true
+        )
+        let cancel = sessionButton(
+            title: environment.string("overlay.action.cancel", "取消"),
+            action: #selector(cancel)
+        )
+        recordBar = CaptureActionBar.make([start, cancel])
         recordBar.isHidden = true
         addSubview(recordBar)
+    }
+
+    private func sessionButton(
+        title: String,
+        symbol: String? = nil,
+        tint: NSColor? = nil,
+        action: Selector,
+        isPrimary: Bool = false
+    ) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        CaptureActionBar.configure(button, isPrimary: isPrimary)
+        if let symbol {
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
+                .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+            button.imagePosition = .imageLeading
+        }
+        button.contentTintColor = tint
+        if isPrimary { button.keyEquivalent = "\r" }
+        return button
     }
 
     @objc private func startRecord() {
@@ -923,8 +1177,12 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
 
         let handle = DragHandle()
         handle.setAccessibilityLabel(environment.string("overlay.toolbar.move", "移动工具栏"))
-        handle.target = toolbar
-        handle.onDrag = { [weak self] in self?.toolbarPinned = true }
+        handle.onDrag = { [weak self] delta in
+            guard let self else { return }
+            toolbar.setFrameOrigin(NSPoint(x: toolbar.frame.minX + delta.width,
+                                           y: toolbar.frame.minY + delta.height))
+            toolbarPinned = true
+        }
         var annotate: [NSView] = [handle]
         let drawTools: [(String, Tool, String)] = [
             ("rectangle", .rect, environment.string("overlay.tool.rectangle", "矩形 (R)")),
@@ -961,12 +1219,18 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
                                                                     environment.saveFolderDisplayName), action: #selector(download)),
         ]
 
-        let cancel = iconButton("xmark", tip: environment.string("overlay.action.cancelShortcut", "取消 (Esc)"), action: #selector(cancel))
-        let done = iconButton("checkmark", tip: environment.string("overlay.action.finish", "复制并完成 (↩ / ⌘C)"), tint: .white, action: #selector(finish))
+        let cancel = iconButton("xmark", tip: environment.string("overlay.action.cancelShortcut", "取消 (Esc)"),
+                                action: #selector(cancel), width: 36)
+        let done = iconButton("checkmark", tip: environment.string("overlay.action.finish", "复制并完成 (↩ / ⌘C)"),
+                              tint: .white, action: #selector(finish), width: 36)
+        cancel.backgroundVerticalInset = 0
+        done.backgroundVerticalInset = 0
 
         let row = NSStackView(views: [capsule(annotate), capsule(process), capsule(output),
-                                      capsule([cancel]), capsule([done], tint: .controlAccentColor)])
+                                      circularControl(cancel),
+                                      circularControl(done, tint: .controlAccentColor)])
         row.orientation = .horizontal
+        row.alignment = .centerY
         row.spacing = 8
         toolbar.addArrangedSubview(Glass.container(row, spacing: 8))
 
@@ -1034,7 +1298,12 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         addSubview(toolbar)
     }
 
-    private func capsule(_ views: [NSView], tint: NSColor? = nil, spacing: CGFloat = 2, inset: CGFloat = 4) -> NSView {
+    private func capsule(
+        _ views: [NSView],
+        tint: NSColor? = nil,
+        spacing: CGFloat = 2,
+        inset: CGFloat = 2
+    ) -> NSView {
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
         stack.spacing = spacing
@@ -1049,7 +1318,14 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         return label
     }
 
-    private func styledButton(image: NSImage, tip: String?, action: Selector?, tag: Int = -1, enabled: Bool = true) -> BarButton {
+    private func styledButton(
+        image: NSImage,
+        tip: String?,
+        action: Selector?,
+        tag: Int = -1,
+        enabled: Bool = true,
+        width: CGFloat = 32
+    ) -> BarButton {
         let button = BarButton(image: image, target: self, action: action)
         button.isBordered = false
         (button.cell as? NSButtonCell)?.highlightsBy = []
@@ -1060,21 +1336,26 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         }
         button.tag = tag
         button.isEnabled = enabled
-        button.wantsLayer = true
-        button.layer?.cornerRadius = 18
+        button.usesCircularBackground = true
+        button.backgroundVerticalInset = 6
         button.alphaValue = enabled ? 1 : 0.35
-        button.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        button.widthAnchor.constraint(equalToConstant: width).isActive = true
         button.heightAnchor.constraint(equalToConstant: 36).isActive = true
         button.refresh()
         return button
     }
 
+    private func circularControl(_ button: BarButton, tint: NSColor? = nil) -> NSView {
+        Glass.wrap(button, radius: 18, tint: tint)
+    }
+
     private func iconButton(_ symbol: String, tip: String, tint: NSColor = .labelColor,
-                            action: Selector?, tag: Int = -1, enabled: Bool = true) -> BarButton {
+                            action: Selector?, tag: Int = -1, enabled: Bool = true,
+                            width: CGFloat = 32) -> BarButton {
         let image = (NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
                      ?? NSImage(systemSymbolName: "questionmark", accessibilityDescription: nil)!)
             .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))!
-        let button = styledButton(image: image, tip: tip, action: action, tag: tag, enabled: enabled)
+        let button = styledButton(image: image, tip: tip, action: action, tag: tag, enabled: enabled, width: width)
         button.tint = tint
         return button
     }
@@ -1138,7 +1419,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         for b in toolButtons { b.isSelectedLook = b.tag == tool.rawValue }
         styleRow.isHidden = !tool.usesStroke
         layoutToolbar()
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     private func refreshStyleButtons() {
@@ -1163,14 +1444,14 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         shadowSlider.doubleValue = Double(shadowSize)
         shadowLabel.stringValue = "\(Int(shadowSize))"
         environment.storage.set(Double(shadowSize), forKey: "shadowSize")
-        needsDisplay = true
+        updateSelectionPresentation()
     }
 
     @objc private func pickShadowColor(_ sender: NSButton) {
         shadowColorIndex = sender.tag
         environment.storage.set(sender.tag, forKey: "shadowColor")
         refreshShadowButtons()
-        needsDisplay = true
+        updateSelectionPresentation()
     }
 
     private func refreshShadowButtons() {
@@ -1182,7 +1463,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         radiusSlider.doubleValue = Double(cornerRadius)
         radiusLabel.stringValue = "\(Int(cornerRadius))"
         environment.storage.set(Double(cornerRadius), forKey: "cornerRadius")
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     @objc private func pickColor(_ sender: NSButton) {
@@ -1198,11 +1479,26 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     @objc private func undoLast() {
         commitText()
         _ = items.popLast()
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     @objc func undo(_ sender: Any?) { undoLast() }
-    @objc func copy(_ sender: Any?) { if editing { finish() } }
+    @objc func copy(_ sender: Any?) {
+        if editing {
+            finish()
+            return
+        }
+        guard let point = lastMouse, let color = pixelColor(at: point) else { return }
+        copyMagnifierValue(color.value(for: magnifierColorFormat), to: .general)
+    }
+
+    @discardableResult
+    func copyMagnifierValue(_ value: String, to pasteboard: NSPasteboard) -> Bool {
+        pasteboard.clearContents()
+        guard pasteboard.setString(value, forType: .string) else { return false }
+        onCancel?()
+        return true
+    }
 
     @objc private func cancel() { onCancel?() }
     @objc private func finish() { export(.clipboard) }
@@ -1210,15 +1506,15 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
 
     @objc private func pinShot() {
         commitText()
-        guard let png = render() else { environment.showToast(environment.string("overlay.export.failed", "截图导出失败")); return }
         let m = shadowMargin
-        onPin?(png, selection.insetBy(dx: -m, dy: -m), shadowBlur > 0)
+        let frame = selection.insetBy(dx: -m, dy: -m)
+        let shadowed = shadowBlur > 0
+        render { [weak self] png in self?.onPin?(png, frame, shadowed) }
     }
 
     private func export(_ mode: SaveMode) {
         commitText()
-        guard let png = render() else { environment.showToast(environment.string("overlay.export.failed", "截图导出失败")); return }
-        onComplete?(png, mode)
+        render { [weak self] png in self?.onComplete?(png, mode) }
     }
 
     private func rerunRecognition() {
@@ -1284,7 +1580,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         qrRects = []
         hideOcrPanel()
         layoutToolbar()
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     @objc private func openLink() {
@@ -1370,15 +1666,23 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         let hint = NSTextField(labelWithString: environment.string("overlay.recognition.editHint", "可直接编辑 · 选中一段后 ⌘C 只复制那段 · Esc 关闭"))
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
+        CaptureActionBar.configure(maskButton)
         maskButton.target = self
         maskButton.action = #selector(maskQR)
+        CaptureActionBar.configure(openButton)
         openButton.target = self
         openButton.action = #selector(openLink)
-        let done = NSButton(title: environment.string("overlay.action.done", "完成"), target: self, action: #selector(finishOcr))
-        done.keyEquivalent = "\r"
+        let close = sessionButton(
+            title: environment.string("overlay.action.close", "关闭"),
+            action: #selector(closeOcr)
+        )
+        let done = sessionButton(
+            title: environment.string("overlay.action.done", "完成"),
+            action: #selector(finishOcr),
+            isPrimary: true
+        )
         let footer = NSStackView(views: [hint, spacer(),
-                                         NSButton(title: environment.string("overlay.action.close", "关闭"), target: self, action: #selector(closeOcr)),
-                                         maskButton, openButton, done])
+                                         close, maskButton, openButton, done])
         footer.orientation = .horizontal
         footer.spacing = 8
 
@@ -1443,7 +1747,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         }
         field.removeFromSuperview()
         window?.makeFirstResponder(self)
-        needsDisplay = true
+        invalidateAnnotations()
     }
 
     private func discardText() {

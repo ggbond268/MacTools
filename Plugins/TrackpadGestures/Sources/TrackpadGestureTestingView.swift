@@ -102,7 +102,6 @@ struct TrackpadGestureTestingPanel: View {
                 .accessibilityLabel(Text(statusText))
         }
         .pluginSettingsListRowPadding(interactive: true)
-        .pluginSettingsCardBackground(.standard)
         .onChange(of: model.latestRejectionAnnouncement) { previous, current in
             guard TrackpadGestureTestingRejectionAnnouncementPolicy.shouldAnnounce(
                 previous: previous,

@@ -270,9 +270,9 @@ final class IPOverviewPluginTests: XCTestCase {
         let refreshTask = try XCTUnwrap(viewModel.refreshAddresses())
         await refreshTask.value
         let plugin = IPOverviewPlugin(viewModel: viewModel)
-        let controls = try XCTUnwrap(plugin.primaryPanelState.detail?.controls)
+        let controls = try XCTUnwrap(plugin.rowState.detail?.controls)
 
-        XCTAssertEqual(plugin.primaryPanelState.subtitle, "203.0.113.8")
+        XCTAssertEqual(plugin.rowState.subtitle, "203.0.113.8")
         XCTAssertEqual(
             controls.map(\.id),
             [
@@ -302,12 +302,12 @@ final class IPOverviewPluginTests: XCTestCase {
         await initialRefresh.value
         let plugin = IPOverviewPlugin(viewModel: viewModel)
 
-        plugin.panelSurfaceDidBecomeVisible(.component)
+        plugin.panelItemDidBecomeVisible("widget")
         await Task.yield()
         var callCounts = await provider.callCounts()
         XCTAssertEqual(callCounts.addresses, 1)
 
-        plugin.panelSurfaceDidBecomeVisible(.primary)
+        plugin.panelItemDidBecomeVisible("control")
         XCTAssertTrue(viewModel.snapshot.isRefreshing)
         try await waitUntil { !viewModel.snapshot.isRefreshing }
 

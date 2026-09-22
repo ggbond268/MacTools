@@ -138,8 +138,8 @@
     "action.custom-command.parameter-summary": "@localizable.settings.custom.name"
   },
   "version": "1.0.0",
-  "minHostVersion": "1.3.0",
-  "pluginKitVersion": 6,
+  "minHostVersion": "1.3.1",
+  "pluginKitVersion": 7,
   "bundleRelativePath": "WindowLayouts.bundle",
   "factoryClass": "WindowLayoutsPlugin.WindowLayoutsPluginFactory",
   "build": {
@@ -147,8 +147,7 @@
     "scheme": "WindowLayoutsPlugin"
   },
   "capabilities": {
-    "primaryPanel": false,
-    "componentPanel": false,
+    "panelItems": [],
     "settings": "form"
   },
   "permissions": [
