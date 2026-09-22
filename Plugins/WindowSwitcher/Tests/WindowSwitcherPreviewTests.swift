@@ -33,7 +33,7 @@ final class WindowSwitcherPreviewTests: XCTestCase {
         XCTAssertEqual(WindowSwitcherPreview.matchingIndex(for: entry, candidates: candidates), 0)
     }
 
-    func testCaptureFallsBackToUniqueTitleForHelperOwnedSteamSurface() {
+    func testCaptureFallsBackToUniqueTitleForVerifiedHelperOwnedSurface() {
         var entry = makeEntry(number: 7)
         entry.previewProcessIdentifiers = [99, 100]
         let candidates = [
