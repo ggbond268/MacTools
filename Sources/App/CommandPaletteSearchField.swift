@@ -60,7 +60,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         field.isBezeled = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
         field.lineBreakMode = .byTruncatingTail
         configure(field)
         context.coordinator.focus(field, for: focusRequestID)

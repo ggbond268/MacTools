@@ -170,6 +170,7 @@ final class ClipboardEmbeddedPreviewPresentation: ObservableObject {
     }
 
     func load(_ item: ClipboardHistoryItem, cache: ClipboardEmbeddedPreviewCache) async {
+        guard !Task.isCancelled else { return }
         generation &+= 1
         let request = generation
         if let cached = cache.cachedImage(for: item) {
@@ -177,6 +178,7 @@ final class ClipboardEmbeddedPreviewPresentation: ObservableObject {
             return
         }
         state = .loading
+        guard await ClipboardPreviewLoadPolicy.waitForSelection(), generation == request else { return }
         let result = await cache.result(for: item)
         guard !Task.isCancelled, generation == request else { return }
         if let image = result.image { state = .ready(image) }

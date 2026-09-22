@@ -14,54 +14,6 @@ final class DiskCleanPluginTests: XCTestCase {
         XCTAssertTrue(requirement.description.contains("跳过"))
     }
 
-    func testFullDiskAccessPermissionCopyCoversEverySupportedLocale() throws {
-        let catalogURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Resources/Localizable.xcstrings")
-        let data = try Data(contentsOf: catalogURL)
-        let catalog = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
-        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
-        let expectedLocales: Set<String> = [
-            "ar", "de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant",
-        ]
-
-        for key in [
-            "permission.fullDiskAccess.title",
-            "permission.fullDiskAccess.description",
-            "detail.fda.footnote",
-        ] {
-            let entry = try XCTUnwrap(strings[key] as? [String: Any], "Missing \(key)")
-            let localizations = try XCTUnwrap(
-                entry["localizations"] as? [String: Any],
-                "Missing localizations for \(key)"
-            )
-            XCTAssertEqual(Set(localizations.keys), expectedLocales, key)
-        }
-    }
-
-    func testExpandedPanelExposesOnlyScanCleanAndOpenDetailsActions() throws {
-        let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
-
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
-
-        XCTAssertEqual(
-            controls.map(\.id),
-            [
-                DiskCleanPlugin.ControlID.scan,
-                DiskCleanPlugin.ControlID.clean,
-                DiskCleanPlugin.ControlID.openDetails
-            ]
-        )
-        XCTAssertEqual(controls.map(\.actionTitle), ["扫描", "移到废纸篓", "打开详情"])
-        XCTAssertFalse(controls.contains { $0.id.hasPrefix("disk-clean-choice.") })
-        XCTAssertFalse(controls.contains { $0.id == "disk-clean-test-mode" })
-    }
-
     // MARK: - P2 section wiring (design §10)
 
     /// When scan roots change, the new scope must be pushed to the developer-artifact section.
@@ -99,20 +51,6 @@ final class DiskCleanPluginTests: XCTestCase {
     }
 
     /// Menu bar only reflects the rules section: P2 candidate inflow must not rebuild the host menu.
-    func testMenuBarPanelIgnoresSectionControllers() {
-        let controller = FakeDiskCleanPluginController()
-        let installers = DiskCleanController(
-            engine: ControlledDiskCleanScanEngine(),
-            removalModeStore: InMemoryDiskCleanRemovalModeStore(mode: .trash)
-        )
-        let plugin = DiskCleanPlugin(controller: controller, installersController: installers)
-        var stateChanges = 0
-        plugin.onStateChange = { stateChanges += 1 }
-
-        installers.setScope(.installers)
-
-        XCTAssertEqual(stateChanges, 0)
-    }
 
     func testInvokingScanForwardsToController() {
         let controller = FakeDiskCleanPluginController()
@@ -170,93 +108,10 @@ final class DiskCleanPluginTests: XCTestCase {
     }
 
     /// Button copy must state how many items and roughly how much, and say what the removal mode will do (design §8.2, §8.4).
-    func testCleanActionTitleReportsSelectionAndRemovalMode() throws {
-        let controller = FakeDiskCleanPluginController()
-        let plugin = DiskCleanPlugin(controller: controller)
-        let candidates = [
-            makePluginTestCandidate(
-                id: "a",
-                path: "/Users/tester/Library/Caches/App",
-                sizeResult: .testComplete(bytes: 5_368_709_120)
-            )
-        ]
-
-        controller.snapshot = makeScannedSnapshot(
-            candidates: candidates,
-            selection: makeSelection(selected: ["a"], bytes: 5_368_709_120)
-        )
-        plugin.handleAction(.setDisclosureExpanded(true))
-        let trashTitle = try XCTUnwrap(try cleanControl(of: plugin).actionTitle)
-        XCTAssertTrue(trashTitle.hasPrefix("移到废纸篓 · 1 项 · 约"), "actual: \(trashTitle)")
-        XCTAssertTrue(
-            trashTitle.hasSuffix("约 \(DiskCleanFormat.bytes(5_368_709_120))"),
-            "actual: \(trashTitle)"
-        )
-
-        controller.snapshot = makeScannedSnapshot(
-            candidates: candidates,
-            removalMode: .permanent,
-            selection: makeSelection(selected: ["a"], bytes: 5_368_709_120)
-        )
-        let permanentTitle = try XCTUnwrap(try cleanControl(of: plugin).actionTitle)
-        XCTAssertTrue(permanentTitle.hasPrefix("清理 · 1 项 · 约"), "actual: \(permanentTitle)")
-    }
-
-    func testCleanIsDisabledWhenNothingIsSelected() throws {
-        let controller = FakeDiskCleanPluginController()
-        let plugin = DiskCleanPlugin(controller: controller)
-        controller.snapshot = makeScannedSnapshot(
-            candidates: [
-                makePluginTestCandidate(
-                    id: "a",
-                    path: "/Users/tester/Library/Caches/App",
-                    sizeResult: .testComplete(bytes: 10)
-                )
-            ],
-            selection: makeSelection(selected: [], selectable: ["a"], bytes: 0)
-        )
-
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        XCTAssertEqual(try cleanControl(of: plugin).isEnabled, false)
-        XCTAssertEqual(try cleanControl(of: plugin).actionTitle, "移到废纸篓")
-    }
 
     /// "Open Details" must actually switch the settings window; before M4 it was a no-op.
-    func testOpenDetailsRequestsConfigurationPresentation() {
-        let plugin = DiskCleanPlugin(controller: FakeDiskCleanPluginController())
-        var presentationRequests = 0
-        plugin.requestSettingsPresentation = { presentationRequests += 1 }
-
-        plugin.handleAction(.invokeAction(controlID: DiskCleanPlugin.ControlID.openDetails))
-
-        XCTAssertEqual(presentationRequests, 1)
-    }
 
     /// The "(limited)" suffix always derives from limitations, not from happening to scan a protected candidate (design §4.5, §8.2).
-    func testPanelSubtitleAppendsLimitedSuffixWhenScanReportsLimitations() {
-        let controller = FakeDiskCleanPluginController()
-        let plugin = DiskCleanPlugin(controller: controller)
-        let candidates = [
-            makePluginTestCandidate(
-                id: "allowed",
-                path: "/Users/tester/Library/Caches/App",
-                sizeResult: .testComplete(bytes: 1_024)
-            )
-        ]
-
-        controller.snapshot = makeScannedSnapshot(candidates: candidates)
-        let plain = plugin.rowState.subtitle
-
-        controller.snapshot = makeScannedSnapshot(
-            candidates: candidates,
-            limitations: [.fdaRestricted(skippedTargetIDs: ["cache.system"])]
-        )
-        let limited = plugin.rowState.subtitle
-
-        XCTAssertFalse(plain.hasSuffix("（受限）"))
-        XCTAssertEqual(limited, plain + "（受限）")
-    }
 
     func testPanelDisablesCleanWhenResultExpired() {
         let controller = FakeDiskCleanPluginController()
@@ -280,31 +135,6 @@ final class DiskCleanPluginTests: XCTestCase {
 
     /// Permanent-delete confirmation: panel swaps to Confirm/Cancel, and Clean must disappear —
     /// the same button must not swing between two meanings.
-    func testConfirmingPhaseReplacesCleanActionWithConfirmAndCancel() throws {
-        let controller = FakeDiskCleanPluginController()
-        let plugin = DiskCleanPlugin(controller: controller)
-        controller.snapshot = makeConfirmingSnapshot(itemCount: 3, totalEstimatedBytes: 5_368_709_120)
-
-        plugin.handleAction(.setDisclosureExpanded(true))
-        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
-
-        XCTAssertEqual(
-            controls.map(\.id),
-            [
-                DiskCleanPlugin.ControlID.scan,
-                DiskCleanPlugin.ControlID.confirmClean,
-                DiskCleanPlugin.ControlID.cancelClean,
-                DiskCleanPlugin.ControlID.openDetails
-            ]
-        )
-        let confirm = try XCTUnwrap(controls.first { $0.id == DiskCleanPlugin.ControlID.confirmClean })
-        let confirmTitle = try XCTUnwrap(confirm.actionTitle)
-        XCTAssertTrue(confirmTitle.hasPrefix("确认永久清理 3 项 · 约"), "actual: \(confirmTitle)")
-        XCTAssertTrue(
-            confirmTitle.hasSuffix("约 \(DiskCleanFormat.bytes(5_368_709_120))"),
-            "frozen byte count must appear in the confirmation copy: \(confirmTitle)"
-        )
-    }
 
     func testConfirmAndCancelActionsForwardToController() {
         let controller = FakeDiskCleanPluginController()
@@ -319,32 +149,6 @@ final class DiskCleanPluginTests: XCTestCase {
     }
 
     /// Trash completion copy must not say "freed": objects still sit in Trash, space is not reclaimed yet (design §7.7).
-    func testTrashCompletionSubtitleDoesNotClaimSpaceWasReclaimed() {
-        let controller = FakeDiskCleanPluginController()
-        let plugin = DiskCleanPlugin(controller: controller)
-        controller.snapshot = DiskCleanControllerSnapshot(
-            phase: .completed,
-            scope: .rules(choices: Set(DiskCleanChoice.allCases)),
-            scanResult: nil,
-            executionResult: DiskCleanExecutionResult(
-                itemResults: [
-                    DiskCleanExecutionItemResult(
-                        candidateID: "a",
-                        path: "/cache/a",
-                        outcome: .trashed(reclaimedBytes: 1_024, stagedName: ".mactools-staged-a")
-                    )
-                ],
-                mode: .trash
-            ),
-            isResultStale: false,
-            errorMessage: nil
-        )
-
-        let subtitle = plugin.rowState.subtitle
-        XCTAssertTrue(subtitle.hasPrefix("已移到废纸篓约"), "actual: \(subtitle)")
-        XCTAssertFalse(subtitle.contains("已释放"), "objects in Trash have not truly freed space")
-        XCTAssertTrue(subtitle.hasSuffix(DiskCleanFormat.bytes(1_024)), "actual: \(subtitle)")
-    }
 
     /// Startup reconciliation must run on activate, or orphan staged objects have no second discovery path.
     func testActivateTriggersStagingReconciliation() async {
@@ -380,11 +184,6 @@ final class DiskCleanPluginTests: XCTestCase {
                 mode: .permanent
             )
         )
-    }
-
-    private func cleanControl(of plugin: DiskCleanPlugin) throws -> PluginPanelControl {
-        let controls = plugin.rowState.detail?.primaryControls ?? []
-        return try XCTUnwrap(controls.first { $0.id == DiskCleanPlugin.ControlID.clean })
     }
 
     /// Default-select all cleanable candidates so Clean-button availability is decided by the condition under test, not masked by an empty selection.

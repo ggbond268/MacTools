@@ -26,7 +26,8 @@ final class OverlayWindow: NSPanel {
         sharingType = .none
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // Reused panels must be able to join other applications' full-screen Spaces.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications, .stationary]
         // Set the final level after panel flags; isFloatingPanel resets it to .floating.
         level = .screenSaver
 

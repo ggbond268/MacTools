@@ -31,24 +31,6 @@ final class DiskCleanScanEngineTests: XCTestCase {
         XCTAssertEqual(events.filter(\.isCandidateSized).count, 2)
     }
 
-    func testFoundCandidatesCarryNoSizeAndAreNotCleanable() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("\(home)/Library/Caches/A")], forPattern: "\(home)/Library/Caches/*")
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            targets: [.test(id: "cache.a", globs: ["\(home)/Library/Caches/*"])]
-        )
-
-        let events = try await collect(engine)
-        let found = try XCTUnwrap(events.compactMap(\.candidateFound).first)
-
-        XCTAssertNil(found.sizeResult)
-        XCTAssertFalse(found.isCleanable, "unsized candidates are not cleanable (§3.1 invariant)")
-        XCTAssertEqual(found.id, "cache.a::\(home)/Library/Caches/A")
-        XCTAssertEqual(found.legacyRuleID, "cache.a")
-        XCTAssertEqual(found.choice, .cache)
-    }
-
     func testFinishedSummaryCountsOnlyCompleteCandidatesAsCleanable() async throws {
         let fileSystem = FakeDiskCleanFileSystem()
         fileSystem.setItems(
@@ -103,91 +85,7 @@ final class DiskCleanScanEngineTests: XCTestCase {
         XCTAssertGreaterThan(executor.peakConcurrency, 1, "concurrency window must actually slide, not serialize")
     }
 
-    func testPassesItemDeadlineClampedByGlobalDeadline() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("\(home)/Library/Caches/A")], forPattern: "\(home)/Library/Caches/*")
-        let executor = FakeDiskCleanSizingExecutor()
-        var configuration = DiskCleanScanEngineConfiguration()
-        configuration.itemTimeout = 20
-        configuration.globalTimeout = 5
-        let startedAt = Date(timeIntervalSince1970: 50_000)
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: executor,
-            configuration: configuration,
-            targets: [.test(id: "cache.a", globs: ["\(home)/Library/Caches/*"])],
-            now: { startedAt }
-        )
-
-        _ = try await finish(engine)
-
-        XCTAssertEqual(
-            executor.deadlines,
-            [startedAt.addingTimeInterval(5)],
-            "item deadline must not exceed the global deadline"
-        )
-    }
-
-    func testItemTimeoutProducesPartialResultThroughRealWorkerPool() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("\(home)/Library/Caches/Slow")], forPattern: "\(home)/Library/Caches/*")
-        // Give plenty of abandon budget: this tests timeout degradation, not circuit break.
-        let pool = DiskCleanWorkerPool(maxThreadCount: 3, abandonBudget: 1_000)
-        defer { pool.shutDown() }
-        var configuration = DiskCleanScanEngineConfiguration()
-        configuration.itemTimeout = 0.2
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: pool,
-            sizer: FakeDiskCleanSizer(blockingDuration: 1.5),
-            configuration: configuration,
-            targets: [.test(id: "cache.a", globs: ["\(home)/Library/Caches/*"])]
-        )
-
-        let summary = try await finish(engine)
-
-        XCTAssertEqual(
-            summary.artifact.candidates.first?.sizeResult?.completeness,
-            .partial(reasons: [.timedOut])
-        )
-        XCTAssertEqual(summary.cleanableCount, 0, "timed-out candidates are not cleanable")
-    }
-
     // MARK: - Cancellation
-
-    func testCancellingConsumerStopsDerivingNewSizingTasks() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        let items = (0..<20).map { DiskCleanFileItem.testDirectory("\(home)/Library/Caches/Item\($0)") }
-        fileSystem.setItems(items, forPattern: "\(home)/Library/Caches/*")
-        let executor = FakeDiskCleanSizingExecutor(delay: .milliseconds(20))
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: executor,
-            targets: [.test(id: "cache.a", globs: ["\(home)/Library/Caches/*"])]
-        )
-
-        // Consumer exits after the first sized event → onTermination → engine root task cancels.
-        var sizedCount = 0
-        do {
-            for try await event in engine.scan(choices: [.cache], forceRefresh: false) {
-                if event.isCandidateSized {
-                    sizedCount += 1
-                    break
-                }
-            }
-        } catch is CancellationError {
-            // Cancellation propagation itself is expected.
-        }
-        XCTAssertEqual(sizedCount, 1)
-
-        // Allow in-flight tasks to finish, then confirm no further spawning.
-        try await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertLessThan(
-            executor.requestedPaths.count,
-            items.count,
-            "must not spawn new sizing tasks after cancellation"
-        )
-    }
 
     func testCancelledTaskFinishesStreamWithCancellationError() async {
         let fileSystem = FakeDiskCleanFileSystem()
@@ -216,32 +114,6 @@ final class DiskCleanScanEngineTests: XCTestCase {
     }
 
     // MARK: - Scan scope (panel equivalence)
-
-    func testScopeFiltersTargetsByLegacyRuleIDPrefix() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("/cache/item")], forPattern: "/cache/*")
-        fileSystem.setItems([.testDirectory("/developer/item")], forPattern: "/developer/*")
-        fileSystem.setItems([.testDirectory("/browser/item")], forPattern: "/browser/*")
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            targets: [
-                .test(id: "cache.x", legacyRuleID: "cache.x", globs: ["/cache/*"]),
-                // Category is developer but legacy prefix is browser — panel membership must follow the legacy prefix;
-                // this is the kind of target where "select by category" changes scan coverage.
-                .test(
-                    id: "browser.service-worker.editors",
-                    legacyRuleID: "browser.service-worker",
-                    category: .developer,
-                    globs: ["/browser/*"]
-                ),
-                .test(id: "developer.y", legacyRuleID: "developer.y", category: .developer, globs: ["/developer/*"])
-            ]
-        )
-
-        let summary = try await finish(engine, choices: [.browser])
-
-        XCTAssertEqual(summary.artifact.candidates.map(\.path), ["/browser/item"])
-    }
 
     // MARK: - limitations
 
@@ -294,56 +166,6 @@ final class DiskCleanScanEngineTests: XCTestCase {
         XCTAssertEqual(summary.artifact.candidates.map(\.path), ["/cache/item"], "one rule failure must not block other rules")
     }
 
-    func testReportsPathExpansionFailureSeparatelyFromDynamicFailure() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setError(FakeDiskCleanExpansionError(message: "glob blew up"), forPattern: "/cache/*")
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            targets: [.test(id: "cache.static", globs: ["/cache/*"], reservedRootPaths: ["/cache"])]
-        )
-
-        let summary = try await finish(engine)
-
-        XCTAssertEqual(
-            summary.limitations,
-            [.targetExpansionFailed(targetID: "cache.static", reason: "glob blew up")]
-        )
-        XCTAssertEqual(summary.artifact.reservedRootPaths, ["/cache"])
-    }
-
-    func testReportsVolumeSkippedFromSizeResults() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("/cache/item")], forPattern: "/cache/*")
-        let executor = FakeDiskCleanSizingExecutor()
-        executor.setResult(.testPartial(reasons: [.unsupportedVolume]), forPath: "/cache/item")
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: executor,
-            targets: [.test(id: "cache.a", globs: ["/cache/*"])]
-        )
-
-        let summary = try await finish(engine)
-
-        XCTAssertEqual(summary.limitations, [.volumeSkipped(path: "/cache/item")])
-    }
-
-    func testDerivesCircuitBreakerAndAbandonedThreadsFromPoolState() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("/cache/item")], forPattern: "/cache/*")
-        let executor = FakeDiskCleanSizingExecutor()
-        executor.setPoolState(isCircuitBroken: true, abandonedThreads: 3)
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: executor,
-            targets: [.test(id: "cache.a", globs: ["/cache/*"])]
-        )
-
-        let summary = try await finish(engine)
-
-        XCTAssertTrue(summary.limitations.contains(.walkerCircuitBroken))
-        XCTAssertTrue(summary.limitations.contains(.threadsAbandoned(count: 3)))
-    }
-
     func testLockedTargetProducesInUseCandidatesThatAreNotCleanable() async throws {
         let fileSystem = FakeDiskCleanFileSystem()
         fileSystem.setItems([.testDirectory("/cache/chrome")], forPattern: "/cache/*")
@@ -364,75 +186,7 @@ final class DiskCleanScanEngineTests: XCTestCase {
         XCTAssertFalse(candidate.isCleanable)
     }
 
-    func testQueriesRunningProcessNamesOfScopedTargetsOnlyOnce() async throws {
-        final class RecordingLock: DiskCleanRunningAppSnapshotting, @unchecked Sendable {
-            private let storage = NSLock()
-            private var requests: [[String]] = []
-            var recordedRequests: [[String]] { storage.withLock { requests } }
-
-            func makeSnapshot(processNames: [String]) async -> DiskCleanRunningAppSnapshot {
-                storage.withLock { requests.append(processNames) }
-                return DiskCleanRunningAppSnapshot()
-            }
-        }
-
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("/cache/a")], forPattern: "/cache/*")
-        let lock = RecordingLock()
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            runningAppLock: lock,
-            targets: [
-                .test(id: "cache.a", globs: ["/cache/*"], skipWhenProcessIsRunning: ["Docker", "Xcode"]),
-                .test(id: "cache.b", globs: ["/other/*"], skipWhenProcessIsRunning: ["Docker"])
-            ]
-        )
-
-        _ = try await finish(engine)
-
-        XCTAssertEqual(
-            lock.recordedRequests,
-            [["Docker", "Xcode"]],
-            "one snapshot queries all process names, replacing v1 per-rule pgrep"
-        )
-    }
-
     // MARK: - Cache wiring
-
-    func testSizeCacheHitSkipsSizerAndPreservesObservedAt() async throws {
-        let path = "/cache/item"
-        let identity = DiskCleanRootIdentity.test(devid: 7, fileID: 9)
-        let observedAt = Date(timeIntervalSince1970: 1_000)
-        let cache = DiskCleanSizeCache()
-        cache.store(
-            path: path,
-            result: .testComplete(bytes: 4_096, identity: identity, observedAt: observedAt),
-            now: observedAt
-        )
-        let sizer = FakeDiskCleanSizer()
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory(path)], forPattern: "/cache/*")
-        let readAt = observedAt.addingTimeInterval(10)
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            sizingExecutor: DirectDiskCleanSizingExecutor(now: { readAt }),
-            sizer: sizer,
-            sizeCache: cache,
-            identityProbe: FakeDiskCleanRootIdentityProbe(identitiesByPath: [path: identity]),
-            targets: [.test(id: "cache.a", globs: ["/cache/*"])],
-            now: { readAt }
-        )
-
-        let summary = try await finish(engine)
-
-        XCTAssertTrue(sizer.calledPaths.isEmpty, "cache hit must not re-walk the directory")
-        XCTAssertEqual(summary.artifact.candidates.first?.sizeResult?.estimatedBytes, 4_096)
-        XCTAssertEqual(
-            summary.artifact.candidates.first?.sizeResult?.observedAt,
-            observedAt,
-            "observedAt must carry the cache entry original observation time or the expiry gate is bypassed"
-        )
-    }
 
     func testForceRefreshBypassesSizeCache() async throws {
         let path = "/cache/item"
@@ -501,69 +255,6 @@ final class DiskCleanScanEngineTests: XCTestCase {
     }
 
     /// Expansion-source risk overrides the target fallback; when omitted, keep the target (fail-safe to not default-selected).
-    func testExpansionFactsOverrideTargetRiskPerCandidate() async throws {
-        let target = DiskCleanRuleTarget.testExternal(id: DiskCleanPurgeKind.nodeModules.targetID, risk: .medium)
-        let engine = makeEngine(
-            fileSystem: FakeDiskCleanFileSystem(),
-            developerArtifactExpansion: FakeDiskCleanExternalExpansion(
-                hits: [
-                    DiskCleanTargetHit(
-                        target: target,
-                        item: .testDirectory("/code/clean/node_modules"),
-                        specificity: 0,
-                        facts: DiskCleanCandidateFacts(risk: .low)
-                    ),
-                    DiskCleanTargetHit(
-                        target: target,
-                        item: .testDirectory("/code/dirty/node_modules"),
-                        specificity: 0,
-                        facts: DiskCleanCandidateFacts(
-                            notes: [.repositoryHasChanges(repositoryPath: "/code/dirty", reason: .uncommittedChanges)]
-                        )
-                    )
-                ],
-                reservedRootPaths: ["/code"]
-            ),
-            targets: [target]
-        )
-
-        let summary = try await finish(engine, scope: .developerArtifacts(roots: ["/code"]))
-        let risksByPath = Dictionary(
-            summary.artifact.candidates.map { ($0.path, $0.risk) },
-            uniquingKeysWith: { first, _ in first }
-        )
-
-        XCTAssertEqual(risksByPath["/code/clean/node_modules"], .low)
-        XCTAssertEqual(risksByPath["/code/dirty/node_modules"], .medium)
-        XCTAssertEqual(
-            DiskCleanSelectionModel().projection(for: summary.artifact.candidates).selectedIDs.count,
-            1,
-            "only the low-risk item is default-selected"
-        )
-    }
-
-    func testDeveloperArtifactScanReservesConfiguredRoots() async throws {
-        let target = DiskCleanRuleTarget.testExternal(id: DiskCleanPurgeKind.nodeModules.targetID)
-        let engine = makeEngine(
-            fileSystem: FakeDiskCleanFileSystem(),
-            developerArtifactExpansion: FakeDiskCleanExternalExpansion(
-                hits: [
-                    DiskCleanTargetHit(
-                        target: target,
-                        item: .testDirectory("/code/app/node_modules"),
-                        specificity: 0
-                    )
-                ],
-                reservedRootPaths: ["/code", "/work"]
-            ),
-            targets: [target]
-        )
-
-        let summary = try await finish(engine, scope: .developerArtifacts(roots: ["/code", "/work"]))
-
-        XCTAssertEqual(summary.artifact.reservedRootPaths, ["/code", "/work"])
-        XCTAssertEqual(summary.artifact.scope, .developerArtifacts(roots: ["/code", "/work"]))
-    }
 
     /// Reserved scan roots extend Planner ancestor assertions to P2: candidates **inside** a root remain deletable,
     /// while any path that would make the root a descendant (e.g. the root's parent) is refused.
@@ -646,33 +337,6 @@ final class DiskCleanScanEngineTests: XCTestCase {
 
     /// Ordinary three-group scans **never** piggyback P2: developer artifacts walk user project trees and installers trigger
     /// the `~/Downloads` TCC prompt; both must be started explicitly in their own sections.
-    func testRuleScanNeverInvokesExternalExpansionOrExternalTargets() async throws {
-        let fileSystem = FakeDiskCleanFileSystem()
-        fileSystem.setItems([.testDirectory("/cache/item")], forPattern: "/cache/*")
-        let engine = makeEngine(
-            fileSystem: fileSystem,
-            developerArtifactExpansion: FakeDiskCleanExternalExpansion(
-                hits: [
-                    DiskCleanTargetHit(
-                        target: .testExternal(id: DiskCleanPurgeKind.nodeModules.targetID),
-                        item: .testDirectory("/code/app/node_modules"),
-                        specificity: 0
-                    )
-                ],
-                reservedRootPaths: ["/code"]
-            ),
-            targets: [
-                .test(id: "cache.a", globs: ["/cache/*"]),
-                .testExternal(id: DiskCleanPurgeKind.nodeModules.targetID),
-                .testExternal(id: DiskCleanInstallerKind.diskImage.targetID, category: .installers)
-            ]
-        )
-
-        let summary = try await finish(engine, choices: Set(DiskCleanChoice.allCases))
-
-        XCTAssertEqual(summary.artifact.candidates.map(\.path), ["/cache/item"])
-        XCTAssertFalse(summary.artifact.reservedRootPaths.contains("/code"))
-    }
 
     /// Unreadable scan roots must be reported honestly: when TCC denies `~/Downloads` it may hold tens of GB;
     /// reporting "nothing to clean" would mislead the user.

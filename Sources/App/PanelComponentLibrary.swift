@@ -386,6 +386,7 @@ private struct PanelComponentLibraryPreview: View {
                 measuredHeight = metrics.itemHeight(forSpanHeight: span)
             }) else { snapshot = .unavailable; return }
             // A static bitmap excludes plugin controls from keyboard focus and ongoing preview updates.
+            @MainActor
             func rootView(_ size: CGSize) -> AnyView {
                 AnyView(content
                     .environment(\.menuBarPanelTheme, theme)

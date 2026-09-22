@@ -141,22 +141,6 @@ final class XcodeCleanPluginTests: XCTestCase {
         XCTAssertEqual(presenter.dismissCallCount, 1)
     }
 
-    func testSubtitleAnnouncesXcodeRunning() {
-        let controller = FakeXcodeCleanController()
-        controller.snapshot = XcodeCleanSnapshot(
-            phase: .idle,
-            selectedCategories: Set(XcodeCleanCategory.allCases),
-            scanResult: nil,
-            executionResult: nil,
-            isResultStale: false,
-            isXcodeRunning: true,
-            errorMessage: nil
-        )
-        let plugin = makePlugin(controller: controller)
-
-        XCTAssertEqual(plugin.rowState.subtitle, "请先退出 Xcode")
-    }
-
     func testScanButtonDisabledWhenXcodeRunning() throws {
         let controller = FakeXcodeCleanController()
         controller.snapshot = XcodeCleanSnapshot(

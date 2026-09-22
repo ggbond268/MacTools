@@ -442,6 +442,8 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
     private func waitForRestore(_ id: String, window: AXUIElement, attempts: Int,
                                 cancellation: WindowSwitcherActionCancellation,
                                 continuation: CheckedContinuation<WindowSwitcherActionResult, Never>) {
+        // This handle stays on the worker's serial queue across restore polls.
+        nonisolated(unsafe) let window = window
         queue.asyncAfter(deadline: .now() + 0.1) { [self] in
             guard !cancellation.isCancelled else { continuation.resume(returning: .cancelled); return }
             guard !stopped else { continuation.resume(returning: .unavailable); return }

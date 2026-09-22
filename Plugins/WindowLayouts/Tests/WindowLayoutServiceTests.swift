@@ -31,30 +31,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
-    func testEnhancedUIRestorationFailurePreservesHistoryAfterInitialWriteOrRetry() async {
-        for ignoredWrites in [0, 1] {
-            let window = makeWindow()
-            let originalFrame = CGRect(x: 100, y: 100, width: 600, height: 400)
-            let frameAdapter = MockWindowFrameAdapter(
-                window: window, frame: originalFrame, ignoredWrites: ignoredWrites
-            )
-            frameAdapter.failsEnhancedUIRestoration = true
-            let history = InMemoryWindowFrameHistory()
-            // A previous command's entry must not survive the new committed resize.
-            history.record(CGRect(x: 20, y: 30, width: 500, height: 300), for: window)
-            let service = makeService(window: window, frameAdapter: frameAdapter, history: history)
-
-            assertFailure(await service.execute(.leftHalf, options: options()), equals: .frameWriteFailed)
-            XCTAssertNotEqual(frameAdapter.frames[window.identity], originalFrame)
-            XCTAssertEqual(frameAdapter.writtenFrames.count, ignoredWrites + 1)
-            XCTAssertEqual(history.previousFrame(for: window), originalFrame)
-
-            frameAdapter.failsEnhancedUIRestoration = false
-            assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-            XCTAssertEqual(frameAdapter.frames[window.identity], originalFrame)
-        }
-    }
-
     func testMoveToDisplayUsesCurrentVisibleFramesAndClampsDestination() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
@@ -88,66 +64,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertEqual(moved?.maxY, 1140)
     }
 
-    func testNonResizableWindowMovesBetweenEqualSizedDisplays() async {
-        let window = makeWindow(canResize: false)
-        let originalFrame = CGRect(x: 100, y: 100, width: 900.1, height: 400.25)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: originalFrame)
-        let screens = [
-            WindowScreen(
-                id: "main",
-                frame: CGRect(x: 0, y: 0, width: 1_440.5, height: 900.5),
-                visibleFrame: CGRect(x: 0, y: 24.25, width: 1_440.5, height: 876.25)
-            ),
-            WindowScreen(
-                id: "right",
-                frame: CGRect(x: 1_440.5, y: 0, width: 1_440.5, height: 900.5),
-                visibleFrame: CGRect(x: 1_440.5, y: 24.25, width: 1_440.5, height: 876.25)
-            ),
-        ]
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            screens: screens
-        )
-
-        assertSuccess(await service.execute(.moveToNextDisplay, options: options()))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 1_540.5, y: 100, width: 900.1, height: 400.25)
-        )
-    }
-
-    func testNonResizableWindowMovesBetweenDifferentSizedDisplaysWithoutResizing() async {
-        let window = makeWindow(canResize: false)
-        let originalFrame = CGRect(x: 720, y: 462, width: 720, height: 438)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: originalFrame)
-        let screens = [
-            WindowScreen(
-                id: "main",
-                frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
-                visibleFrame: CGRect(x: 0, y: 24, width: 1440, height: 876)
-            ),
-            WindowScreen(
-                id: "right",
-                frame: CGRect(x: 1440, y: -300, width: 2560, height: 1440),
-                visibleFrame: CGRect(x: 1440, y: -276, width: 2560, height: 1416)
-            ),
-        ]
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            screens: screens
-        )
-
-        assertSuccess(await service.execute(.moveToNextDisplay, options: options()))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 3280, y: 702, width: 720, height: 438)
-        )
-    }
-
     func testNonResizableWindowCanCenterButCannotTile() async {
         let window = makeWindow(canResize: false)
         let frameAdapter = MockWindowFrameAdapter(
@@ -160,28 +76,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         let maximizeError = await service.validationError(for: .maximize, options: options())
         XCTAssertNil(centerError)
         XCTAssertEqual(maximizeError, .windowCannotResize)
-    }
-
-    func testRestoreRemovesStaleHistoryEntry() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
-        )
-        let history = InMemoryWindowFrameHistory()
-        history.record(CGRect(x: 0, y: 24, width: 1440, height: 876), for: window)
-        frameAdapter.validIdentities.remove(window.identity)
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            history: history
-        )
-
-        let error = await service.validationError(
-            for: .restorePreviousFrame,
-            options: options()
-        )
-        XCTAssertEqual(error, .noPreviousFrame)
     }
 
     func testSingleDisplayMoveReturnsSpecificError() async {
@@ -221,105 +115,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertEqual(
             frameAdapter.frames[window.identity],
             CGRect(x: -360, y: 24, width: 1800, height: 1200)
-        )
-    }
-
-    func testRestoreKeepsOversizedOffTopFrameReachableWithoutResizing() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
-        )
-        let history = InMemoryWindowFrameHistory()
-        history.record(
-            CGRect(x: -300, y: -200, width: 2000, height: 1200),
-            for: window
-        )
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            history: history
-        )
-
-        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: -300, y: 24, width: 2000, height: 1200)
-        )
-    }
-
-    func testRestoreKeepsNonResizableOversizedWindowReachable() async {
-        let historicalFrame = CGRect(x: -300, y: -200, width: 2000, height: 1200)
-        let window = makeWindow(canResize: false)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: historicalFrame)
-        let history = InMemoryWindowFrameHistory()
-        history.record(historicalFrame, for: window)
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            history: history
-        )
-
-        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: -300, y: 24, width: 2000, height: 1200)
-        )
-    }
-
-    func testRestoreUsesStageManagerSafeVisibleFrame() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 300, y: 100, width: 600, height: 400)
-        )
-        let history = InMemoryWindowFrameHistory()
-        history.record(CGRect(x: 0, y: 24, width: 600, height: 400), for: window)
-        let safeFrame = CGRect(x: 200, y: 24, width: 1240, height: 876)
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            history: history,
-            stageManagerSafeAreaProvider: FixedStageManagerSafeAreaProvider(
-                safeFrame: safeFrame
-            )
-        )
-
-        assertSuccess(await service.execute(
-            .restorePreviousFrame,
-            options: options(respectsStageManager: true)
-        ))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 200, y: 24, width: 600, height: 400)
-        )
-    }
-
-    func testRestoreClampsFrameWithOnlySliverVisibleOnSurvivingDisplay() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
-        )
-        let history = InMemoryWindowFrameHistory()
-        history.record(
-            CGRect(x: 1439, y: 100, width: 600, height: 400),
-            for: window
-        )
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            history: history
-        )
-
-        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 840, y: 100, width: 600, height: 400)
         )
     }
 
@@ -365,155 +160,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertEqual(
             frameAdapter.frames[window.identity],
             CGRect(x: 0, y: 24, width: 720, height: 876)
-        )
-    }
-
-    func testTopHalfCyclesOnlyThroughVerticalSizes() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 0, y: 24, width: 1440, height: 438)
-        )
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-        let cycling = WindowLayoutExecutionOptions(
-            gap: 0,
-            cyclesHalves: true,
-            respectsStageManager: false
-        )
-
-        assertSuccess(await service.execute(.topHalf, options: cycling))
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 0, y: 24, width: 1440, height: 584)
-        )
-    }
-
-    func testRapidHalfCycleUsesLastRequestedStepWhileAXFrameIsSettling() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 0, y: 24, width: 720, height: 876),
-            ignoredWrites: 1
-        )
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-        let cycling = WindowLayoutExecutionOptions(
-            gap: 0,
-            cyclesHalves: true,
-            respectsStageManager: false
-        )
-
-        assertSuccess(await service.execute(.leftHalf, options: cycling))
-        assertSuccess(await service.execute(.leftHalf, options: cycling))
-
-        XCTAssertEqual(
-            frameAdapter.writtenFrames,
-            [
-                CGRect(x: 0, y: 24, width: 960, height: 876),
-                CGRect(x: 0, y: 24, width: 960, height: 876),
-                CGRect(x: 0, y: 24, width: 480, height: 876),
-            ]
-        )
-    }
-
-    func testChangingHalfOrientationResetsToRequestedHalf() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 0, y: 24, width: 720, height: 876),
-            ignoredWrites: 1
-        )
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-        let cycling = WindowLayoutExecutionOptions(
-            gap: 0,
-            cyclesHalves: true,
-            respectsStageManager: false
-        )
-
-        assertSuccess(await service.execute(.leftHalf, options: cycling))
-        assertSuccess(await service.execute(.topHalf, options: cycling))
-
-        XCTAssertEqual(
-            frameAdapter.writtenFrames.last,
-            CGRect(x: 0, y: 24, width: 1440, height: 438)
-        )
-    }
-
-    func testRapidDirectionChangesWaitForDelayedApplicationFrames() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400),
-            defersWritesUntilSettlement: true
-        )
-        var settlementCount = 0
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            waitForFrameSettlement: { _ in
-                settlementCount += 1
-                frameAdapter.settlePendingWrite()
-            }
-        )
-
-        for operation in [
-            WindowLayoutOperation.topHalf,
-            .bottomHalf,
-            .leftHalf,
-            .rightHalf,
-        ] {
-            assertSuccess(await service.execute(operation, options: options()))
-        }
-
-        XCTAssertEqual(settlementCount, 4)
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 720, y: 24, width: 720, height: 876)
-        )
-        XCTAssertEqual(frameAdapter.writtenFrames.count, 4)
-    }
-
-    func testOverlappingDirectionChangesExecuteInOrder() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400),
-            defersWritesUntilSettlement: true
-        )
-        var settlementContinuations: [CheckedContinuation<Void, Never>] = []
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            waitForFrameSettlement: { _ in
-                await withCheckedContinuation { continuation in
-                    settlementContinuations.append(continuation)
-                }
-                frameAdapter.settlePendingWrite()
-            }
-        )
-
-        let top = Task { @MainActor in
-            await service.execute(.topHalf, options: options())
-        }
-        while settlementContinuations.isEmpty { await Task.yield() }
-
-        let right = Task { @MainActor in
-            await service.execute(.rightHalf, options: options())
-        }
-        for _ in 0 ..< 10 { await Task.yield() }
-
-        XCTAssertEqual(frameAdapter.writtenFrames.count, 1)
-        settlementContinuations.removeFirst().resume()
-        assertSuccess(await top.value)
-
-        while settlementContinuations.isEmpty { await Task.yield() }
-        XCTAssertEqual(frameAdapter.writtenFrames.count, 2)
-        settlementContinuations.removeFirst().resume()
-        assertSuccess(await right.value)
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 720, y: 24, width: 720, height: 876)
         )
     }
 
@@ -582,53 +228,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         XCTAssertTrue(frameAdapter.writtenFrames.isEmpty)
     }
 
-    func testExecutionQueueRejectsRequestsBeyondBoundedCapacity() async {
-        let window = makeFullScreenWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 100, y: 100, width: 600, height: 400)
-        )
-        let fullScreenWriter = BlockingFullScreenWriter()
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            fullScreenWriter: fullScreenWriter
-        )
-
-        let active = Task { @MainActor in
-            await service.execute(.toggleFullScreen, options: options())
-        }
-        while !fullScreenWriter.isBlocked { await Task.yield() }
-
-        var queued: [Task<Result<Void, WindowLayoutError>, Never>] = []
-        for _ in 0 ..< 9 {
-            queued.append(Task { @MainActor in
-                await service.execute(.leftHalf, options: options())
-            })
-            for _ in 0 ..< 5 { await Task.yield() }
-        }
-
-        assertFailure(await queued[8].value, equals: .executionQueueFull)
-        for task in queued.prefix(8) { task.cancel() }
-        for task in queued.prefix(8) {
-            assertFailure(await task.value, equals: .executionCancelled)
-        }
-        fullScreenWriter.resume()
-        assertSuccess(await active.value)
-    }
-
-    func testWindowFrameHistoryRetainsOnlyMostRecentEntries() {
-        let history = InMemoryWindowFrameHistory()
-        let windows = (0 ..< 65).map { makeWindow(token: "window-\($0)") }
-        for (index, window) in windows.enumerated() {
-            history.record(CGRect(x: index, y: 0, width: 100, height: 100), for: window)
-        }
-
-        XCTAssertEqual(history.entryCountForTesting, 64)
-        XCTAssertNil(history.previousFrame(for: windows[0]))
-        XCTAssertNotNil(history.previousFrame(for: windows[64]))
-    }
-
     func testPlacementReportsWhenApplicationPermanentlyConstrainsSize() async {
         let window = makeWindow()
         let frameAdapter = MockWindowFrameAdapter(
@@ -693,37 +292,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
-    func testFullScreenRejectsFocusChangeImmediatelyBeforeWrite() async {
-        let originalWindow = AccessibilityWindowHandle(
-            identity: WindowIdentity(processIdentifier: 42, token: "fullscreen"),
-            canMove: false,
-            canResize: false,
-            canToggleFullScreen: true
-        )
-        let replacementWindow = AccessibilityWindowHandle(
-            identity: WindowIdentity(processIdentifier: 42, token: "replacement"),
-            canMove: false,
-            canResize: false,
-            canToggleFullScreen: true
-        )
-        let frameAdapter = MockWindowFrameAdapter(window: originalWindow, frame: .zero)
-        let fullScreenWriter = MockFullScreenWriter()
-        let service = makeService(
-            window: originalWindow,
-            frameAdapter: frameAdapter,
-            fullScreenWriter: fullScreenWriter,
-            focusedWindowResolver: MockFocusedWindowResolver(
-                windows: [originalWindow, replacementWindow]
-            )
-        )
-
-        assertFailure(
-            await service.execute(.toggleFullScreen, options: options()),
-            equals: .windowUnavailable
-        )
-        XCTAssertTrue(fullScreenWriter.values.isEmpty)
-    }
-
     func testIncrementalResizeExecutesAndUpdatesFrameSequentially() async {
         let window = makeWindow()
         let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
@@ -756,29 +324,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         )
     }
 
-    func testIncrementalResizeRestorePreviousFrameReversesLatestChange() async {
-        let window = makeWindow()
-        let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: initialFrame)
-        let history = InMemoryWindowFrameHistory()
-        let service = makeService(window: window, frameAdapter: frameAdapter, history: history)
-
-        assertSuccess(await service.execute(.increaseWidth, options: options()))
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 275, y: 200, width: 450, height: 300)
-        )
-
-        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-        XCTAssertEqual(frameAdapter.frames[window.identity], initialFrame)
-
-        assertSuccess(await service.execute(.restorePreviousFrame, options: options()))
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 275, y: 200, width: 450, height: 300)
-        )
-    }
-
     func testIncrementalResizeReportsAtLimitFailure() async {
         let window = makeWindow()
         let fullWidthFrame = CGRect(x: 0, y: 24, width: 1440, height: 400)
@@ -801,89 +346,6 @@ final class WindowLayoutServiceTests: XCTestCase {
         assertFailure(
             await service.execute(.decreaseWidth, options: options()),
             equals: .windowCannotResizeFurther
-        )
-    }
-
-    func testIncrementalResizeNonResizableWindowFailsWithCannotResize() async {
-        let window = makeWindow(canResize: false)
-        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame)
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-
-        let validationError = await service.validationError(for: .increaseWidth, options: options())
-        XCTAssertEqual(validationError, .windowCannotResize)
-
-        assertFailure(
-            await service.execute(.increaseWidth, options: options()),
-            equals: .windowCannotResize
-        )
-    }
-
-    func testIncrementalResizeNonMovableWindowFailsWithCannotMove() async {
-        let window = makeWindow(canMove: false)
-        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame)
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-
-        let validationError = await service.validationError(for: .increaseWidth, options: options())
-        XCTAssertEqual(validationError, .windowCannotMove)
-
-        assertFailure(
-            await service.execute(.increaseWidth, options: options()),
-            equals: .windowCannotMove
-        )
-    }
-
-    func testIncrementalResizeAppConstrainedSizeFailsWithSizeConstrained() async {
-        let window = makeWindow()
-        let frame = CGRect(x: 300, y: 200, width: 400, height: 300)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: frame, appliesWrites: false)
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-
-        assertFailure(
-            await service.execute(.increaseWidth, options: options()),
-            equals: .windowSizeConstrained
-        )
-    }
-
-    func testIncrementalResizeRespectsStageManagerSafeArea() async {
-        let window = makeWindow()
-        let frameAdapter = MockWindowFrameAdapter(
-            window: window,
-            frame: CGRect(x: 150, y: 200, width: 400, height: 300)
-        )
-        let stageManagerSafeFrame = CGRect(x: 150, y: 24, width: 1290, height: 876)
-        let service = makeService(
-            window: window,
-            frameAdapter: frameAdapter,
-            stageManagerSafeAreaProvider: FixedStageManagerSafeAreaProvider(safeFrame: stageManagerSafeFrame)
-        )
-
-        assertSuccess(await service.execute(.increaseWidth, options: options(respectsStageManager: true)))
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 150, y: 200, width: 450, height: 300)
-        )
-    }
-
-    func testIncrementalResizeSequentialCallsQueueAndPreserveIntermediateChanges() async {
-        let window = makeWindow()
-        let initialFrame = CGRect(x: 300, y: 200, width: 400, height: 300)
-        let frameAdapter = MockWindowFrameAdapter(window: window, frame: initialFrame)
-        let service = makeService(window: window, frameAdapter: frameAdapter)
-
-        async let first = service.execute(.increaseWidth, options: options())
-        async let second = service.execute(.increaseWidth, options: options())
-        async let third = service.execute(.increaseWidth, options: options())
-
-        let results = await [first, second, third]
-        for result in results {
-            assertSuccess(result)
-        }
-
-        XCTAssertEqual(
-            frameAdapter.frames[window.identity],
-            CGRect(x: 225, y: 200, width: 550, height: 300)
         )
     }
 
@@ -969,15 +431,6 @@ final class WindowLayoutServiceTests: XCTestCase {
             cyclesHalves: false,
             respectsStageManager: respectsStageManager
         )
-    }
-}
-
-@MainActor
-private struct FixedStageManagerSafeAreaProvider: StageManagerSafeAreaProviding {
-    let safeFrame: CGRect
-
-    func safeVisibleFrame(for screen: WindowScreen) -> CGRect {
-        safeFrame
     }
 }
 

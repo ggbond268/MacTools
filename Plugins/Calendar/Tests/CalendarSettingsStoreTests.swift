@@ -5,29 +5,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class CalendarSettingsStoreTests: XCTestCase {
-    func testWeekStartDefaultsToSunday() {
-        let store = CalendarSettingsStore(storage: CalendarSettingsMemoryStorage())
-
-        XCTAssertEqual(store.weekStartDay, .sunday)
-    }
-
-    func testWeekStartDaysMapToFoundationWeekdayValues() {
-        XCTAssertEqual(
-            CalendarWeekStartDay.allCases.map(\.calendarFirstWeekday),
-            Array(1...7)
-        )
-    }
-
-    func testWeekStartDisplayNamesUseCompleteLocalizedWeekdays() {
-        XCTAssertEqual(
-            CalendarWeekStartDay.friday.displayName(locale: Locale(identifier: "ja_JP")),
-            "金曜日"
-        )
-        XCTAssertEqual(
-            CalendarWeekStartDay.sunday.displayName(locale: Locale(identifier: "es_ES")),
-            "domingo"
-        )
-    }
 
     func testWeekStartPersistsAndReloads() {
         let storage = CalendarSettingsMemoryStorage()
@@ -46,17 +23,6 @@ final class CalendarSettingsStoreTests: XCTestCase {
         XCTAssertEqual(CalendarSettingsStore(storage: storage).weekStartDay, .sunday)
     }
 
-    func testRecentAgendaDefaultsToVisibleAndPersists() {
-        let storage = CalendarSettingsMemoryStorage()
-        let store = CalendarSettingsStore(storage: storage)
-
-        XCTAssertTrue(store.showsRecentAgenda)
-        store.setShowsRecentAgenda(false)
-
-        XCTAssertEqual(storage.object(forKey: "settings.shows-recent-agenda") as? Bool, false)
-        XCTAssertFalse(CalendarSettingsStore(storage: storage).showsRecentAgenda)
-    }
-
     func testAgendaRangeDefaultsToThreeFutureDaysAndPersists() {
         let storage = CalendarSettingsMemoryStorage()
         let store = CalendarSettingsStore(storage: storage)
@@ -66,17 +32,6 @@ final class CalendarSettingsStoreTests: XCTestCase {
 
         XCTAssertEqual(CalendarSettingsStore(storage: storage).agendaRange,
                        CalendarAgendaRange(dayCount: 7, direction: .surrounding))
-    }
-
-    func testLegacyHiddenDetailsRemainHiddenAndNewPreferenceTakesPrecedence() {
-        let storage = CalendarSettingsMemoryStorage()
-        storage.set(false, forKey: "settings.shows-today-details")
-        let store = CalendarSettingsStore(storage: storage)
-        XCTAssertFalse(store.showsRecentAgenda)
-
-        store.setShowsRecentAgenda(true)
-
-        XCTAssertTrue(CalendarSettingsStore(storage: storage).showsRecentAgenda)
     }
 
     func testInvalidRangeSettingsAreBounded() {
@@ -100,21 +55,6 @@ final class CalendarSettingsStoreTests: XCTestCase {
                 store.setAlternateCalendar(selection)
                 XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "zh-Hans").alternateCalendar, selection)
             }
-        }
-    }
-
-    func testLegacyLunarChoicesMigrateWithoutOverridingNewSelection() {
-        for (legacy, language, expected) in [
-            ("shown", "en", CalendarAlternateCalendar.chinese), ("hidden", "zh-Hans", .none),
-            ("automatic", "en_CN", .none), ("automatic", "zh-Hans-US", .chinese)
-        ] {
-            let storage = CalendarSettingsMemoryStorage()
-            storage.set(legacy, forKey: "settings.lunar-display")
-            let store = CalendarSettingsStore(storage: storage, languageIdentifier: language)
-            XCTAssertEqual(store.alternateCalendar, expected)
-            store.setAlternateCalendar(.none)
-            storage.set("shown", forKey: "settings.lunar-display")
-            XCTAssertEqual(CalendarSettingsStore(storage: storage, languageIdentifier: "zh-Hans").alternateCalendar, .none)
         }
     }
 

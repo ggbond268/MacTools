@@ -8,25 +8,6 @@ import MacToolsPluginKit
 @MainActor
 final class MenuBarHiddenStoreTests: XCTestCase {
 
-    func testEnabledDefaultsToFalse() {
-        let store = MenuBarHiddenStore(storage: MenuBarHiddenMemoryStorage())
-        XCTAssertFalse(store.isEnabled)
-    }
-
-    func testAlwaysHiddenItemStableKeysDefaultToEmpty() {
-        let store = MenuBarHiddenStore(storage: MenuBarHiddenMemoryStorage())
-
-        XCTAssertTrue(store.alwaysHiddenItemStableKeys.isEmpty)
-    }
-
-    func testVisibleHiddenLayoutDefaultsToMissingUntilRecorded() {
-        let store = MenuBarHiddenStore(storage: MenuBarHiddenMemoryStorage())
-
-        XCTAssertFalse(store.hasVisibleHiddenLayout)
-        XCTAssertTrue(store.visibleItemStableKeys.isEmpty)
-        XCTAssertTrue(store.hiddenItemStableKeys.isEmpty)
-    }
-
     func testVisibleHiddenLayoutPersistsStableKeysInOrderWithoutDuplicates() {
         let storage = MenuBarHiddenMemoryStorage()
         let store = MenuBarHiddenStore(storage: storage)

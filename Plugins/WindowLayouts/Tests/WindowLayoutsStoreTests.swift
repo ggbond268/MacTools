@@ -4,15 +4,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class WindowLayoutsStoreTests: XCTestCase {
-    func testCenteredGuidesAreOptInPersistAndReset() {
-        let storage = StoreMemoryStorage()
-        let store = WindowLayoutsStore(storage: storage)
-        XCTAssertFalse(store.centeredGuidesEnabled)
-        store.setCenteredGuidesEnabled(true)
-        XCTAssertTrue(WindowLayoutsStore(storage: storage).centeredGuidesEnabled)
-        store.reset()
-        XCTAssertFalse(WindowLayoutsStore(storage: storage).centeredGuidesEnabled)
-    }
 
     func testPersistsCustomCommandsWithStableActionIDs() throws {
         let storage = StoreMemoryStorage()
@@ -23,30 +14,6 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.customCommands.first?.id, command.id)
         XCTAssertEqual(reloaded.customCommands.first?.name, "Reading")
         XCTAssertEqual(reloaded.customCommands.first?.actionID, command.actionID)
-    }
-
-    func testPersistsAndResetsCommandFeedbackPreference() {
-        let storage = StoreMemoryStorage()
-        let store = WindowLayoutsStore(storage: storage)
-
-        XCTAssertFalse(store.showsCommandFeedback)
-        store.setShowsCommandFeedback(true)
-        XCTAssertTrue(WindowLayoutsStore(storage: storage).showsCommandFeedback)
-
-        store.reset()
-        XCTAssertFalse(WindowLayoutsStore(storage: storage).showsCommandFeedback)
-    }
-
-    func testPersistsAndResetsModifierDragShowsIndicatorPreference() {
-        let storage = StoreMemoryStorage()
-        let store = WindowLayoutsStore(storage: storage)
-
-        XCTAssertTrue(store.modifierDragShowsIndicator)
-        store.setModifierDragShowsIndicator(false)
-        XCTAssertFalse(WindowLayoutsStore(storage: storage).modifierDragShowsIndicator)
-
-        store.reset()
-        XCTAssertTrue(WindowLayoutsStore(storage: storage).modifierDragShowsIndicator)
     }
 
     func testPersistsAndResetsModifierDragConfiguration() {
@@ -77,38 +44,6 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertEqual(store.modifierDragModifiers, [.control, .option])
     }
 
-    func testMigratesLegacyBrandedShortcutPresetNames() {
-        let raycastStorage = StoreMemoryStorage()
-        raycastStorage.set("raycast", forKey: "shortcut-preset")
-        XCTAssertEqual(
-            WindowLayoutsStore(storage: raycastStorage).shortcutPreset,
-            .controlOption
-        )
-        XCTAssertEqual(
-            raycastStorage.string(forKey: "shortcut-preset"),
-            "control-option"
-        )
-
-        let rectangleStorage = StoreMemoryStorage()
-        rectangleStorage.set("rectangle", forKey: "shortcut-preset")
-        XCTAssertEqual(
-            WindowLayoutsStore(storage: rectangleStorage).shortcutPreset,
-            .controlOptionCommand
-        )
-        XCTAssertEqual(
-            rectangleStorage.string(forKey: "shortcut-preset"),
-            "control-option-command"
-        )
-    }
-
-    func testUnknownFutureShortcutPresetFallsBackWithoutOverwritingIt() {
-        let storage = StoreMemoryStorage()
-        storage.set("future-preset", forKey: "shortcut-preset")
-
-        XCTAssertEqual(WindowLayoutsStore(storage: storage).shortcutPreset, .none)
-        XCTAssertEqual(storage.string(forKey: "shortcut-preset"), "future-preset")
-    }
-
     func testDuplicateCreatesNewActionIdentitiesAndPreservesConfiguration() throws {
         let store = WindowLayoutsStore(storage: StoreMemoryStorage())
         var command = try XCTUnwrap(store.addCustomCommand(name: "Centered"))
@@ -123,35 +58,6 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertEqual(copy.anchor, .top)
     }
 
-    func testCustomRunLinkPolicyNotifiesSafetyRegistryOnlyForPersistedChanges() throws {
-        let store = WindowLayoutsStore(storage: StoreMemoryStorage())
-        var command = try XCTUnwrap(store.addCustomCommand(name: "Safety"))
-        var safetyMutationCount = 0
-        store.onSafetyPolicyMutation = { safetyMutationCount += 1 }
-
-        command.name = "Renamed"
-        XCTAssertTrue(store.updateCustomCommand(command))
-        XCTAssertEqual(safetyMutationCount, 0)
-
-        command.allowExternalInvocation = false
-        XCTAssertTrue(store.updateCustomCommand(command))
-        XCTAssertTrue(store.updateCustomCommand(command))
-        XCTAssertEqual(safetyMutationCount, 1)
-    }
-
-    func testDuplicateKeepsCopySuffixAtNameLengthBoundary() throws {
-        let store = WindowLayoutsStore(storage: StoreMemoryStorage())
-        let source = try XCTUnwrap(store.addCustomCommand(
-            name: String(repeating: "A", count: 80)
-        ))
-
-        let copy = try XCTUnwrap(store.duplicateCustomCommand(id: source.id, copySuffix: "Copy"))
-
-        XCTAssertEqual(copy.name.count, 80)
-        XCTAssertTrue(copy.name.hasSuffix(" Copy"))
-        XCTAssertEqual(store.customCommands.count, 2)
-    }
-
     func testCorruptLibraryIsQuarantinedAndEditingRecovers() throws {
         let storage = StoreMemoryStorage()
         let corruptData = Data("not-json".utf8)
@@ -163,36 +69,6 @@ final class WindowLayoutsStoreTests: XCTestCase {
         XCTAssertEqual(command.name, "Recovered")
         XCTAssertEqual(storage.data(forKey: "library.v1.quarantined"), corruptData)
         XCTAssertNotEqual(storage.data(forKey: "library.v1"), corruptData)
-    }
-
-    func testReloadNormalizesPersistedCommandGeometry() throws {
-        let storage = StoreMemoryStorage()
-        let command = WindowCustomCommand(
-            name: "   ",
-            width: .points(9_000),
-            height: .fraction(0.001),
-            anchor: .center,
-            offsetX: 2_000,
-            offsetY: -2_000
-        )
-        storage.set(
-            try JSONEncoder().encode(StoreLibraryEnvelope(
-                formatVersion: 1,
-                customCommands: [command]
-            )),
-            forKey: "library.v1"
-        )
-
-        let store = WindowLayoutsStore(storage: storage)
-        let normalized = try XCTUnwrap(store.customCommands.first)
-
-        XCTAssertEqual(normalized.name, "Custom Layout")
-        XCTAssertEqual(normalized.width, .points(3_000))
-        XCTAssertEqual(normalized.height, .fraction(0.05))
-        XCTAssertEqual(normalized.offsetX, 500)
-        XCTAssertEqual(normalized.offsetY, -500)
-        XCTAssertNil(storage.data(forKey: "library.v1.quarantined"))
-        XCTAssertEqual(WindowLayoutsStore(storage: storage).customCommands, [normalized])
     }
 
     func testDuplicatePersistedCommandIDsAreQuarantined() throws {

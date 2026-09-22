@@ -859,6 +859,11 @@ struct ClipboardHistoryItem: Codable, Equatable, Identifiable, Sendable {
 
     var isSaved: Bool { savedMetadata != nil }
 
+    /// Latest capture or reuse, shared by presentation and inactivity expiration.
+    var lastActivityAt: Date {
+        max(capturedAt, lastUsedAt ?? capturedAt)
+    }
+
     var savedActivityAt: Date? {
         guard let savedMetadata else { return nil }
         return max(savedMetadata.updatedAt, lastUsedAt ?? .distantPast)
@@ -1062,8 +1067,8 @@ enum ClipboardHistoryExpiration: Int, CaseIterable, Identifiable, Sendable {
 struct ClipboardHistorySettings: Equatable, Sendable {
     static let maximumSupportedItemCount = 10_000
     static let defaultMaximumItemCount = 500
-    static let defaultMaximumItemByteCount = 5 * 1_024 * 1_024
-    static let defaultMaximumTotalPayloadByteCount = 64 * 1_024 * 1_024
+    static let defaultMaximumItemByteCount = 30 * 1_024 * 1_024
+    static let defaultMaximumTotalPayloadByteCount = 512 * 1_024 * 1_024
     static let maximumSupportedTotalPayloadByteCount = 5 * 1_024 * 1_024 * 1_024
 
     var isPaused: Bool
@@ -1249,7 +1254,7 @@ struct ClipboardRetentionResult: Equatable, Sendable {
 }
 
 enum ClipboardRetentionPolicy {
-    // Kept as the default and legacy single-file migration ceiling.
+    // Legacy single-file storage ceiling, independent of the configurable history capacity.
     static let maximumTotalPayloadByteCount = 64 * 1_024 * 1_024
 
     static func prune(
@@ -1290,7 +1295,7 @@ enum ClipboardRetentionPolicy {
             unexpired = newestFirstItems.filter {
                 protectedItemIDs.contains($0.id)
                     || shortcutRetainedItemIDs.contains($0.id)
-                    || $0.capturedAt >= cutoff
+                    || $0.lastActivityAt >= cutoff
             }
         } else {
             unexpired = newestFirstItems

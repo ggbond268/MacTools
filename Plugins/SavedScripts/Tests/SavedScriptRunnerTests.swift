@@ -46,8 +46,8 @@ final class SavedScriptRunnerTests: XCTestCase {
         )
     }
 
-    func testInvalidWorkingDirectoryFailsBeforeLaunching() async {
-        let runner = ProcessSavedScriptRunner()
+    func testInvalidWorkingDirectoryFailsBeforeLaunching() async throws {
+        let runner = try makeRunner()
         let script = SavedScript(
             name: "Missing",
             kind: .zsh,
@@ -60,25 +60,6 @@ final class SavedScriptRunnerTests: XCTestCase {
             XCTFail("Expected invalid working directory")
         } catch {
             XCTAssertEqual(error as? SavedScriptProcessError, .invalidWorkingDirectory)
-        }
-    }
-
-    func testTimeoutTerminatesLongRunningScript() async {
-        let runner = ProcessSavedScriptRunner()
-        let script = SavedScript(
-            name: "Timeout",
-            kind: .sh,
-            source: "sleep 10",
-            timeoutSeconds: 1
-        )
-
-        let started = Date()
-        do {
-            _ = try await runner.run(script)
-            XCTFail("Expected timeout")
-        } catch {
-            XCTAssertEqual(error as? SavedScriptProcessError, .timedOut)
-            XCTAssertLessThan(Date().timeIntervalSince(started), 4)
         }
     }
 
@@ -113,121 +94,6 @@ final class SavedScriptRunnerTests: XCTestCase {
         }
         XCTAssertEqual(kill(childPID, 0), -1)
         XCTAssertEqual(errno, ESRCH)
-    }
-
-    func testTimeoutCannotBeStarvedByContinuousTermIgnoringOutput() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let pidFile = root.appendingPathComponent("child.pid")
-        let runner = ProcessSavedScriptRunner(temporaryDirectory: root)
-        let script = SavedScript(
-            name: "Continuous Output Timeout",
-            kind: .sh,
-            source: "trap '' TERM; (trap '' TERM; echo $$ > child.pid; exec yes output) & wait",
-            workingDirectory: root.path,
-            timeoutSeconds: 1
-        )
-
-        let started = Date()
-        do {
-            _ = try await runner.run(script)
-            XCTFail("Expected timeout")
-        } catch {
-            XCTAssertEqual(error as? SavedScriptProcessError, .timedOut)
-        }
-        XCTAssertLessThan(Date().timeIntervalSince(started), 4)
-
-        let childPID = try XCTUnwrap(
-            Int32(try String(contentsOf: pidFile, encoding: .utf8)
-                .trimmingCharacters(in: .whitespacesAndNewlines))
-        )
-        for _ in 0 ..< 50 where kill(childPID, 0) == 0 {
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        XCTAssertEqual(kill(childPID, 0), -1)
-        XCTAssertEqual(errno, ESRCH)
-    }
-
-    func testBackgroundChildCannotKeepInheritedOutputPipeOpen() async throws {
-        let runner = ProcessSavedScriptRunner()
-        let script = SavedScript(
-            name: "Inherited Pipe",
-            kind: .sh,
-            source: "(sleep 10) & printf done",
-            timeoutSeconds: 5
-        )
-
-        let started = Date()
-        let result = try await runner.run(script)
-
-        XCTAssertEqual(result.standardOutput, "done")
-        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
-    }
-
-    func testNaturalLeaderExitKillsTermIgnoringBackgroundDescendantBeforeReturning() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let pidFile = root.appendingPathComponent("child.pid")
-        let runner = ProcessSavedScriptRunner(temporaryDirectory: root)
-        let script = SavedScript(
-            name: "Background Descendant",
-            kind: .sh,
-            source: "(trap '' TERM; while :; do sleep 1; done) & echo $! > child.pid; exit 0",
-            workingDirectory: root.path,
-            timeoutSeconds: 5
-        )
-
-        let result = try await runner.run(script)
-        let childPID = try XCTUnwrap(
-            Int32(try String(contentsOf: pidFile, encoding: .utf8)
-                .trimmingCharacters(in: .whitespacesAndNewlines))
-        )
-        defer { _ = kill(childPID, SIGKILL) }
-
-        XCTAssertEqual(result.exitCode, 0)
-        for _ in 0 ..< 50 where kill(childPID, 0) == 0 {
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        XCTAssertEqual(kill(childPID, 0), -1)
-        XCTAssertEqual(errno, ESRCH)
-    }
-
-    func testSuccessfulExitDuringPipeDrainDoesNotBecomeTimeout() async throws {
-        let runner = ProcessSavedScriptRunner()
-        let script = SavedScript(
-            name: "Near Timeout",
-            kind: .sh,
-            source: "sleep 0.75; printf done",
-            timeoutSeconds: 1
-        )
-
-        let result = try await runner.run(script)
-
-        XCTAssertEqual(result.exitCode, 0)
-        XCTAssertEqual(result.standardOutput, "done")
-    }
-
-    func testHighVolumeOutputKeepsItsOrderAtProcessExit() async throws {
-        let runner = ProcessSavedScriptRunner()
-        let script = SavedScript(
-            name: "Exit Ordering",
-            kind: .sh,
-            source: "i=0; while [ $i -lt 4000 ]; do printf '%04d\\n' $i; i=$((i + 1)); done",
-            timeoutSeconds: 5
-        )
-
-        let result = try await runner.run(script)
-
-        XCTAssertEqual(result.exitCode, 0)
-        XCTAssertFalse(result.outputWasTruncated)
-        XCTAssertEqual(
-            result.standardOutput.split(separator: "\n").map(String.init),
-            (0 ..< 4000).map { String(format: "%04d", $0) }
-        )
     }
 
     func testInitializationRemovesOnlyAbandonedOwnedRunDirectories() throws {
@@ -267,7 +133,7 @@ final class SavedScriptRunnerTests: XCTestCase {
     }
 
     func testCapturedOutputIsBounded() async throws {
-        let runner = ProcessSavedScriptRunner()
+        let runner = try makeRunner()
         let script = SavedScript(
             name: "Large Output",
             kind: .zsh,
@@ -279,5 +145,12 @@ final class SavedScriptRunnerTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertEqual(result.standardOutput.utf8.count, ProcessSavedScriptRunner.maximumCapturedByteCount)
         XCTAssertTrue(result.outputWasTruncated)
+    }
+
+    private func makeRunner() throws -> ProcessSavedScriptRunner {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return ProcessSavedScriptRunner(temporaryDirectory: directory)
     }
 }

@@ -5,12 +5,6 @@ import MacToolsPluginKit
 import QuickLookThumbnailing
 import SwiftUI
 
-@MainActor
-private var selectedRowTextColor: Color {
-    // This is the list/table foreground paired with selectedContentBackgroundColor.
-    PluginPaletteColors.selectedText
-}
-
 private struct ClipboardItemShortcutRequest: Identifiable {
     let itemID: UUID
     var id: UUID { itemID }
@@ -877,7 +871,10 @@ final class ClipboardHistoryPanelModel: ObservableObject {
     @Published private(set) var selectedItemIDs: [UUID] = []
     @Published private(set) var selectionLimitReachedRevision: UInt = 0
     @Published var isActionPalettePresented = false
-    @Published private(set) var visibleItems: [ClipboardHistoryItem] = []
+    @Published private(set) var visibleItems: [ClipboardHistoryItem] = [] {
+        didSet { visibleItemsRevision &+= 1 }
+    }
+    private(set) var visibleItemsRevision: UInt64 = 0
     @Published private(set) var visibleSavedPresentationItemIDs: Set<UUID> = []
     @Published private(set) var visibleSavedItemIDs: [UUID] = []
     @Published private(set) var hasMoreResults = false
@@ -948,7 +945,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         let availableClipItemIDs: Set<UUID>
         let availableSnippetIDs: Set<UUID>
         let savedClipIDs: Set<UUID>
-        let newestHistoryItemID: UUID?
         let scopeModes: [ClipboardPanelMode]
         let contentFilters: [ClipboardHistoryContentFilter]
         let semanticFilters: [ClipboardHistorySemanticFilter]
@@ -1037,6 +1033,21 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             }
         }
         refreshInitialPage()
+        let preparedQuery = ClipboardHistorySearch.PreparedQuery(query)
+        let changesResults = structural || changes.contains {
+            let matchedBefore = matchesCurrentSearch($0.before, query: preparedQuery)
+            let matchesAfter = matchesCurrentSearch($0.after, query: preparedQuery)
+            return matchedBefore != matchesAfter
+                || (matchesAfter && $0.before?.lastActivityAt != $0.after?.lastActivityAt)
+        }
+        // Indexed pages update synchronously. Publish their final order once instead of
+        // first publishing stale positions, then moving the same rows a second time.
+        if mode != .snippets, (isSearching || changesResults),
+           query.isEmpty, contentFilter == .all, semanticFilter == .any,
+           presentationIndex != nil {
+            scheduleSearch(debounced: false)
+            return
+        }
         let removedIDs = Set(changes.lazy.filter { $0.after == nil }.map(\.id))
         let changedByID = Dictionary(uniqueKeysWithValues: changes.compactMap { change in
             change.after.map { (change.id, $0) }
@@ -1046,10 +1057,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         }
         if immediatelyReconciled != visibleItems { visibleItems = immediatelyReconciled }
         guard mode != .snippets else { return }
-        let preparedQuery = ClipboardHistorySearch.PreparedQuery(query)
-        let changesResults = structural || changes.contains {
-            matchesCurrentSearch($0.before, query: preparedQuery) != matchesCurrentSearch($0.after, query: preparedQuery)
-        }
         if isSearching || changesResults {
             scheduleSearch(debounced: false)
         } else {
@@ -1191,7 +1198,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         visibleItems = []
         visibleSavedPresentationItemIDs = []
         hasMoreResults = false
-        selectedItemID = preparation.newestHistoryItemID
+        selectedItemID = preparation.index.page(in: mode, limit: 1).first?.item.id
         requestedScrollItemID = selectedItemID
         isMultiSelectionEnabled = false
         selectedItemIDs = []
@@ -1853,7 +1860,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             visibleSavedPresentationItemIDs = []
             hasMoreResults = false
         }
-        selectedItemID = visibleItems.first?.id ?? preparation.newestHistoryItemID
+        selectedItemID = preparation.index.page(in: mode, limit: 1).first?.item.id
         requestedScrollItemID = selectedItemID
         isMultiSelectionEnabled = false
         selectedItemIDs = []
@@ -1873,8 +1880,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
         var availableClipItemIDs = Set<UUID>()
         availableClipItemIDs.reserveCapacity(items.count)
         var savedClipIDs = Set<UUID>()
-        var newestHistoryItemID: UUID?
-        var newestHistoryCaptureDate: Date?
 
         for (index, item) in items.enumerated() {
             if index.isMultiple(of: 64) {
@@ -1885,10 +1890,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             availableClipItemIDs.insert(item.id)
             if item.isInHistory {
                 historyItemCount += 1
-                if newestHistoryCaptureDate.map({ item.capturedAt > $0 }) ?? true {
-                    newestHistoryCaptureDate = item.capturedAt
-                    newestHistoryItemID = item.id
-                }
             }
             if item.isSaved { savedClipIDs.insert(item.id) }
         }
@@ -1913,7 +1914,6 @@ final class ClipboardHistoryPanelModel: ObservableObject {
             availableClipItemIDs: availableClipItemIDs,
             availableSnippetIDs: availableSnippetIDs,
             savedClipIDs: savedClipIDs,
-            newestHistoryItemID: newestHistoryItemID,
             scopeModes: index.scopeModes,
             contentFilters: index.contentFilters,
             semanticFilters: index.semanticFilters,
@@ -2032,7 +2032,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                         collector.consider(ClipboardPanelSearchCandidate(
                             item: item,
                             isSnippet: false,
-                            sortDate: item.capturedAt
+                            sortDate: item.lastActivityAt
                         ))
                     }
                     guard mode == .all || mode == .snippets else { return }
@@ -2049,7 +2049,7 @@ final class ClipboardHistoryPanelModel: ObservableObject {
                         collector.consider(ClipboardPanelSearchCandidate(
                             item: presentation,
                             isSnippet: true,
-                            sortDate: savedItem.updatedAt
+                            sortDate: savedItem.lastActivityAt
                         ))
                     }
                 }
@@ -2485,8 +2485,8 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private func beginPanelUserMovement() {
-        guard let panel, panel.isVisible, !isPositioningPanel else { return }
-        savePendingPanelPosition()
+        // The drag handle and AppKit can both announce the same movement.
+        guard let panel, panel.isVisible, !isPositioningPanel, positionSaveTask == nil else { return }
         positionTracker.beginUserMovement(
             frame: panel.frame,
             screens: ClipboardHistoryPanelScreen.currentScreens()
@@ -2587,6 +2587,13 @@ final class ClipboardHistoryPanelController: NSObject, NSWindowDelegate {
         removeKeyMonitor()
         let previousApplication = previousApplicationState.consume()
         if shouldRestore { previousApplication?.activate(options: []) }
+    }
+
+    func windowWillMove(_ notification: Notification) {
+        guard let panel, notification.object as? NSWindow === panel,
+              CGEventSource.buttonState(.combinedSessionState, button: .left)
+        else { return }
+        beginPanelUserMovement()
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -3744,6 +3751,11 @@ struct ClipboardRichTextPreviewView: View {
                                             presentation: resetID, isActive: isActive)) {
             preview = nil
             guard isActive else { return }
+            if let cached = cache?.cachedPreview(for: item) {
+                preview = cached
+                return
+            }
+            guard await ClipboardPreviewLoadPolicy.waitForSelection() else { return }
             let fallbackText = item.text
             let loadedPreview: ClipboardRichTextPreviewResult
             if let cache {
@@ -3911,6 +3923,7 @@ private struct ClipboardFilePreviewView: View {
                                             presentation: resetID, isActive: isActive)) {
             result = nil
             guard isActive else { return }
+            guard await ClipboardPreviewLoadPolicy.waitForSelection() else { return }
             let loaded = await ClipboardFilePreviewLoader.load(url: url, scale: NSScreen.main?.backingScaleFactor ?? 2)
             // Publish one result after every await; a cancelled request can never
             // overwrite a newer file's availability or loading state.
@@ -4169,7 +4182,7 @@ struct ClipboardHistoryPanelView: View {
                 ]
             )
         }
-        .onChange(of: visibleItems.map(\.id)) { _, _ in repairSelection() }
+        .onChange(of: model.visibleItemsRevision) { _, _ in repairSelection() }
         .onChange(of: model.savedEditRequestID) { _, _ in
             guard selectedSavedItem?.isSnippet == true,
                   model.actionItemIDs.count == 1 else { return }
@@ -4517,7 +4530,6 @@ struct ClipboardHistoryPanelView: View {
                             )
                         )
                     }
-
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -4837,14 +4849,23 @@ struct ClipboardHistoryPanelView: View {
                     .padding(.bottom, 8)
                 }
                 .onChange(of: model.selectedItemID, initial: true) { previousItemID, itemID in
-                    controller.releasePayloadIfReloadable(id: previousItemID)
+                    if let previousItemID {
+                        model.item(forPresentationID: previousItemID)?.discardCachedPayloadIfReloadable()
+                    }
                     guard let itemID else { return }
-                    controller.requestImageTextIndexing(id: itemID)
                     // Without an anchor, ScrollViewReader moves only enough to reveal
                     // an off-screen row and leaves already-visible clicks in place.
                     proxy.scrollTo(itemID)
                 }
-                .onChange(of: visibleItems.map(\.id)) { _, _ in
+                .task(id: ClipboardPreviewRequestID(key: model.selectedItemID,
+                    presentation: model.previewResetRevision, isActive: model.isPreviewPresentationActive)) {
+                    guard model.isPreviewPresentationActive,
+                          let item = selectedItem,
+                          item.kind == .image, !item.hasCompletedImageTextIndexing,
+                          await ClipboardPreviewLoadPolicy.waitForSelection() else { return }
+                    controller.requestImageTextIndexing(for: item)
+                }
+                .onChange(of: model.visibleItemsRevision) { _, _ in
                     guard let itemID = model.requestedScrollItemID,
                           visibleItems.contains(where: { $0.id == itemID }) else { return }
                     _ = model.consumeRequestedScrollItemID()
@@ -4875,7 +4896,6 @@ struct ClipboardHistoryPanelView: View {
         return HStack(alignment: .center, spacing: PluginPaletteMetrics.rowContentSpacing) {
             rowLeadingControl(
                 item: item,
-                isSelected: isSelected,
                 isMarked: isMarked
             )
             VStack(
@@ -4884,21 +4904,21 @@ struct ClipboardHistoryPanelView: View {
             ) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(displayTitle(item).replacingOccurrences(of: "\n", with: " "))
-                        .font(PluginSettingsTheme.Typography.rowTitle)
-                        .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)
+                        .font(.body)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if isSaved || isSavePending {
                         Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                            .foregroundStyle(.secondary)
                             .help(localization.string("saved.kind.clip", defaultValue: "Saved Item"))
                             .opacity(isSavePending ? 0.65 : 1)
                     }
                     if let badgeNumber = model.rowNumber(for: item.id, quickPasteNumber: quickPasteNumber) {
                         Text(model.isMultiSelectionEnabled ? "\(badgeNumber)" : "⌘\(badgeNumber)")
                             .font(PluginSettingsTheme.Typography.statusBadge)
-                            .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(minWidth: 24, alignment: .trailing)
                             .fixedSize(horizontal: true, vertical: false)
                     }
@@ -4911,11 +4931,11 @@ struct ClipboardHistoryPanelView: View {
                         .fixedSize()
                 }
                 .font(PluginSettingsTheme.Typography.rowDescription)
-                .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .pluginPaletteSelectableRow(isSelected: isSelected)
+        .modifier(ClipboardHistoryRowStyle(isSelected: isSelected))
         .contentShape(Rectangle())
         .simultaneousGesture(
             SpatialTapGesture(count: 1)
@@ -4999,7 +5019,6 @@ struct ClipboardHistoryPanelView: View {
     @ViewBuilder
     private func rowLeadingControl(
         item: ClipboardHistoryItem,
-        isSelected: Bool,
         isMarked: Bool
     ) -> some View {
         if model.isMultiSelectionEnabled {
@@ -5008,7 +5027,7 @@ struct ClipboardHistoryPanelView: View {
             } label: {
                 Image(systemName: isMarked ? "checkmark.square.fill" : "square")
                     .font(.body)
-                    .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
@@ -5026,7 +5045,7 @@ struct ClipboardHistoryPanelView: View {
         } else {
             Image(systemName: itemSystemImage(item))
                 .font(.body)
-                .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 36, height: 20)
                 .help(detailKindTitle(item))
                 .accessibilityLabel(detailKindTitle(item))
@@ -5191,12 +5210,10 @@ struct ClipboardHistoryPanelView: View {
                     Label(localization.format("panel.selection.shareCount", defaultValue: "Share %lld", model.actionItemIDs.count),
                         systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(ClipboardHistoryDetailActionStyle())
                 .disabled(model.actionItemIDs.isEmpty)
                 Button(localization.format("panel.selection.pasteCount", defaultValue: "Paste %lld", model.actionItemIDs.count)) {
                     performActionMenuAction(.pasteCombined)
                 }
-                .buttonStyle(ClipboardHistoryDetailActionStyle(isPrimary: true))
                 .help(selectionOrderHint)
                 .disabled(model.actionItemIDs.isEmpty)
             } else {
@@ -5206,7 +5223,6 @@ struct ClipboardHistoryPanelView: View {
                 } label: {
                     Image(systemName: "pencil")
                 }
-                .buttonStyle(ClipboardHistoryDetailActionStyle())
                 .help(localization.string("saved.edit", defaultValue: "Edit Snippet")
                     + " (" + panelShortcutText(
                         ClipboardHistoryPlugin.ShortcutID.panelEditSnippet,
@@ -5225,7 +5241,6 @@ struct ClipboardHistoryPanelView: View {
                         : "bookmark")
                         .opacity(isSavePending ? 0.65 : 1)
                 }
-                .buttonStyle(ClipboardHistoryDetailActionStyle())
                 .disabled(isSavePending)
                 .help(isSaved
                     ? localization.string("saved.remove", defaultValue: "Unsave Clip")
@@ -5242,7 +5257,6 @@ struct ClipboardHistoryPanelView: View {
             } label: {
                 Image(systemName: "square.and.arrow.up")
             }
-            .buttonStyle(ClipboardHistoryDetailActionStyle())
             .help(localization.string("share.action", defaultValue: "Share"))
             .accessibilityLabel(Text(
                 localization.string("share.action", defaultValue: "Share")
@@ -5250,26 +5264,21 @@ struct ClipboardHistoryPanelView: View {
             Button(localization.string("panel.footer.paste", defaultValue: "粘贴")) {
                 pastePanelItem(item.id, asPlainText: false)
             }
-                .buttonStyle(ClipboardHistoryDetailActionStyle(isPrimary: true))
                 .accessibilityIdentifier("mactools.clipboard-history.paste")
             }
             Button {
                 model.requestActionMenu()
             } label: {
-                Image(systemName: "ellipsis")
+                Label(localization.string("common.actions", defaultValue: "Actions"), systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
             }
-            .buttonStyle(ClipboardHistoryDetailActionStyle())
-            .overlay {
-                if model.isActionPalettePresented {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .strokeBorder(Color.accentColor, lineWidth: 1.5)
-                        .allowsHitTesting(false)
-                }
-            }
+            .buttonStyle(ClipboardHistoryDetailActionStyle(isActive: model.isActionPalettePresented))
+            .help(localization.string("common.actions", defaultValue: "Actions"))
             .accessibilityLabel(
                 localization.string("common.actions", defaultValue: "Actions")
             )
         }
+        .buttonStyle(ClipboardHistoryDetailActionStyle())
         .fixedSize()
         .disabled(model.runtimeStatus.isClearingHistory)
     }
@@ -6792,8 +6801,15 @@ struct ClipboardHistoryPanelView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .help(title)
-            .task(id: item.id) {
-                guard detailMetadataByItemID[item.id] == nil else { return }
+            .task(id: ClipboardPreviewRequestID(key: ClipboardEmbeddedPreviewKey(item),
+                presentation: model.previewResetRevision, isActive: model.isPreviewPresentationActive)) {
+                guard model.isPreviewPresentationActive, detailMetadataByItemID[item.id] == nil else { return }
+                switch item.kind {
+                case .image, .pdf, .files, .media:
+                    guard await ClipboardPreviewLoadPolicy.waitForSelection() else { return }
+                default:
+                    break
+                }
                 let metadata = await ClipboardHistoryDetailMetadataLoader.load(for: item)
                 guard !Task.isCancelled, model.selectedItemID == item.id else { return }
                 detailMetadataByItemID[item.id] = metadata
@@ -7331,11 +7347,11 @@ private struct ClipboardHistoryActionPalette: View {
                 if let shortcut = actionShortcutText(entry) {
                     Text(shortcut)
                         .font(PluginSettingsTheme.Typography.statusBadge)
-                        .foregroundStyle(isSelected ? selectedRowTextColor : Color.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .foregroundStyle(isSelected ? selectedRowTextColor : Color.primary)
-            .pluginPaletteSelectableRow(isSelected: isSelected)
+            .foregroundStyle(.primary)
+            .modifier(ClipboardHistoryRowStyle(isSelected: isSelected))
         }
         .onContinuousHover { phase in
             guard case .active = phase else { return }

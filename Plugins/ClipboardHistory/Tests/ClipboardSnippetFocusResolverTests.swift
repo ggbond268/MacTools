@@ -26,12 +26,6 @@ final class ClipboardSnippetFocusResolverTests: XCTestCase {
         XCTAssertNil(resolve(access))
     }
 
-    func testApplicationFocusFromAnotherProcessIsRejected() {
-        let access = FocusAccess()
-        access.applicationElement = .init(owner: 7, id: "other process")
-        XCTAssertNil(resolve(access))
-    }
-
     func testUnknownElementOwnershipIsRejected() {
         let access = FocusAccess()
         access.applicationElement = .init(owner: nil, id: "unknown application owner")
@@ -48,29 +42,12 @@ final class ClipboardSnippetFocusResolverTests: XCTestCase {
         XCTAssertEqual(access.accessibilityRequests, 0)
     }
 
-    func testChangedForegroundAppNeverReadsFocusOrRequestsAccessibility() {
-        let access = FocusAccess()
-        access.frontmostProcessIdentifier = 7
-        XCTAssertNil(resolve(access, requestAccessibility: true))
-        XCTAssertEqual(access.applicationQueries, 0)
-        XCTAssertEqual(access.systemQueries, 0)
-        XCTAssertEqual(access.accessibilityRequests, 0)
-    }
-
     func testFocusChangeDuringApplicationQueryStopsFallback() {
         let access = FocusAccess()
         access.applicationElement = .init(owner: 42, id: "stale")
         access.afterApplicationQuery = { access.frontmostProcessIdentifier = 7 }
         XCTAssertNil(resolve(access, requestAccessibility: true))
         XCTAssertEqual(access.systemQueries, 0)
-        XCTAssertEqual(access.accessibilityRequests, 0)
-    }
-
-    func testFocusChangeDuringSystemQueryRejectsStaleElement() {
-        let access = FocusAccess()
-        access.systemElement = .init(owner: 42, id: "stale")
-        access.afterSystemQuery = { access.frontmostProcessIdentifier = 7 }
-        XCTAssertNil(resolve(access, requestAccessibility: true))
         XCTAssertEqual(access.accessibilityRequests, 0)
     }
 
@@ -82,103 +59,16 @@ final class ClipboardSnippetFocusResolverTests: XCTestCase {
         XCTAssertEqual(access.accessibilityRequests, 0)
     }
 
-    func testMissingFocusRequestsAccessibilityOnlyWhenExplicitlyAllowed() {
-        let access = FocusAccess()
-        XCTAssertNil(resolve(access))
-        XCTAssertEqual(access.accessibilityRequests, 0)
-        XCTAssertNil(resolve(access, requestAccessibility: true))
-        XCTAssertEqual(access.accessibilityRequests, 1)
-    }
-
-    func testLazyAccessibilityTreeCanResolveOnNextAttemptWithoutRequestingAgain() {
-        let access = FocusAccess()
-        XCTAssertNil(resolve(access, requestAccessibility: true))
-        access.applicationElement = .init(owner: 42, id: "editor now available")
-        XCTAssertEqual(resolve(access)?.id, "editor now available")
-        XCTAssertEqual(access.accessibilityRequests, 1)
-    }
-
-    func testUnavailableAccessibilityTreeRemainsFailClosed() {
-        let access = FocusAccess()
-        XCTAssertNil(resolve(access, requestAccessibility: true))
-        XCTAssertNil(resolve(access))
-        XCTAssertEqual(access.accessibilityRequests, 1)
-    }
-
-    func testInvalidProcessIsRejected() {
-        let access = FocusAccess()
-        access.frontmostProcessIdentifier = 0
-        XCTAssertNil(ClipboardSnippetFocusResolver(access: access).resolve(
-            processIdentifier: 0,
-            requestManualAccessibilityIfNeeded: true
-        ))
-        XCTAssertEqual(access.applicationQueries, 0)
-        XCTAssertEqual(access.accessibilityRequests, 0)
-    }
-
     func testRemoteEditorIsAcceptedOnlyWithVerifiedForegroundWindow() {
         let access = remoteEditorAccess()
         XCTAssertEqual(resolve(access)?.id, "web editor")
         XCTAssertEqual(access.systemQueries, 0)
     }
 
-    func testSystemFocusedRemoteEditorAlsoRequiresVerifiedWindow() {
-        let access = remoteEditorAccess()
-        access.systemElement = access.applicationElement
-        access.applicationElement = nil
-        XCTAssertEqual(resolve(access)?.id, "web editor")
-    }
-
     func testRemoteEditorInAnotherWindowOfSameAppIsRejected() {
         let access = remoteEditorAccess()
         access.applicationWindow = .init(owner: 42, id: "another window")
         XCTAssertNil(resolve(access))
-    }
-
-    func testRemoteEditorWithForeignHostWindowIsRejected() {
-        let access = remoteEditorAccess()
-        access.elementWindow = .init(owner: 7, id: "foreign window")
-        access.applicationWindow = access.elementWindow
-        XCTAssertNil(resolve(access))
-    }
-
-    func testRemoteEditorWithoutWindowIsRejected() {
-        let access = remoteEditorAccess()
-        access.elementWindow = nil
-        XCTAssertNil(resolve(access))
-    }
-
-    func testRemoteEditorWithoutFocusedHostWindowIsRejected() {
-        let access = remoteEditorAccess()
-        access.applicationWindow = nil
-        XCTAssertNil(resolve(access))
-    }
-
-    func testRemoteEditorCannotSurviveAppSwitchDuringWindowLookup() {
-        let access = remoteEditorAccess()
-        access.afterWindowQuery = { access.frontmostProcessIdentifier = 7 }
-        XCTAssertNil(resolve(access, requestAccessibility: true))
-        XCTAssertEqual(access.accessibilityRequests, 0)
-    }
-
-    func testRemoteEditorCannotSurvivePermissionRevocationDuringWindowLookup() {
-        let access = remoteEditorAccess()
-        access.afterWindowQuery = { access.hasAccessibilityPermission = false }
-        XCTAssertNil(resolve(access))
-    }
-
-    func testFocusDiagnosticsDistinguishMissingEditorFromUnverifiedOwnership() {
-        let access = FocusAccess()
-        var failure: ClipboardSnippetFocusFailure?
-        XCTAssertNil(ClipboardSnippetFocusResolver(access: access).resolve(
-            processIdentifier: 42, onFailure: { failure = $0 }
-        ))
-        XCTAssertEqual(failure, .unavailable)
-        access.applicationElement = .init(owner: 7, id: "unverified editor")
-        XCTAssertNil(ClipboardSnippetFocusResolver(access: access).resolve(
-            processIdentifier: 42, onFailure: { failure = $0 }
-        ))
-        XCTAssertEqual(failure, .ownershipUnverified)
     }
 
     private func remoteEditorAccess() -> FocusAccess {

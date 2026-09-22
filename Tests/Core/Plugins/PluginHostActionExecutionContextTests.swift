@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import MacToolsPluginKit
 @testable import MacTools
@@ -31,26 +32,42 @@ final class PluginHostActionExecutionContextTests: XCTestCase {
             let controller = MacSettingsController(catalog: makeTestCatalog([record]), storage: MacSettingsTestStorage())
             controller.toggleFavorite(record.id)
             let plugin = MacSettingsPlugin(controller: controller)
-            let host = makePluginHostForTests(plugins: [plugin])
+            let host = makePluginHostForTests(plugins: [plugin], pluginStateChangeRebuildDelay: .zero)
+            defer {
+                adapter.resumeFirstRead(with: .boolean(false))
+                host.deactivateAllPlugins()
+            }
             host.setDisclosureExpanded(true, for: host.testEntry(pluginID: plugin.metadata.id, kind: .row).id)
-            try await Task.sleep(for: .milliseconds(350))
+            await waitForFavoriteControl(enabled: true, in: host)
             controller.cancelRefresh()
             XCTAssertEqual(host.panelItems.first?.detail?.controls.first?.isEnabled, true)
+            let readSuspended = expectation(description: "Plan preparation is waiting for the setting")
+            adapter.onReadSuspended = { readSuspended.fulfill() }
             adapter.suspendNextRead = true
             controller.preparePlan(for: .init(name: "Busy", entries: [
                 .init(settingID: record.id, desiredValue: .boolean(true), category: .finder),
             ]))
-            while !adapter.firstReadStarted { await Task.yield() }
-            try await Task.sleep(for: .milliseconds(150))
+            await fulfillment(of: [readSuspended], timeout: 2)
+            await waitForFavoriteControl(enabled: false, in: host)
             XCTAssertEqual(host.panelItems.first?.detail?.controls.first?.isEnabled, false)
             if cancels { controller.cancelOperation() }
             adapter.resumeFirstRead(with: .boolean(false))
-            while controller.isPreparingPlan { await Task.yield() }
-            try await Task.sleep(for: .milliseconds(150))
+            await waitForFavoriteControl(enabled: true, in: host)
             XCTAssertEqual(host.panelItems.first?.detail?.controls.first?.isEnabled, true)
-            if cancels { XCTAssertNil(controller.activePlan) }
-            controller.deactivate()
+            XCTAssertFalse(controller.isPreparingPlan)
+            XCTAssertEqual(controller.activePlan == nil, cancels)
         }
+    }
+
+    private func waitForFavoriteControl(enabled: Bool, in host: PluginHost) async {
+        if host.panelItems.first?.detail?.controls.first?.isEnabled == enabled { return }
+        let updated = expectation(description: "Favorite control enabled: \(enabled)")
+        let subscription = host.menuBarPanelContentDidChange
+            .filter { host.panelItems.first?.detail?.controls.first?.isEnabled == enabled }
+            .prefix(1)
+            .sink { updated.fulfill() }
+        defer { subscription.cancel() }
+        await fulfillment(of: [updated], timeout: 2)
     }
 
     func testComposedTrueToneVerifiesBeforeDebouncedHostRebuild() async throws {

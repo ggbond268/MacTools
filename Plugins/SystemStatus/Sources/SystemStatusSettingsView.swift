@@ -1777,7 +1777,7 @@ final class SystemStatusMetricPreferenceCellView: NSTableCellView {
         textStackView.alignment = .leading
         textStackView.spacing = PluginSettingsTheme.Spacing.rowTitleDescription
         separatorView.boxType = .custom
-        separatorView.borderType = .noBorder
+        separatorView.borderWidth = 0
         separatorView.titlePosition = .noTitle
         separatorView.contentViewMargins = .zero
         let separatorColor = NSColor.separatorColor

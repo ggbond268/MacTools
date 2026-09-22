@@ -268,7 +268,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/action-grid/",
       "summary": "在指针附近打开用户配置的常用操作网格。",
-      "version": "1.1.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -625,7 +625,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/activity-bar/",
       "summary": "统计输入、前台应用使用时长和 AI 编程活动",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -1554,7 +1554,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/app-hotkey/",
       "summary": "为常用应用绑定全局快捷键，快速打开或切换到前台",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -1910,7 +1910,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/app-volume/",
       "summary": "分别调节正在播放音频的应用音量",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -2340,7 +2340,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/appearance/",
       "summary": "切换系统亮色与深色外观",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -2660,7 +2660,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/apple-shortcuts/",
       "summary": "发现并运行现有的 Apple 快捷指令。",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -3014,7 +3014,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-hide-dock/",
       "summary": "自动隐藏程序坞，提供更干净的桌面环境",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -3446,7 +3446,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-hide-menu-bar/",
       "summary": "自动隐藏菜单栏，提供更完整的屏幕显示空间",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -3900,7 +3900,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/auto-input/",
       "summary": "按应用记住并自动切换输入法",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -4483,7 +4483,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/battery-charge-limit/",
       "summary": "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -4724,7 +4724,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/calendar/",
       "summary": "查看日期、节假日和系统日程",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -5449,7 +5449,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/clipboard/",
       "summary": "搜索历史记录并管理可重复使用的片段和已存项目。",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -5718,7 +5718,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/clipboard-clear/",
       "summary": "一键清空当前剪贴板内容",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -6023,7 +6023,250 @@
       "releaseNotesURL": null,
       "route": "/plugins/cloudflare-r2/",
       "summary": "上传文件到 Cloudflare R2",
-      "version": "1.1.0"
+      "version": "2.0.0"
+    },
+    {
+      "capabilities": {
+        "panelItems": [],
+        "settings": "workspace"
+      },
+      "category": "storage",
+      "displayName": "存储空间分析",
+      "id": "com.mactools.plugin.storage-explorer",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "مستكشف التخزين",
+          "summary": "تحليل استخدام القرص بشكل مرئي مع التنقل الهرمي، وتحديد الملفات الكبيرة، والنقل إلى المهملات بعد المراجعة."
+        },
+        "de": {
+          "displayName": "Speicher-Explorer",
+          "summary": "Visuelle Festplattenanalyse mit hierarchischer Navigation, Erkennung großer Dateien und Verschieben in den Papierkorb nach Überprüfung."
+        },
+        "en": {
+          "displayName": "Storage Explorer",
+          "summary": "Visually analyze disk usage with hierarchical navigation, identify large files, and move to Trash after explicit review."
+        },
+        "es": {
+          "displayName": "Explorador de almacenamiento",
+          "summary": "Analiza visualmente el uso del disco con navegación jerárquica, identifica archivos grandes y muévelos a la Papelera tras su revisión."
+        },
+        "fr": {
+          "displayName": "Explorateur de stockage",
+          "summary": "Analysez visuellement l'utilisation du disque grâce à une navigation hiérarchique, repérez les gros fichiers et mettez-les à la corbeille après examen."
+        },
+        "ja": {
+          "displayName": "ストレージエクスプローラー",
+          "summary": "階層構造でディスク使用状況を視覚的に分析し、大容量ファイルを特定して確認後にゴミ箱へ移動します。"
+        },
+        "ko": {
+          "displayName": "저장 공간 탐색기",
+          "summary": "계층적 탐색으로 디스크 사용량을 시각적으로 분석하고, 대용량 파일을 식별하여 검토 후 휴지통으로 이동합니다."
+        },
+        "pt": {
+          "displayName": "Explorador de armazenamento",
+          "summary": "Analise visualmente o uso do disco com navegação hierárquica, identifique ficheiros grandes e mova para o Lixo após revisão."
+        },
+        "ru": {
+          "displayName": "Анализатор диска",
+          "summary": "Наглядный анализ использования диска с иерархической навигацией, поиск больших файлов и перемещение в корзину после проверки."
+        },
+        "zh-Hans": {
+          "displayName": "存储空间分析",
+          "summary": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓"
+        },
+        "zh-Hant": {
+          "displayName": "儲存空間分析",
+          "summary": "以層級檢視直觀分析磁碟佔用，找出大檔案，在審閱確認後移至垃圾桶"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/com.mactools.plugin.storage-explorer",
+      "product": {
+        "actions": null,
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "storage"
+          ],
+          "keywords": [
+            "storage",
+            "explorer",
+            "disk",
+            "usage",
+            "analyzer",
+            "space"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "مستكشف التخزين",
+              "تحليل القرص"
+            ],
+            "de": [
+              "Speicher-Explorer",
+              "Festplattenanalyse"
+            ],
+            "en": [
+              "Storage Explorer",
+              "Disk Usage",
+              "Disk Analyzer"
+            ],
+            "es": [
+              "Explorador de almacenamiento",
+              "Analizador de disco"
+            ],
+            "fr": [
+              "Explorateur de stockage",
+              "Analyseur de disque"
+            ],
+            "ja": [
+              "ストレージエクスプローラー",
+              "ディスク使用量"
+            ],
+            "ko": [
+              "저장 공간 탐색기",
+              "디스크 분석"
+            ],
+            "pt": [
+              "Explorador de armazenamento",
+              "Análise de disco"
+            ],
+            "ru": [
+              "Анализатор диска",
+              "Использование диска"
+            ],
+            "zh-Hans": [
+              "存储空间分析",
+              "磁盘分析",
+              "空间占用"
+            ],
+            "zh-Hant": [
+              "儲存空間分析",
+              "磁碟分析",
+              "空間佔用"
+            ]
+          },
+          "relatedPluginIDs": [
+            "disk-clean"
+          ],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "مستكشف التخزين",
+                "de": "Speicher-Explorer",
+                "en": "Storage Explorer",
+                "es": "Explorador de almacenamiento",
+                "fr": "Explorateur de stockage",
+                "ja": "ストレージエクスプローラー",
+                "ko": "저장 공간 탐색기",
+                "pt": "Explorador de armazenamento",
+                "ru": "Анализатор диска",
+                "zh-Hans": "存储空间分析",
+                "zh-Hant": "儲存空間分析"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "تحليل استخدام القرص بشكل مرئي مع التنقل الهرمي، وتحديد الملفات الكبيرة، والنقل إلى المهملات بعد المراجعة.",
+                "de": "Visuelle Festplattenanalyse mit hierarchischer Navigation, Erkennung großer Dateien und Verschieben in den Papierkorb nach Überprüfung.",
+                "en": "Visually analyze disk usage with hierarchical navigation, identify large files, and move to Trash after explicit review.",
+                "es": "Analiza visualmente el uso del disco con navegación jerárquica, identifica archivos grandes y muévelos a la Papelera tras su revisión.",
+                "fr": "Analysez visuellement l'utilisation du disque grâce à une navigation hiérarchique, repérez les gros fichiers et mettez-les à la corbeille après examen.",
+                "ja": "階層構造でディスク使用状況を視覚的に分析し、大容量ファイルを特定して確認後にゴミ箱へ移動します。",
+                "ko": "계층적 탐색으로 디스크 사용량을 시각적으로 분석하고, 대용량 파일을 식별하여 검토 후 휴지통으로 이동합니다.",
+                "pt": "Analise visualmente o uso do disco com navegação hierárquica, identifique ficheiros grandes e mova para o Lixo após revisão.",
+                "ru": "Наглядный анализ использования диска с иерархической навигацией, поиск больших файлов и перемещение в корзину после проверки.",
+                "zh-Hans": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓",
+                "zh-Hant": "以層級檢視直觀分析磁碟佔用，找出大檔案，在審閱確認後移至垃圾桶"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "تحليل استخدام القرص بشكل مرئي مع التنقل الهرمي، وتحديد الملفات الكبيرة، والنقل إلى المهملات بعد المراجعة.",
+            "de": "Visuelle Festplattenanalyse mit hierarchischer Navigation, Erkennung großer Dateien und Verschieben in den Papierkorb nach Überprüfung.",
+            "en": "Visually analyze disk usage with hierarchical navigation, identify large files, and move to Trash after explicit review.",
+            "es": "Analiza visualmente el uso del disco con navegación jerárquica, identifica archivos grandes y muévelos a la Papelera tras su revisión.",
+            "fr": "Analysez visuellement l'utilisation du disque grâce à une navigation hiérarchique, repérez les gros fichiers et mettez-les à la corbeille après examen.",
+            "ja": "階層構造でディスク使用状況を視覚的に分析し、大容量ファイルを特定して確認後にゴミ箱へ移動します。",
+            "ko": "계층적 탐색으로 디스크 사용량을 시각적으로 분석하고, 대용량 파일을 식별하여 검토 후 휴지통으로 이동합니다.",
+            "pt": "Analise visualmente o uso do disco com navegação hierárquica, identifique ficheiros grandes e mova para o Lixo após revisão.",
+            "ru": "Наглядный анализ использования диска с иерархической навигацией, поиск больших файлов и перемещение в корзину после проверки.",
+            "zh-Hans": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓",
+            "zh-Hant": "以層級檢視直觀分析磁碟佔用，找出大檔案，在審閱確認後移至垃圾桶"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": false,
+          "dataObserved": [
+            "filesystem-paths",
+            "file-sizes"
+          ],
+          "dataPersisted": [
+            "plugin-configuration",
+            "scan-result-cache"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "none",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "description": {
+              "ar": "تظل الإعدادات محفوظة حتى إزالة بيانات الإضافة. تُحفظ محليًا معاينات آخر عمليات الفحص وتُستبدل أو تُحذف تلقائيًا.",
+              "de": "Einstellungen bleiben bis zum Entfernen der Plug-in-Daten erhalten. Vorschauen der letzten Scans werden lokal zwischengespeichert und automatisch ersetzt oder gelöscht.",
+              "en": "Settings persist until plugin data is removed. Recent scan previews are cached locally and automatically replaced or removed.",
+              "es": "Los ajustes se conservan hasta que se eliminan los datos del complemento. Las vistas previas recientes se guardan localmente y se sustituyen o eliminan automáticamente.",
+              "fr": "Les réglages restent jusqu'à la suppression des données du module. Les aperçus d’analyses récentes sont mis en cache localement, puis remplacés ou supprimés automatiquement.",
+              "ja": "設定はプラグインデータが削除されるまで保持されます。最近のスキャンのプレビューはローカルにキャッシュされ、自動的に置き換えまたは削除されます。",
+              "ko": "설정은 플러그인 데이터를 제거할 때까지 유지됩니다. 최근 스캔 미리보기는 로컬에 캐시되며 자동으로 교체되거나 삭제됩니다.",
+              "pt": "As definições permanecem até à remoção dos dados do plugin. As pré-visualizações recentes são guardadas localmente e substituídas ou removidas automaticamente.",
+              "ru": "Настройки сохраняются до удаления данных плагина. Предварительные результаты последних сканирований хранятся локально и автоматически заменяются или удаляются.",
+              "zh-Hans": "设置会保留到插件数据被移除。最近的扫描预览会在本地缓存，并自动替换或删除。",
+              "zh-Hant": "設定會保留到外掛資料被移除。最近的掃描預覽會在本機快取，並自動取代或刪除。"
+            },
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [
+            "disk-clean"
+          ],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [],
+          "requiresRelaunch": false,
+          "setupComplexity": "none"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": []
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/com.mactools.plugin.storage-explorer/",
+      "summary": "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓",
+      "version": "1.0.0"
     },
     {
       "capabilities": {
@@ -6236,7 +6479,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/device-battery/",
       "summary": "查看 Mac、Apple 移动设备、蓝牙外设和雷柏/迈从鼠标电量",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -6527,7 +6770,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/disk-clean/",
       "summary": "扫描系统缓存、开发产物与残留安装包，默认移到废纸篓，执行前校验路径安全",
-      "version": "2.2.0"
+      "version": "3.0.0"
     },
     {
       "capabilities": {
@@ -6987,7 +7230,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-brightness/",
       "summary": "快速调节每个显示器的亮度",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -7338,7 +7581,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-resolution/",
       "summary": "查看并切换每个显示器的分辨率",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -7608,7 +7851,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-sleep/",
       "summary": "一键让所有显示器立即进入休眠",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -7958,7 +8201,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/display-true-color/",
       "summary": "自动调节显示器颜色以适应环境光",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -8561,7 +8804,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/dock-click-minimize/",
       "summary": "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -8946,7 +9189,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/dock-lock/",
       "summary": "防止程序坞在多显示器之间意外移动",
-      "version": "1.0.1"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -9435,7 +9678,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/eject-disk/",
       "summary": "推出所有可移动磁盘",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -9708,7 +9951,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/empty-trash/",
       "summary": "清空废纸篓中的所有项目",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -10063,7 +10306,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/fan-control/",
       "summary": "管理风扇转速预设，支持自动、全速和自定义策略",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -10337,7 +10580,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/fix-damaged-app/",
       "summary": "移除隔离属性，解决「已损坏」或「不受信任」提示",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -10684,7 +10927,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/hide-notch/",
       "summary": "自动遮挡刘海屏顶部区域",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -11146,7 +11389,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/homebrew/",
       "summary": "管理 Homebrew 包、库仓库并执行系统诊断",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -11394,7 +11637,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/input-remapping/",
       "summary": "将输入映射为操作",
-      "version": "1.1.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -11791,7 +12034,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/ip-overview/",
       "summary": "查看出口 IP、本地 IP、归属地与网络测速摘要",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -12214,7 +12457,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/keep-awake/",
       "summary": "保持 Mac 唤醒；可选保持屏幕常亮或让屏幕工具继续工作。MacBook 合盖运行要求连接电源",
-      "version": "1.4.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -12648,7 +12891,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/launch-control/",
       "summary": "查看和管理 launchctl 启动项",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -12918,7 +13161,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/launchpad/",
       "summary": "用全局热键或菜单栏打开应用网格，搜索并启动。",
-      "version": "1.3.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -13189,7 +13432,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/lock-screen/",
       "summary": "一键立即锁定屏幕，进入密码解锁界面",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -13936,7 +14179,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/mac-settings/",
       "summary": "搜索并集中调整当前 Mac 的常用设置",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -14265,7 +14508,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/menu-bar-hidden/",
       "summary": "菜单栏图标隐藏功能的设置与弹窗界面",
-      "version": "1.1.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -14610,7 +14853,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/microphone-mute/",
       "summary": "快速静音或恢复默认麦克风输入",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -14913,7 +15156,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/middle-click/",
       "summary": "触控板轻点 → 模拟鼠标中键",
-      "version": "1.0.16"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -15156,7 +15399,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/mouse-enhancer/",
       "summary": "分别调整鼠标与触控板的滚动方向",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -15501,7 +15744,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/night-shift/",
       "summary": "降低蓝光，使屏幕颜色更暖",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -15808,7 +16051,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/physical-clean-mode/",
       "summary": "屏幕全黑并临时禁用键盘输入",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -16076,7 +16319,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/quit-apps/",
       "summary": "选择并退出正在运行的应用，或一键退出全部",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -16313,7 +16556,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/right-click/",
       "summary": "为 Finder 右键菜单添加新建文件夹和路径复制",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -16603,7 +16846,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/saved-scripts/",
       "summary": "保存并运行 AppleScript 和 Shell 脚本。",
-      "version": "1.1.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -17449,7 +17692,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/sidecar/",
       "summary": "连接附近可用的 Sidecar 显示器作为扩展显示器",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -18074,7 +18317,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/stage-manager/",
       "summary": "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -18419,7 +18662,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-mute/",
       "summary": "快速静音或恢复系统音频输出",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -18852,7 +19095,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-power/",
       "summary": "让 Mac 睡眠、退出登录、重新启动或关机",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -19128,7 +19371,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-soft-restart/",
       "summary": "重启 macOS 用户服务，尝试恢复常见运行时异常",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -19408,7 +19651,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/system-status/",
       "summary": "实时查看系统状态",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -19651,7 +19894,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/trackpad-gestures/",
       "summary": "将自定义触控板手势映射为 MacTools 操作、快捷键或中键点击",
-      "version": "1.1.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -20016,7 +20259,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/translator/",
       "summary": "划词与截图快捷键翻译",
-      "version": "0.3.0"
+      "version": "1.0.0"
     },
     {
       "capabilities": {
@@ -22605,7 +22848,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/window-layouts/",
       "summary": "移动聚焦窗口并调整其大小",
-      "version": "1.0.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -22993,7 +23236,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/window-switcher/",
       "summary": "用可配置快捷键快速切换正在运行的窗口",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -23267,7 +23510,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/xcode-clean/",
       "summary": "分类清理 Xcode DerivedData、设备支持、归档与缓存",
-      "version": "1.2.0"
+      "version": "2.0.0"
     },
     {
       "capabilities": {
@@ -23494,7 +23737,7 @@
       "releaseNotesURL": null,
       "route": "/plugins/zsh-config/",
       "summary": "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",
-      "version": "1.2.0"
+      "version": "2.0.0"
     }
   ]
 }

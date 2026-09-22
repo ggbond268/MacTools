@@ -36,7 +36,7 @@ These APIs require host 1.3.1. The current host uses PluginKit v7; plugins must 
 | Action Grid | Shared presentation and dismissal; retains pointer debounce and grid-owned confirmation |
 | Window Switcher | Shared presentation in all modes; explicit preview click retains gesture activation compatibility; selection owns target activation |
 | Clipboard History | Nonactivating persistent workspace; keeps original paste target and nested action palette; losing key focus invalidates filters; keyword expansion excludes typing owned by host panels |
-| Menu-bar popover | Native anchored popover without explicit application activation; keeps existing sibling-window and editing dismissal coordinator |
+| Menu-bar popover | Native anchored popover without application activation on opening; explicit native menu requests acquire activation before tracking, with sibling-window and editing dismissal coordinated by the host |
 | Shortcut recorder | Native popover anchored to its owning control; suspends transient-parent dismissal |
 | Translator, secondary menu panels, menu-bar detail panels, HUDs, snap guides, screenshot outlines | Already nonactivating; keep their existing specialized lifecycle |
 | Settings, task confirmations, file/save dialogs, Launchpad, physical clean mode | Retain task-specific activation and safety behavior; these are not interchangeable with transient command panels |
@@ -44,6 +44,10 @@ These APIs require host 1.3.1. The current host uses PluginKit v7; plugins must 
 Menu-bar search and the global shortcut open the standalone command palette.
 Settings-local Command-K retains the embedded search surface. Explicit navigation
 from either palette to a settings destination opens and activates Settings.
+
+Menu-bar More, layout-editing, and tab context menus share an on-demand native menu
+presenter. It waits for activation without polling and cancels requests when their
+owner disappears. Detail panels follow host visibility rather than temporary key-window loss.
 
 ## Validation
 

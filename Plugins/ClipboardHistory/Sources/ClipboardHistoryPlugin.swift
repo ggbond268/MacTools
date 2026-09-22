@@ -2268,6 +2268,11 @@ final class ClipboardHistoryPlugin:
             ))
             return
         }
+        if assignment.source == .snippet {
+            savedLibraryController.recordSuccessfulUse(id: assignment.itemID)
+        } else {
+            controller.recordSuccessfulUse(id: assignment.itemID)
+        }
         if let cursorAccess, let cursorContext {
             await cursorContext.apply(access: cursorAccess)
         }
@@ -2393,6 +2398,9 @@ final class ClipboardHistoryPlugin:
         }
         if savedLibraryController.items.contains(where: { $0.id == itemID }) {
             savedLibraryController.recordSuccessfulUse(id: itemID)
+        } else if operation.source == .explicitQueue {
+            // Snapshot writes bypass the history copy path that normally records usage.
+            controller.recordSuccessfulUse(id: itemID)
         }
         // Commit the exact item that was actually sent before yielding for pacing. Session-bound
         // operations prevent a late completion from advancing a replaced or cancelled queue.

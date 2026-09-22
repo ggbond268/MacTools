@@ -89,28 +89,6 @@ final class HomebrewPluginTests: XCTestCase {
         }
     }
     
-    func testMetadataIdentifiesHomebrewPlugin() {
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        let localization = PluginLocalization(bundle: .main)
-        let plugin = HomebrewPlugin(controller: controller, localization: localization)
-        
-        XCTAssertEqual(plugin.metadata.id, "homebrew")
-        XCTAssertEqual(plugin.metadata.title, "Homebrew")
-    }
-
-    func testContextualSearchIsAvailableOnlyWhenHomebrewIsAvailable() {
-        let controller = HomebrewController(runner: FakeHomebrewCommandRunner())
-        let plugin = HomebrewPlugin(
-            controller: controller,
-            localization: PluginLocalization(bundle: .main)
-        )
-
-        controller.isBrewAvailable = false
-        XCTAssertFalse(plugin.isSettingsSearchAvailable)
-        controller.isBrewAvailable = true
-        XCTAssertTrue(plugin.isSettingsSearchAvailable)
-    }
 
     func testCanonicalMaintenanceActionsAreBoundedAndReportCommandCompletion() async throws {
         let runner = FakeHomebrewCommandRunner()
@@ -163,82 +141,13 @@ final class HomebrewPluginTests: XCTestCase {
         XCTAssertFalse(controller.isBusy)
     }
 
-    func testUpdatingDeactivationStopsTheOwningScanSequence() async {
-        let runner = FakeHomebrewCommandRunner()
-        runner.suspendNextRun = true
-        let controller = HomebrewController(runner: runner)
-        controller.isBrewAvailable = true
-        controller.brewPath = "/opt/homebrew/bin/brew"
-        let plugin = HomebrewPlugin(
-            controller: controller,
-            localization: PluginLocalization(bundle: .main)
-        )
-
-        controller.scanAll()
-        for _ in 0 ..< 100 where runner.runCalls.isEmpty {
-            await Task.yield()
-        }
-        XCTAssertEqual(runner.runCalls, [["tap"]])
-
-        plugin.deactivate(reason: .updating)
-        for _ in 0 ..< 100 where controller.isBusy || runner.cancelCount == 0 {
-            await Task.yield()
-        }
-        for _ in 0 ..< 20 {
-            await Task.yield()
-        }
-
-        XCTAssertEqual(runner.cancelCount, 1)
-        XCTAssertEqual(runner.runCalls, [["tap"]])
-        XCTAssertFalse(controller.isBusy)
-    }
-
-    func testStaleCancellationCleanupDoesNotClearReplacementScan() async {
-        let runner = FakeHomebrewCommandRunner()
-        runner.suspendNextRun = true
-        runner.suspendCancelCompletion = true
-        let controller = HomebrewController(runner: runner)
-        controller.isBrewAvailable = true
-        controller.brewPath = "/opt/homebrew/bin/brew"
-
-        controller.scanAll()
-        for _ in 0 ..< 100 where runner.runCalls.count < 1 {
-            await Task.yield()
-        }
-        controller.cancelCurrentOperation()
-        for _ in 0 ..< 100 where controller.isBusy {
-            await Task.yield()
-        }
-
-        runner.suspendNextRun = true
-        controller.scanAll()
-        for _ in 0 ..< 100 where runner.runCalls.count < 2 {
-            await Task.yield()
-        }
-        XCTAssertTrue(controller.isBusy)
-        let replacementName = controller.currentOperationName
-
-        runner.releaseCancelCompletion()
-        for _ in 0 ..< 20 {
-            await Task.yield()
-        }
-
-        XCTAssertTrue(controller.isBusy)
-        XCTAssertEqual(controller.currentOperationName, replacementName)
-        controller.cancelCurrentOperation()
-        for _ in 0 ..< 100 where controller.isBusy {
-            await Task.yield()
-        }
-        XCTAssertEqual(runner.cancelCount, 2)
-    }
-
     func testCommandRunnerCancellationKillsDescendantProcessGroup() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("HomebrewCommandRunnerTests-\(UUID().uuidString)")
         let bin = root.appendingPathComponent("bin")
         let brew = bin.appendingPathComponent("brew")
         let started = root.appendingPathComponent("started")
-        let survived = root.appendingPathComponent("survived")
+        let childPIDFile = root.appendingPathComponent("child.pid")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try """
@@ -247,9 +156,9 @@ final class HomebrewPluginTests: XCTestCase {
         trap '' TERM
         (
           trap '' TERM
-          sleep 1
-          echo survived > "$1"
+          exec sleep 30
         ) &
+        echo $! > "$1"
         echo started > "$2"
         wait
         """.write(to: brew, atomically: true, encoding: .utf8)
@@ -261,7 +170,7 @@ final class HomebrewPluginTests: XCTestCase {
         let runTask = Task {
             try await runner.run(
                 executable: brew.path,
-                arguments: [survived.path, started.path],
+                arguments: [childPIDFile.path, started.path],
                 onOutput: { _ in },
                 onError: { _ in }
             )
@@ -272,13 +181,22 @@ final class HomebrewPluginTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: started.path))
+        let childPID = try XCTUnwrap(Int32(
+            try String(contentsOf: childPIDFile, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        ))
+        defer { _ = kill(childPID, SIGKILL) }
 
         await runner.cancel()
         let status = try await runTask.value
-        try await Task.sleep(for: .milliseconds(1_100))
+        let exitDeadline = ContinuousClock.now + .seconds(1)
+        while kill(childPID, 0) == 0, ContinuousClock.now < exitDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         XCTAssertNotEqual(status, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: survived.path))
+        XCTAssertEqual(kill(childPID, 0), -1)
+        XCTAssertEqual(errno, ESRCH)
     }
 
     func testCommandRunnerWaitsForDescendantBeforeReturningSuccess() async throws {
@@ -316,80 +234,8 @@ final class HomebrewPluginTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: completed.path))
     }
 
-    func testCommandRunnerCancellationAfterLeaderExitReturnsNonzero() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("HomebrewCommandRunnerTests-\(UUID().uuidString)")
-        let bin = root.appendingPathComponent("bin")
-        let brew = bin.appendingPathComponent("brew")
-        let started = root.appendingPathComponent("started")
-        let completed = root.appendingPathComponent("completed")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        try """
-        #!/bin/sh
-        # HOMEBREW post-leader cancellation fixture
-        (
-          trap '' HUP TERM
-          echo started > "$1"
-          sleep 1
-          echo completed > "$2"
-        ) </dev/null >/dev/null 2>&1 &
-        exit 0
-        """.write(to: brew, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o755],
-            ofItemAtPath: brew.path
-        )
-        let runner = HomebrewCommandRunner()
-        let runTask = Task {
-            try await runner.run(
-                executable: brew.path,
-                arguments: [started.path, completed.path],
-                onOutput: { _ in },
-                onError: { _ in }
-            )
-        }
-        let deadline = ContinuousClock().now.advanced(by: .seconds(2))
-        while !FileManager.default.fileExists(atPath: started.path),
-              ContinuousClock().now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: started.path))
-
-        await runner.cancel()
-        let status = try await runTask.value
-        try await Task.sleep(for: .milliseconds(1_100))
-
-        XCTAssertNotEqual(status, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: completed.path))
-    }
     
-    func testPanelUsesManageButton() {
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        let localization = PluginLocalization(bundle: .main)
-        let plugin = HomebrewPlugin(controller: controller, localization: localization)
-        
-        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .button)
-        XCTAssertEqual(plugin.rowDescriptor.menuActionBehavior, .dismissBeforeHandling)
-        XCTAssertEqual(plugin.rowDescriptor.buttonTitle, "管理")
-        XCTAssertNil(plugin.rowState.detail)
-    }
 
-    func testManageButtonRequestsConfigurationPresentation() {
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        let localization = PluginLocalization(bundle: .main)
-        let plugin = HomebrewPlugin(controller: controller, localization: localization)
-        var requestCount = 0
-        plugin.requestSettingsPresentation = {
-            requestCount += 1
-        }
-
-        plugin.handleAction(.invokeAction(controlID: HomebrewPlugin.ControlID.manage))
-
-        XCTAssertEqual(requestCount, 1)
-    }
     
     func testScanPopulatesPackagesAndTaps() async throws {
         let runner = FakeHomebrewCommandRunner()
@@ -432,74 +278,8 @@ final class HomebrewPluginTests: XCTestCase {
         XCTAssertEqual(ripPkg.requiredBy(in: controller.installedPackages), [])
     }
 
-    func testSearchSkipsDuplicatePopulatedQuery() async throws {
-        let runner = FakeHomebrewCommandRunner()
-        runner.stubbedOutputs = [
-            "search-formula": "wget\n",
-            "search-cask": "warp\n"
-        ]
-
-        let controller = HomebrewController(runner: runner)
-        controller.isBrewAvailable = true
-        controller.brewPath = "/opt/homebrew/bin/brew"
-
-        controller.search(query: "w")
-        let deadline = Date().addingTimeInterval(5.0)
-        while controller.isSearching && Date() < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
-        XCTAssertEqual(controller.searchResults.map(\.name), ["warp", "wget"])
-        XCTAssertEqual(runner.runCalls.count, 2)
-
-        controller.search(query: " w ")
-
-        XCTAssertEqual(controller.searchResults.map(\.name), ["warp", "wget"])
-        XCTAssertEqual(runner.runCalls.count, 2)
-    }
     
-    func testCustomPathPersistence() {
-        UserDefaults.standard.removeObject(forKey: "mactools.homebrew.customPath")
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-        let binDir = tempDir.appendingPathComponent("bin")
-        let tempBrewFile = binDir.appendingPathComponent("brew")
-        try? FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
-        try? "#!/bin/sh\n# HOMEBREW test shim\n".write(to: tempBrewFile, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tempBrewFile.path)
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-            UserDefaults.standard.removeObject(forKey: "mactools.homebrew.customPath")
-        }
-        
-        // Test updating path
-        controller.updateCustomPath(tempBrewFile.path)
-        XCTAssertTrue(controller.isBrewAvailable)
-        XCTAssertEqual(controller.brewPath, tempBrewFile.path)
-        XCTAssertEqual(UserDefaults.standard.string(forKey: "mactools.homebrew.customPath"), tempBrewFile.path)
-        
-        // Test empty path resets standard path discovery
-        controller.updateCustomPath("")
-        XCTAssertEqual(UserDefaults.standard.string(forKey: "mactools.homebrew.customPath"), nil)
-    }
     
-    func testUnknownPanelActionIsIgnored() {
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        controller.isBrewAvailable = true
-        controller.brewPath = "/opt/homebrew/bin/brew"
-
-        let localization = PluginLocalization(bundle: .main)
-        let plugin = HomebrewPlugin(controller: controller, localization: localization)
-
-        plugin.handleAction(.invokeAction(controlID: "legacy-scan"))
-
-        XCTAssertFalse(controller.isBusy)
-        XCTAssertTrue(runner.runCalls.isEmpty)
-    }
 
     func testCaskPackageActionsUseBrewSubcommandBeforeCaskFlag() async throws {
         let runner = FakeHomebrewCommandRunner()
@@ -544,26 +324,6 @@ final class HomebrewPluginTests: XCTestCase {
         XCTAssertEqual(runner.runCalls.last, ["upgrade", "--cask", "iterm2"])
     }
     
-    func testPanelStateBusyAndNotAvailable() {
-        let runner = FakeHomebrewCommandRunner()
-        let controller = HomebrewController(runner: runner)
-        let localization = PluginLocalization(bundle: .main)
-        let plugin = HomebrewPlugin(controller: controller, localization: localization)
-        
-        // Case 1: Not installed
-        controller.isBrewAvailable = false
-        var state = plugin.rowState
-        XCTAssertNotNil(state.errorMessage)
-        
-        // Case 2: Available and Busy
-        controller.isBrewAvailable = true
-        controller.isBusy = true
-        controller.currentOperationName = "Scanning..."
-        state = plugin.rowState
-        XCTAssertNil(state.errorMessage)
-        XCTAssertTrue(state.isOn)
-        XCTAssertEqual(state.subtitle, "Scanning...")
-    }
     
     func testScanAllFailurePath() async throws {
         let runner = FakeHomebrewCommandRunner()

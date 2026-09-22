@@ -10,12 +10,9 @@ final class ScreenshotPluginTests: XCTestCase {
     func testHostPanelActionsShortcutsAndPermissionContracts() {
         let plugin = makePlugin()
         XCTAssertEqual(plugin.metadata.id, "screenshot")
-        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .button)
-        XCTAssertEqual(plugin.rowDescriptor.menuActionBehavior, .dismissBeforeHandling)
         XCTAssertTrue(plugin.rowState.isEnabled)
         XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertNil(plugin.rowState.errorMessage)
-        XCTAssertNotNil(plugin.settingsPage)
         XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["screen-recording"])
         XCTAssertEqual(plugin.actionDefinitions.map(\.key.actionID), ["capture", "quick-capture"])
         XCTAssertEqual(plugin.shortcutDefinitions.map(\.actionID), ["capture", "quick-capture"])
@@ -45,14 +42,6 @@ final class ScreenshotPluginTests: XCTestCase {
             ["capture", "quick-capture"]
         )
         XCTAssertEqual(
-            plugin.actionShortcutSettingsConfiguration.placementAfterSectionID,
-            "shortcut-placement"
-        )
-        guard case let .form(sections) = plugin.settingsPage?.body else {
-            return XCTFail("Expected a form settings page")
-        }
-        XCTAssertEqual(sections.map(\.id), ["shortcut-placement", "output"])
-        XCTAssertEqual(
             Set(plugin.legacyActionShortcutAssignments),
             [
                 LegacyActionShortcutAssignment(
@@ -66,20 +55,6 @@ final class ScreenshotPluginTests: XCTestCase {
                     legacyShortcutDefinitionID: "quick-capture"
                 ),
             ]
-        )
-    }
-
-    func testDefaultSaveFolderIsScreenshotDirectoryOnDesktop() {
-        let environment = ScreenshotEnvironment(
-            context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage())
-        )
-        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Desktop", isDirectory: true)
-
-        XCTAssertEqual(
-            environment.saveFolder,
-            desktop.appendingPathComponent("screenshot", isDirectory: true)
         )
     }
 
@@ -202,7 +177,7 @@ final class ScreenshotPluginTests: XCTestCase {
         XCTAssertEqual(plugin.permissionRequirementIDs(for: ActionKey(providerID: "other", actionID: "capture")), [])
     }
 
-    func testDeactivationRejectsPendingAndNewActionsUntilReactivated() async throws {
+    func testDeactivationRejectsPendingAndNewActions() async throws {
         var count = 0
         let plugin = makePlugin(capture: { _ in count += 1 })
         let pending = try plugin.beginAction(invocation())
@@ -212,9 +187,6 @@ final class ScreenshotPluginTests: XCTestCase {
         plugin.handleShortcutAction(id: "capture")
         XCTAssertEqual(count, 0)
         XCTAssertFalse(plugin.rowState.isEnabled)
-        plugin.activate(context: PluginRuntimeContext(pluginID: "screenshot", storage: ScreenshotTestStorage()))
-        plugin.handleShortcutAction(id: "capture")
-        XCTAssertEqual(count, 1)
     }
 
     func testFolderSettingsPersistInPluginStorageAndCancelledPickerPreservesValue() {

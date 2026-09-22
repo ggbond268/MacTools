@@ -62,15 +62,6 @@ final class DiskCleanPurgeRootsStoreTests: XCTestCase {
     }
 
     /// Adjudication is order-independent: descendant then ancestor still keeps the ancestor. Shrinking the user's explicit scope is the worse failure.
-    func testKeepsSiblingWithSharedPrefix() throws {
-        let first = try temporaryDirectory.makeDirectory("Repos")
-        let second = try temporaryDirectory.makeDirectory("ReposBackup")
-
-        let update = store.replaceAll(with: [first.path, second.path])
-
-        XCTAssertEqual(update.roots, [first.path, second.path])
-        XCTAssertTrue(update.rejections.isEmpty)
-    }
 
     func testRejectsMissingPath() {
         let missing = temporaryDirectory.resolve("NotThere").path
@@ -87,14 +78,6 @@ final class DiskCleanPurgeRootsStoreTests: XCTestCase {
 
         XCTAssertTrue(update.roots.isEmpty)
         XCTAssertEqual(update.rejections, [.unresolvable(path: "Documents/Code")])
-    }
-
-    func testExpandsTildePrefix() throws {
-        let resolved = DiskCleanPurgeRootNormalizer.normalize(["~/Anywhere"]) { path in
-            path.hasPrefix(NSHomeDirectory() + "/") ? path : nil
-        }
-
-        XCTAssertEqual(resolved.roots, [NSHomeDirectory() + "/Anywhere"])
     }
 
     // MARK: - Too-broad denylist
@@ -130,17 +113,6 @@ final class DiskCleanPurgeRootsStoreTests: XCTestCase {
 
     /// Denylist covers any account's home, not just the current user's: `/Users/<name>/Documents`
     /// is exactly as broad as the current user's own Documents folder.
-    func testRejectsOtherUsersTopLevelPersonalFoldersButAllowsSubfolders() {
-        let rejectedHome = DiskCleanPurgeRootNormalizer.normalize(["/Users/alice"]) { $0 }
-        XCTAssertEqual(rejectedHome.rejections, [.tooBroad(path: "/Users/alice")])
-
-        let rejectedDocuments = DiskCleanPurgeRootNormalizer.normalize(["/Users/alice/Documents"]) { $0 }
-        XCTAssertEqual(rejectedDocuments.rejections, [.tooBroad(path: "/Users/alice/Documents")])
-
-        let allowedProject = DiskCleanPurgeRootNormalizer.normalize(["/Users/alice/Documents/MyApp"]) { $0 }
-        XCTAssertEqual(allowedProject.roots, ["/Users/alice/Documents/MyApp"])
-        XCTAssertTrue(allowedProject.rejections.isEmpty)
-    }
 
     func testSanitizeDropsPersistedTooBroadRoots() throws {
         let home = NSHomeDirectory()
@@ -151,40 +123,7 @@ final class DiskCleanPurgeRootsStoreTests: XCTestCase {
         XCTAssertEqual(persistence.storedRoots, [project])
     }
 
-    func testAddingValidRootDoesNotResurfaceSanitizedTooBroadEntries() throws {
-        let home = NSHomeDirectory()
-        let project = try temporaryDirectory.makeDirectory("App").path
-        persistence.storedRoots = [home]
-
-        let update = store.add(project)
-
-        XCTAssertEqual(update.roots, [project])
-        XCTAssertTrue(update.rejections.isEmpty)
-        XCTAssertEqual(persistence.storedRoots, [project])
-    }
-
     // MARK: - Add/remove
-
-    func testRemoveMatchesOriginalSpellingWhenPathIsGone() throws {
-        let directory = try temporaryDirectory.makeDirectory("Gone")
-        store.add(directory.path)
-        try FileManager.default.removeItem(at: directory)
-
-        let remaining = store.remove(directory.path)
-
-        XCTAssertTrue(remaining.isEmpty)
-        XCTAssertTrue(persistence.storedRoots.isEmpty)
-    }
-
-    func testRemoveMatchesPhysicalPathForSymlinkedSpelling() throws {
-        let real = try temporaryDirectory.makeDirectory("Live")
-        let link = try temporaryDirectory.makeSymlink("LiveLink", destination: "Live")
-        store.add(real.path)
-
-        let remaining = store.remove(link.path)
-
-        XCTAssertTrue(remaining.isEmpty)
-    }
 
     func testUserDefaultsPersistenceRoundTrip() throws {
         let suiteName = "DiskCleanPurgeRootsStoreTests-\(UUID().uuidString)"

@@ -21,18 +21,18 @@ struct ClipboardPanelPresentationIndex: Sendable {
         keys.reserveCapacity(items.count + savedItems.count)
         for item in items {
             let key = Key(id: item.id, isSnippet: false)
-            if records.updateValue(.init(item: item, isSnippet: false, sortDate: item.capturedAt), forKey: key) == nil {
+            if records.updateValue(.init(item: item, isSnippet: false, sortDate: item.lastActivityAt), forKey: key) == nil {
                 keys.append(key)
             }
         }
         for saved in savedItems where saved.isSnippet {
             let key = Key(id: saved.id, isSnippet: true)
-            if records.updateValue(.init(item: saved.historyPresentationItem(), isSnippet: true, sortDate: saved.updatedAt), forKey: key) == nil {
+            if records.updateValue(.init(item: saved.historyPresentationItem(), isSnippet: true, sortDate: saved.lastActivityAt), forKey: key) == nil {
                 keys.append(key)
             }
         }
-        // History normally arrives in capture order. Keep that order when possible, and
-        // sort mixed or unordered inputs once before distributing them to every scope.
+        // History arrives in capture order. Incorporate reuse dates once before distributing
+        // records to every scope; later usage updates only reposition the changed records.
         // Sorting dictionary keys independently per scope repeated both sorting and lookups.
         var orderedRecords = keys.map { ($0, records[$0]!) }
         if zip(orderedRecords, orderedRecords.dropFirst()).contains(where: { precedes($0.1.1, $0.0.1) }) {
@@ -75,13 +75,13 @@ struct ClipboardPanelPresentationIndex: Sendable {
     }
 
     mutating func update(_ item: ClipboardHistoryItem?, id: UUID) {
-        replace(item.map { .init(item: $0, isSnippet: false, sortDate: $0.capturedAt) },
+        replace(item.map { .init(item: $0, isSnippet: false, sortDate: $0.lastActivityAt) },
                 key: Key(id: id, isSnippet: false))
     }
 
     mutating func updateSnippet(_ item: ClipboardSavedItem?, id: UUID) {
         replace(item.flatMap { $0.isSnippet ? .init(
-            item: $0.historyPresentationItem(), isSnippet: true, sortDate: $0.updatedAt
+            item: $0.historyPresentationItem(), isSnippet: true, sortDate: $0.lastActivityAt
         ) : nil }, key: Key(id: id, isSnippet: true))
     }
 

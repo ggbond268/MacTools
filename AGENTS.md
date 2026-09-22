@@ -41,8 +41,8 @@
 - Build one plugin with `make build-plugin PLUGIN=<plugin directory name or plugin ID>`.
 - Run repository script tests with `make script-tests`; these checks are separate from XCTest and include pending changelog validation and PluginKit minimum-host compatibility validation.
 - Whenever `changes/unreleased/*.md` changes, run `make validate-changelog` before committing or pushing, even when only focused XCTest is otherwise needed. Each entry must stay within 220 characters and two sentences. `make script-tests` and `make ci` include this check; XCTest and `git diff --check` do not.
-- Run the full test suite with `xcodebuild -project MacTools.xcodeproj -scheme MacTools -configuration Debug -derivedDataPath build/DerivedData test -quiet`.
-- Run one test class by appending `-only-testing:MacToolsTests/<TestClassName>` to the full test command.
+- Run the core XCTest suite with `make test`; it regenerates the project and uses the same bounded, serial test runner as CI.
+- Run one test class with `make test TEST_FILTER=<TestClassName>` or one method with `make test TEST_FILTER=<TestClassName>/<testMethod>`.
 - Run the CI-equivalent local validation with `make ci` before pushing cross-module or PluginKit changes.
 - Use `./scripts/release-local.sh` only when a release is needed; confirm user intent before signing, notarizing, publishing, or tagging.
 
@@ -88,8 +88,9 @@
 - Update release: keep Sparkle appcast, version, signing, and notarization changes small and careful; avoid committing local release artifacts.
 
 ## Testing Requirements
-- Cover core outcomes, regressions, and consequential boundaries affected by the change. Reuse existing coverage; add or update adjacent XCTest only where it leaves a meaningful gap. There is no per-change test-count or coverage-percentage target. Test files should use `<TypeName>Tests.swift`.
+- Keep a compact suite covering the main user flow and consequential failure boundaries. A past bug alone does not justify a permanent test: omit unlikely combinations in settled code unless recurrence could lose data, bypass permissions, or break a shared contract. Reuse adjacent coverage rather than duplicating the same outcome across layers. There is no test-count or coverage-percentage target. Test files should use `<TypeName>Tests.swift`.
 - Do not add tests that merely repeat implementation logic, private call sequences, or fixed wording, colors, and spacing. Documentation and cosmetic-only changes normally need review and visual verification, not new automated tests.
+- Choose tests by the distinct behavior and risk they protect, not by their UI/unit/integration label. Keep native UI or end-to-end checks only for critical integration outcomes that cheaper tests cannot establish, and run desktop-dependent evidence checks on demand. Prefer manual review for appearance and hardware behavior. Avoid fixed copy/layout assertions, wall-clock thresholds, large synthetic datasets, and real process fan-out for already-covered behavior. See `docs/testing/core-tests.md` for the retained scope and decision criteria.
 - Local and agent validation should default to the smallest relevant test method or class, such as `-only-testing:MacToolsTests/<TestClassName>` or `-only-testing:MacToolsTests/<TestClassName>/<testMethod>`. Do not run the full suite for narrow changes unless the scope justifies it.
 - Plugin tests should prefer `Plugins/<PluginName>/Tests/`; shared Core/App tests should live under the corresponding `Tests/Core/` or `Tests/App/` path.
 - Filesystem tests must use temporary directories or fake stores, and must never delete real user directories.

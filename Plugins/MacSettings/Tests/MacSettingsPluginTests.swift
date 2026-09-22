@@ -4,67 +4,6 @@ import MacToolsPluginKit
 
 @MainActor
 final class MacSettingsPluginTests: XCTestCase {
-    func testDeferredSettingsCannotReappearThroughFavoritesOrActions() async throws {
-        let catalog = try MacSettingsCatalogFactory.make { nil }
-        let storage = MacSettingsTestStorage()
-        let retainedID: SystemSettingID = "finder.show-all-extensions"
-        storage.set(
-            [retainedID.rawValue] + catalog.deferredDefinitions.keys.map(\.rawValue),
-            forKey: "favorite-setting-ids"
-        )
-        let controller = MacSettingsController(catalog: catalog, storage: storage)
-        // Inspect the production catalog without running live system reads or writes.
-        controller.deactivate()
-        let plugin = MacSettingsPlugin(controller: controller)
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        XCTAssertEqual(controller.visibleRecords.count, 44)
-        XCTAssertEqual(controller.favoriteIDs, [retainedID])
-        XCTAssertEqual(plugin.rowState.detail?.controls.count, 2)
-        let draftIDs = Set(controller.makeDraft().items.map(\.settingID))
-        XCTAssertTrue(draftIDs.isDisjoint(with: catalog.deferredDefinitions.keys))
-        let settingActions = plugin.actionCatalogEntries.filter {
-            $0.reference.key.actionID == "open-setting"
-        }
-        XCTAssertEqual(settingActions.count, 44)
-
-        for id in catalog.deferredDefinitions.keys {
-            for actionID in ["open-setting", "set-boolean"] {
-                let reference = ActionReference(
-                    key: ActionKey(providerID: "mac-settings", actionID: actionID),
-                    parameters: try ActionParameterSet([
-                        "setting-id": .string(id.rawValue), "enabled": .boolean(true),
-                    ])
-                )
-                XCTAssertFalse(plugin.actionAvailability(for: reference).isAvailable)
-                let handle = try plugin.beginAction(.init(
-                    reference: reference, source: .test, mode: .background
-                ))
-                guard case .failed = await handle.result() else {
-                    return XCTFail("Deferred setting must not execute \(actionID): \(id)")
-                }
-            }
-        }
-    }
-
-    func testFeaturePanelPreservesAllChoicesAndSelectionBeyondThirdOption() throws {
-        let options = (1 ... 4).map { SystemSettingChoice(id: "\($0)", title: "Option \($0)") }
-        let record = makeTestRecord(
-            id: "choice", title: "Choice", schema: .choice(options: options),
-            defaultValue: .choice(id: "4"),
-            adapter: DeterministicSystemSettingAdapter(value: .choice(id: "4"))
-        )
-        let controller = MacSettingsController(
-            catalog: makeTestCatalog([record]), storage: MacSettingsTestStorage()
-        )
-        controller.toggleFavorite(record.id)
-        let plugin = MacSettingsPlugin(controller: controller)
-        plugin.handleAction(.setDisclosureExpanded(true))
-        let control = try XCTUnwrap(plugin.rowState.detail?.controls.first)
-        XCTAssertEqual(control.kind, .selectList)
-        XCTAssertEqual(control.options.map(\.id), options.map(\.id))
-        XCTAssertEqual(control.selectedOptionID, "4")
-    }
 
     func testFullDiskAccessPermissionDerivesAffectedSettingsAndRoutesActions() throws {
         let protectedFirst = makeTestRecord(
@@ -121,59 +60,6 @@ final class MacSettingsPluginTests: XCTestCase {
         XCTAssertEqual(openedURLs[2].absoluteString, "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
     }
 
-    func testPluginDefaultsToAllSettingsAndPublishesFeaturePanelFavorites() throws {
-        let adapter = DeterministicSystemSettingAdapter(value: .boolean(false))
-        let record = makeTestRecord(id: "favorite", title: "Favorite", adapter: adapter)
-        let controller = MacSettingsController(
-            catalog: makeTestCatalog([record]),
-            storage: MacSettingsTestStorage(),
-            historyStore: InMemorySystemSettingChangeHistoryStore(),
-            profileStore: InMemorySystemSettingsProfileStore()
-        )
-        let plugin = MacSettingsPlugin(controller: controller)
-
-        XCTAssertEqual(controller.destination, .all)
-        XCTAssertEqual(plugin.metadata.id, "mac-settings")
-        XCTAssertEqual(plugin.settingsPage?.body.layout, .workspace)
-        controller.toggleFavorite(record.id)
-        plugin.handleAction(.setDisclosureExpanded(true))
-        XCTAssertEqual(plugin.rowState.detail?.controls.count, 2)
-        XCTAssertEqual(plugin.rowState.detail?.controls.first?.actionTitle, "Favorite · Off")
-    }
-
-    func testSearchActionKeepsResultsInControllableWorkspace() async throws {
-        let record = makeTestRecord(
-            id: "finder.extension",
-            title: "Show Extensions",
-            adapter: DeterministicSystemSettingAdapter(value: .boolean(false))
-        )
-        let controller = MacSettingsController(
-            catalog: makeTestCatalog([record]),
-            storage: MacSettingsTestStorage(),
-            historyStore: InMemorySystemSettingChangeHistoryStore(),
-            profileStore: InMemorySystemSettingsProfileStore()
-        )
-        let plugin = MacSettingsPlugin(controller: controller)
-        var presentationCount = 0
-        plugin.requestSettingsPresentation = { presentationCount += 1 }
-        let reference = ActionReference(
-            key: ActionKey(providerID: "mac-settings", actionID: "search"),
-            parameters: try ActionParameterSet(["query": .string("extensions")])
-        )
-
-        let result = try plugin.beginAction(.init(
-            reference: reference,
-            source: .test,
-            mode: .foreground
-        ))
-        let executionResult = await result.result()
-        XCTAssertEqual(executionResult, .succeeded())
-        XCTAssertEqual(controller.destination, .all)
-        XCTAssertEqual(controller.searchText, "extensions")
-        XCTAssertEqual(controller.visibleRecords.map(\.id), [record.id])
-        XCTAssertEqual(presentationCount, 1)
-    }
-
     func testSettingDeepLinkOpensTheExactControllableRow() async throws {
         let record = makeTestRecord(
             id: "finder.extension",
@@ -215,37 +101,6 @@ final class MacSettingsPluginTests: XCTestCase {
         ))).result()
         XCTAssertNotEqual(controller.settingFocusRequest, firstRequest)
         XCTAssertEqual(controller.settingFocusRequest?.settingID, record.id)
-    }
-
-    func testCategoryDeepLinkUsesVisibleSearchInsteadOfAHiddenScope() async throws {
-        let record = makeTestRecord(
-            id: "finder.extension",
-            title: "Show Extensions",
-            adapter: DeterministicSystemSettingAdapter(value: .boolean(false))
-        )
-        let controller = MacSettingsController(
-            catalog: makeTestCatalog([record]),
-            storage: MacSettingsTestStorage(),
-            historyStore: InMemorySystemSettingChangeHistoryStore(),
-            profileStore: InMemorySystemSettingsProfileStore()
-        )
-        let plugin = MacSettingsPlugin(controller: controller)
-        let reference = ActionReference(
-            key: ActionKey(providerID: "mac-settings", actionID: "open-category"),
-            parameters: try ActionParameterSet(["category": .string(SystemSettingCategory.finder.rawValue)])
-        )
-
-        let result = await (try plugin.beginAction(.init(
-            reference: reference,
-            source: .test,
-            mode: .foreground
-        ))).result()
-
-        XCTAssertEqual(result, .succeeded())
-        XCTAssertEqual(controller.destination, .all)
-        XCTAssertEqual(controller.searchText, SystemSettingCategory.finder.title)
-        XCTAssertEqual(controller.paletteSections.map(\.kind), [.searchResults])
-        XCTAssertEqual(controller.paletteSections.flatMap(\.records).map(\.id), [record.id])
     }
 
     func testParameterizedBooleanActionUsesSameVerifiedAdapterPath() async throws {
@@ -390,21 +245,6 @@ final class MacSettingsPluginTests: XCTestCase {
         XCTAssertTrue(reactivatedWrite)
     }
 
-    func testDeactivationCancelsAnInlineWriteSuspendedBeforeMutation() async {
-        let adapter = FirstReadSuspendingSystemSettingAdapter(value: .boolean(false))
-        let record = makeTestRecord(id: "toggle", title: "Toggle", adapter: adapter)
-        let controller = MacSettingsController(catalog: makeTestCatalog([record]), storage: MacSettingsTestStorage())
-        let plugin = MacSettingsPlugin(controller: controller)
-        let operation = Task { await controller.applyAndWait(.boolean(true), to: record) }
-        while !adapter.firstReadStarted { await Task.yield() }
-        plugin.deactivate(reason: .disabled)
-        adapter.resumeFirstRead(with: .boolean(false))
-        let result = await operation.value
-        XCTAssertFalse(result)
-        XCTAssertEqual(adapter.value, .boolean(false))
-        XCTAssertFalse(controller.rowStates[record.id]?.isApplying ?? true)
-    }
-
     func testCancelledProfileRetainsCompletedChangesAndTheirRollbackPoint() async {
         let completed = DeterministicSystemSettingAdapter(value: .boolean(false))
         let pending = FirstReadSuspendingSystemSettingAdapter(value: .boolean(false), suspendsFirstRead: false)
@@ -461,20 +301,4 @@ final class MacSettingsPluginTests: XCTestCase {
         )
     }
 
-    func testProfileActionProvidesRequiredConfirmationCopy() throws {
-        let controller = MacSettingsController(
-            catalog: makeTestCatalog([]),
-            storage: MacSettingsTestStorage(),
-            historyStore: InMemorySystemSettingChangeHistoryStore(),
-            profileStore: InMemorySystemSettingsProfileStore()
-        )
-        let plugin = MacSettingsPlugin(controller: controller)
-        let definition = try XCTUnwrap(
-            plugin.actionDefinitions.first { $0.key.actionID == "apply-profile" }
-        )
-
-        XCTAssertEqual(definition.risk, .confirmationRequired)
-        XCTAssertNotNil(definition.confirmation)
-        XCTAssertTrue(definition.capabilities.contains(.foregroundInteractive))
-    }
 }

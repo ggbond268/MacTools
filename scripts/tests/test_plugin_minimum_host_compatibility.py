@@ -159,6 +159,8 @@ NEW_API_MINIMUM_HOSTS = {
     # Shared palette, shortcut-recorder, and private-data APIs introduced after v1.2.0.
     "PluginPaletteMetrics": "1.3.0",
     "PluginPaletteColors": "1.3.1",
+    "PluginPaletteChrome": "1.3.1",
+    "PluginPaletteSearchChrome": "1.3.1",
     "PluginPaletteSearchCommand": "1.3.0",
     "PluginPaletteSearchField": "1.3.0",
     "PluginPaletteSearchBar": "1.3.0",

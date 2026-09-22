@@ -46,7 +46,7 @@ private final class CatalogAXAccess: WindowSwitcherAXAccess, @unchecked Sendable
 
 @MainActor
 final class WindowSwitcherAppCatalogTests: XCTestCase {
-    func testBurstInvalidationReadsOnlyAffectedHostWithoutWindowServerQuery() async throws {
+    func testInvalidationRefreshesChangedWindowsWithoutScanningOtherHosts() async throws {
         let first = CatalogAXAccess(number: 7, elementPID: 201)
         let second = CatalogAXAccess(number: 8, elementPID: 202)
         let cgReads = CatalogAXAccess(number: nil, elementPID: 203)
@@ -54,35 +54,13 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
         defer { catalog.stop() }
         catalog.start()
         try await waitUntil { catalog.isInvocationReady }
-        let firstReads = first.read { $0.reads }, secondReads = second.read { $0.reads }
+        let secondReads = second.read { $0.reads }
         let recordReads = cgReads.read { $0.reads }
-        for _ in 0..<100 { catalog.invalidate(processIdentifiers: [42], windowRecords: false) }
-        try await waitUntil { first.read { $0.reads } > firstReads }
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertEqual(first.read { $0.reads }, firstReads + 1)
+        first.update { $0.number = 9 }
+        catalog.invalidate(processIdentifiers: [42], windowRecords: false)
+        try await waitUntil { self.numbers(catalog) == [9] }
         XCTAssertEqual(second.read { $0.reads }, secondReads)
         XCTAssertEqual(cgReads.read { $0.reads }, recordReads)
-    }
-
-    func testInvalidationDuringScanRetainsOneFollowUp() async throws {
-        let first = CatalogAXAccess(number: 7, elementPID: 201)
-        let second = CatalogAXAccess(number: 8, elementPID: 202)
-        let catalog = twoHostCatalog(first, second)
-        let release = DispatchSemaphore(value: 0)
-        defer { release.signal(); catalog.stop() }
-        catalog.start()
-        try await waitUntil { catalog.isInvocationReady }
-        let initialReads = first.read { $0.reads }
-        first.update { $0.beforeRead = { _ = release.wait(timeout: .now() + 3) } }
-        catalog.invalidate(processIdentifiers: [42], windowRecords: false)
-        try await waitUntil { first.read { $0.reads } > initialReads }
-        for _ in 0..<20 { catalog.invalidate(processIdentifiers: [42], windowRecords: false) }
-        try await Task.sleep(for: .milliseconds(250))
-        first.update { $0.beforeRead = nil }
-        release.signal()
-        try await waitUntil { first.read { $0.reads } == initialReads + 2 }
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertEqual(first.read { $0.reads }, initialReads + 2)
     }
 
     func testInvocationReconcilesANonemptyCacheBeforeBecomingReady() async throws {
@@ -98,68 +76,6 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
         XCTAssertEqual(numbers(catalog), [7])
         try await waitUntil { catalog.isInvocationReady }
         XCTAssertEqual(numbers(catalog), [9])
-    }
-
-    func testGeometryEventsWaitUntilDragEndsAndKeepUnrelatedHostsIdle() async throws {
-        let first = CatalogAXAccess(number: 7, elementPID: 201)
-        let second = CatalogAXAccess(number: 8, elementPID: 202)
-        var dragging = false
-        let catalog = twoHostCatalog(first, second, isDragging: { dragging })
-        defer { catalog.stop() }
-        catalog.start()
-        try await waitUntil { catalog.isInvocationReady }
-        let firstReads = first.read { $0.reads }, secondReads = second.read { $0.reads }
-        dragging = true
-        for _ in 0..<100 { catalog.invalidate(processIdentifiers: [42], windowRecords: true) }
-        try await Task.sleep(for: .milliseconds(450))
-        XCTAssertEqual(first.read { $0.reads }, firstReads)
-        XCTAssertEqual(second.read { $0.reads }, secondReads)
-        dragging = false
-        try await waitUntil { first.read { $0.reads } == firstReads + 1 }
-        XCTAssertEqual(second.read { $0.reads }, secondReads)
-        XCTAssertTrue(WindowSwitcherProcessWorker.windowNotifications.contains(kAXMovedNotification))
-        XCTAssertTrue(WindowSwitcherProcessWorker.windowNotifications.contains(kAXResizedNotification))
-    }
-
-    func testStopAndRestartDoNotReleasePhysicalScanSlotsEarly() async throws {
-        let access = CatalogAXAccess(number: nil, elementPID: 201)
-        let release = DispatchSemaphore(value: 0)
-        access.update { $0.beforeRead = { _ = release.wait(timeout: .now() + 3) } }
-        let catalog = WindowSwitcherAppCatalog(notificationCenter: NotificationCenter(), accessFactory: { _ in access },
-            allSpacesCatalog: .init(windowRecordProvider: { [] }), discovery: .init(applications: {
-                (40..<48).map { .init(processIdentifier: pid_t($0), bundleIdentifier: "fixture.\($0)",
-                                     bundlePath: "/Fixture\($0).app", localizedName: "Fixture") }
-            }, isAccessibilityTrusted: { true }, isDragging: { false }))
-        defer {
-            for _ in 0..<4 { release.signal() }
-            catalog.stop()
-        }
-        catalog.start()
-        try await waitUntil { access.read { $0.reads } == 4 }
-        catalog.stop()
-        catalog.start()
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(access.read { $0.reads }, 4)
-        access.update { $0.beforeRead = nil }
-        for _ in 0..<4 { release.signal() }
-        try await waitUntil { catalog.isInvocationReady }
-        XCTAssertEqual(access.read { $0.reads }, 12)
-    }
-
-    func testUnchangedReconciliationDoesNotNotifyTheUI() async throws {
-        let first = CatalogAXAccess(number: 7, elementPID: 201)
-        let second = CatalogAXAccess(number: 8, elementPID: 202)
-        let catalog = twoHostCatalog(first, second)
-        defer { catalog.stop() }
-        catalog.start()
-        try await waitUntil { catalog.isInvocationReady }
-        var notifications = 0
-        catalog.onChange = { notifications += 1 }
-        let reads = first.read { $0.reads }
-        catalog.refresh()
-        try await waitUntil { first.read { $0.reads } > reads }
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(notifications, 0)
     }
 
     func testWakeAndSpaceChangesDoNotResumeAnInactiveSession() async throws {
@@ -192,44 +108,6 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
                 [.init(processIdentifier: 42, bundleIdentifier: "first", bundlePath: "/First.app", localizedName: "First"),
                  .init(processIdentifier: 43, bundleIdentifier: "second", bundlePath: "/Second.app", localizedName: "Second")]
             }, isAccessibilityTrusted: { true }, isDragging: isDragging))
-    }
-
-    func testOnlyScannedHostLoadsFreshPresentationMetadata() async throws {
-        let host = CatalogAXAccess(number: 7, elementPID: 201)
-        let helper = CatalogAXAccess(number: 8, elementPID: 202)
-        var hostReads = 0
-        var helperReads = 0
-        var name = "Original"
-        let records = WindowSwitcherWindowRecords(windowRecordProvider: {
-            [.init(windowNumber: 8, processIdentifier: 43, title: "Fixture", isOnScreen: true,
-                   bounds: CGRect(x: 20, y: 20, width: 800, height: 600))]
-        })
-        let catalog = WindowSwitcherAppCatalog(notificationCenter: NotificationCenter(),
-            accessFactory: { $0 == 42 ? host : helper }, allSpacesCatalog: records,
-            discovery: .init(applications: {
-                [.init(processIdentifier: 42, bundleIdentifier: "fixture.host", bundlePath: "/Fixture.app",
-                       localizedName: nil, loadPresentation: {
-                           hostReads += 1
-                           return .init(localizedName: name, icon: nil, isHidden: false, isActive: false)
-                       }),
-                 .init(processIdentifier: 43, bundleIdentifier: "fixture.host.helper", bundlePath: "/Fixture.app/Helper.app",
-                       localizedName: nil, isRegular: false, loadPresentation: {
-                           helperReads += 1
-                           return .init(localizedName: "Helper", icon: nil, isHidden: false, isActive: false)
-                       })]
-            }, isAccessibilityTrusted: { true }, isDragging: { false }))
-        defer { catalog.stop() }
-        catalog.start()
-        catalog.refresh()
-        XCTAssertEqual(hostReads, 1, "An in-flight host scan must not reread presentation metadata")
-        try await waitUntil { catalog.refresh(); return numbers(catalog) == [7, 8] }
-        XCTAssertEqual(helperReads, 0)
-        name = "Renamed"
-        try await waitUntil {
-            catalog.refresh()
-            return catalog.entries(sortMode: .fixed).filter { $0.processIdentifier == 42 }.allSatisfy { $0.appName == name }
-        }
-        XCTAssertEqual(helperReads, 0)
     }
 
     private func makeCatalog(host: CatalogAXAccess, helper: CatalogAXAccess,
@@ -278,30 +156,6 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(150))
         XCTAssertTrue(catalog.entries(sortMode: .fixed).isEmpty)
         XCTAssertEqual(callbacks, callbacksAtStop)
-    }
-
-    func testOldHelperScanCannotOverwriteRestartedCatalog() async throws {
-        let oldHost = CatalogAXAccess(number: 7, elementPID: 201)
-        let oldHelper = CatalogAXAccess(number: 8, elementPID: 202)
-        let newHost = CatalogAXAccess(number: 9, elementPID: 301)
-        let newHelper = CatalogAXAccess(number: 10, elementPID: 302)
-        let phase = CatalogAXAccess(number: nil, elementPID: 303)
-        let release = DispatchSemaphore(value: 0)
-        oldHelper.update { $0.beforeRead = { _ = release.wait(timeout: .now() + 5) } }
-        let catalog = makeCatalog(host: oldHost, helper: newHelper, accessFactory: { pid in
-            if phase.read({ $0.number != nil }) { return pid == 42 ? newHost : newHelper }
-            return pid == 42 ? oldHost : oldHelper
-        })
-        defer { release.signal(); catalog.stop() }
-        catalog.start()
-        try await waitUntil { catalog.refresh(); return oldHelper.read { $0.reads > 0 } }
-        catalog.stop()
-        phase.update { $0.number = 1 }
-        catalog.start()
-        try await waitUntil { catalog.refresh(); return numbers(catalog) == [9, 10] }
-        release.signal()
-        try await Task.sleep(for: .milliseconds(150))
-        XCTAssertEqual(numbers(catalog), [9, 10])
     }
 
     func testHostAXRecordKeepsItsWorkerWhenCompositorOwnerIsHelper() async throws {

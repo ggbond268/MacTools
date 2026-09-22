@@ -83,6 +83,7 @@ final class MenuBarStatusItemController: NSObject {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var appActivationObserver: NSObjectProtocol?
+    private var dismissalGeneration: UInt = 0
     private var appearanceObserver: NSObjectProtocol?
     private var appTerminationObserver: NSObjectProtocol?
     private var statusItemWindowMoveObserver: NSObjectProtocol?
@@ -543,6 +544,7 @@ final class MenuBarStatusItemController: NSObject {
         ]
 
         if localEventMonitor == nil {
+            dismissalGeneration &+= 1
             localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self] event in
                 self?.handleLocalMouseEvent(event) ?? event
             }
@@ -560,14 +562,17 @@ final class MenuBarStatusItemController: NSObject {
                     return
                 }
 
-                DispatchQueue.main.async {
-                    self?.requestPanelClose()
+                let generation = MainActor.assumeIsolated { self?.dismissalGeneration }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.dismissalGeneration == generation else { return }
+                    self.requestPanelClose()
                 }
             }
         }
     }
 
     private func removeDismissMonitorsIfNeeded() {
+        dismissalGeneration &+= 1
         if let localEventMonitor {
             NSEvent.removeMonitor(localEventMonitor)
             self.localEventMonitor = nil
@@ -590,6 +595,10 @@ final class MenuBarStatusItemController: NSObject {
             return event
         }
 
+        // Native menu tracking owns its menu windows and consumes the dismissal click.
+        // Those windows are not members of the popover's auxiliary-window registry.
+        guard !panelPresenter.isTrackingNativeMenu else { return event }
+
         guard !isEventInsidePresentedPanel(event), !isEventInsideStatusButton(event) else {
             return event
         }
@@ -611,8 +620,10 @@ final class MenuBarStatusItemController: NSObject {
                 screenX: Double(location.x),
                 screenY: Double(location.y)
             )
+            let generation = self?.dismissalGeneration
             DispatchQueue.main.async { [weak self] in
-                self?.handleGlobalMouseEvent(snapshot)
+                guard let self, self.dismissalGeneration == generation else { return }
+                self.handleGlobalMouseEvent(snapshot)
             }
         }
     }

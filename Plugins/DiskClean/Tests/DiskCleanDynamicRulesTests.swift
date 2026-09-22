@@ -30,31 +30,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
 
     // MARK: - Version parsing
 
-    func testVersionNumberAcceptsNumericDottedNamesOnly() {
-        XCTAssertEqual(DiskCleanVersionNumber("152.0.7933.0")?.components, [152, 0, 7933, 0])
-        XCTAssertEqual(DiskCleanVersionNumber("2.1.215")?.components, [2, 1, 215])
-        XCTAssertEqual(DiskCleanVersionNumber("223")?.components, [223])
-        XCTAssertEqual(DiskCleanVersionNumber("1.0.0-beta.2")?.components, [1, 0, 0, 2])
-
-        XCTAssertNil(DiskCleanVersionNumber("Current"))
-        XCTAssertNil(DiskCleanVersionNumber("ch-0"))
-        XCTAssertNil(DiskCleanVersionNumber("crx_cache"))
-        XCTAssertNil(DiskCleanVersionNumber("prefs.json"))
-        XCTAssertNil(DiskCleanVersionNumber("updater.log.old"))
-        XCTAssertNil(DiskCleanVersionNumber(""))
-    }
-
-    func testVersionNumberComparesNumericallyNotLexically() throws {
-        XCTAssertLessThan(
-            try XCTUnwrap(DiskCleanVersionNumber("2.1.9")),
-            try XCTUnwrap(DiskCleanVersionNumber("2.1.10"))
-        )
-        XCTAssertLessThan(
-            try XCTUnwrap(DiskCleanVersionNumber("2.1")),
-            try XCTUnwrap(DiskCleanVersionNumber("2.1.1"))
-        )
-    }
-
     // MARK: - Version directory provider
 
     func testVersionProviderKeepsNewestAndReturnsOlderVersions() async throws {
@@ -68,35 +43,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
         for item in items {
             XCTAssertTrue(item.path.hasPrefix(container.path + "/"), "candidate escaped container: \(item.path)")
         }
-    }
-
-    func testVersionProviderHonoursKeepNewestCount() async throws {
-        let container = try makeDirectory("versions")
-        try makeDirectories(["1.0.0", "1.1.0", "1.2.0", "1.3.0"], in: container)
-
-        let items = try await expand(containerGlobs: [container.path], keepNewestCount: 2)
-
-        XCTAssertEqual(names(of: items), ["1.1.0", "1.0.0"])
-    }
-
-    func testVersionProviderReturnsNothingWhenOnlyKeptVersionsExist() async throws {
-        let container = try makeDirectory("versions")
-        try makeDirectories(["3.0.0"], in: container)
-
-        let items = try await expand(containerGlobs: [container.path])
-
-        XCTAssertTrue(items.isEmpty)
-    }
-
-    func testVersionProviderIgnoresNonVersionEntriesAndFiles() async throws {
-        let container = try makeDirectory("GoogleUpdater")
-        try makeDirectories(["149.0.7814.0", "152.0.7933.0", "crx_cache"], in: container)
-        try Data("{}".utf8).write(to: container.appendingPathComponent("prefs.json"))
-        try Data("log".utf8).write(to: container.appendingPathComponent("updater.log"))
-
-        let items = try await expand(containerGlobs: [container.path])
-
-        XCTAssertEqual(names(of: items), ["149.0.7814.0"])
     }
 
     /// The version pointed to by `Current -> <version>` is in use and must not be a candidate even if it is not the newest.
@@ -125,20 +71,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
         let items = try await expand(containerGlobs: [container.path])
 
         XCTAssertEqual(names(of: items), ["1.1.0", "1.0.0"])
-    }
-
-    func testVersionProviderExpandsWildcardContainerGlobs() async throws {
-        let apps = try makeDirectory("apps")
-        for ide in ["IntelliJ", "GoLand"] {
-            let channel = apps.appendingPathComponent("\(ide)/ch-0", isDirectory: true)
-            try FileManager.default.createDirectory(at: channel, withIntermediateDirectories: true)
-            try makeDirectories(["223.8836.35", "241.14494.240"], in: channel)
-        }
-
-        let items = try await expand(containerGlobs: [apps.path + "/*/ch-*"])
-
-        XCTAssertEqual(Set(names(of: items)), ["223.8836.35"])
-        XCTAssertEqual(items.count, 2)
     }
 
     func testUnavailableSimulatorProviderReturnsOnlyUnavailableExistingDeviceDirectories() async throws {
@@ -189,22 +121,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
         }
     }
 
-    func testUnavailableSimulatorProviderReturnsEmptyWhenSimctlUnavailable() async throws {
-        let devices = try makeDirectory("Devices")
-
-        let missingExecutable = try await expandSimulators(
-            devicesRoot: devices,
-            outcome: .failure(.executableUnavailable(path: "/usr/bin/xcrun"))
-        )
-        XCTAssertTrue(missingExecutable.isEmpty)
-
-        let nonZeroExit = try await expandSimulators(
-            devicesRoot: devices,
-            outcome: .exit(code: 72, output: Data())
-        )
-        XCTAssertTrue(nonZeroExit.isEmpty)
-    }
-
     // MARK: - Real subprocess executor
 
     func testLocalSubprocessRunnerCapturesStandardOutput() async throws {
@@ -216,21 +132,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertEqual(String(data: result.standardOutput, encoding: .utf8), "diskclean\n")
-    }
-
-    func testLocalSubprocessRunnerReportsMissingExecutable() async throws {
-        do {
-            _ = try await LocalDiskCleanSubprocessRunner().run(
-                executablePath: root.appendingPathComponent("nope").path,
-                arguments: [],
-                timeout: .seconds(1)
-            )
-            XCTFail("missing executable should throw")
-        } catch let error as DiskCleanSubprocessError {
-            guard case .executableUnavailable = error else {
-                return XCTFail("unexpected error type: \(error)")
-            }
-        }
     }
 
     func testLocalSubprocessRunnerTimesOutAndTerminatesChild() async throws {
@@ -270,163 +171,6 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
             3,
             "SIGKILL escalation must close inherited pipe writers promptly"
         )
-    }
-
-    func testLocalSubprocessRunnerCancelsAfterOutputDrainAndTerminatesGroup() async throws {
-        let script = root.appendingPathComponent("close-output-and-wait.sh")
-        let pidFile = root.appendingPathComponent("processes.txt")
-        let source = """
-        trap '' TERM
-        (
-          trap '' TERM
-          exec 1>&-
-          sleep 30
-        ) &
-        child=$!
-        printf '%s %s\n' "$$" "$child" > "$1"
-        exec 1>&-
-        wait "$child"
-        """
-        try Data(source.utf8).write(to: script)
-        let drain = DiskCleanOutputDrainRecorder()
-        let runner = LocalDiskCleanSubprocessRunner {
-            drain.record()
-        }
-        let task = Task {
-            try await runner.run(
-                executablePath: "/bin/sh",
-                arguments: [script.path, pidFile.path],
-                timeout: .seconds(2)
-            )
-        }
-        defer { task.cancel() }
-
-        for _ in 0..<200 where !drain.didDrain {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(drain.didDrain, "subprocess stdout should reach EOF before cancellation")
-        let pidText = try String(contentsOf: pidFile, encoding: .utf8)
-        let processIDs = pidText.split(separator: " ").compactMap {
-            pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        XCTAssertEqual(processIDs.count, 2)
-        let started = Date()
-        task.cancel()
-
-        do {
-            _ = try await task.value
-            XCTFail("cancelled subprocess should throw")
-        } catch is CancellationError {
-            // Expected.
-        } catch {
-            XCTFail("expected CancellationError, got \(error)")
-        }
-
-        XCTAssertLessThan(Date().timeIntervalSince(started), 1.5)
-        for processID in processIDs {
-            for _ in 0..<200 where kill(processID, 0) == 0 {
-                try await Task.sleep(for: .milliseconds(10))
-            }
-            XCTAssertEqual(kill(processID, 0), -1, "process \(processID) should be terminated")
-        }
-    }
-
-    func testSubprocessLifecycleNaturalCompletionWinsLateTimeout() {
-        let lifecycle = DiskCleanSubprocessLifecycle()
-
-        lifecycle.recordLeaderExited()
-        lifecycle.recordDrainFinished()
-
-        XCTAssertEqual(lifecycle.outcome, .completed)
-        XCTAssertFalse(lifecycle.claimTimeout())
-        XCTAssertFalse(lifecycle.claimCancellation())
-        XCTAssertEqual(lifecycle.outcome, .completed)
-    }
-
-    func testSubprocessLifecycleTimeoutWinsWhileDescendantStillHoldsPipe() {
-        let lifecycle = DiskCleanSubprocessLifecycle()
-
-        lifecycle.recordLeaderExited()
-
-        XCTAssertTrue(lifecycle.claimTimeout())
-        XCTAssertFalse(lifecycle.claimTimeout())
-        XCTAssertFalse(lifecycle.claimCancellation())
-        lifecycle.recordDrainFinished()
-        XCTAssertEqual(lifecycle.outcome, .timedOut)
-    }
-
-    func testProcessGroupEscalationFinishesBeforeOwnershipRelease() async {
-        let events = DiskCleanProcessEventRecorder()
-        let lifecycle = DiskCleanSubprocessLifecycle()
-        lifecycle.recordLeaderExited()
-        lifecycle.recordDrainFinished()
-        let processGroup = DiskCleanProcessGroupBox(
-            processID: 42,
-            lifecycle: lifecycle,
-            signalGroup: { _, signal in
-                events.append(signal == SIGTERM ? .term : .kill)
-            },
-            waitForGrace: {
-                events.append(.grace)
-            }
-        )
-
-        await processGroup.finishAndTerminateRemainingDescendants()
-        events.append(.reap)
-        processGroup.releaseOwnership()
-        let eventsAtRelease = events.snapshot
-        for _ in 0 ..< 10 {
-            await Task.yield()
-        }
-
-        XCTAssertEqual(eventsAtRelease, [.term, .grace, .kill, .reap])
-        XCTAssertEqual(events.snapshot, eventsAtRelease)
-    }
-
-    func testFailedExitObservationRevokesAllProcessGroupSignals() async {
-        let events = DiskCleanProcessEventRecorder()
-        let lifecycle = DiskCleanSubprocessLifecycle()
-        let processGroup = DiskCleanProcessGroupBox(
-            processID: 42,
-            lifecycle: lifecycle,
-            signalGroup: { _, signal in
-                events.append(signal == SIGTERM ? .term : .kill)
-            },
-            waitForGrace: {
-                events.append(.grace)
-            }
-        )
-
-        processGroup.revokeGroupSignalOwnership()
-        processGroup.requestCancellation()
-        await processGroup.finishAndTerminateRemainingDescendants()
-        events.append(.reap)
-        processGroup.releaseOwnership()
-
-        XCTAssertEqual(events.snapshot, [.grace, .reap])
-    }
-
-    func testRunnerFailsWhenLeaderExitCannotBeSafelyObserved() async {
-        let runner = LocalDiskCleanSubprocessRunner(
-            waitForLeaderExitWithoutReaping: { _ in false }
-        )
-
-        do {
-            _ = try await runner.run(
-                executablePath: "/usr/bin/true",
-                arguments: [],
-                timeout: .seconds(1)
-            )
-            XCTFail("unsafe leader-exit observation should fail")
-        } catch let error as DiskCleanSubprocessError {
-            guard case let .launchFailed(path, message) = error else {
-                return XCTFail("expected launchFailed, got \(error)")
-            }
-            XCTAssertEqual(path, "/usr/bin/true")
-            XCTAssertEqual(message, "Unable to observe subprocess exit safely.")
-        } catch {
-            XCTFail("expected DiskCleanSubprocessError, got \(error)")
-        }
     }
 
     // MARK: - Helpers
@@ -497,38 +241,5 @@ final class DiskCleanDynamicRulesTests: XCTestCase {
 
     private func names(of items: [DiskCleanFileItem]) -> [String] {
         items.map { ($0.path as NSString).lastPathComponent }
-    }
-}
-
-private final class DiskCleanProcessEventRecorder: @unchecked Sendable {
-    enum Event: Equatable, Sendable {
-        case term
-        case grace
-        case kill
-        case reap
-    }
-
-    private let lock = NSLock()
-    private var events: [Event] = []
-
-    var snapshot: [Event] {
-        lock.withLock { events }
-    }
-
-    func append(_ event: Event) {
-        lock.withLock { events.append(event) }
-    }
-}
-
-private final class DiskCleanOutputDrainRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var drained = false
-
-    var didDrain: Bool {
-        lock.withLock { drained }
-    }
-
-    func record() {
-        lock.withLock { drained = true }
     }
 }

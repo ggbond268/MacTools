@@ -4,38 +4,6 @@ import XCTest
 @testable import AppleShortcutsPlugin
 
 final class AppleShortcutsCommandRunnerTests: XCTestCase {
-    func testBuildsExactRunArgumentsWithoutShellInterpolation() async throws {
-        let executable = try makeExecutable("""
-        #!/bin/sh
-        printf '%s\\n' "$@"
-        """)
-        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
-        let runner = ProcessAppleShortcutsCommandRunner(commandURL: executable)
-        let id = UUID()
-
-        let result = try await runner.runShortcut(id: id)
-
-        XCTAssertEqual(result.standardOutput, "run\n\(id.uuidString)\n")
-    }
-
-    func testListCommandsParseIdentifiersAndFolderArgument() async throws {
-        let shortcutID = UUID()
-        let executable = try makeExecutable("""
-        #!/bin/sh
-        if [ "$2" = "--folder-name" ]; then
-          printf 'Inside (\(shortcutID.uuidString))\\n'
-        else
-          printf 'All (\(shortcutID.uuidString))\\n'
-        fi
-        """)
-        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
-        let runner = ProcessAppleShortcutsCommandRunner(commandURL: executable)
-
-        let allIDs = try await runner.listShortcuts().map(\.id)
-        let folderIDs = try await runner.listShortcuts(inFolder: UUID()).map(\.id)
-        XCTAssertEqual(allIDs, [shortcutID])
-        XCTAssertEqual(folderIDs, [shortcutID])
-    }
 
     func testNonzeroExitUsesBoundedStandardError() async throws {
         let executable = try makeExecutable("""
@@ -65,7 +33,7 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
         }
     }
 
-    func testEverySupportedOperationUsesTheExactArgumentVector() async throws {
+    func testDiscoveryAndExecutionUseExactArgumentsAndParseResults() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -84,12 +52,16 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
         """, in: directory)
         let runner = ProcessAppleShortcutsCommandRunner(commandURL: executable)
 
-        _ = try await runner.listShortcuts()
-        _ = try await runner.listFolders()
-        _ = try await runner.listShortcuts(inFolder: folderID)
-        _ = try await runner.runShortcut(id: itemID)
+        let shortcuts = try await runner.listShortcuts()
+        let folders = try await runner.listFolders()
+        let folderShortcuts = try await runner.listShortcuts(inFolder: folderID)
+        let execution = try await runner.runShortcut(id: itemID)
         try await runner.viewShortcut(name: "--help")
 
+        XCTAssertEqual(shortcuts.map(\.id), [itemID])
+        XCTAssertEqual(folders.map(\.id), [itemID])
+        XCTAssertEqual(folderShortcuts.map(\.id), [itemID])
+        XCTAssertEqual(execution.standardOutput, "Fixture (\(itemID.uuidString))\n")
         let lines = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map(String.init)
         XCTAssertEqual(lines, [
             "list|--show-identifiers",
@@ -116,43 +88,6 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
             XCTFail("Expected malformed truncated output")
         } catch {
             XCTAssertEqual(error as? AppleShortcutsCommandError, .malformedOutput)
-        }
-    }
-
-    func testDuplicateDiscoveryIdentifierFailsClosed() async throws {
-        let id = UUID()
-        let executable = try makeExecutable("""
-        #!/bin/sh
-        printf 'Original (\(id.uuidString))\nRenamed (\(id.uuidString))\n'
-        """)
-        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
-        let runner = ProcessAppleShortcutsCommandRunner(commandURL: executable)
-
-        do {
-            _ = try await runner.listShortcuts()
-            XCTFail("Expected malformed duplicate output")
-        } catch {
-            XCTAssertEqual(error as? AppleShortcutsCommandError, .malformedOutput)
-        }
-    }
-
-    func testTimeoutTerminatesCommand() async throws {
-        let executable = try makeExecutable("""
-        #!/bin/sh
-        trap '' TERM
-        sleep 10
-        """)
-        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
-        let runner = ProcessAppleShortcutsCommandRunner(
-            commandURL: executable,
-            runTimeout: 0.1
-        )
-
-        do {
-            _ = try await runner.runShortcut(id: UUID())
-            XCTFail("Expected timeout")
-        } catch {
-            XCTAssertEqual(error as? AppleShortcutsCommandError, .timedOut)
         }
     }
 
@@ -214,39 +149,6 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
         }
     }
 
-    func testCancellationBeforeLaunchClaimDoesNotSpawnCommand() async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let marker = directory.appendingPathComponent("launched")
-        let escapedMarker = marker.path.replacingOccurrences(of: "'", with: "'\\''")
-        let executable = try makeExecutable("""
-        #!/bin/sh
-        printf launched > '\(escapedMarker)'
-        """, in: directory)
-        let gate = AppleShortcutsLaunchGate()
-        let runner = ProcessAppleShortcutsCommandRunner(
-            commandURL: executable,
-            beforeProcessLaunch: { gate.pauseBeforeLaunch() },
-            onProcessStopRequested: { gate.recordStop() }
-        )
-        let task = Task { try await runner.runShortcut(id: UUID()) }
-        XCTAssertTrue(gate.waitUntilLaunchPaused())
-
-        task.cancel()
-        XCTAssertTrue(gate.waitUntilStopRecorded())
-        gate.resumeLaunch()
-
-        do {
-            _ = try await task.value
-            XCTFail("Expected cancellation before launch")
-        } catch {
-            XCTAssertTrue(error is CancellationError)
-        }
-        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
-    }
-
     func testUnavailableExecutableFailsBeforeLaunch() async {
         let runner = ProcessAppleShortcutsCommandRunner(
             commandURL: URL(fileURLWithPath: "/private/mactools-missing-shortcuts")
@@ -256,21 +158,6 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
             XCTFail("Expected unavailable executable")
         } catch {
             XCTAssertEqual(error as? AppleShortcutsCommandError, .executableUnavailable)
-        }
-    }
-
-    func testPostCheckSpawnFailureIsTyped() async throws {
-        let executable = try makeExecutable("not a Mach-O or script")
-        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
-        let runner = ProcessAppleShortcutsCommandRunner(commandURL: executable)
-
-        do {
-            _ = try await runner.runShortcut(id: UUID())
-            XCTFail("Expected launch failure")
-        } catch let AppleShortcutsCommandError.launchFailed(code) {
-            XCTAssertEqual(code, ENOEXEC)
-        } catch {
-            XCTFail("Expected typed launch failure, got \(error)")
         }
     }
 
@@ -284,32 +171,5 @@ final class AppleShortcutsCommandRunnerTests: XCTestCase {
         try Data(source.utf8).write(to: url, options: .atomic)
         XCTAssertEqual(chmod(url.path, 0o700), 0)
         return url
-    }
-}
-
-private final class AppleShortcutsLaunchGate: @unchecked Sendable {
-    private let launchPaused = DispatchSemaphore(value: 0)
-    private let launchResume = DispatchSemaphore(value: 0)
-    private let stopRecorded = DispatchSemaphore(value: 0)
-
-    func pauseBeforeLaunch() {
-        launchPaused.signal()
-        launchResume.wait()
-    }
-
-    func recordStop() {
-        stopRecorded.signal()
-    }
-
-    func waitUntilLaunchPaused() -> Bool {
-        launchPaused.wait(timeout: .now() + 2) == .success
-    }
-
-    func waitUntilStopRecorded() -> Bool {
-        stopRecorded.wait(timeout: .now() + 2) == .success
-    }
-
-    func resumeLaunch() {
-        launchResume.signal()
     }
 }

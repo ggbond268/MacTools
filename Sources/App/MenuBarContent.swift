@@ -2121,6 +2121,7 @@ private struct PluginPanelSegmentedControl: NSViewRepresentable {
         return CGSize(width: proposedWidth.isFinite ? max(0, proposedWidth) : intrinsicWidth, height: 24)
     }
 
+    @MainActor
     final class Coordinator: NSObject {
         var parent: PluginPanelSegmentedControl
 
@@ -2679,23 +2680,9 @@ final class SecondaryPanelWindow: NSPanel {
 
 @MainActor
 final class SecondaryPanelController: ObservableObject {
-    // The secondary panel must remain a sibling of the MenuBarExtra popover, not a child window.
-    //
-    // Background: `NSWindow.addChildWindow(_:, ordered:)` binds parent and child key status into the
-    // same focus group, so the parent window does not receive `didResignKeyNotification` when the
-    // user clicks outside. `MenuBarExtra(.window)` dismissal, implemented by SwiftUI's private
-    // `WindowMenuBarExtraBehavior`, relies on the popover's `didResignKey` notification. Once this
-    // panel is attached as a child window, the popover never closes itself.
-    //
-    // Solution: keep it as an independent sibling NSPanel and never call `addChildWindow`. Its
-    // placement is computed from `anchorRect` and the anchor screen's visible frame; when neither
-    // side has enough room, MenuBarContent renders the same panel as an in-place drill-in view.
-    //
-    // References:
-    // - MenuBarExtraAccess source, which observes `didResignKey` on `MenuBarExtraWindow`
-    //   https://github.com/orchetect/MenuBarExtraAccess
-    // - Apple Feedback FB11984872: window-style MenuBarExtra cannot be closed programmatically
-    // - CocoaDev "HowCanChildWindowBeKey": https://cocoadev.github.io/HowCanChildWindowBeKey/
+    // Detail panels remain non-key siblings. Their lifetime follows the host popover's visibility,
+    // not key-window changes: native menus and child popovers can temporarily own keyboard focus.
+    // MenuBarStatusItemController owns outside-click/application-switch dismissal for the group.
 
     private weak var hostWindow: NSWindow?
     private var panelWindow: SecondaryPanelWindow?
@@ -2831,7 +2818,7 @@ final class SecondaryPanelController: ObservableObject {
             setPresentingInline(false)
             panelWindow.setFrame(frame, display: true)
             // Align the panel level to `hostWindow.level + 1` at runtime so it stays above the popover.
-            // The MenuBarExtra popover level is a private SwiftUI implementation detail.
+            // The native popover window level is an AppKit implementation detail.
             panelWindow.level = NSWindow.Level(rawValue: hostWindow.level.rawValue + 1)
             PluginPresentationSafety.prepareForWindowOrdering(panelWindow)
             panelWindow.orderFrontRegardless()
@@ -2895,7 +2882,7 @@ final class SecondaryPanelController: ObservableObject {
         panel.isFloatingPanel = true
         MenuBarPanelWindowRegistry.markSecondaryPanel(panel)
         // Keep this false. For an LSUIElement menu-bar app, the app is often inactive while
-        // MenuBarExtra is open, but the menu remains interactive. If `hidesOnDeactivate` is enabled,
+        // the popover is open, but the menu remains interactive. If `hidesOnDeactivate` is enabled,
         // the panel hides immediately after showing, or can end up with `isVisible == true` while no
         // pixels are on screen. Panel lifetime is driven by MenuBarContent's `onDisappear` and
         // `syncSecondaryPanelWindow`.
@@ -2917,23 +2904,14 @@ final class SecondaryPanelController: ObservableObject {
         let notificationCenter = NotificationCenter.default
         hostWindowObservers = [
             notificationCenter.addObserver(
-                forName: NSWindow.didResignKeyNotification,
-                object: hostWindow,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.hide()
-                    self?.onHostWindowDismissRequest?()
-                }
-            },
-            notificationCenter.addObserver(
                 forName: NSWindow.willCloseNotification,
                 object: hostWindow,
                 queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.hide()
-                    self?.onHostWindowDismissRequest?()
+            ) { [weak self, weak hostWindow] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let hostWindow, self.hostWindow === hostWindow else { return }
+                    self.hide()
+                    self.onHostWindowDismissRequest?()
                 }
             }
         ]

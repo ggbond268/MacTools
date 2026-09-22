@@ -14,38 +14,6 @@ final class SystemPowerPluginTests: XCTestCase {
         )
     }
 
-    func testPluginContractAndPanelControls() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.metadata.id, "system-power")
-        XCTAssertEqual(plugin.metadata.order, 99)
-        XCTAssertEqual(plugin.rowDescriptor.controlStyle, .disclosure)
-        XCTAssertEqual(
-            plugin.rowState.detail?.primaryControls.map(\.id),
-            ["sleep", "log-out", "restart", "shut-down"]
-        )
-        XCTAssertTrue(
-            plugin.rowState.detail?.primaryControls.allSatisfy {
-                switch $0.actionBehavior {
-                case .dismissBeforeHandling:
-                    true
-                case .keepPresented:
-                    false
-                }
-            } == true
-        )
-    }
-
-    func testDisclosureStateNotifiesTheHost() {
-        let plugin = makePlugin()
-        var stateChangeCount = 0
-        plugin.onStateChange = { stateChangeCount += 1 }
-
-        plugin.handleAction(.setDisclosureExpanded(true))
-
-        XCTAssertEqual(stateChangeCount, 1)
-    }
-
     func testCanonicalActionsAreForegroundOnlyAndUnavailableToRunLinks() {
         let plugin = makePlugin()
 

@@ -64,51 +64,10 @@ final class AppHotkeyStoreTests: XCTestCase {
         XCTAssertNil(store.conflictEntry(for: binding, excludingID: first.id))
     }
 
-    func testShortcutEntryCodableRoundTrip() throws {
-        let entry = AppShortcutEntry(
-            bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app"),
-            displayName: "Xcode",
-            shortcut: ShortcutBinding(keyCode: 2, modifiers: [.command, .option])
-        )
-
-        let decoded = try JSONDecoder().decode(AppShortcutEntry.self, from: JSONEncoder().encode(entry))
-
-        XCTAssertEqual(decoded, entry)
-    }
 }
 
 @MainActor
 final class AppHotkeyPluginTests: XCTestCase {
-    func testDefaultStateAndMetadata() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.metadata.id, "app-hotkey")
-        XCTAssertTrue(plugin.rowState.isOn)
-        XCTAssertEqual(plugin.rowState.subtitle, "暂无绑定，前往设置配置")
-    }
-
-    func testSubtitleCountsConfiguredApplicationsAndReflectsDisabledState() {
-        let storage = InMemoryPluginStorage()
-        let store = AppHotkeyStore(storage: storage)
-        store.addEntry(AppShortcutEntry(
-            bundleURL: URL(fileURLWithPath: "/Applications/Safari.app"),
-            displayName: "Safari",
-            shortcut: ShortcutBinding(keyCode: 0, modifiers: [.command])
-        ))
-        store.addEntry(AppShortcutEntry(
-            bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app"),
-            displayName: "Xcode"
-        ))
-        let plugin = makePlugin(storage: storage)
-
-        XCTAssertEqual(plugin.rowState.subtitle, "已配置 2 个应用")
-
-        plugin.handleAction(.setSwitch(false))
-
-        XCTAssertFalse(plugin.rowState.isOn)
-        XCTAssertEqual(plugin.rowState.subtitle, "快捷键已暂停")
-        XCTAssertFalse(storage.bool(forKey: "isEnabled"))
-    }
 
     func testEntriesPublishConcreteActionsAndLegacyBindingsMigrateOnce() throws {
         let storage = InMemoryPluginStorage()

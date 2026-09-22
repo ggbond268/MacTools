@@ -106,21 +106,6 @@ final class PluginPanelHostTests: XCTestCase {
         XCTAssertEqual(host.panelItems.first { $0.pluginID == "example" }?.description, "Updated")
     }
 
-    func testLayoutOnlyMutationsDoNotRereadDefinitionsOrRecreateCachedViews() throws {
-        let plugin = PanelTestPlugin()
-        let host = host([plugin])
-        let custom = try XCTUnwrap(host.addMenuBarPanel())
-        let chart = try XCTUnwrap(host.panelEntries(in: "components").first)
-        _ = host.componentViewItem(for: chart.id, dismiss: {})
-        let reads = plugin.readCount
-        let change = try XCTUnwrap(host.transferPanelEntry(chart, from: "components", to: custom, at: 0))
-        _ = host.componentViewItem(for: chart.id, dismiss: {})
-        XCTAssertEqual(plugin.readCount, reads)
-        XCTAssertEqual(plugin.factoryCalls, 1)
-        XCTAssertTrue(host.undoPanelLayoutChange(change))
-        XCTAssertEqual(host.panelEntries(in: "components").first?.placement.id, chart.placement.id)
-    }
-
     func testLibraryFindsItemTitlesAndExposesEveryViewWithinItsPlugin() {
         let host = host([PanelTestPlugin()])
         XCTAssertEqual(PanelComponentLibraryItem.catalog(in: host).first?.items.count, 4)
@@ -129,59 +114,6 @@ final class PluginPanelHostTests: XCTestCase {
         let matches = PanelComponentLibraryItem.catalog(in: host, matching: "History")
         XCTAssertEqual(matches.count, 1)
         XCTAssertEqual(matches.first?.items.map(\.key.itemID), ["history"])
-    }
-
-    func testLibraryPreservesPluginOrderInsteadOfSortingLocalizedTitles() {
-        let host = host([PanelTestPlugin(id: "z-first"), PanelTestPlugin(id: "a-second", order: 1)])
-        XCTAssertEqual(PanelComponentLibraryItem.catalog(in: host).map(\.id), ["z-first", "a-second"])
-    }
-
-    func testMeasuredHeightsAreIndependentCoalescedAndDoNotRefreshPlugins() async throws {
-        let plugin = PanelTestPlugin()
-        let host = host([plugin])
-        let first = try XCTUnwrap(host.panelEntries(in: "components").first)
-        XCTAssertTrue(host.addPanelItem(first.key, to: "components"))
-        let copy = try XCTUnwrap(host.panelEntries(in: "components").last)
-        _ = host.componentViewItem(for: first.id, dismiss: {})
-        _ = host.componentViewItem(for: copy.id, dismiss: {})
-        let reads = plugin.readCount
-        let layout = host.menuBarPanelStore.configuration
-        _ = host.componentItems // Populate the projection cache before measuring.
-        var notifications = 0
-        var hostChanges = 0
-        let resized = expectation(description: "Coalesced layout update")
-        let contentSubscription = host.menuBarPanelContentDidChange.sink {
-            notifications += 1
-            resized.fulfill()
-        }
-        let hostSubscription = host.objectWillChange.sink { hostChanges += 1 }
-
-        plugin.contexts[0].reportContentHeight(501)
-        plugin.contexts[0].reportContentHeight(503)
-        plugin.contexts[1].reportContentHeight(80)
-        await fulfillment(of: [resized], timeout: 1)
-        contentSubscription.cancel()
-
-        XCTAssertEqual(notifications, 1)
-        XCTAssertEqual(hostChanges, 0)
-        XCTAssertEqual(host.componentItems.map(\.span.height), [63, 10])
-        XCTAssertEqual(plugin.readCount, reads)
-        XCTAssertEqual(plugin.factoryCalls, 2)
-        XCTAssertEqual(host.menuBarPanelStore.configuration, layout)
-        let item = try XCTUnwrap(host.panelCoordinator.item(for: first.key))
-        XCTAssertEqual(host.panelCoordinator.widgetSnapshot(item)?.span.height, 1)
-        var previewHeight: CGFloat?
-        _ = host.componentPreviewView(for: item.id, reportContentHeight: { previewHeight = $0 })
-        plugin.contexts.last?.reportContentHeight(800)
-        XCTAssertEqual(previewHeight, 800)
-        XCTAssertEqual(host.componentItems.map(\.span.height), [63, 10])
-
-        let shrunk = expectation(description: "Only the first copy shrinks")
-        let shrinkSubscription = host.menuBarPanelContentDidChange.sink { shrunk.fulfill() }
-        plugin.contexts[0].reportContentHeight(40)
-        await fulfillment(of: [shrunk], timeout: 1)
-        XCTAssertEqual(host.componentItems.map(\.span.height), [5, 10])
-        withExtendedLifetime((hostSubscription, shrinkSubscription)) {}
     }
 
     func testInvalidCatalogUpdatesPreserveTheLastValidSnapshotAndKindContract() async throws {

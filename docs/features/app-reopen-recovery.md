@@ -78,11 +78,12 @@ Source of truth: yes
 | Owner runtime | `Sources/App/MacToolsAppRuntime.swift` |
 | Architecture plan | `docs/superpowers/plans/2026-08-12-single-instance-reopen-recovery.md` |
 | Settings presentation | `Sources/App/AppWindowRouter.swift` |
-| Tests | `Tests/App/AppInstanceCoordinatorTests.swift`, `Tests/App/AppInstanceCoordinatorProcessTests.swift`, `Tests/App/MacToolsAppDelegateTests.swift`, `Tests/App/AppWindowRouterTests.swift` |
-| Process probe | `Tests/Support/AppInstanceProbe/AppInstanceProbe.swift` |
+| Tests | `Tests/App/AppInstanceCoordinatorTests.swift`, `Tests/App/MacToolsAppDelegateTests.swift` |
 | Test integration | `project.yml`, `scripts/plugins/generate-plugin-project-config.rb` |
 
 ## Tests / QA
+
+The September 2026 test reduction retired the native UI checks and process fan-out probe. The completion records below describe the original implementation validation; current automated checks cover the core coordinator behavior. Repeat real launch and window activation checks manually when those paths change.
 
 - [x] The AppKit callback requests Settings; the router activates, deminiaturizes, and orders the window front.
 - [x] Run `MacToolsAppDelegateTests` and `AppWindowRouterTests` after implementation.

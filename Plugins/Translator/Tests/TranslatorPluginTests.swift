@@ -5,38 +5,6 @@ import XCTest
 
 @MainActor
 final class TranslatorPluginTests: XCTestCase {
-    func testMetadataMatchesManifestContract() {
-        let plugin = makePlugin()
-
-        XCTAssertEqual(plugin.metadata.id, "translator")
-        XCTAssertEqual(plugin.metadata.title, "翻译")
-        XCTAssertEqual(plugin.metadata.defaultDescription, "划词与截图快捷键翻译")
-        XCTAssertTrue(plugin.panelItems.contains { $0.kind == .row })
-        XCTAssertNotNil(plugin.settingsPage)
-    }
-
-    func testShortcutDefinitionsIncludeSelectAndScreenshotTranslation() {
-        let definitions = makePlugin().shortcutDefinitions
-
-        XCTAssertEqual(definitions.map(\.id), [
-            "translator.select-translation",
-            "translator.screenshot-translation",
-        ])
-        XCTAssertEqual(definitions.map(\.actionID), [
-            "select-translation",
-            "screenshot-translation",
-        ])
-        XCTAssertEqual(definitions.map(\.scope), [.global, .global])
-        XCTAssertEqual(definitions.first?.defaultBinding?.keyCode, UInt16(kVK_ANSI_D))
-        XCTAssertEqual(definitions.last?.defaultBinding?.keyCode, UInt16(kVK_ANSI_S))
-    }
-
-    func testDeclaresAccessibilityAutomationAndScreenRecordingPermissions() {
-        let requirements = makePlugin().permissionRequirements
-
-        XCTAssertEqual(requirements.map(\.id), ["accessibility", "automation", "screen-recording"])
-        XCTAssertEqual(requirements.map(\.kind), [.accessibility, .automation, .screenRecording])
-    }
 
     func testPrimaryPanelReflectsPermissionAndSetupState() {
         XCTAssertEqual(

@@ -10504,67 +10504,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعطّل «أبدًا» انتهاء السجل حسب العمر؛ وقد تزيل حدود السعة أقدم عناصر السجل. ولا تتأثر العناصر المحفوظة."
+            "value": "تُحسب المدة من آخر استخدام، أو من وقت الإضافة للعناصر التي لم تُستخدم بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "„Nie“ deaktiviert den zeitbasierten Ablauf. Kapazitätsgrenzen können den ältesten Verlauf entfernen; gespeicherte Elemente bleiben erhalten."
+            "value": "Ab der letzten Verwendung; noch nie verwendete Einträge zählen ab dem Hinzufügen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Never disables age-based expiration; capacity limits may still remove the oldest History items. Saved items are unaffected."
+            "value": "Count from the last use, or from when the item was added if it has never been used."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nunca desactiva la caducidad por antigüedad; los límites de capacidad aún pueden eliminar el historial más antiguo. Los elementos guardados no se ven afectados."
+            "value": "Se cuenta desde el último uso, o desde que se añadió el elemento si nunca se ha usado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jamais désactive l’expiration selon l’âge ; les limites de capacité peuvent encore supprimer l’historique le plus ancien. Les éléments enregistrés ne sont pas affectés."
+            "value": "À partir de la dernière utilisation, ou de l’ajout si l’élément n’a jamais été utilisé."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "「しない」は期間による期限切れを無効にします。容量上限により古い履歴が削除される場合があります。保存済み項目には影響しません。"
+            "value": "最後に使用した時点から計算します。未使用の項目は追加時点から計算します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "안 함은 기간에 따른 만료를 끕니다. 용량 한도에 따라 오래된 기록은 삭제될 수 있으며 저장된 항목에는 영향을 주지 않습니다."
+            "value": "마지막 사용 시점부터 계산하며, 사용한 적이 없는 항목은 추가 시점부터 계산합니다."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nunca desativa a expiração por idade; os limites de capacidade ainda podem remover o histórico mais antigo. Os itens salvos não são afetados."
+            "value": "Conta a partir do último uso, ou da adição do item se ele nunca foi usado."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "«Никогда» отключает удаление по возрасту; лимиты ёмкости всё ещё могут удалить самую старую историю. Сохранённые элементы не затрагиваются."
+            "value": "Отсчитывается с последнего использования, а для неиспользованных элементов — с момента добавления."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "“永不”会关闭按时间过期；容量上限仍可能移除最早的历史。已存项目不受影响。"
+            "value": "按最后使用时间计算；未使用过的记录按添加时间计算。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "「永不」會關閉按時間到期；容量上限仍可能移除最早的記錄。已儲存項目不受影響。"
+            "value": "按最後使用時間計算；未使用過的記錄按加入時間計算。"
           }
         }
       }
@@ -10854,67 +10854,67 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انتهاء تلقائي"
+            "value": "مدة انتهاء الصلاحية عند عدم الاستخدام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatisch ablaufen"
+            "value": "Ablauf bei Inaktivität"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatic Expiration"
+            "value": "Inactivity Expiration"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Caducidad automática"
+            "value": "Caducidad por inactividad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expiration automatique"
+            "value": "Expiration après inactivité"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "自動期限切れ"
+            "value": "未使用時の保持期間"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "자동 만료"
+            "value": "미사용 만료 기간"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Expiração automática"
+            "value": "Expiração por inatividade"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Автоудаление"
+            "value": "Срок хранения без использования"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自动过期"
+            "value": "闲置过期时间"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "自動過期"
+            "value": "閒置到期時間"
           }
         }
       }

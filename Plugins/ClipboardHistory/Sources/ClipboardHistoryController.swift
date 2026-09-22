@@ -723,7 +723,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private(set) var historyItemCount = 0
     private(set) var savedItemCount = 0
     private var historyPayloadByteCount = 0
-    private var oldestUnprotectedHistoryCapturedAt: Date?
+    private var oldestUnprotectedHistoryActivityAt: Date?
 
     /// Only content mutations disable the panel. Saving a bookmark still holds
     /// the persistence barrier, but must not dim every control while it commits.
@@ -1669,13 +1669,10 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         item.discardCachedPayloadIfReloadable()
     }
 
-    func requestImageTextIndexing(id: UUID?) {
-        guard let id,
-              let item = items.first(where: {
-                  $0.id == id && $0.kind == .image && !$0.hasCompletedImageTextIndexing
-              }) else {
-            return
-        }
+    func requestImageTextIndexing(for item: ClipboardHistoryItem) {
+        // The panel already has the item. The queue validates its current history
+        // membership and indexing state when work starts.
+        guard item.kind == .image, !item.hasCompletedImageTextIndexing else { return }
         imageIndexAttemptedItemIDs.remove(item.id)
         enqueueImageTextIndexing(for: [item])
     }
@@ -1753,7 +1750,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         let selectedIDs = Set(ids)
         var updated = items
         for index in updated.indices where selectedIDs.contains(updated[index].id) {
-            updated[index].lastUsedAt = usedAt
+            updated[index].lastUsedAt = max(updated[index].lastUsedAt ?? usedAt, usedAt)
         }
         publishItems(updated, changedIDs: selectedIDs)
         persistCurrentItems(changedIDs: selectedIDs)
@@ -1812,9 +1809,12 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
     private func recordItemUsage(at index: Int) {
         guard !isSuspendedForBackup else { return }
         var updated = items
-        updated[index].lastUsedAt = Date()
+        let usedAt = Date()
+        updated[index].lastUsedAt = max(updated[index].lastUsedAt ?? usedAt, usedAt)
         publishItems(updated, changedIDs: [updated[index].id])
         persistCurrentItems(changedIDs: [items[index].id])
+        // Reuse only extends expiration. Let the existing timer recheck activity and schedule
+        // the next deadline when it fires, avoiding another full scan on every paste.
         notifyChanged(reschedulesRetention: false)
     }
 
@@ -2041,7 +2041,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         guard items.contains(where: {
             $0.isInHistory
                 && !protectedIDs.contains($0.id)
-                && $0.capturedAt < cutoff
+                && $0.lastActivityAt < cutoff
         }) else {
             return
         }
@@ -2073,7 +2073,7 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
         let protectedIDs = expirationProtectedItemIDs
         guard let nextExpiration = items.lazy
             .filter({ $0.isInHistory && !protectedIDs.contains($0.id) })
-            .map({ $0.capturedAt.addingTimeInterval(interval) })
+            .map({ $0.lastActivityAt.addingTimeInterval(interval) })
             .min() else { return }
         retentionTimer = Timer.scheduledTimer(
             timeInterval: max(0.05, nextExpiration.timeIntervalSince(now)),
@@ -2642,14 +2642,14 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             historyCount += 1
             payloadByteCount += item.payloadByteCount
             guard !protectedIDs.contains(item.id) else { continue }
-            if item.capturedAt < (oldestUnprotectedDate ?? .distantFuture) {
-                oldestUnprotectedDate = item.capturedAt
+            if item.lastActivityAt < (oldestUnprotectedDate ?? .distantFuture) {
+                oldestUnprotectedDate = item.lastActivityAt
             }
         }
         historyItemCount = historyCount
         savedItemCount = savedCount
         historyPayloadByteCount = payloadByteCount
-        oldestUnprotectedHistoryCapturedAt = oldestUnprotectedDate
+        oldestUnprotectedHistoryActivityAt = oldestUnprotectedDate
     }
 
     private func canApplyCaptureWithoutFullRetentionEvaluation(
@@ -2671,8 +2671,8 @@ final class ClipboardHistoryController: NSObject, ObservableObject {
             return false
         }
         if let interval = currentSettings.expiration.interval,
-           let oldestUnprotectedHistoryCapturedAt,
-           oldestUnprotectedHistoryCapturedAt < now.addingTimeInterval(-interval) {
+           let oldestUnprotectedHistoryActivityAt,
+           oldestUnprotectedHistoryActivityAt < now.addingTimeInterval(-interval) {
             return false
         }
         return true

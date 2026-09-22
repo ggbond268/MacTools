@@ -962,10 +962,10 @@ struct ClipboardHistorySettingsView: View {
             }
             PluginSettingsListDivider()
             settingPickerRow(
-                title: localization.string("settings.retention.expiration.title", defaultValue: "自动过期"),
+                title: localization.string("settings.retention.expiration.title", defaultValue: "闲置过期时间"),
                 description: localization.string(
                     "settings.retention.expiration.description",
-                    defaultValue: "“永不”仅关闭按时间过期；容量规则仍会移除最早的历史记录。"
+                    defaultValue: "按最后使用时间计算；未使用过的记录按添加时间计算。"
                 ),
                 selection: $settings.expiration
             ) {

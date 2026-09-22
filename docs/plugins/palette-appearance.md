@@ -13,41 +13,23 @@ Command Palette and Clipboard History use `PluginPaletteSurface` from PluginKit.
 
 Apple references: [custom SwiftUI glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views), [macOS 27 AppKit design updates](https://developer.apple.com/videos/play/wwdc2026/289/).
 
-## Repeatable validation
+## Search headers and icon controls
 
-Select the affected cases in `PluginPaletteSurfaceTests`, `ClipboardHistoryWindowStyleTests`, or `ClipboardHistoryDetailActionStyleTests`. The surface regression checks opaque rendering and preserves the native field editor, marked text, hit testing, and window frame across live appearance and surface changes. Add routing, keyboard, placement, or preview checks only when those behaviors change. Use `make ci` before pushing shared PluginKit changes; it includes script checks.
+- Command Palette, Clipboard History, clipboard actions, and Window Switcher share a 36-point search header. Window Switcher's expandable inline field retains its compact 32-point layout.
+- `PluginPaletteSearchChrome` applies search spacing, a neutral semantic fill, and a subtle focus-fill change without replacing the native text field or its input-method handling. Pass the field's accessibility identifier and current Increase Contrast state. Custom AppKit headers use `PluginPaletteChrome` colors and the same metrics. Both APIs require host 1.3.1.
+- Search text uses the regular system font. Keep the magnifying glass, placeholder, clear action, and insertion caret recognizable. Clear buttons retain a 24-point hit target. Preserve each panel's original controls: style existing close buttons consistently, but do not add one solely to match another panel's layout.
+- `PluginPaletteToolbarControlStyle` has no permanent border or fill in the standard appearance. Hover and press use neutral fills; disabled controls do not react. Native AppKit icon controls use inline bezels with mouse-over borders. Increase Contrast restores search and SwiftUI control outlines, while native controls follow the system accessibility appearance.
+- Preserve existing search commands, IME composition, focus restoration, and the distinction between clearing a query, collapsing inline search, and dismissing a panel.
 
-Three optional XCTest methods open the production panels with synthetic data and isolated settings. Set `TEST_RUNNER_MACTOOLS_PALETTE_CAPTURE_DIR` to an absolute local output directory when invoking `xcodebuild test`, and select:
+## Validation
 
-```text
--only-testing:MacToolsTests/AppWindowRouterTests/testCaptureCommandPaletteAppearanceForReview
--only-testing:MacToolsTests/AppWindowRouterTests/testCaptureSettingsCommandPaletteAppearanceForReview
--only-testing:MacToolsTests/ClipboardHistoryPluginTests/testCaptureClipboardAppearanceForReview
-```
+Palette appearance and native interaction are checked manually. Automated screenshot capture, native pointer injection, and UI XCTest fixtures have been removed from the routine suite. Keep logic coverage in the command/search models, action executor, and clipboard controllers; see the [core test scope](../testing/core-tests.md).
 
-For the actual composited glass over the synthetic backdrop, run the driver from an unlocked desktop whose invoking terminal already has Screen Recording access:
+For changes to this surface, exercise only the affected paths:
 
-```sh
-python3 scripts/e2e/capture-palette-appearance.py build/PaletteAppearance/review
-```
+- Open the palette, type a query with ordinary text and IME composition, execute or cancel, and reopen.
+- Check focus, dragging, resizing, and display placement when those behaviors change.
+- Review light/dark appearance, Reduce Transparency, and Increase Contrast when changing material or colors. Use representative backgrounds and content rather than a screenshot matrix.
+- For performance work, compare the same workload on equivalent builds and record the OS, settings, and observations. Avoid fixed wall-clock thresholds in XCTest.
 
-For an interactive inspection of the synthetic Command Palette, also set `TEST_RUNNER_MACTOOLS_PALETTE_INTERACTIVE_REVIEW=1` when running its XCTest directly. After the automatic checks it holds the light palette open for 60 seconds for pointer and keyboard review, then closes it.
-
-The output directory must be new. The helper uses the last connected display for review and captures the panel rectangle above an owned synthetic background. Keep unrelated windows and alerts clear of that display: rectangle captures include anything overlapping the panel. A final frame on the other display is recorded separately when available. The driver runs the tests sequentially so native field editors do not compete for key focus.
-
-Add `--native-drag` to exercise each production drag handle with injected pointer events. This requires existing pointer-event access and moves only windows owned by that test build. The test supplies the native handle's coordinates, and the driver fails if the window does not move. The resulting `.drag.json` files distinguish this check from programmatic movement and physical hardware input. Idle CPU sampling waits two seconds after reopening to avoid measuring the opening transition.
-
-Without the driver, the helper uses ScreenCaptureKit if access is available, or an in-process view image otherwise. Window-only and in-process images do not establish the appearance of WindowServer glass over the real backdrop; `capture-report.json` identifies the method. Capture tests are skipped during ordinary CI runs. They never use the personal clipboard, modify global appearance settings, or execute search results. Live System Settings acceptance is a separate, explicitly recorded session.
-
-## Native acceptance checklist
-
-Select checks affected by the change. Shared material, focus, or accessibility changes warrant broader coverage than a plugin-local layout edit. Record the OS build, system accent, display count, capture method, and settings actually exercised. App appearance overrides and a programmatic Reduce Transparency input are useful regression checks, but do not establish end-to-end system-settings acceptance.
-
-- With both panels open, change the macOS 27 Liquid Glass preference through System Settings; verify live changes without losing query, selection, composition, or placement.
-- Check Light and Dark with each supported system accent, Increase Contrast, and Reduce Transparency; repeat on bright, dark, and detailed backgrounds. Inspect selected subtitles, shortcut badges, disabled buttons, errors, and image/rich-text borders.
-- Open, type, navigate with arrows and number shortcuts, use Tab, dismiss with Escape and outside click, then reopen. Exercise real IME composition and VoiceOver.
-- Drag using each explicit handle, snap, resize Clipboard History, and reopen. Repeat across physical displays, disconnection, fullscreen, and Spaces/Stage Manager.
-- Compare idle CPU, cold/warm opening, search/scroll latency, and physical dragging on equivalent before/after builds. Programmatic window moves measure only dispatch/layout work, not physical drag or WindowServer/GPU frame pacing.
-- Run native fallback acceptance on macOS 14/15 and native glass acceptance on macOS 26. Building with a macOS 14 deployment target does not establish runtime behavior on those systems.
-
-Keep capture reports with the corresponding review evidence and record any native checks that remain unverified.
+Attach a representative screenshot or short recording to the review. Use `make ci` before pushing shared PluginKit changes; compile-time compatibility does not replace native acceptance on affected macOS versions.

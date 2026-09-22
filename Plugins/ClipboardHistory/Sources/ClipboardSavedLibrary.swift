@@ -27,6 +27,9 @@ struct ClipboardSavedItem: Identifiable, Equatable, Sendable {
     var lastUsedAt: Date? {
         didSet { cachedHistoryPresentation?.lastUsedAt = lastUsedAt }
     }
+    var lastActivityAt: Date {
+        max(updatedAt, lastUsedAt ?? updatedAt)
+    }
     let sourceApplication: ClipboardSourceApplication?
     let contentKind: ClipboardHistoryContentKind
     let payloadByteCount: Int

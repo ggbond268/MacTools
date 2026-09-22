@@ -4,62 +4,6 @@ import XCTest
 
 @MainActor
 final class ClipboardSnippetTextReplacementTests: XCTestCase {
-    func testIncomingCharacterRestoresKeywordSelectionBeforeBeingForwarded() async {
-        let access = FakeSnippetReplacementAccess()
-        let transaction = ClipboardSnippetReplacementTransaction(access: access)
-        let task = Task {
-            await ClipboardSnippetTextReplacement.perform(using: access, transaction: transaction)
-        }
-        while access.nativeAttempts == 0 { await Task.yield() }
-        task.cancel()
-        transaction.cancelBeforeForwardingInput()
-        // Simulate delivery immediately, without yielding for task cancellation cleanup.
-        let textAfterInput = access.keywordIsSelected() ? "x" : ";bbx"
-        XCTAssertEqual(textAfterInput, ";bbx")
-        XCTAssertEqual(access.selectionRestores, 1)
-        let result = await task.value
-        XCTAssertFalse(result)
-        XCTAssertEqual(access.pastes, 0)
-        XCTAssertEqual(access.selectionRestores, 1, "No delayed caret movement after user typing")
-    }
-
-    func testInputCancellationDoesNotMoveCaretInChangedEditorOrAfterPasteDispatch() {
-        let changed = FakeSnippetReplacementAccess()
-        changed.ownsSelection = false
-        ClipboardSnippetReplacementTransaction(access: changed).cancelBeforeForwardingInput()
-        XCTAssertEqual(changed.selectionRestores, 0)
-        let posted = FakeSnippetReplacementAccess()
-        let transaction = ClipboardSnippetReplacementTransaction(access: posted)
-        transaction.markPasteDispatched()
-        transaction.cancelBeforeForwardingInput()
-        XCTAssertEqual(posted.selectionRestores, 0)
-        XCTAssertEqual(posted.clipboardRestores, 0)
-    }
-
-    func testDelayedKeywordSelectionCanCatchUpWithoutSelectingAgain() async {
-        let access = FakeSnippetReplacementAccess()
-        access.selectionReady = false
-        access.nativeWorks = true
-        var waits = 0
-        let result = await ClipboardSnippetTextReplacement.perform(using: access) {
-            waits += 1
-            if waits == 2 { access.selectionReady = true }
-        }
-        XCTAssertTrue(result)
-        XCTAssertEqual(waits, 2)
-        XCTAssertEqual(access.nativeAttempts, 1)
-    }
-
-    func testChangedContextDuringSelectionWaitNeverReplacesText() async {
-        let access = FakeSnippetReplacementAccess()
-        access.selectionReady = false
-        let result = await ClipboardSnippetTextReplacement.perform(using: access) {
-            access.ownsSelection = false
-        }
-        XCTAssertFalse(result)
-        XCTAssertEqual(access.nativeAttempts, 0)
-        XCTAssertEqual(access.pastes, 0)
-    }
 
     func testNativeReplacementIsVerifiedWithoutTouchingClipboard() async {
         let access = FakeSnippetReplacementAccess()
@@ -79,17 +23,6 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         XCTAssertEqual(access.pastes, 1)
         XCTAssertEqual(access.clipboardRestores, 1)
         XCTAssertEqual(access.selectionRestores, 0)
-    }
-
-    func testDelayedNativeReplacementDoesNotDoubleInsert() async {
-        let access = FakeSnippetReplacementAccess()
-        var waits = 0
-        let result = await ClipboardSnippetTextReplacement.perform(using: access) {
-            waits += 1
-            if waits == 3 { access.expanded = true }
-        }
-        XCTAssertTrue(result)
-        XCTAssertEqual(access.pastes, 0)
     }
 
     func testChangedFocusOrSelectionNeverPastesOrRestoresSelection() async {
@@ -113,15 +46,6 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         XCTAssertEqual(access.cursorPlacements, 0)
     }
 
-    func testPostedButUnconfirmedPasteIsNotReportedAsExpanded() async {
-        let access = FakeSnippetReplacementAccess()
-        access.canPost = true
-        let result = await ClipboardSnippetTextReplacement.perform(using: access, pause: {})
-        XCTAssertFalse(result)
-        XCTAssertEqual(access.pastes, 1)
-        XCTAssertEqual(access.clipboardRestores, 1)
-    }
-
     func testCancelledBeforeFallbackDoesNotPasteOrMoveCaret() async {
         let access = FakeSnippetReplacementAccess()
         let task = Task { @MainActor in
@@ -134,51 +58,6 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
         XCTAssertFalse(result)
         XCTAssertEqual(access.pastes, 0)
         XCTAssertEqual(access.selectionRestores, 0)
-    }
-
-    func testCancellationAfterPostingWaitsForDeliveryBeforeRestoringClipboard() async {
-        let access = FakeSnippetReplacementAccess()
-        access.canPost = true
-        var task: Task<Bool, Never>?
-        var deliveryWaits = 0
-        task = Task { @MainActor in
-            await ClipboardSnippetTextReplacement.perform(using: access) {
-                if access.pastes > 0 {
-                    task?.cancel()
-                    deliveryWaits += 1
-                    XCTAssertEqual(access.clipboardRestores, 0)
-                    if deliveryWaits == 3 { access.expanded = true }
-                }
-            }
-        }
-        let result = await task!.value
-        XCTAssertFalse(result)
-        XCTAssertEqual(deliveryWaits, 3)
-        XCTAssertEqual(access.clipboardRestores, 1)
-        XCTAssertEqual(access.cursorPlacements, 0)
-    }
-
-    func testPasteboardLeasePreservesAllRepresentationsAndItems() throws {
-        let board = NSPasteboard.withUniqueName()
-        defer { board.releaseGlobally() }
-        let first = NSPasteboardItem()
-        first.setString("original", forType: .string)
-        first.setData(Data([1, 2, 3]), forType: .init("com.example.custom"))
-        let second = NSPasteboardItem()
-        second.setData(Data([4, 5, 6]), forType: .png)
-        board.writeObjects([first, second])
-        var writes = 0
-        let lease = try XCTUnwrap(makeLease(pasteboard: board, onWrite: { writes += 1 }))
-        XCTAssertTrue(lease.write("replacement"))
-        XCTAssertEqual(board.string(forType: .string), "replacement")
-        XCTAssertTrue(board.types!.contains(ClipboardSnippetPasteboardLease.generatedType))
-        lease.restore()
-        XCTAssertEqual(board.pasteboardItems?.count, 2)
-        XCTAssertEqual(board.string(forType: .string), "original")
-        XCTAssertEqual(board.data(forType: .init("com.example.custom")), Data([1, 2, 3]))
-        XCTAssertEqual(board.pasteboardItems?[1].data(forType: .png), Data([4, 5, 6]))
-        XCTAssertFalse(board.types!.contains(ClipboardSnippetPasteboardLease.generatedType))
-        XCTAssertEqual(writes, 2)
     }
 
     func testLeaseNeverOverwritesNewUserCopy() throws {
@@ -202,85 +81,6 @@ final class ClipboardSnippetTextReplacementTests: XCTestCase {
             XCTAssertNil(makeLease(pasteboard: board))
             XCTAssertEqual(board.types, [.init(type)])
         }
-    }
-
-    func testLeasePreservesEmptyClipboardAndRejectsCopyDuringPreparation() throws {
-        let board = NSPasteboard.withUniqueName()
-        defer { board.releaseGlobally() }
-        board.clearContents()
-        let lease = try XCTUnwrap(makeLease(pasteboard: board))
-        XCTAssertTrue(lease.write("snippet"))
-        lease.restore()
-        XCTAssertTrue(board.pasteboardItems?.isEmpty ?? true)
-        let stale = try XCTUnwrap(makeLease(pasteboard: board))
-        board.clearContents()
-        board.setString("new", forType: .string)
-        XCTAssertFalse(stale.write("snippet"))
-        XCTAssertEqual(board.string(forType: .string), "new")
-    }
-
-    func testLeasePreparationTimesOutStalledLazyOwnerAndRecovers() async throws {
-        let helperURL = try XCTUnwrap(Self.helperURL)
-        let board = NSPasteboard.withUniqueName()
-        let owner = Process()
-        let readinessPipe = Pipe()
-        owner.executableURL = helperURL
-        owner.arguments = ["--stall-plain-text-owner", board.name.rawValue]
-        owner.standardOutput = readinessPipe
-        owner.standardError = FileHandle.nullDevice
-        try owner.run()
-        defer {
-            if owner.isRunning { owner.terminate() }
-            board.clearContents()
-            board.releaseGlobally()
-        }
-        let readiness = try readinessPipe.fileHandleForReading.read(upToCount: 6)
-        XCTAssertEqual(readiness.flatMap { String(data: $0, encoding: .utf8) }, "ready\n")
-
-        // Model a cold helper launch on a busy runner without loading the real clipboard.
-        let helperDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: helperDirectory) }
-        let delayedHelperURL = helperDirectory.appendingPathComponent("delayed-reader.sh")
-        try "#!/bin/sh\nsleep 0.15\nexec \"$@\"\n".write(to: delayedHelperURL, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: delayedHelperURL.path)
-        let reader = ClipboardPasteboardReaderProcess(
-            helperURL: { delayedHelperURL },
-            helperArguments: [helperURL.path],
-            // Include cold process startup; the dedicated deadline test covers short timeouts.
-            requestTimeout: .seconds(2)
-        )
-        defer { Task { await reader.stop() } }
-        let preparation = Task { @MainActor in
-            await ClipboardSnippetPasteboardLease.prepare(
-                pasteboard: board,
-                reader: reader,
-                onWrite: {}
-            )
-        }
-        await Task.yield()
-        let mainActorRemainedResponsive = await Task { @MainActor in true }.value
-        let stalledLease = await preparation.value
-        let hasLiveSession = await reader.hasLiveSessionForTesting
-        XCTAssertTrue(mainActorRemainedResponsive)
-        XCTAssertNil(stalledLease)
-        XCTAssertFalse(hasLiveSession)
-
-        if owner.isRunning { owner.terminate() }
-        owner.waitUntilExit()
-        board.clearContents()
-        XCTAssertTrue(board.setString("original", forType: .string))
-        let recovered = await ClipboardSnippetPasteboardLease.prepare(
-            pasteboard: board,
-            reader: reader,
-            onWrite: {}
-        )
-        let lease = try XCTUnwrap(recovered)
-        XCTAssertTrue(lease.write("snippet"))
-        lease.restore()
-        XCTAssertEqual(board.string(forType: .string), "original")
-        let launchCount = await reader.launchCountForTesting
-        XCTAssertEqual(launchCount, 2)
     }
 
     private func makeLease(

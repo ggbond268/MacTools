@@ -4,6 +4,7 @@ import MacToolsPluginKit
 enum SettingsPageWidthPolicy {
     case standard
     case general
+    case expansive
 
     var maximumContentWidth: CGFloat {
         switch self {
@@ -13,6 +14,9 @@ enum SettingsPageWidthPolicy {
         case .general:
             // Ordinary preferences benefit from a denser macOS-style column.
             720
+        case .expansive:
+            // Self-managed workspaces own their layout and can use the viewport.
+            .infinity
         }
     }
 }

@@ -65,7 +65,7 @@
       "zh-Hant": "選擇儲存在此 Mac 上、要執行的已儲存指令碼。"
     }
   },
-  "version": "1.1.0",
+  "version": "2.0.0",
   "minHostVersion": "1.3.1",
   "pluginKitVersion": 7,
   "bundleRelativePath": "SavedScripts.bundle",
@@ -75,7 +75,9 @@
     "scheme": "SavedScriptsPlugin"
   },
   "capabilities": {
-    "panelItems": ["row"],
+    "panelItems": [
+      "row"
+    ],
     "settings": "workspace"
   },
   "permissions": [],

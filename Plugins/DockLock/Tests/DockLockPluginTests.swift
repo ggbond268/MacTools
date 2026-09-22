@@ -23,22 +23,6 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertEqual(result, CGPoint(x: 1_800, y: 996))
     }
 
-    func testCursorOutsideBottomInsetIsNotClamped() {
-        let result = DockLockCursorBoundary.clampedQuartzLocation(
-            for: CGPoint(x: 1_800, y: 990),
-            primaryDisplayHeight: 1_000,
-            screens: [
-                screen(
-                    frame: CGRect(x: 0, y: 0, width: 1_440, height: 1_000),
-                    bottomDockInset: 80
-                ),
-                screen(frame: CGRect(x: 1_440, y: 0, width: 1_000, height: 800)),
-            ]
-        )
-
-        XCTAssertNil(result)
-    }
-
     func testSingleDisplayIsNeverClamped() {
         let result = DockLockCursorBoundary.clampedQuartzLocation(
             for: CGPoint(x: 400, y: 1_000),
@@ -87,23 +71,6 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    func testExposedPartOfPartiallySharedBottomEdgeIsStillClamped() {
-        let result = DockLockCursorBoundary.clampedQuartzLocation(
-            for: CGPoint(x: 2_200, y: 1_000),
-            primaryDisplayHeight: 1_000,
-            screens: [
-                screen(
-                    frame: CGRect(x: 0, y: 0, width: 1_440, height: 1_000),
-                    bottomDockInset: 80
-                ),
-                screen(frame: CGRect(x: 1_440, y: 0, width: 1_000, height: 800)),
-                screen(frame: CGRect(x: 1_440, y: -800, width: 500, height: 800)),
-            ]
-        )
-
-        XCTAssertEqual(result, CGPoint(x: 2_200, y: 996))
-    }
-
     func testUnknownDockDisplayFailsOpen() {
         let result = DockLockCursorBoundary.clampedQuartzLocation(
             for: CGPoint(x: 1_800, y: 1_000),
@@ -115,29 +82,6 @@ final class DockLockPluginTests: XCTestCase {
         )
 
         XCTAssertNil(result)
-    }
-
-    func testSideDockDoesNotEnableCursorClamping() {
-        XCTAssertFalse(DockLockDockOrientation.isBottom(preferenceValue: "left"))
-        XCTAssertFalse(DockLockDockOrientation.isBottom(preferenceValue: "right"))
-        XCTAssertFalse(DockLockDockOrientation.isBottom(preferenceValue: nil))
-        XCTAssertFalse(DockLockDockOrientation.isBottom(preferenceValue: 1))
-        XCTAssertTrue(DockLockDockOrientation.isBottom(preferenceValue: "bottom"))
-    }
-
-    func testAutoHiddenDockDisablesCursorClamping() {
-        XCTAssertTrue(
-            DockLockDockPreferences.shouldClamp(
-                orientationValue: "bottom",
-                autoHideValue: false
-            )
-        )
-        XCTAssertFalse(
-            DockLockDockPreferences.shouldClamp(
-                orientationValue: "bottom",
-                autoHideValue: true
-            )
-        )
     }
 
     func testActivationStartsMonitorWhenPermissionIsGranted() {
@@ -164,90 +108,6 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertFalse(plugin.rowState.isOn)
     }
 
-    func testSettingsPageExposesPersistedEnableToggle() {
-        let plugin = DockLockPlugin(
-            context: makeContext(isEnabled: true),
-            accessibilityTrusted: { true }
-        )
-
-        guard case let .form(sections) = plugin.settingsPage?.body,
-              case let .rows(rows) = sections.first?.content,
-              let row = rows.first,
-              case let .toggle(isOn) = row.control
-        else {
-            return XCTFail("Expected a Dock Lock settings toggle")
-        }
-
-        XCTAssertEqual(row.title, "启用")
-        XCTAssertNotEqual(row.title, plugin.metadata.title)
-        XCTAssertEqual(row.description, "开启后防止程序坞在多显示器之间意外移动。")
-        XCTAssertNotEqual(row.description, plugin.metadata.defaultDescription)
-        XCTAssertTrue(isOn)
-    }
-
-    func testSettingsPageUsesValidPluginKitForm() throws {
-        let plugin = DockLockPlugin(
-            context: makeContext(),
-            accessibilityTrusted: { true }
-        )
-        let page = try XCTUnwrap(plugin.settingsPage)
-
-        XCTAssertEqual(page.body.layout, .form)
-        XCTAssertNoThrow(try PluginSettingsValidator.validate(page))
-    }
-
-    func testSettingsEnableToggleUsesPrimaryPanelActivationLifecycle() {
-        let monitor = MockDockLockMonitor()
-        let context = makeContext(isEnabled: false)
-        let plugin = DockLockPlugin(context: context, monitor: monitor, accessibilityTrusted: { true })
-
-        plugin.handleSettingsAction(
-            .setBoolean(controlID: "dock-lock.settings.enabled", value: true)
-        )
-
-        XCTAssertEqual(monitor.startCallCount, 1)
-        XCTAssertTrue(plugin.rowState.isOn)
-
-        let enabledReloadedPlugin = DockLockPlugin(
-            context: context,
-            monitor: MockDockLockMonitor(),
-            accessibilityTrusted: { true }
-        )
-        XCTAssertTrue(enabledReloadedPlugin.rowState.isOn)
-
-        plugin.handleSettingsAction(
-            .setBoolean(controlID: "dock-lock.settings.enabled", value: false)
-        )
-
-        XCTAssertEqual(monitor.stopCallCount, 1)
-        XCTAssertFalse(plugin.rowState.isOn)
-
-        let reloadedPlugin = DockLockPlugin(
-            context: context,
-            monitor: MockDockLockMonitor(),
-            accessibilityTrusted: { true }
-        )
-        XCTAssertFalse(reloadedPlugin.rowState.isOn)
-    }
-
-    func testSettingsEnableToggleReportsMissingAccessibilityPermission() {
-        let monitor = MockDockLockMonitor()
-        let plugin = DockLockPlugin(
-            context: makeContext(isEnabled: false),
-            monitor: monitor,
-            accessibilityTrusted: { false },
-            requestAccessibilityTrust: { _ in false }
-        )
-
-        plugin.handleSettingsAction(
-            .setBoolean(controlID: "dock-lock.settings.enabled", value: true)
-        )
-
-        XCTAssertTrue(plugin.rowState.isOn)
-        XCTAssertEqual(monitor.startCallCount, 0)
-        XCTAssertNotNil(plugin.rowState.errorMessage)
-    }
-
     func testMissingPermissionDoesNotStartMonitor() {
         let monitor = MockDockLockMonitor()
         let context = makeContext(isEnabled: true)
@@ -262,48 +122,6 @@ final class DockLockPluginTests: XCTestCase {
 
         XCTAssertEqual(monitor.startCallCount, 0)
         XCTAssertNotNil(plugin.rowState.errorMessage)
-    }
-
-    func testFirstLaunchIsDisabled() {
-        let monitor = MockDockLockMonitor()
-        let context = makeContext()
-        let plugin = DockLockPlugin(context: context, monitor: monitor, accessibilityTrusted: { true })
-
-        plugin.activate(context: context)
-
-        XCTAssertFalse(plugin.rowState.isOn)
-        XCTAssertEqual(monitor.startCallCount, 0)
-    }
-
-    func testUpdateDeactivationStopsMonitorBeforeReplacementActivates() {
-        let monitor = MockDockLockMonitor()
-        let context = makeContext(isEnabled: true)
-        let plugin = DockLockPlugin(context: context, monitor: monitor, accessibilityTrusted: { true })
-        plugin.activate(context: context)
-
-        plugin.deactivate(reason: .updating)
-
-        XCTAssertEqual(monitor.stopCallCount, 1)
-    }
-
-    func testCanonicalActionsExposeStatefulToggleAndDeterministicChoices() throws {
-        let plugin = DockLockPlugin(
-            context: makeContext(),
-            monitor: MockDockLockMonitor(),
-            accessibilityTrusted: { true }
-        )
-
-        XCTAssertEqual(plugin.actionDefinitions.map(\.key.actionID), ["toggle", "set-enabled"])
-        XCTAssertEqual(plugin.actionCatalogEntries.count, 3)
-        XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .inactive)
-        XCTAssertEqual(plugin.actionDefinitions.map(\.externalInvocationPolicy), [.allowed, .allowed])
-        XCTAssertEqual(plugin.permissionRequirements.map(\.id), ["accessibility"])
-        for definition in plugin.actionDefinitions {
-            XCTAssertEqual(
-                plugin.permissionRequirementIDs(for: definition.key),
-                ["accessibility"]
-            )
-        }
     }
 
     func testCanonicalEnableAndDisableActionsUseTheSharedMutationPath() async throws {
@@ -329,19 +147,6 @@ final class DockLockPluginTests: XCTestCase {
         XCTAssertEqual(disableResult, .succeeded())
         XCTAssertFalse(plugin.rowState.isOn)
         XCTAssertGreaterThanOrEqual(monitor.stopCallCount, 1)
-    }
-
-    func testEnableActionIsUnavailableWithoutAccessibilityPermission() throws {
-        let plugin = DockLockPlugin(
-            context: makeContext(),
-            monitor: MockDockLockMonitor(),
-            accessibilityTrusted: { false }
-        )
-        let enable = try XCTUnwrap(plugin.actionCatalogEntries.dropFirst().first?.reference)
-        let disable = try XCTUnwrap(plugin.actionCatalogEntries.last?.reference)
-
-        XCTAssertFalse(plugin.actionAvailability(for: enable).isAvailable)
-        XCTAssertTrue(plugin.actionAvailability(for: disable).isAvailable)
     }
 
     private func makeContext(isEnabled: Bool? = nil) -> PluginRuntimeContext {

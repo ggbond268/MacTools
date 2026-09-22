@@ -85,6 +85,28 @@ jobs:
       - name: Validate pending changelog fragments
         run: make validate-changelog
 
+      - name: Resolve Swift packages
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if xcodebuild \
+              -project "${PROJECT_NAME}.xcodeproj" \
+              -scheme "${SCHEME}" \
+              -derivedDataPath "${DERIVED_DATA}" \
+              -resolvePackageDependencies; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Swift package resolution failed after ${attempt} attempts."
+              exit 1
+            fi
+
+            delay=$((attempt * 15))
+            echo "::warning::Swift package resolution failed on attempt ${attempt}; retrying in ${delay} seconds."
+            sleep "$delay"
+          done
+
       - name: Build and run tests
         id: tests
         run: |
@@ -94,6 +116,7 @@ jobs:
             -configuration Debug \
             -destination "platform=macOS" \
             -derivedDataPath "${DERIVED_DATA}" \
+            -disableAutomaticPackageResolution \
             -resultBundlePath build/CI-TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -133,6 +156,7 @@ jobs:
             -configuration Nightly \
             -destination "generic/platform=macOS" \
             -derivedDataPath "${DERIVED_DATA}" \
+            -disableAutomaticPackageResolution \
             CURRENT_PROJECT_VERSION=1.1 \
             PLUGIN_CATALOG_URL="https://mactools.ggbond.app/nightly/plugins/v${PLUGIN_KIT_VERSION}/catalog.json" \
             CODE_SIGNING_ALLOWED=NO \
@@ -248,6 +272,7 @@ jobs:
             -configuration Release \
             -destination "generic/platform=macOS" \
             -derivedDataPath "${DERIVED_DATA}" \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \

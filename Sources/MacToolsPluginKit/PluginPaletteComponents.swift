@@ -10,7 +10,7 @@ public enum PluginPaletteMetrics {
     public static let searchVerticalPadding: CGFloat = 9
     public static let searchContentSpacing: CGFloat = 8
     public static let searchToolbarSpacing: CGFloat = 8
-    public static let toolbarControlSize = CGSize(width: 40, height: 40)
+    public static let toolbarControlSize = CGSize(width: 36, height: 36)
     public static let rowCornerRadius: CGFloat = 8
     public static let rowHorizontalPadding: CGFloat = 10
     public static let rowVerticalPadding: CGFloat = 9
@@ -67,7 +67,7 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
         field.isBezeled = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
         field.lineBreakMode = .byTruncatingTail
         configure(field)
         context.coordinator.focus(field, for: focusRequestID)
@@ -363,6 +363,61 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
     }
 }
 
+/// Shared colors for SwiftUI palettes and native AppKit search headers.
+public enum PluginPaletteChrome {
+    public static func searchBackground(isFocused: Bool) -> NSColor {
+        NSColor.labelColor.withAlphaComponent(isFocused ? 0.08 : 0.05)
+    }
+
+    public static func toolbarBackground(isHovered: Bool, isPressed: Bool, isEnabled: Bool) -> NSColor {
+        guard isEnabled else { return .clear }
+        if isPressed { return NSColor.labelColor.withAlphaComponent(0.12) }
+        return isHovered ? NSColor.labelColor.withAlphaComponent(0.07) : .clear
+    }
+}
+
+/// A quiet search surface that leaves editing and keyboard commands to the native field.
+public struct PluginPaletteSearchChrome: ViewModifier {
+    private let accessibilityIdentifier: String
+    private let increasedContrast: Bool
+    @State private var isFocused = false
+
+    public init(accessibilityIdentifier: String, increasedContrast: Bool) {
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.increasedContrast = increasedContrast
+    }
+
+    public func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, PluginPaletteMetrics.searchHorizontalPadding)
+            .frame(height: PluginPaletteMetrics.toolbarControlSize.height)
+            .background(
+                Color(nsColor: PluginPaletteChrome.searchBackground(isFocused: isFocused)),
+                in: RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
+            )
+            .overlay {
+                if increasedContrast {
+                    RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.7), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSControl.textDidBeginEditingNotification)) { note in
+                guard matchesField(note) else { return }
+                isFocused = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSControl.textDidEndEditingNotification)) { note in
+                guard matchesField(note) else { return }
+                isFocused = false
+            }
+    }
+
+    private func matchesField(_ notification: Notification) -> Bool {
+        guard let field = notification.object as? NSTextField else { return false }
+        return field.accessibilityIdentifier() == accessibilityIdentifier
+    }
+}
+
 public struct PluginPaletteSearchBar: View {
     @Environment(\.colorSchemeContrast) private var contrast
     @Binding private var text: String
@@ -417,25 +472,16 @@ public struct PluginPaletteSearchBar: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PluginPaletteToolbarControlStyle(size: CGSize(width: 24, height: 24)))
                 .help(clearAccessibilityLabel)
                 .accessibilityLabel(clearAccessibilityLabel)
             }
 
         }
-        .padding(.horizontal, PluginPaletteMetrics.searchHorizontalPadding)
-        .frame(height: PluginPaletteMetrics.toolbarControlSize.height)
-        .background(
-            RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
-                .fill(PluginSettingsTheme.Palette.fieldBackground)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: PluginPaletteMetrics.searchCornerRadius, style: .continuous)
-                .strokeBorder(
-                    contrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
-                    lineWidth: 1
-                )
-        }
+        .modifier(PluginPaletteSearchChrome(
+            accessibilityIdentifier: accessibilityIdentifier,
+            increasedContrast: contrast == .increased
+        ))
     }
 }
 
@@ -633,17 +679,18 @@ private struct PluginPaletteToolbarControlStyleBody: View {
     var body: some View {
         configuration.label
             .frame(width: size.width, height: size.height)
-            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .foregroundStyle(isEnabled && (isHovered || configuration.isPressed) ? Color.primary : Color.secondary)
+            .opacity(isEnabled ? 1 : 0.5)
             .background(
                 background,
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(
-                        contrast == .increased ? Color.primary : PluginSettingsTheme.Palette.cardBorder,
-                        lineWidth: 1
-                    )
+                if contrast == .increased {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(isEnabled ? 0.7 : 0.3), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
             }
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .onHover { isHovered = $0 }
@@ -651,13 +698,11 @@ private struct PluginPaletteToolbarControlStyleBody: View {
     }
 
     private var background: Color {
-        if configuration.isPressed {
-            return PluginSettingsTheme.Palette.fieldBackground.opacity(0.7)
-        }
-        if isHovered, isEnabled {
-            return PluginSettingsTheme.Palette.activeControlBackground
-        }
-        return PluginSettingsTheme.Palette.fieldBackground
+        Color(nsColor: PluginPaletteChrome.toolbarBackground(
+            isHovered: isHovered,
+            isPressed: configuration.isPressed,
+            isEnabled: isEnabled
+        ))
     }
 }
 

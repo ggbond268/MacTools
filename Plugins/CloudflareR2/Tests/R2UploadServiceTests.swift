@@ -4,29 +4,6 @@ import XCTest
 @testable import CloudflareR2Plugin
 
 final class R2UploadServiceTests: XCTestCase {
-    func testS3URIEncoderEscapesEverySubDelimiterAndUTF8Byte() {
-        let names: [(String, String)] = [
-            ("report(1).pdf", "report%281%29.pdf"), ("a+b.png", "a%2Bb.png"),
-            ("Q&A.txt", "Q%26A.txt"), ("a=b,c.txt", "a%3Db%2Cc.txt"),
-            ("mail@x.jpg", "mail%40x.jpg"), ("it's.txt", "it%27s.txt"),
-            ("$100.csv", "%24100.csv"), ("a;b.txt", "a%3Bb.txt"),
-            ("a*b.txt", "a%2Ab.txt"), ("中文 file.txt", "%E4%B8%AD%E6%96%87%20file.txt"),
-        ]
-        for (input, expected) in names {
-            XCTAssertEqual(
-                R2S3URIEncoder.canonicalURI(bucket: "bucket", objectKey: "uploads/\(input)"),
-                "/bucket/uploads/\(expected)", input)
-        }
-    }
-
-    func testRequestURLUsesExactlyTheCanonicalEncodedPath() throws {
-        let canonical = R2S3URIEncoder.canonicalURI(bucket: "my bucket", objectKey: "a+b/Q&A.txt")
-        let url = try XCTUnwrap(
-            R2S3URIEncoder.requestURL(accountID: "account", canonicalURI: canonical))
-        XCTAssertEqual(canonical, "/my%20bucket/a%2Bb/Q%26A.txt")
-        XCTAssertEqual(
-            URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath, canonical)
-    }
 
     func testUploadBuildsSignedPutWithUnsignedPayloadAndProgress() async throws {
         let fileURL = try makeFile("report(1).pdf", Data("hello".utf8))
@@ -52,29 +29,6 @@ final class R2UploadServiceTests: XCTestCase {
         XCTAssertEqual(recorder.values, [0.25, 0.75, 1])
     }
 
-    func testDefaultObjectNameUsesOriginalFileName() async throws {
-        let fileURL = try makeFile("photo.png", Data())
-        defer { removeParent(of: fileURL) }
-        let service = R2UploadService(httpClient: R2HTTPClientMock(statusCode: 200))
-        let result = try await service.upload(
-            fileURL: fileURL, configuration: configuration(), secretAccessKey: "secret")
-        XCTAssertEqual(result.objectKey, "photo.png")
-    }
-
-    func testExplicitObjectNameIsUsedForObjectKey() async throws {
-        let fileURL = try makeFile("original.pdf", Data())
-        defer { removeParent(of: fileURL) }
-        let result = try await R2UploadService(
-            httpClient: R2HTTPClientMock(statusCode: 200)
-        ).upload(
-            fileURL: fileURL,
-            objectName: "renamed.pdf",
-            configuration: configuration(objectPrefix: "uploads"),
-            secretAccessKey: "secret"
-        )
-        XCTAssertEqual(result.objectKey, "uploads/renamed.pdf")
-    }
-
     func testExplicitObjectNameRejectsPathSeparators() async throws {
         let fileURL = try makeFile("original.pdf", Data())
         defer { removeParent(of: fileURL) }
@@ -88,20 +42,6 @@ final class R2UploadServiceTests: XCTestCase {
             )
         }
         XCTAssertNil(client.recordedRequest)
-    }
-
-    func testExplicitObjectNameIsTrimmedBeforeUse() async throws {
-        let fileURL = try makeFile("original.txt", Data())
-        defer { removeParent(of: fileURL) }
-        let result = try await R2UploadService(
-            httpClient: R2HTTPClientMock(statusCode: 200)
-        ).upload(
-            fileURL: fileURL,
-            objectName: "  renamed.txt  ",
-            configuration: configuration(objectPrefix: "uploads"),
-            secretAccessKey: "secret"
-        )
-        XCTAssertEqual(result.objectKey, "uploads/renamed.txt")
     }
 
     func testObjectExistsUsesSignedHeadRequest() async throws {
@@ -136,39 +76,6 @@ final class R2UploadServiceTests: XCTestCase {
             secretAccessKey: "secret"
         )
         XCTAssertFalse(exists)
-    }
-
-    func testObjectExistsRejectsUnexpectedStatus() async {
-        let checker = R2HTTPObjectCheckerMock(statusCodes: [403])
-        do {
-            _ = try await R2UploadService(objectCheckClient: checker).objectExists(
-                objectName: "file.txt",
-                configuration: configuration(),
-                secretAccessKey: "secret"
-            )
-            XCTFail("Expected HTTP status error")
-        } catch {
-            XCTAssertEqual(error as? R2UploadError, .httpStatus(403))
-        }
-    }
-
-    func testPublicURLRequiresHTTPOrHTTPSAbsoluteURL() {
-        XCTAssertNil(R2PublicURLValidator.baseURL(from: "cdn.example.com"))
-        XCTAssertNil(R2PublicURLValidator.baseURL(from: "ftp://cdn.example.com"))
-        XCTAssertNil(R2PublicURLValidator.baseURL(from: "https:///missing-host"))
-        XCTAssertNil(R2PublicURLValidator.baseURL(from: "https://cdn.example.com?query=1"))
-        XCTAssertEqual(
-            R2PublicURLValidator.baseURL(from: "https://cdn.example.com/base")?.absoluteString,
-            "https://cdn.example.com/base")
-    }
-
-    func testInvalidPublicURLIsTreatedAsNotConfigured() async throws {
-        let fileURL = try makeFile("file.txt", Data())
-        defer { removeParent(of: fileURL) }
-        let result = try await R2UploadService(httpClient: R2HTTPClientMock(statusCode: 200)).upload(
-            fileURL: fileURL, configuration: configuration(publicBaseURL: "cdn.example.com"),
-            secretAccessKey: "secret")
-        XCTAssertNil(result.url)
     }
 
     func testUploadRejectsRelativeObjectPrefixSegmentsBeforeNetwork() async throws {

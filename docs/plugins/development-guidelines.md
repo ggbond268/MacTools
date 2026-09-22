@@ -41,6 +41,8 @@ For a single toggle, fixed action, or settings entry, prefer `PluginPanelItem.ic
 
 Choose widget checks according to the changed behavior. For state or lifecycle changes, focus on shared collection across copies, preview isolation, current values after reopening, and ignoring late callbacks after deactivation. For layout changes, visually check affected spans, scrolling, and adaptive height with representative content. Reuse host tests for unchanged placement/move mechanics; do not recreate the host test matrix in every plugin or add automated assertions for exact spacing and colors.
 
+Keep adjacent plugin tests limited to the main action, durable state, and consequential permission or failure handling. Do not retain a separate test for every historical timing combination or presentation detail. Run `make test TEST_FILTER=<TestClassName>`; use manual checks for windows, native input, screenshots, and timing measurements. The generated test target includes plugin tests automatically and has no standalone process-probe dependencies. See the [core test scope](../testing/core-tests.md).
+
 ## Visual and interaction design
 
 Use the existing host surfaces and semantic tokens before adding custom UI.

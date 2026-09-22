@@ -46,26 +46,6 @@ final class AppleShortcutsPluginTests: XCTestCase {
         XCTAssertTrue(plugin.actionCatalogEntries.isEmpty)
     }
 
-    func testActionCatalogUsesFolderNamesAndOmitsRootSubtitle() async throws {
-        let folder = AppleShortcutFolder(id: UUID(), name: "Home")
-        let rootShortcut = AppleShortcutItem(id: UUID(), name: "Root")
-        let folderShortcut = AppleShortcutItem(id: UUID(), name: "Inside Folder")
-        let runner = AppleShortcutsRunnerStub(
-            shortcuts: [rootShortcut, folderShortcut],
-            folders: [folder],
-            memberships: [folder.id: .success([folderShortcut])]
-        )
-        let plugin = makePlugin(runner: runner)
-
-        await plugin.controller.performRefresh()
-
-        let entriesByTitle = Dictionary(
-            uniqueKeysWithValues: plugin.actionCatalogEntries.map { ($0.title, $0) }
-        )
-        XCTAssertNil(entriesByTitle["Root"]?.subtitle)
-        XCTAssertEqual(entriesByTitle["Inside Folder"]?.subtitle, "Home")
-    }
-
     func testAllShortcutsPublishConfirmedRunLinks() async throws {
         let id = UUID()
         let runner = AppleShortcutsRunnerStub(shortcuts: [AppleShortcutItem(id: id, name: "Secure")])

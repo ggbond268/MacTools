@@ -330,17 +330,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
                 let metrics = PanelLayoutItemControlsLayout(size: proxy.size)
                 PanelLayoutControls(metrics: metrics, rightToLeft: layoutDirection == .rightToLeft) {
                     if metrics.isCompact {
-                        Menu {
-                            orderingActions
-                            Menu(FeatureL10n.string("移动到")) { panelActions }
-                            Divider()
-                            Button(role: .destructive) {
-                                requestRemoval(proxy: proxy, metrics: metrics)
-                            } label: {
-                                Label(FeatureL10n.string("移除组件"), systemImage: "trash")
-                            }
-                            .accessibilityIdentifier("panel.layout.remove.\(id)")
-                        } label: {
+                        MenuBarPanelMenu(makeMenu: { compactMenu(proxy: proxy, metrics: metrics) }) {
                             controlIcon("ellipsis", side: metrics.buttonSide, preferredIconSide: 14)
                         }
                         .focused($focusedControl, equals: .more)
@@ -356,11 +346,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
                         .accessibilityLabel(FeatureL10n.string("移除组件"))
                         .accessibilityIdentifier("panel.layout.remove.\(id)")
 
-                        Menu {
-                            Text(FeatureL10n.string("移动到"))
-                            Divider()
-                            panelActions
-                        } label: {
+                        MenuBarPanelMenu(makeMenu: { destinationMenu(showsHeading: true) }) {
                             controlIcon("arrow.right.square", side: metrics.buttonSide)
                         }
                         .focused($focusedControl, equals: .moveTo)
@@ -368,7 +354,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
                         .accessibilityLabel(FeatureL10n.string("移动到"))
                         .accessibilityIdentifier("panel.layout.moveTo.\(id)")
 
-                        Menu { orderingActions } label: {
+                        MenuBarPanelMenu(makeMenu: orderingMenu) {
                             controlIcon("ellipsis.circle", side: metrics.buttonSide)
                         }
                         .focused($focusedControl, equals: .more)
@@ -381,9 +367,7 @@ private struct PanelLayoutReorderItem<Content: View>: View {
                 .accessibilityAction(named: PanelLayoutCopy.later) { if index < count - 1 { perform(index + 2) } }
                 .accessibilityAction(named: PanelLayoutCopy.beginning) { perform(0) }
                 .accessibilityAction(named: PanelLayoutCopy.end) { perform(count) }
-                .menuStyle(.button)
                 .buttonStyle(.plain)
-                .menuIndicator(.hidden)
                 .tint(theme.text.primary)
                 .foregroundStyle(theme.text.primary)
                 .fixedSize()
@@ -413,20 +397,44 @@ private struct PanelLayoutReorderItem<Content: View>: View {
         .id(id)
     }
 
-    @ViewBuilder private var orderingActions: some View {
-        Button(PanelLayoutCopy.earlier) { perform(index - 1) }.disabled(index == 0)
-        Button(PanelLayoutCopy.later) { perform(index + 2) }.disabled(index == count - 1)
-        Button(PanelLayoutCopy.beginning) { perform(0) }.disabled(index == 0)
-        Button(PanelLayoutCopy.end) { perform(count) }.disabled(index == count - 1)
+    private func orderingMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(MenuBarPanelMenuItem(PanelLayoutCopy.earlier, isEnabled: index > 0) { perform(index - 1) })
+        menu.addItem(MenuBarPanelMenuItem(PanelLayoutCopy.later, isEnabled: index < count - 1) { perform(index + 2) })
+        menu.addItem(MenuBarPanelMenuItem(PanelLayoutCopy.beginning, isEnabled: index > 0) { perform(0) })
+        menu.addItem(MenuBarPanelMenuItem(PanelLayoutCopy.end, isEnabled: index < count - 1) { perform(count) })
+        return menu
     }
 
-    @ViewBuilder private var panelActions: some View {
-        ForEach(panels.filter { $0.id != panelID }) { panel in
-            Button { moveToPanel(panel.id) } label: {
-                Label(panel.title, systemImage: PluginSystemImage.resolvedName(panel.systemImage))
-                    .labelStyle(.iconOnly)
-            }
+    private func destinationMenu(showsHeading: Bool = false) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        if showsHeading {
+            let heading = NSMenuItem(title: FeatureL10n.string("移动到"), action: nil, keyEquivalent: "")
+            heading.isEnabled = false
+            menu.addItem(heading)
+            menu.addItem(.separator())
         }
+        for panel in panels where panel.id != panelID {
+            menu.addItem(MenuBarPanelMenuItem(panel.title,
+                image: NSImage(systemSymbolName: PluginSystemImage.resolvedName(panel.systemImage),
+                               accessibilityDescription: nil)) { moveToPanel(panel.id) })
+        }
+        return menu
+    }
+
+    private func compactMenu(proxy: GeometryProxy, metrics: PanelLayoutItemControlsLayout) -> NSMenu {
+        let menu = orderingMenu()
+        let destination = NSMenuItem(title: FeatureL10n.string("移动到"), action: nil, keyEquivalent: "")
+        destination.submenu = destinationMenu()
+        destination.isEnabled = destination.submenu?.items.isEmpty == false
+        menu.addItem(destination)
+        menu.addItem(.separator())
+        menu.addItem(MenuBarPanelMenuItem(FeatureL10n.string("移除组件"),
+            image: NSImage(systemSymbolName: "trash", accessibilityDescription: nil),
+            identifier: "panel.layout.remove.\(id)") { requestRemoval(proxy: proxy, metrics: metrics) })
+        return menu
     }
 
     private func requestRemoval(proxy: GeometryProxy, metrics: PanelLayoutItemControlsLayout) {

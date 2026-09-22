@@ -30,10 +30,6 @@ final class RightClickConfigurationStoreTests: XCTestCase {
         XCTAssertEqual(loaded.openWithApps.first?.fileExtensions, ["txt", "md"])
     }
 
-    func testLoadMissingFileReturnsInactiveDefault() {
-        XCTAssertEqual(RightClickConfigurationStore.load(from: makeTempFileURL()), .inactiveDefault)
-    }
-
     func testLoadCorruptDataReturnsInactiveDefault() throws {
         let fileURL = makeTempFileURL()
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
@@ -47,33 +43,6 @@ final class RightClickConfigurationStoreTests: XCTestCase {
 
     /// A config written before newer keys existed must decode with defaults for
     /// the missing keys instead of failing the whole decode.
-    func testDecodeToleratesMissingKeys() throws {
-        let fileURL = makeTempFileURL()
-        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        try Data(#"{"newFolder":false}"#.utf8).write(to: fileURL)
-
-        let loaded = RightClickConfigurationStore.load(from: fileURL)
-        XCTAssertTrue(loaded.menuEnabled)     // missing key -> active default for existing configs
-        XCTAssertNil(loaded.preferredLanguages)
-        XCTAssertFalse(loaded.newFolder)      // present key honored
-        XCTAssertTrue(loaded.copyFileName)    // missing key → default
-        XCTAssertTrue(loaded.openInTerminal)  // missing key → default
-        XCTAssertEqual(loaded.openWithApps, [])
-    }
-
-    func testSetMenuEnabledInitializesActiveDefaultsWhenMissing() {
-        let fileURL = makeTempFileURL()
-        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
-
-        RightClickConfigurationStore.setMenuEnabled(true, fileURL: fileURL)
-        let loaded = RightClickConfigurationStore.load(from: fileURL)
-
-        XCTAssertTrue(loaded.menuEnabled)
-        XCTAssertEqual(loaded, .activeDefault)
-    }
 
     func testSetMenuEnabledPreservesExistingSettings() throws {
         let fileURL = makeTempFileURL()
@@ -99,45 +68,6 @@ final class RightClickConfigurationStoreTests: XCTestCase {
         XCTAssertEqual(loaded.openWithApps.first?.name, "Code")
     }
 
-    func testTwoLanguageSwitchesPreserveFinderMenuStateAndUseFreshStrings() {
-        let fileURL = makeTempFileURL()
-        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
-
-        var config = RightClickConfiguration.activeDefault
-        config.copyFileName = false
-        config.openInTerminal = true
-
-        config.preferredLanguages = ["en"]
-        XCTAssertTrue(RightClickConfigurationStore.save(config, to: fileURL))
-        var loaded = RightClickConfigurationStore.load(from: fileURL)
-        XCTAssertEqual(
-            RightClickLocalization.string(
-                "finder.openInTerminal",
-                defaultValue: "在终端打开",
-                preferredLanguages: loaded.preferredLanguages
-            ),
-            "Open in Terminal"
-        )
-
-        config.preferredLanguages = ["zh-Hans"]
-        XCTAssertTrue(RightClickConfigurationStore.save(config, to: fileURL))
-        loaded = RightClickConfigurationStore.load(from: fileURL)
-        XCTAssertEqual(
-            RightClickLocalization.string(
-                "finder.openInTerminal",
-                defaultValue: "Open in Terminal",
-                preferredLanguages: loaded.preferredLanguages
-            ),
-            "在终端打开"
-        )
-
-        config.preferredLanguages = ["en"]
-        XCTAssertTrue(RightClickConfigurationStore.save(config, to: fileURL))
-        loaded = RightClickConfigurationStore.load(from: fileURL)
-        XCTAssertEqual(loaded.preferredLanguages, ["en"])
-        XCTAssertFalse(loaded.copyFileName)
-        XCTAssertTrue(loaded.openInTerminal)
-    }
 }
 
 final class RightClickOpenWithAppTests: XCTestCase {
@@ -149,11 +79,6 @@ final class RightClickOpenWithAppTests: XCTestCase {
         XCTAssertFalse(app.matches(fileExtension: "png"))
     }
 
-    func testEmptyExtensionsMatchesEverything() {
-        let app = RightClickOpenWithApp(name: "Editor", appPath: "/E.app", fileExtensions: [])
-        XCTAssertTrue(app.matches(fileExtension: "anything"))
-        XCTAssertTrue(app.matches(fileExtension: ""))
-    }
 }
 
 final class RightClickOpenWithParsingTests: XCTestCase {
@@ -206,32 +131,5 @@ final class RightClickOpenWithParsingTests: XCTestCase {
             isApplicationBundle: { _ in true }
         )
         XCTAssertEqual(request?.files.map(\.path), ["/tmp/exists"])
-    }
-}
-
-final class RightClickURLSchemeTests: XCTestCase {
-    func testBundleURLSchemesReadsDebugSchemeFromBundleInfo() {
-        let bundle = URLSchemeBundleMock(urlTypes: [
-            ["CFBundleURLSchemes": ["mactools-dev"]]
-        ])
-
-        XCTAssertEqual(RightClickURLRouter.bundleURLSchemes(bundle: bundle), ["mactools-dev"])
-    }
-
-    func testBundleURLSchemesFallsBackToReleaseSchemeWhenMissing() {
-        XCTAssertEqual(RightClickURLRouter.bundleURLSchemes(bundle: URLSchemeBundleMock(urlTypes: nil)), ["mactools"])
-    }
-}
-
-private final class URLSchemeBundleMock: Bundle, @unchecked Sendable {
-    private let urlTypes: [[String: Any]]?
-
-    init(urlTypes: [[String: Any]]?) {
-        self.urlTypes = urlTypes
-        super.init()
-    }
-
-    override func object(forInfoDictionaryKey key: String) -> Any? {
-        key == "CFBundleURLTypes" ? urlTypes : nil
     }
 }

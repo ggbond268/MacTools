@@ -54,7 +54,7 @@ Try development features with `MacTools-Nightly.dmg` from a [`nightly-*` prerele
   <tr>
     <td width="50%" valign="top">
       <h3>Custom panels</h3>
-      <p>Mix live widgets, quick controls, and feature rows. Drag to rearrange them, move them between panels, and choose each panel's icon.</p>
+      <p>Mix live widgets, quick controls, and feature rows. Drag to rearrange them, move them between panels, and choose each panel's icon. More and editing menus open on the first click from a background app; detail panels stay open during internal focus changes.</p>
       <a href="docs/assets/screenshots/readme/components-en-dark.png"><img width="100%" src="docs/assets/screenshots/readme/components-en-dark.png" alt="MacTools component library with a System Status widget preview"></a>
     </td>
     <td width="50%" valign="top">
@@ -81,7 +81,9 @@ Try development features with `MacTools-Nightly.dmg` from a [`nightly-*` prerele
 
 Search actions, settings, workflows, and plugins from the **Command Palette**. Press **⌘K** within MacTools, or assign a global shortcut to open it from anywhere. Use **Action Grid**, keyboard shortcuts, mouse mappings, or trackpad gestures for frequent actions; connect Apple Shortcuts, saved scripts, and [Run Links](docs/url-scheme.md) to your setup.
 
-Window Switcher keeps search collapsed in direct-key and cycling modes. All Windows sits beside the display filter and expands when an app scope is available; Search, More, and the grid/list control align to the right. Click Search to expand and focus search. In Direct Keys mode, **⌘F** also opens search and is consumed by the panel; window-key assignments reserve it for search. Cycling retains its existing keyboard behavior. Close Search clears the query and restores the previous mode while keeping scope and display filters. Search Select mode keeps its full-width search field.
+Window Switcher keeps search collapsed in direct-key and cycling modes. All Windows sits beside the display filter and expands when an app scope is available; Search, More, and the grid/list control align to the right. Click Search or press **⌘F** to expand and focus search without inserting F into the query. From cycling, this enters persistent Search mode and keeps the panel open after the invocation modifiers are released. Window-key assignments reserve **⌘F** for search. Close Search clears the query and restores the previous mode while keeping scope and display filters. Search Select mode opens with its full-width search field focused, ready for typing.
+
+In Direct Keys mode, **Tab** selects the next window and **Shift-Tab** selects the previous one, wrapping within the current results. **Return** opens the selected window. Search editing and shortcut recording keep their own Tab behavior.
 
 Switching between grid and list keeps the selected window and visible shortcut numbers in sync, including after scrolling or filtering. Scrollbars hide when all results fit, and the grid stays clear of overlaid navigation buttons.
 
@@ -93,16 +95,30 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 
 | Area | What you can do |
 | --- | --- |
-| Capture & clipboard | Annotate screenshots, use OCR and QR recognition, pin images, capture scrolling content, and record a region. Keep encrypted local clipboard history, snippets, and paste queues. |
+| Capture & clipboard | Annotate screenshots, use OCR and QR recognition, pin images, capture scrolling content, and record a region. Keep encrypted local clipboard history, snippets, and paste queues, with a default clipboard content limit of 30 MB per item. |
 | Windows & workspace | Switch and arrange windows, launch apps, manage Stage Manager, and customize Finder's right-click menu. |
 | Keyboard, mouse & trackpad | Remap inputs, assign gestures and app shortcuts, tune scrolling, add middle-click, and type text with Auto Input. |
 | Displays & appearance | Adjust brightness and resolution, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
 | Audio & power | Control system, microphone, app, and display volume; keep the Mac awake; manage fans and charging limits; lock, sleep, or shut down. |
 | Monitoring & calendar | Follow system performance, device batteries, activity statistics, AI usage, and network status. Check your calendar and upcoming events. |
-| Cleanup & maintenance | Clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
+| Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
 | Utilities & configuration | Translate selected text, run editable AI prompt templates on selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
 
+Clipboard History moves reused items to the front when you copy or paste them from the plugin, including item shortcuts and snippets. Browsing leaves the order unchanged, and sequential paste queues keep their established order. History expires after the configured period of inactivity, measured from its latest use or capture. Count and storage limits apply separately; Saved items and snippets remain available.
+
+Clipboard history defaults to a 512 MB content capacity, with 64 MB, 256 MB, 512 MB, 1 GB, and 5 GB options. Existing saved capacity settings are preserved.
+
+Clipboard opens on the display under the pointer and remembers each display's window position after dragging the title bar or top handle. Automatic repositioning when displays change preserves those saved positions.
+
+Window Switcher, Command Palette, Clipboard History, and clipboard actions share compact search headers with soft gray fields. Existing close controls use borderless icons; each panel keeps its original controls. Hover and focus feedback stay subtle; Increase Contrast restores visible boundaries.
+
+The clipboard panel and action menu use neutral system gray selections. Native action buttons have matching heights and subtle hover feedback, with an icon-only More button. List titles use regular weight while detail headings remain emphasized.
+
+Clipboard selection and scrolling respond immediately. Rapid navigation skips transient preview requests, and recent image and rich-text previews are reused within bounded caches. Large rich-text items use their saved text summaries for preview.
+
 Screenshots work on macOS 14+; region recording and per-app volume require macOS 15+. Hardware controls depend on device support. See the [feature guides](docs/README.md) for details.
+
+Screenshot selection remains available on each display after switching desktops or entering and leaving full-screen apps.
 
 **Take your setup with you:** export and import preferences, keep local backups, or sync supported settings through a cloud or shared folder. The app supports **11 languages** and follows your system language by default.
 

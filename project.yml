@@ -16,6 +16,17 @@ packages:
 include:
 - path: Configs/GeneratedPlugins.yml
 targets:
+  MacToolsFileSystem:
+    type: library.static
+    platform: macOS
+    deploymentTarget: '14.0'
+    sources:
+    - path: Sources/MacToolsFileSystem
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: MacToolsFileSystem
+        SWIFT_VERSION: 6.0
+        CODE_SIGNING_ALLOWED: false
   MacToolsCLIProtocol:
     type: library.static
     platform: macOS
@@ -92,6 +103,7 @@ targets:
     - path: Sources
       excludes:
       - "**/.gitkeep"
+      - MacToolsFileSystem/**
       - MacToolsPluginKit/**
       - MacToolsAppIntents/**
       - MacToolsCLIProtocol/**
@@ -333,35 +345,3 @@ targets:
           DEAD_CODE_STRIPPING: true
           DEPLOYMENT_POSTPROCESSING: true
           STRIP_INSTALLED_PRODUCT: true
-  AppInstanceProbe:
-    type: tool
-    platform: macOS
-    deploymentTarget: '14.0'
-    sources:
-    - path: Sources/App/AppInstanceCoordinator.swift
-    - path: Sources/Core/Diagnostics/AppLog.swift
-    - path: Tests/Support/AppInstanceProbe/AppInstanceProbe.swift
-    settings:
-      base:
-        PRODUCT_NAME: AppInstanceProbe
-        PRODUCT_MODULE_NAME: AppInstanceProbe
-        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.instance-probe"
-        GENERATE_INFOPLIST_FILE: true
-        SWIFT_VERSION: 6.0
-        CODE_SIGNING_ALLOWED: false
-  AppIntentCircuitBreakerProbe:
-    type: tool
-    platform: macOS
-    deploymentTarget: '14.0'
-    sources:
-    - path: Sources/Core/AppIntents/MacToolsAppIntentCircuitBreaker.swift
-    - path: Sources/Core/Diagnostics/AppLog.swift
-    - path: Tests/Support/AppIntentCircuitBreakerProbe/AppIntentCircuitBreakerProbe.swift
-    settings:
-      base:
-        PRODUCT_NAME: AppIntentCircuitBreakerProbe
-        PRODUCT_MODULE_NAME: AppIntentCircuitBreakerProbe
-        PRODUCT_BUNDLE_IDENTIFIER: "$(BUNDLE_IDENTIFIER_PREFIX).mactools.app-intent-circuit-breaker-probe"
-        GENERATE_INFOPLIST_FILE: true
-        SWIFT_VERSION: 6.0
-        CODE_SIGNING_ALLOWED: false

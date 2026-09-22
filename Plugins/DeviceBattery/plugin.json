@@ -52,7 +52,7 @@
     "display-name": "@displayName",
     "summary": "@summary"
   },
-  "version": "1.2.0",
+  "version": "2.0.0",
   "minHostVersion": "1.3.1",
   "pluginKitVersion": 7,
   "bundleRelativePath": "DeviceBattery.bundle",
@@ -62,7 +62,9 @@
     "scheme": "DeviceBatteryPlugin"
   },
   "capabilities": {
-    "panelItems": ["widget"],
+    "panelItems": [
+      "widget"
+    ],
     "settings": "form"
   },
   "permissions": [

@@ -62,32 +62,42 @@ class WindowSwitcherAppearanceView: NSView {
 /// Match the command palette's shared field and toolbar geometry without
 /// replacing the switcher's native search responder and input-method handling.
 @MainActor
-private func drawPaletteField(in bounds: NSRect) {
-    let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                            xRadius: PluginPaletteMetrics.searchCornerRadius,
-                            yRadius: PluginPaletteMetrics.searchCornerRadius)
-    NSColor.textBackgroundColor.setFill(); path.fill()
-    NSColor.separatorColor.setStroke(); path.lineWidth = 1; path.stroke()
-}
-
-@MainActor
-final class WindowSwitcherHeaderSurface: NSView {
+final class WindowSwitcherHeaderSurface: WindowSwitcherAppearanceView {
     var isFocused = false { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        drawPaletteField(in: bounds)
-        if isFocused {
-            let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1),
-                                   xRadius: PluginPaletteMetrics.searchCornerRadius,
-                                   yRadius: PluginPaletteMetrics.searchCornerRadius)
-            NSColor.keyboardFocusIndicatorColor.setStroke()
-            ring.lineWidth = 2; ring.stroke()
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                 xRadius: PluginPaletteMetrics.searchCornerRadius,
+                                 yRadius: PluginPaletteMetrics.searchCornerRadius)
+        PluginPaletteChrome.searchBackground(isFocused: isFocused).setFill()
+        shape.fill()
+        if WindowSwitcherAppearance.increasedContrast(effectiveAppearance) {
+            NSColor.labelColor.withAlphaComponent(0.7).setStroke()
+            shape.lineWidth = 1
+            shape.stroke()
         }
     }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 }
 
 @MainActor
 final class WindowSwitcherToolbarButton: NSButton {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureAppearance()
+    }
+
+    private func configureAppearance() {
+        bezelStyle = .inline
+        isBordered = true
+        showsBorderOnlyWhileMouseInside = true
+        imagePosition = .imageOnly
+        contentTintColor = .secondaryLabelColor
+    }
+
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
 }
 

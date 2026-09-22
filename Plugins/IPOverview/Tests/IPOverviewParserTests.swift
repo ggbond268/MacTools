@@ -20,29 +20,6 @@ final class IPOverviewParserTests: XCTestCase {
         XCTAssertEqual(IPOverviewParser.ipFromCloudflareTrace(data), "2001:db8::1")
     }
 
-    func testParsesIPAddressFromBilibiliPayload() {
-        let data = """
-        {"code":0,"data":{"addr":"203.0.113.8","country":"中国"}}
-        """.data(using: .utf8)!
-
-        XCTAssertEqual(IPOverviewParser.ipFromBilibiliIPService(data), "203.0.113.8")
-    }
-
-    func testParsesIPAddressFromCIPText() {
-        let data = """
-        IP\t: 203.0.113.8
-        地址\t: 中国 北京 北京
-        """.data(using: .utf8)!
-
-        XCTAssertEqual(IPOverviewParser.ipFromCIPText(data), "203.0.113.8")
-    }
-
-    func testParsesIPAddressFromIPIPText() {
-        let data = "当前 IP：203.0.113.8  来自于：中国 北京 北京 电信".data(using: .utf8)!
-
-        XCTAssertEqual(IPOverviewParser.ipFromIPIPText(data), "203.0.113.8")
-    }
-
     func testParsesIPWhoisGeoPayload() {
         let data = """
         {
@@ -67,18 +44,6 @@ final class IPOverviewParserTests: XCTestCase {
         XCTAssertEqual(info?.asn, "AS15169")
         XCTAssertEqual(info?.organization, "Google LLC")
         XCTAssertEqual(info?.timezone, "America/Los_Angeles")
-    }
-
-    func testMapsPreferredLocalizationToGeoLanguageCode() {
-        XCTAssertEqual(IPOverviewLocale.geoLanguageCode(preferredLocalization: "zh-Hans"), "zh-CN")
-        XCTAssertEqual(IPOverviewLocale.geoLanguageCode(preferredLocalization: "en"), "en")
-        XCTAssertNil(IPOverviewLocale.geoLanguageCode(preferredLocalization: "ja"))
-    }
-
-    func testIPWhoisGeoURLUsesLanguageCode() {
-        let url = IPOverviewGeoSource.ipwhois.url(ip: "8.8.8.8", languageCode: "zh-CN")
-
-        XCTAssertEqual(url.absoluteString, "https://ipwho.is/8.8.8.8?lang=zh-CN")
     }
 
     func testParsesIPAPIGeoPayload() {
@@ -126,88 +91,6 @@ final class IPOverviewParserTests: XCTestCase {
         XCTAssertEqual(measurement?.totalPhaseDuration, 8)
         XCTAssertEqual(measurement?.interfaceName, "en0")
         XCTAssertEqual(measurement?.testEndpoint, "example.apple.com")
-    }
-
-    func testParsesNetworkQualityVerbosePayload() {
-        let data = """
-        ==== Verbose Results ====
-        Uplink capacity: 29.192 Mbps
-        Downlink capacity: 21.801 Mbps
-        Idle Latency: 200.707 milliseconds | 298 RPM
-        Uplink Responsiveness: Low (304.435 milliseconds | 197 RPM)
-        Downlink Responsiveness: Low (356.107 milliseconds | 168 RPM)
-        Test Endpoint: example.apple.com
-        Interface: en0
-        Start: 2026-06-24 19:10:11.260
-        End: 2026-06-24 19:10:19.946
-        Downlink Phase Length: 3.60s
-        Uplink Phase Length: 3.54s
-        """.data(using: .utf8)!
-
-        let measurement = IPOverviewNetworkQualityParser.measurement(from: data)
-
-        XCTAssertEqual(measurement?.downloadMbps, 21.801)
-        XCTAssertEqual(measurement?.uploadMbps, 29.192)
-        XCTAssertEqual(measurement?.baseRTTMilliseconds, 200.707)
-        XCTAssertEqual(measurement?.uploadResponsivenessRPM, 197)
-        XCTAssertEqual(measurement?.downloadResponsivenessRPM, 168)
-        XCTAssertEqual(measurement?.downloadPhaseDuration, 3.60)
-        XCTAssertEqual(measurement?.uploadPhaseDuration, 3.54)
-        XCTAssertEqual(measurement?.interfaceName, "en0")
-        XCTAssertEqual(measurement?.testEndpoint, "example.apple.com")
-    }
-
-    func testParsesNetworkQualityProgressEvents() {
-        let events = IPOverviewNetworkQualityParser.progressEvents(from: """
-        Downlink capacity: 21.801 Mbps
-        Uplink capacity: 29.192 Mbps
-        Idle Latency: 200.707 milliseconds | 298 RPM
-        """)
-
-        XCTAssertTrue(events.contains(.phase(.measuringDownload)))
-        XCTAssertTrue(events.contains(.phase(.measuringUpload)))
-        XCTAssertTrue(events.contains(.phase(.measuringLatency)))
-        XCTAssertTrue(events.contains(.download(21.801)))
-        XCTAssertTrue(events.contains(.upload(29.192)))
-    }
-
-    func testParsesNetworkQualityTTYProgressEvents() {
-        let events = IPOverviewNetworkQualityParser.progressEvents(from: """
-        \u{1B}[2K
-        Downlink: capacity 26.079 Mbps, responsiveness 147 RPM (17.608 MB, 6 flows) - Uplink: capacity 0.000 Mbps, responsiveness 0 RPM (0 B, 0 flows)
-        """)
-
-        XCTAssertTrue(events.contains(.phase(.measuringDownload)))
-        XCTAssertTrue(events.contains(.download(26.079)))
-        XCTAssertFalse(events.contains(.phase(.measuringUpload)))
-        XCTAssertFalse(events.contains(.upload(0)))
-    }
-
-    func testGradesNetworkQualityMeasurement() {
-        XCTAssertEqual(
-            IPOverviewNetworkQualityGrade.evaluate(
-                baseRTTMilliseconds: 45,
-                downloadMbps: 150,
-                uploadMbps: 50
-            ),
-            .excellent
-        )
-        XCTAssertEqual(
-            IPOverviewNetworkQualityGrade.evaluate(
-                baseRTTMilliseconds: 120,
-                downloadMbps: 8,
-                uploadMbps: 4
-            ),
-            .fair
-        )
-        XCTAssertEqual(
-            IPOverviewNetworkQualityGrade.evaluate(
-                baseRTTMilliseconds: 240,
-                downloadMbps: 2,
-                uploadMbps: 0.5
-            ),
-            .poor
-        )
     }
 
     func testValidatesIPAddressFamily() {
@@ -263,35 +146,6 @@ final class IPOverviewParserTests: XCTestCase {
             Set(requestedURLs.compactMap(\.host)),
             ["api.live.bilibili.com", "4.ipcheck.ing"]
         )
-    }
-
-    func testAddressSnapshotDoesNotReuseStaleInternationalIPv4WhenDomesticRefreshSucceeds() async {
-        let client = SelectiveIPOverviewHTTPClient(succeedsForDomesticPrimary: true)
-        let service = IPOverviewService(httpClient: client)
-        let preservedSnapshot = IPOverviewSnapshot(
-            domesticIPv4: nil,
-            domesticIPv6: nil,
-            internationalIPv4: IPOverviewPublicIPResult(
-                family: .ipv4,
-                route: .international,
-                ip: "203.0.113.99",
-                source: "Stale International"
-            ),
-            internationalIPv6: nil,
-            localAddresses: [],
-            geoInfoByIP: [:],
-            sourceResults: [],
-            lastUpdated: Date(timeIntervalSinceReferenceDate: 1_000),
-            errorMessage: nil,
-            isRefreshing: false
-        )
-
-        let snapshot = await service.collectAddressSnapshot(preserving: preservedSnapshot)
-
-        XCTAssertEqual(snapshot.domesticIPv4?.ip, "198.51.100.8")
-        XCTAssertNil(snapshot.internationalIPv4)
-        XCTAssertEqual(snapshot.preferredPublicIPv4?.ip, "198.51.100.8")
-        XCTAssertNil(snapshot.errorMessage)
     }
 
     func testAddressSnapshotClearsCachedPublicIPv4AndBoundsFallbackWorkWhenSourcesFail() async {

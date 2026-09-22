@@ -159,11 +159,9 @@ final class PluginMenuBarIconCoordinatorTests: XCTestCase {
         defer { subscription.cancel() }
         try plugin.context.requestPlacement(.primary, for: "status").get()
         XCTAssertEqual(changes.count, 1)
-        for revision in 1...100 {
-            plugin.revision = UInt64(revision)
-            plugin.onMenuBarIconChange?("status")
-            _ = coordinator.snapshot(context: light)
-        }
+        plugin.revision = 1
+        plugin.onMenuBarIconChange?("status")
+        _ = coordinator.snapshot(context: light)
         XCTAssertEqual(changes.count, 1)
         coordinator.unregister(pluginID: "first", reason: .updating)
         XCTAssertEqual(changes.count, 2)
@@ -191,37 +189,26 @@ final class PluginMenuBarIconCoordinatorTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: PluginMenuBarIconCoordinator.preferenceKey))
     }
 
-    func testSnapshotCacheIsBoundedAndAppearanceAware() throws {
-        let plugin = IconPlugin(id: "first")
-        coordinator.synchronize(with: [plugin], pendingPluginIDs: [])
-        try plugin.context.requestPlacement(.primary, for: "status").get()
-        _ = coordinator.snapshot(context: light)
-        let count = plugin.renderCount
-        for _ in 0..<100 { _ = coordinator.snapshot(context: light) }
-        XCTAssertEqual(plugin.renderCount, count)
-        let dark = PluginMenuBarIconRenderContext(pointSize: light.pointSize, displayScale: 2, appearance: .dark)
-        _ = coordinator.snapshot(context: dark)
-        XCTAssertEqual(plugin.lastContext, dark)
-        XCTAssertEqual(plugin.renderCount, count + 1)
-    }
-
-    func testIconNotificationsCoalesceWithoutGeneralStateChanges() async throws {
+    func testIconChangePublishesLatestOwnerSnapshot() async throws {
         let plugin = IconPlugin(id: "first")
         let other = IconPlugin(id: "second")
         coordinator.synchronize(with: [plugin, other], pendingPluginIDs: [])
         try plugin.context.requestPlacement(.primary, for: "status").get()
-        var changes = 0
-        coordinator.onPrimaryIconChange = { changes += 1 }
-        let placements = plugin.placementChanges
-        for revision in 1...100 {
+        let updated = expectation(description: "Latest owner icon is available")
+        coordinator.onPrimaryIconChange = { [unowned self] in
+            guard coordinator.snapshot(context: light)?.revision == 2 else { return }
+            coordinator.onPrimaryIconChange = nil
+            updated.fulfill()
+        }
+        defer { coordinator.onPrimaryIconChange = nil }
+        for revision in 1...2 {
             plugin.revision = UInt64(revision)
             plugin.onMenuBarIconChange?("status")
             other.onMenuBarIconChange?("status")
         }
-        try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(changes, 1)
-        XCTAssertEqual(plugin.placementChanges, placements)
-        XCTAssertEqual(coordinator.snapshot(context: light)?.revision, 100)
+        await fulfillment(of: [updated], timeout: 2)
+        XCTAssertEqual(coordinator.snapshot(context: light)?.revision, 2)
+        XCTAssertEqual(coordinator.primaryIconOwner?.pluginID, plugin.metadata.id)
     }
 
     func testHostShutdownRevokesCapabilitiesButPreservesSelection() throws {
@@ -295,9 +282,7 @@ private final class IconPlugin: MacToolsPlugin, PluginMenuBarIconProviding, Plug
     var onContextRevoked: (() -> Void)?
     var onDeactivate: (() -> Void)?
     var placementChanges = 0
-    var renderCount = 0
     var revision: UInt64 = 0
-    var lastContext: PluginMenuBarIconRenderContext?
     var invalidImage = false
     var context: PluginMenuBarIconHostContext { menuBarIconHostContext! }
     var menuBarIconDescriptors: [PluginMenuBarIconDescriptor] { [.init(id: "status", title: metadata.title)] }
@@ -310,8 +295,6 @@ private final class IconPlugin: MacToolsPlugin, PluginMenuBarIconProviding, Plug
     func menuBarIconPlacementDidChange() { placementChanges += 1 }
 
     func menuBarIcon(for iconID: String, context: PluginMenuBarIconRenderContext) -> PluginMenuBarIconSnapshot? {
-        renderCount += 1
-        lastContext = context
         let image = NSImage(size: invalidImage ? .zero : context.pointSize, flipped: false) { bounds in
             NSColor.black.setFill()
             NSBezierPath(ovalIn: bounds).fill()

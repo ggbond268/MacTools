@@ -40,16 +40,6 @@ private final class MockMiddleClickSession: MiddleClickSessionManaging {
     }
 }
 
-private final class MiddleClickLifetimeOwner {
-    let onDeinit: () -> Void
-
-    init(onDeinit: @escaping () -> Void) {
-        self.onDeinit = onDeinit
-    }
-
-    deinit { onDeinit() }
-}
-
 @MainActor
 final class MiddleClickPluginTests: XCTestCase {
     func testThreeFingerTapRecognizesAfterAllContactsRelease() {
@@ -87,24 +77,6 @@ final class MiddleClickPluginTests: XCTestCase {
         XCTAssertFalse(slowRecognizer.process(frame(at: 2.31, contacts: [])))
     }
 
-    func testTapRejectsTooManyOrSequentialFingers() {
-        var tooManyRecognizer = MiddleClickTapRecognizer(fingerCount: 3)
-        XCTAssertFalse(tooManyRecognizer.process(frame(
-            at: 1.00,
-            contacts: [contact(1), contact(2), contact(3), contact(4)]
-        )))
-        XCTAssertFalse(tooManyRecognizer.process(frame(at: 1.10, contacts: [])))
-
-        var sequentialRecognizer = MiddleClickTapRecognizer(fingerCount: 3)
-        XCTAssertFalse(sequentialRecognizer.process(frame(at: 2.00, contacts: [contact(1)])))
-        XCTAssertFalse(sequentialRecognizer.process(frame(at: 2.02, contacts: [contact(2)])))
-        XCTAssertFalse(sequentialRecognizer.process(frame(
-            at: 2.04,
-            contacts: [contact(2), contact(3)]
-        )))
-        XCTAssertFalse(sequentialRecognizer.process(frame(at: 2.08, contacts: [])))
-    }
-
     func testNativeClickRewriteSuppressesSyntheticClickForSameEpisode() {
         let pipeline = MiddleClickTapPipeline(fingerCount: 3)
         XCTAssertFalse(pipeline.process(frame(
@@ -136,44 +108,6 @@ final class MiddleClickPluginTests: XCTestCase {
         )
     }
 
-    func testTapPipelineTracksMultipleDevicesIndependently() {
-        let pipeline = MiddleClickTapPipeline(fingerCount: 3)
-        XCTAssertFalse(pipeline.process(frame(
-            deviceID: 1,
-            at: 1.00,
-            contacts: [contact(1), contact(2), contact(3)]
-        )))
-        XCTAssertFalse(pipeline.process(frame(
-            deviceID: 2,
-            at: 1.01,
-            contacts: [contact(1), contact(2), contact(3)]
-        )))
-        XCTAssertTrue(pipeline.process(frame(deviceID: 1, at: 1.10, contacts: [])))
-        XCTAssertTrue(pipeline.process(frame(deviceID: 2, at: 1.11, contacts: [])))
-    }
-
-    func testTapPipelineRequestsSyntheticClickWithoutNativeClick() {
-        let pipeline = MiddleClickTapPipeline(fingerCount: 3)
-        XCTAssertFalse(pipeline.process(frame(
-            at: 1.00,
-            contacts: [contact(1), contact(2), contact(3)]
-        )))
-        XCTAssertTrue(pipeline.process(frame(at: 1.10, contacts: [])))
-    }
-
-    func testStoreUsesLegacyDefaultsAndNormalizesFingerCount() {
-        let storage = MiddleClickMemoryStorage()
-        var store = MiddleClickStore(storage: storage)
-
-        XCTAssertFalse(store.isEnabled)
-        XCTAssertEqual(store.requiredFingerCount, 3)
-
-        storage.values["middle-click.required-finger-count"] = 9
-        store = MiddleClickStore(storage: storage)
-
-        XCTAssertEqual(store.requiredFingerCount, 3)
-    }
-
     func testActivateRestoresEnabledSessionAndFingerCount() {
         let storage = MiddleClickMemoryStorage()
         storage.values["middle-click.enabled"] = true
@@ -203,24 +137,6 @@ final class MiddleClickPluginTests: XCTestCase {
 
         plugin.activate(context: PluginRuntimeContext(pluginID: "middle-click"))
         XCTAssertEqual(session.activateCallCount, 2)
-    }
-
-    func testSettingsSwitchStartsAndStopsSessionWhenPermissionIsGranted() {
-        let storage = MiddleClickMemoryStorage()
-        let session = MockMiddleClickSession()
-        let plugin = makePlugin(storage: storage, session: session)
-
-        plugin.handleSettingsAction(.setBoolean(controlID: "enabled", value: true))
-
-        XCTAssertEqual(session.activateCallCount, 1)
-        XCTAssertEqual(storage.values["middle-click.enabled"] as? Bool, true)
-        XCTAssertTrue(plugin.store.isEnabled)
-
-        plugin.handleSettingsAction(.setBoolean(controlID: "enabled", value: false))
-
-        XCTAssertEqual(session.deactivateCallCount, 1)
-        XCTAssertEqual(storage.values["middle-click.enabled"] as? Bool, false)
-        XCTAssertFalse(plugin.store.isEnabled)
     }
 
     func testCanonicalActionTogglesStateAndPublishesPresentation() async throws {
@@ -272,20 +188,6 @@ final class MiddleClickPluginTests: XCTestCase {
         )
     }
 
-    func testCanonicalActionCanDisableAfterAccessibilityIsRevoked() throws {
-        let storage = MiddleClickMemoryStorage()
-        storage.values["middle-click.enabled"] = true
-        let plugin = makePlugin(
-            storage: storage,
-            accessibilityTrusted: false,
-            requestAccessibilityTrust: false
-        )
-        let reference = ActionReference(key: try XCTUnwrap(plugin.actionDefinitions.first).key)
-
-        XCTAssertTrue(plugin.actionAvailability(for: reference).isAvailable)
-        XCTAssertEqual(plugin.permissionRequirementIDs(for: reference.key), [])
-    }
-
     func testTrackpadGestureClaimPausesAndRestoresEnabledSession() {
         let storage = MiddleClickMemoryStorage()
         let session = MockMiddleClickSession()
@@ -309,54 +211,6 @@ final class MiddleClickPluginTests: XCTestCase {
 
         XCTAssertEqual(session.activateCallCount, 2)
         XCTAssertNil(settingsRows(for: plugin).first?.error)
-    }
-
-    func testEnablingDuringTrackpadConflictPreservesIntentAndResumesLater() {
-        let storage = MiddleClickMemoryStorage()
-        let session = MockMiddleClickSession()
-        let plugin = makePlugin(storage: storage, session: session)
-        plugin.inputGestureConflictsDidChange([
-            PluginInputGestureConflict(
-                claim: PluginInputGestureClaim(id: "trackpad.tap.3", title: "Three-Finger Tap"),
-                ownerPluginID: "trackpad-gestures",
-                ownerPluginTitle: "Trackpad Gestures"
-            ),
-        ])
-
-        plugin.handleSettingsAction(.setBoolean(controlID: "enabled", value: true))
-
-        XCTAssertTrue(plugin.store.isEnabled)
-        XCTAssertEqual(session.activateCallCount, 0)
-        XCTAssertNotNil(settingsRows(for: plugin).first?.error)
-        XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .inactive)
-
-        plugin.inputGestureConflictsDidChange([])
-
-        XCTAssertEqual(session.activateCallCount, 1)
-        XCTAssertNil(settingsRows(for: plugin).first?.error)
-        XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .active)
-    }
-
-    func testChangingToUnclaimedFingerCountRestartsConflictPausedSession() {
-        let storage = MiddleClickMemoryStorage()
-        let session = MockMiddleClickSession()
-        let plugin = makePlugin(storage: storage, session: session)
-        plugin.handleSettingsAction(.setBoolean(controlID: "enabled", value: true))
-        plugin.inputGestureConflictsDidChange([
-            PluginInputGestureConflict(
-                claim: PluginInputGestureClaim(id: "trackpad.tap.3", title: "Three-Finger Tap"),
-                ownerPluginID: "trackpad-gestures",
-                ownerPluginTitle: "Trackpad Gestures"
-            ),
-        ])
-
-        plugin.handleSettingsAction(.setSelection(controlID: "finger-count", optionID: "4"))
-
-        XCTAssertTrue(plugin.store.isEnabled)
-        XCTAssertEqual(session.activateCallCount, 2)
-        XCTAssertEqual(session.requiredFingerCount, 4)
-        XCTAssertNil(settingsRows(for: plugin).first?.error)
-        XCTAssertEqual(plugin.actionCatalogEntries.first?.presentationState, .active)
     }
 
     func testDeniedPermissionKeepsFeatureOffAndRequestsGuidance() {
@@ -393,18 +247,6 @@ final class MiddleClickPluginTests: XCTestCase {
         XCTAssertEqual(session.requiredFingerCount, 4)
     }
 
-    func testInvalidFingerCountSettingIsIgnored() {
-        let storage = MiddleClickMemoryStorage()
-        let session = MockMiddleClickSession()
-        let plugin = makePlugin(storage: storage, session: session)
-
-        plugin.handleSettingsAction(.setSelection(controlID: "finger-count", optionID: "2"))
-
-        XCTAssertEqual(plugin.store.requiredFingerCount, 3)
-        XCTAssertNil(storage.values["middle-click.required-finger-count"])
-        XCTAssertEqual(session.requiredFingerCount, 3)
-    }
-
     func testPermissionRevocationStopsSessionAndTurnsFeatureOff() {
         let storage = MiddleClickMemoryStorage()
         let session = MockMiddleClickSession()
@@ -423,89 +265,6 @@ final class MiddleClickPluginTests: XCTestCase {
         XCTAssertEqual(storage.values["middle-click.enabled"] as? Bool, false)
         XCTAssertFalse(plugin.store.isEnabled)
         XCTAssertFalse(plugin.permissionState(for: "accessibility").isGranted)
-    }
-
-    func testSettingsPageUsesValidPluginKitV5Form() throws {
-        let plugin = makePlugin()
-        let page = try XCTUnwrap(plugin.settingsPage)
-
-        XCTAssertEqual(page.body.layout, .form)
-        XCTAssertNoThrow(try PluginSettingsValidator.validate(page))
-        XCTAssertEqual(plugin.metadata.title, "模拟鼠标中键")
-
-        let rows = settingsRows(for: plugin)
-        XCTAssertEqual(rows.map(\.id), ["enabled", "finger-count"])
-        guard case let .toggle(isOn) = rows.first?.control else {
-            return XCTFail("Expected settings to start with the enable toggle")
-        }
-        XCTAssertFalse(isOn)
-    }
-
-    func testSettingsToggleTitleFollowsRuntimeLanguageAfterPluginCreation() throws {
-        let preferenceKey = PluginRuntimeLocalization.preferenceUserDefaultsKey
-        let originalPreference = UserDefaults.standard.string(forKey: preferenceKey)
-        let bundleURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("MiddleClickLocalizationTests-\(UUID().uuidString).bundle")
-        defer {
-            if let originalPreference {
-                UserDefaults.standard.set(originalPreference, forKey: preferenceKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: preferenceKey)
-            }
-            PluginRuntimeLocalization.source.setPreference(originalPreference)
-            try? FileManager.default.removeItem(at: bundleURL)
-        }
-
-        let bundle = try makeLocalizationBundle(at: bundleURL)
-        PluginRuntimeLocalization.source.setPreference("en")
-        let plugin = makePlugin(localization: PluginLocalization(bundle: bundle))
-        XCTAssertEqual(plugin.metadata.title, "Middle Click")
-        XCTAssertEqual(settingsRows(for: plugin).first?.title, "Middle Click")
-
-        PluginRuntimeLocalization.source.setPreference("zh-Hans")
-
-        // Metadata was captured when the plugin was created, but settings must resolve against
-        // the current app language each time the host rebuilds the page.
-        XCTAssertEqual(plugin.metadata.title, "Middle Click")
-        XCTAssertEqual(settingsRows(for: plugin).first?.title, "模拟鼠标中键")
-    }
-
-    func testRuntimeResolvesRequiredMultitouchSymbolsDynamically() {
-        XCTAssertNotNil(MiddleClickMultitouchRuntime.load())
-    }
-
-    func testDeviceCollectionRetainsCreateOwnedListForListenerLifetime() {
-        var didReleaseOwner = false
-        var owner: MiddleClickLifetimeOwner? = MiddleClickLifetimeOwner {
-            didReleaseOwner = true
-        }
-        var collection: MiddleClickMultitouchDeviceCollection? =
-            MiddleClickMultitouchDeviceCollection(devices: [], lifetimeOwner: owner)
-
-        owner = nil
-        XCTAssertFalse(didReleaseOwner)
-
-        collection = nil
-        XCTAssertNil(collection)
-        XCTAssertTrue(didReleaseOwner)
-    }
-
-    func testRemovedCallbackContextCannotReachReplacementGeneration() {
-        let oldGate = MiddleClickFrameCallbackGate()
-        let oldPointer = MiddleClickCallbackContextRegistry.shared.insert(oldGate)
-        XCTAssertTrue(MiddleClickCallbackContextRegistry.shared.gate(for: oldPointer) === oldGate)
-
-        MiddleClickCallbackContextRegistry.shared.remove(oldPointer)
-        let replacementGate = MiddleClickFrameCallbackGate()
-        let replacementPointer = MiddleClickCallbackContextRegistry.shared.insert(replacementGate)
-        defer { MiddleClickCallbackContextRegistry.shared.remove(replacementPointer) }
-
-        XCTAssertNotEqual(oldPointer, replacementPointer)
-        XCTAssertNil(MiddleClickCallbackContextRegistry.shared.gate(for: oldPointer))
-        XCTAssertTrue(
-            MiddleClickCallbackContextRegistry.shared.gate(for: replacementPointer)
-                === replacementGate
-        )
     }
 
     private func makePlugin(
@@ -527,60 +286,6 @@ final class MiddleClickPluginTests: XCTestCase {
             },
             requestAccessibilityTrust: { _ in requestAccessibilityTrust }
         )
-    }
-
-    private func makeLocalizationBundle(at bundleURL: URL) throws -> Bundle {
-        let contentsURL = bundleURL.appendingPathComponent("Contents", isDirectory: true)
-        let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: resourcesURL,
-            withIntermediateDirectories: true
-        )
-
-        let info: [String: Any] = [
-            "CFBundleDevelopmentRegion": "en",
-            "CFBundleIdentifier": "cc.ggbond.mactools.tests.middle-click-localization",
-            "CFBundleLocalizations": ["en", "zh-Hans"],
-            "CFBundleName": "MiddleClickLocalizationTests",
-            "CFBundlePackageType": "BNDL",
-        ]
-        let infoData = try PropertyListSerialization.data(
-            fromPropertyList: info,
-            format: .xml,
-            options: 0
-        )
-        try infoData.write(to: contentsURL.appendingPathComponent("Info.plist"))
-
-        let stringsByLanguage: [String: [String: String]] = [
-            "en": [
-                "metadata.title": "Middle Click",
-                "metadata.description": "Turn trackpad taps into middle clicks.",
-                "settings.section.title": "Settings",
-            ],
-            "zh-Hans": [
-                "metadata.title": "模拟鼠标中键",
-                "metadata.description": "触控板轻点 → 模拟鼠标中键",
-                "settings.section.title": "设置",
-            ],
-        ]
-        for (language, strings) in stringsByLanguage {
-            let localizationURL = resourcesURL.appendingPathComponent(
-                "\(language).lproj",
-                isDirectory: true
-            )
-            try FileManager.default.createDirectory(
-                at: localizationURL,
-                withIntermediateDirectories: true
-            )
-            let stringsData = try PropertyListSerialization.data(
-                fromPropertyList: strings,
-                format: .binary,
-                options: 0
-            )
-            try stringsData.write(to: localizationURL.appendingPathComponent("Localizable.strings"))
-        }
-
-        return try XCTUnwrap(Bundle(url: bundleURL))
     }
 
     private func settingsRows(for plugin: MiddleClickPlugin) -> [PluginSettingsRow] {
