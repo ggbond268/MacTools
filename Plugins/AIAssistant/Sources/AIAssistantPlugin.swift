@@ -21,7 +21,6 @@ private struct AIAssistantPluginProvider: PluginProvider {
 @MainActor
 final class AIAssistantPlugin:
     MacToolsPlugin,
-    PluginPrimaryPanel,
     PluginSettingsPresenting,
     PluginActionProviding,
     PluginActionPermissionProviding,
@@ -38,7 +37,7 @@ final class AIAssistantPlugin:
 
     let metadata: PluginMetadata
 
-    let primaryPanelDescriptor = PluginPrimaryPanelDescriptor(
+    private let rowDescriptor = PluginPanelRowDescriptor(
         controlStyle: .switch,
         menuActionBehavior: .keepPresented
     )
@@ -107,13 +106,24 @@ final class AIAssistantPlugin:
         }
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var panelItems: [PluginPanelItem] {
+        [
+            .row(
+                id: "control",
+                initialPlacement: .featurePanel,
+                descriptor: rowDescriptor,
+                state: rowState,
+                action: { [weak self] in self?.handleAction($0) }
+            )
+        ]
+    }
+
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: isShortcutEnabled,
-            isExpanded: false,
             isEnabled: true,
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: nil
         )

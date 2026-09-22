@@ -18,13 +18,20 @@ private struct ScreenshotPluginProvider: PluginProvider {
 }
 
 @MainActor
-final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
-    PluginActionProviding, PluginActionPermissionProviding
-{
+final class ScreenshotPlugin: MacToolsPlugin, PluginActionProviding, PluginActionPermissionProviding, PluginActionShortcutSettingsProviding, PluginLegacyActionShortcutProviding, DisplayTopologyRefreshing {
+    var panelItems: [PluginPanelItem] {
+        return [
+            .row(id: "control", initialPlacement: .featurePanel,
+                 descriptor: rowDescriptor, state: rowState,
+                 action: { [weak self] in self?.handleAction($0) }),
+        ]
+    }
+
     private enum ID {
         static let plugin = "screenshot"
         static let capture = "capture"
         static let quickCapture = "quick-capture"
+        static let shortcutPlacement = "shortcut-placement"
         static let execute = "execute"
         static let permission = "screen-recording"
         static let folder = "save-folder"
@@ -78,8 +85,8 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         }
     }
 
-    var primaryPanelDescriptor: PluginPrimaryPanelDescriptor {
-        PluginPrimaryPanelDescriptor(
+    var rowDescriptor: PluginPanelRowDescriptor {
+        PluginPanelRowDescriptor(
             controlStyle: .button,
             menuActionBehavior: .dismissBeforeHandling,
             buttonTitle: coordinator.isRecording
@@ -90,13 +97,12 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         )
     }
 
-    var primaryPanelState: PluginPanelState {
-        PluginPanelState(
+    var rowState: PluginPanelRowState {
+        PluginPanelRowState(
             subtitle: panelSubtitle,
             isOn: coordinator.isBusy,
-            isExpanded: false,
             isEnabled: isActive && (!coordinator.isBusy || canFinishSession),
-            isVisible: true,
+            isAvailable: true,
             detail: nil,
             errorMessage: lastError
         )
@@ -141,7 +147,7 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
                 title: definition.title,
                 description: definition.description,
                 actionID: definition.key.actionID,
-                scope: .whilePluginActive,
+                scope: .global,
                 defaultBinding: nil,
                 isRequired: false
             )
@@ -150,6 +156,9 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
 
     var settingsPage: PluginSettingsPage? {
         .form(description: metadata.defaultDescription, sections: [
+            // The host inserts the canonical action-shortcut section after this
+            // zero-row anchor, keeping output settings below the shortcuts.
+            PluginSettingsSection(id: ID.shortcutPlacement, rows: []),
             PluginSettingsSection(
                 id: "output",
                 title: environment.string("settings.output.title", "保存"),
@@ -166,6 +175,33 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
         ])
     }
 
+    var actionShortcutSettingsConfiguration: PluginActionShortcutSettingsConfiguration {
+        PluginActionShortcutSettingsConfiguration(
+            title: environment.string("settings.shortcuts.title", "快捷键"),
+            description: environment.string(
+                "settings.shortcuts.description",
+                "设置截图和快速截图的全局快捷键。"
+            ),
+            actionIDs: [ID.capture, ID.quickCapture],
+            placementAfterSectionID: ID.shortcutPlacement
+        )
+    }
+
+    var legacyActionShortcutAssignments: [LegacyActionShortcutAssignment] {
+        shortcutDefinitions.compactMap { definition in
+            guard let binding = shortcutBindingResolver?(definition.id) else { return nil }
+            return LegacyActionShortcutAssignment(
+                reference: ActionReference(
+                    key: ActionKey(providerID: ID.plugin, actionID: definition.actionID)
+                ),
+                binding: binding,
+                legacyShortcutDefinitionID: definition.id
+            )
+        }
+    }
+
+    func legacyActionShortcutsDidMigrate() {}
+
     func refresh() {
         let granted = screenAccess()
         guard granted != isGranted else { return }
@@ -181,7 +217,13 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
     func activate(context: PluginRuntimeContext) {
         isActive = true
         refresh()
+        coordinator.prepareCaptureSurfaces()
         onStateChange?()
+    }
+
+    func refreshDisplayTopology() {
+        guard isActive else { return }
+        coordinator.refreshDisplayTopology()
     }
 
     func deactivate(reason: PluginDeactivationReason) {
@@ -294,8 +336,6 @@ final class ScreenshotPlugin: MacToolsPlugin, PluginPrimaryPanel,
     }
 
     private static func chooseFolder(_ current: URL, environment: ScreenshotEnvironment) -> URL? {
-        PluginPresentationSafety.prepareForWindowOrdering()
-        NSApp.activate(ignoringOtherApps: true)
         let panel = NSOpenPanel()
         environment.savePanel = panel
         defer { if environment.savePanel === panel { environment.savePanel = nil } }
