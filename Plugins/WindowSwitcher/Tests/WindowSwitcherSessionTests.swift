@@ -698,70 +698,45 @@ final class WindowSwitcherSessionTests: XCTestCase {
         }
     }
 
-    func testCyclingIgnoresCommandFBeforeHeldModifiersBecomeText() throws {
-        for held: NSEvent.ModifierFlags in [.command, .option, [.command, .option]] {
-            let controller = WindowSwitcherOverlayController()
-            controller.show(WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: false,
-                originalWindowID: nil, invocationModifiers: held), currentPID: 100, showsPreview: false)
-            defer { controller.hide() }
-            let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
-            let responder = try XCTUnwrap(panel.firstResponder)
-            func key(_ text: String, code: Int, flags: NSEvent.ModifierFlags, repeated: Bool = false) throws -> NSEvent {
-                try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
-                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: text,
-                    charactersIgnoringModifiers: text, isARepeat: repeated, keyCode: UInt16(code)))
-            }
-            for flags in [NSEvent.ModifierFlags.command, held.union(.command)] {
-                let find = try key("f", code: kVK_ANSI_F, flags: flags)
-                XCTAssertTrue(panel.performKeyEquivalent(with: find))
-                panel.sendEvent(try key("f", code: kVK_ANSI_F, flags: flags, repeated: true))
-                responder.keyDown(with: find)
-                XCTAssertTrue(panel.firstResponder === responder)
-                XCTAssertFalse(controller.isEditingSearch)
-                XCTAssertEqual(controller.session?.isPersistent, false)
-                XCTAssertEqual(controller.session?.query, "")
-                XCTAssertEqual(controller.session?.selectedID, "one")
-            }
-
-            // Other letters still enter search while the invocation chord is held.
-            panel.sendEvent(try key("w", code: kVK_ANSI_W, flags: held))
-            XCTAssertEqual(controller.session?.query, "w")
-            XCTAssertTrue(controller.isEditingSearch)
-            let editor = try XCTUnwrap(panel.firstResponder as? NSTextView)
-            let find = try key("f", code: kVK_ANSI_F, flags: held.union(.command))
-            XCTAssertTrue(panel.performKeyEquivalent(with: find))
-            panel.sendEvent(find)
-            XCTAssertEqual(controller.session?.query, "w", "Held Command-F must not append F after search has opened")
-            editor.setMarkedText("pin", selectedRange: NSRange(location: 3, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
-            panel.sendEvent(find)
-            XCTAssertTrue(editor.hasMarkedText())
-            editor.unmarkText()
-
-            // F without Command remains ordinary text input.
-            let release = try XCTUnwrap(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [],
-                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
-                isARepeat: false, keyCode: UInt16(kVK_Command)))
-            panel.sendEvent(release)
-            editor.selectAll(nil)
-            panel.sendEvent(try key("f", code: kVK_ANSI_F, flags: []))
-            XCTAssertEqual(controller.session?.query, "f")
-        }
-    }
-
-    func testSearchSelectDoesNotUseCommandFToFocusOrChangeSearch() throws {
+    func testFindPromotesCyclingAndPreservesNativeSearchInput() throws {
         let controller = WindowSwitcherOverlayController()
-        controller.show(WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: true,
-            originalWindowID: nil), currentPID: 100, showsPreview: false)
+        controller.show(WindowSwitcherSession(entries: [entry("one")], selectedID: "one", isPersistent: false,
+            originalWindowID: nil, invocationModifiers: .command), currentPID: 100, showsPreview: false)
         defer { controller.hide() }
         let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
-        let responder = try XCTUnwrap(panel.firstResponder)
-        let find = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
-                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "f",
-                    charactersIgnoringModifiers: "f", isARepeat: false, keyCode: UInt16(kVK_ANSI_F)))
-        panel.sendEvent(find)
-        XCTAssertTrue(panel.firstResponder === responder)
-        XCTAssertFalse(controller.isEditingSearch)
+        let resultsResponder = try XCTUnwrap(panel.firstResponder)
+        func key(_ text: String, code: Int, flags: NSEvent.ModifierFlags) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: text,
+                charactersIgnoringModifiers: text, isARepeat: false, keyCode: UInt16(code)))
+        }
+        let find = try key("f", code: kVK_ANSI_F, flags: .command)
+        XCTAssertTrue(panel.performKeyEquivalent(with: find))
+        XCTAssertTrue(controller.isEditingSearch)
+        XCTAssertEqual(controller.session?.isPersistent, true)
         XCTAssertEqual(controller.session?.query, "")
+        XCTAssertEqual(controller.session?.selectedID, "one")
+
+        // The invocation modifier remains suppressed for ordinary search typing.
+        panel.sendEvent(try key("w", code: kVK_ANSI_W, flags: .command))
+        XCTAssertEqual(controller.session?.query, "w")
+        panel.sendEvent(find)
+        XCTAssertEqual(controller.session?.query, "w")
+
+        let release = try XCTUnwrap(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: UInt16(kVK_Command)))
+        panel.sendEvent(release)
+        XCTAssertTrue(panel.makeFirstResponder(resultsResponder))
+        panel.sendEvent(find)
+        XCTAssertTrue(controller.isEditingSearch)
+        XCTAssertEqual(controller.session?.query, "w")
+        XCTAssertEqual(controller.filterSearchEvent(find).modifierFlags, .command,
+                       "Refocusing search must not start suppressing a released invocation modifier again")
+        let editor = try XCTUnwrap(panel.firstResponder as? NSTextView)
+        editor.selectAll(nil)
+        panel.sendEvent(try key("f", code: kVK_ANSI_F, flags: []))
+        XCTAssertEqual(controller.session?.query, "f", "Plain F remains ordinary text input")
     }
 
     func testDirectKeyTabNavigationWrapsWithinScopeWithoutActivating() throws {

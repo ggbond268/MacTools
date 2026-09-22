@@ -3,4 +3,4 @@ release: plugin
 type: changed
 ---
 
-Window Switcher's Direct Keys mode supports Command-F for search and Tab or Shift-Tab to select windows. Cycling ignores Command-F without opening search or inserting F.
+Command-F opens and focuses Window Switcher search without inserting F, keeping the panel open after cycling modifiers are released. Direct Keys supports Tab and Shift-Tab to select windows.

@@ -513,21 +513,27 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         XCTAssertTrue(catalog.activated.isEmpty)
     }
 
-    func testModifierReleaseAfterEnteringSearchDoesNotCommit() async {
+    func testModifierReleaseAfterEnteringSearchDoesNotCommit() async throws {
         let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
         let overlay = WindowSwitcherOverlayController()
         catalog.windows = [entry("a"), entry("b")]
         let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
         defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.shortcutBindingResolver = { _ in WindowSwitcherShortcutBindingStore.legacyBinding }
         tap.onShortcutPressed(false, false, false)
-        var session = plugin.session!
-        session.beginSearch()
-        overlay.onSessionChange?(session)
+        await eventually { overlay.isVisible }
+        let find = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+            timestamp: 0, windowNumber: 0, context: nil, characters: "f", charactersIgnoringModifiers: "f",
+            isARepeat: false, keyCode: 3))
+        XCTAssertTrue(overlay.handleChooserShortcut(find))
         tap.onShortcutReleased()
         await Task.yield()
         XCTAssertTrue(catalog.activated.isEmpty)
         XCTAssertTrue(plugin.session?.isPersistent == true)
-        XCTAssertFalse(tap.isEditing, "Persistent result navigation must still accept custom scope shortcuts")
+        XCTAssertEqual(plugin.session?.query, "")
+        XCTAssertTrue(overlay.isVisible)
+        XCTAssertTrue(overlay.isEditingSearch)
+        XCTAssertTrue(tap.isEditing)
     }
 
     func testClosingSearchRestoresCyclingAndModifierRelease() async throws {
