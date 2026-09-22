@@ -66,6 +66,16 @@ struct FixtureTrash: UninstallTrashing {
     }
 }
 
+struct OriginalPathTrash: UninstallTrashing {
+    let expectedPath: String
+    let directory: URL
+
+    func trash(_ url: URL) throws -> URL? {
+        guard url.path == expectedPath else { throw AppUninstallerError.changed }
+        return try FixtureTrash(directory: directory).trash(url)
+    }
+}
+
 final class UninstallTestClock: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Date

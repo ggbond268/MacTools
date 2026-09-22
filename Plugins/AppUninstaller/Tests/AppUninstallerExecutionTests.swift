@@ -73,6 +73,21 @@ final class AppUninstallerExecutionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent("FakeTrash").path))
     }
 
+    func testTrashReceivesReviewedOriginalPathSoFinderCanPutBack() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let plan = try UninstallPlanner.make(scan: fixture.scan(), selectedIDs: [fixture.app.path])
+        let trash = OriginalPathTrash(expectedPath: fixture.app.path,
+                                      directory: fixture.root.appendingPathComponent("FakeTrash"))
+        let executor = UninstallExecutor(scanner: fixture.scanner, environment: fixture.environment,
+            history: fixture.history(), trash: trash)
+
+        let run = try await executor.execute(plan)
+
+        XCTAssertTrue(run.complete)
+        XCTAssertEqual(run.results.first?.disposition, .trashed)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.app.path))
+    }
+
     func testReplacementAfterReviewIsRetained() async throws {
         let fixture = try UninstallFixture(); defer { fixture.remove() }
         let plan = try UninstallPlanner.make(scan: fixture.scan(), selectedIDs: [fixture.app.path])

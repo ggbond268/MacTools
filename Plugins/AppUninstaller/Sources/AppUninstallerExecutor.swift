@@ -128,7 +128,7 @@ struct UninstallExecutor: Sendable {
 
     private func move(_ item: UninstallCandidate, staged: Stage, plan: UninstallPlan, now: @Sendable () -> Date) -> UninstallItemResult {
         let fs = scanner.fileSystem
-        var moved = false
+        var isStaged = false
         func result(_ status: UninstallDisposition, destination: String? = nil, message: String? = nil) -> UninstallItemResult {
             .init(originalPath: item.path, destinationPath: destination, disposition: status, message: message)
         }
@@ -147,7 +147,7 @@ struct UninstallExecutor: Sendable {
             guard renameatx_np(staged.parentFD, staged.name, staged.stageFD, staged.name, UInt32(RENAME_EXCL)) == 0 else {
                 throw AppUninstallerError.io(errno)
             }
-            moved = true
+            isStaged = true
             try environment.validateRunning(applicationPath: plan.application.path,
                                                   additionalPath: item.dataClass == .application ? staged.path : nil)
             let frozen = try fs.tree(staged.path, isApplication: item.dataClass == .application)
@@ -157,11 +157,27 @@ struct UninstallExecutor: Sendable {
             guard try fs.identity(at: staged.path) == frozen.identity else { throw AppUninstallerError.changed }
             guard now() < plan.expiresAt else { throw AppUninstallerError.expired }
             try Task.checkCancellation()
-            let destination = try trash.trash(URL(fileURLWithPath: staged.path))
+            // FileManager records the path passed to trashItem as Finder's Put Back destination.
+            // Move the already-validated object back to its reviewed path immediately before
+            // Trash so recovery returns it to the real location instead of this private stage.
+            guard renameatx_np(staged.stageFD, staged.name, staged.parentFD, staged.name, UInt32(RENAME_EXCL)) == 0 else {
+                throw AppUninstallerError.io(errno)
+            }
+            isStaged = false
+            try environment.validateRunning(applicationPath: plan.application.path,
+                                              additionalPath: item.dataClass == .application ? item.path : nil)
+            let restored = try fs.tree(item.path, isApplication: item.dataClass == .application)
+            guard sameObject(restored.identity, frozen.identity), restored.digest == frozen.digest,
+                  sameObject(try fs.identity(at: item.path), restored.identity) else {
+                throw AppUninstallerError.changed
+            }
+            guard now() < plan.expiresAt else { throw AppUninstallerError.expired }
+            try Task.checkCancellation()
+            let destination = try trash.trash(URL(fileURLWithPath: item.path))
             _ = unlinkat(staged.parentFD, staged.directoryName, AT_REMOVEDIR)
             return result(.trashed, destination: destination?.path, message: "已移入废纸篓；未测量实际回收空间。")
         } catch {
-            if moved {
+            if isStaged {
                 // Rollback never overwrites a rebuilt original or moves a substituted staged object.
                 guard let expected = item.snapshot,
                       let current = try? fs.identity(at: staged.path), sameObject(current, expected.identity),
