@@ -14,10 +14,24 @@ private struct AppUninstallerProvider: PluginProvider {
     let context: PluginRuntimeContext
     func makePlugins() -> [any MacToolsPlugin] {
         let configuration = UninstallConfiguration.system()
-        let service = UninstallReviewService(scanner: .init(configuration: configuration),
-                                            environment: UninstallSystemEnvironment(configuration: configuration))
+        let scanner = UninstallScanner(configuration: configuration)
+        let environment = UninstallSystemEnvironment(configuration: configuration)
+        let temporaryDirectory = context.temporaryDirectory
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+                .appendingPathComponent("MacTools-AppUninstaller", isDirectory: true)
+        let engineRoot = context.resourceBundle.url(
+            forResource: "mactools-engine",
+            withExtension: "sh",
+            subdirectory: "MoleEngine"
+        )?.deletingLastPathComponent()
+            ?? context.resourceBundle.resourceURL?.appendingPathComponent("MoleEngine", isDirectory: true)
+            ?? temporaryDirectory.appendingPathComponent("MissingMoleEngine", isDirectory: true)
+        let engine = BundledMoleEngine(rootURL: engineRoot, temporaryDirectory: temporaryDirectory)
+        let service = MoleBackedUninstallReviewService(scanner: scanner, environment: environment, engine: engine)
         let history = context.supportDirectory.map { UninstallHistory(directory: $0.appendingPathComponent("UninstallHistory", isDirectory: true)) }
-        let executor = history.map { UninstallExecutor(scanner: service.scanner, environment: service.environment, history: $0) }
+        let executor = history.map {
+            UninstallExecutor(scanner: scanner, environment: environment, history: $0, reviewer: service)
+        }
         let localization = PluginLocalization(bundle: context.resourceBundle)
         return [AppUninstallerPlugin(controller: .init(service: service, executor: executor, history: history,
                                                        localization: localization), localization: localization)]

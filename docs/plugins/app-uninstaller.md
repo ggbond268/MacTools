@@ -2,6 +2,8 @@
 
 App Uninstaller implements the reviewed, user-domain Trash milestone of [issue #350](https://github.com/ggbond268/MacTools/issues/350), following the maintainer's scope clarification. Users browse a persistent installed-app inventory, search or filter it, select one or several top-level apps, and review the batch before explicitly confirming a move to Trash. Choosing or dropping application bundles also adds them to the review. Each app has a focused detail view; associated-file evidence, coverage, source restrictions, and history remain available through disclosure rather than filling the inventory list.
 
+Application-specific leftover discovery is provided by a version-pinned, embedded subset of [Mole](https://github.com/tw93/mole). Users do not install Mole separately, the embedded engine never updates or downloads code, and its headless adapter exposes only a read-only, versioned JSON plan. MacTools retains the native review policy, immutable-plan construction, filesystem snapshots, process checks, Trash execution, and history. Mole candidates outside MacTools' fixed first-release roots remain unavailable for removal.
+
 The only canonical action is `app-uninstaller/open-review`. It opens the foreground workspace. It accepts no parameters and exposes no removal, automatic, workflow, or external-invocation action. Homebrew navigation opens the existing Homebrew settings; it does not invoke package management.
 
 ## Reviewed scope
@@ -33,7 +35,7 @@ Xcode copies share the `com.apple.dt.Xcode` identifier. Their review groups the 
 - Managed or indeterminate device enrollment prevents removal. This intentionally protects every app on a managed device rather than attempting to override administrator policy for individual apps.
 - Privileged helpers, embedded service declarations, system or driver extensions, attributable launch services, and possible vendor uninstallers lead to vendor/manual guidance. Launch metadata is read as data and never executed. Vendor tools are revealed in Finder for user inspection. Detection is bounded and does not claim to discover every external service, extension, custom manager, or vendor tool.
 - Main applications and executable paths inside the selected bundle must be stopped. Quit targets only the selected running app; Force Quit is a separate explicit confirmation. Unrelated or privileged processes are never terminated.
-- A live process belonging to the current user whose executable path cannot be inspected makes process coverage incomplete and blocks removal. Recheck is available after the condition changes. Unreadable processes belonging only to other users are outside this user-domain process check; installation checks and vendor guidance remain necessary for privileged services.
+- A process belonging to the selected application must be inspectable and stopped before execution. Unreadable unrelated process records remain visible as incomplete coverage but do not invalidate an otherwise verified app-only plan. Installation checks and vendor guidance remain necessary for privileged services.
 - Full Disk Access is probed without reading protected database contents. An unavailable probe is not reported as granted. The settings action opens the native privacy pane, while scan coverage reports actual readability.
 
 ## Execution and recovery
@@ -50,7 +52,9 @@ History stores original paths, known Trash destinations, per-item results, and e
 
 ## Implementation provenance
 
-This is an independent implementation using Foundation, AppKit, Security, CryptoKit, and Darwin APIs. No third-party uninstaller code, path database, or heuristic list is incorporated. Product references informed interaction boundaries only.
+The embedded Mole subset is pinned by commit in `Plugins/AppUninstaller/MoleEngineResources/REVISION`; its GPL-3.0 license is retained beside the source and included in generated plugin notices. The adapter changes Mole's log destinations and adds a read-only JSON planning entry point. MacTools invokes the entry point through `/bin/bash` with an absolute packaged path, a fixed environment, bounded output, and a deadline. It never resolves `mo` from `PATH`, runs Mole's interactive UI, requests Mole self-update, or delegates permanent deletion.
+
+The native scanner remains responsible for application identity, reviewed-root policy, candidate snapshots, inventory conflicts, and evidence shown by MacTools. The native executor independently rescans through the embedded planner, revalidates the immutable plan, stages each item beside its original location, and calls the macOS Trash API. This deliberately prevents a Mole discovery rule from widening MacTools' removal authority.
 
 The issue's draft storage work was not merged into this plugin. The narrow filesystem identity, bounded traversal, immutable plan, and Trash adapter remain private and have focused adversarial fixture coverage. Sharing those primitives with another plugin requires agreeing on the same safety contract and separate integration review; this change does not widen Disk Cleanup or PluginKit authority.
 
@@ -59,11 +63,13 @@ Primary references used to establish the boundaries:
 - [Apple: Delete or uninstall apps on Mac](https://support.apple.com/en-us/102610) supports preferring a vendor uninstaller and the Trash workflow.
 - [Apple: Code-signing information dictionary keys](https://developer.apple.com/documentation/security/signing-information-dictionary-keys) describes identity and entitlement metadata.
 - [Apple: Configuring app groups](https://developer.apple.com/documentation/xcode/configuring-app-groups) establishes shared-container semantics.
-- [Homebrew: Cask Cookbook](https://docs.brew.sh/Cask-Cookbook) describes package-owned uninstall and service behavior; MacTools does not copy cask removal rules.
+- [Homebrew: Cask Cookbook](https://docs.brew.sh/Cask-Cookbook) describes package-owned uninstall and service behavior; Homebrew-managed applications remain routed to the MacTools Homebrew plugin.
 
 ## Validation and manual acceptance
 
 The original milestone validation on September 12, 2026 passed the unsigned plugin build, all 38 targeted host tests (37 adjacent plugin tests plus runtime/manifest consistency), and all 254 repository script tests. Two independent reviewers iterated on that implementation and reported no remaining P1/P2 findings. Native fixture workspace renders were checked at 880 points in light appearance and 650 points in dark appearance. A fixture confirmation sheet presented and dismissed, but its bitmap capture was blank, so confirmation-sheet visual acceptance is not claimed. The later inventory/batch redesign requires its own installed-app, batch-review, and accessibility acceptance; those older renders do not validate the new layout.
+
+The embedded-engine integration was exercised in an ad-hoc MacTools Dev build on September 22, 2026. A disposable app outside the installation roots was rejected, Mole's MacTools protection rule rejected fixtures whose name or bundle identifier matched MacTools, and a neutral fixture under `~/Applications` reached the reviewed one-item Trash plan. The confirmation sheet required explicit acknowledgement before enabling “Move to Trash.” The sheet was then cancelled and the fixtures were removed directly; this pass did not invoke the app's real Trash executor.
 
 Regenerate targets with `make generate`. Run the adjacent safety, execution, controller, and plugin tests using the MacTools scheme and `-only-testing:MacToolsTests/AppUninstallerSafetyTests`, `-only-testing:MacToolsTests/AppUninstallerExecutionTests`, `-only-testing:MacToolsTests/AppUninstallerControllerTests`, and `-only-testing:MacToolsTests/AppUninstallerPluginTests`. Use the configured Xcode developer directory and an isolated derived-data path. Run `make script-tests` for manifest and PluginKit compatibility checks, and build the `AppUninstallerPlugin` scheme without signing for compilation validation.
 

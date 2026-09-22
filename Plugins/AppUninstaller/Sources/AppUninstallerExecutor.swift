@@ -17,7 +17,18 @@ struct UninstallExecutor: Sendable {
     let scanner: UninstallScanner
     let environment: any UninstallEnvironmentChecking
     let history: UninstallHistory
-    var trash: any UninstallTrashing = UninstallSystemTrash()
+    var trash: any UninstallTrashing
+    var reviewer: (any UninstallReviewProviding)?
+
+    init(scanner: UninstallScanner, environment: any UninstallEnvironmentChecking,
+         history: UninstallHistory, trash: any UninstallTrashing = UninstallSystemTrash(),
+         reviewer: (any UninstallReviewProviding)? = nil) {
+        self.scanner = scanner
+        self.environment = environment
+        self.history = history
+        self.trash = trash
+        self.reviewer = reviewer
+    }
 
     func execute(_ plan: UninstallPlan, now: @Sendable () -> Date = { Date() }) async throws -> UninstallRun {
         guard now() < plan.expiresAt, now() >= plan.createdAt else { throw AppUninstallerError.expired }
@@ -37,7 +48,11 @@ struct UninstallExecutor: Sendable {
                 guard !(state.runningPaths + state.activeExecutables).contains(where: { UninstallPaths.contains($0, in: plan.application.path) }) else {
                     throw AppUninstallerError.running
                 }
-                let current = try scanner.scan(path: plan.application.path, environment: state)
+                let current = if let reviewer {
+                    try await reviewer.review(plan.application.path)
+                } else {
+                    try scanner.scan(path: plan.application.path, environment: state)
+                }
                 guard current.canPlan, current.application.bundleID == plan.application.bundleID,
                       current.application.metadataDigest == plan.application.metadataDigest,
                       current.application.identity == plan.application.identity else { throw AppUninstallerError.changed }
