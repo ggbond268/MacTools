@@ -87,6 +87,8 @@ In Direct Keys mode, **Tab** selects the next window and **Shift-Tab** selects t
 
 Switching between grid and list keeps the selected window and visible shortcut numbers in sync, including after scrolling or filtering. Scrollbars hide when all results fit, and the grid stays clear of overlaid navigation buttons.
 
+The selected window stays fully visible when the chooser opens, resizes, or changes layout. Grid results scroll with a mouse or trackpad, previews accept pinch zoom immediately, and choosing a minimized window restores it before switching.
+
 Editing a direct shortcut highlights its key and shows a concise prompt beside Direct Keys, with Cancel at the far right. Recording instructions and feedback are available in all 11 supported languages.
 
 <p align="center"><a href="docs/assets/screenshots/readme/search-en-dark.png"><img src="docs/assets/screenshots/readme/search-en-dark.png" width="640" alt="Command Palette searching window actions, settings, and plugins in English"></a></p>

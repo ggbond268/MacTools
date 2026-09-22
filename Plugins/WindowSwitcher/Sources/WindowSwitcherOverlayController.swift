@@ -191,7 +191,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                                                                  object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isVisible else { return }
-                self.layoutPanel(preservePosition: true); self.render()
+                self.layoutPanel(preservePosition: true); self.render(forceRevealSelection: true)
             }
         }
     }
@@ -232,7 +232,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewedEntry = nil; previewedPermission = nil
         render()
         layoutPanel()
-        render()
+        render(forceRevealSelection: true)
         chooserFocus.prepare()
         dismissalMonitor.start(
             for: panel,
@@ -785,7 +785,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         zoom.submenu = previewZoomMenu()
         more.menu?.addItem(zoom)
         previewImage.setAccessibilityLabel(localization.string("chooser.preview", defaultValue: "预览"))
-        previewImage.toolTip = localization.string("preview.zoomHelp", defaultValue: "点按预览以聚焦，再双指缩放。放大后拖移或用方向键平移，双击恢复适合窗口。")
+        previewImage.toolTip = localization.string("preview.zoomHelp", defaultValue: "在预览上双指缩放。放大后拖移或用方向键平移，双击恢复适合窗口。")
         previewImage.setAccessibilityHelp(previewImage.toolTip)
         let shortcuts = NSMenuItem(title: localization.string("chooser.shortcuts", defaultValue: "键盘快捷键"), action: nil, keyEquivalent: "")
         let help = NSMenu()
@@ -833,7 +833,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
 
-    private func render() {
+    private func render(forceRevealSelection: Bool = false) {
         guard var session else { return }
         if let recordingEntryID, !session.entries.contains(where: { $0.id == recordingEntryID }) || !session.usesDirectKeys {
             self.recordingEntryID = nil
@@ -845,7 +845,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         dragBar.isHidden = !session.isPersistent
         if session.isPersistent, !panel.styleMask.contains(.resizable) { panel.styleMask.insert(.resizable) }
         else if !session.isPersistent, panel.styleMask.contains(.resizable) { panel.styleMask.remove(.resizable) }
-        let revealSelection = renderedSession == nil || renderedSession?.selectedID != session.selectedID
+        let revealSelection = forceRevealSelection || renderedSession == nil || renderedSession?.selectedID != session.selectedID
             || renderedSession?.query != session.query || renderedSession?.scope != session.scope
             || renderedSession?.display != session.display
         listScroll.isHidden = !usesList
@@ -872,10 +872,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             if usesList { table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }
             let path = IndexPath(item: index, section: 0)
             if !usesList { cards.selectionIndexPaths = [path] }
-            if revealSelection {
-                if usesList { table.scrollRowToVisible(index) }
-                else { cards.scrollToItems(at: [path], scrollPosition: .nearestHorizontalEdge.union(.nearestVerticalEdge)) }
-            }
+            if revealSelection { revealSelectedItem(at: index, path: path) }
         } else { table.deselectAll(nil); cards.selectionIndexPaths = [] }
         if !revealSelection {
             activeScroll.contentView.scroll(to: viewport)
@@ -928,13 +925,40 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
 
+    /// Reveal after the final viewport geometry is known. AppKit's nearest-edge
+    /// collection scroll can leave a card clipped when the panel shrinks, so the
+    /// item's full rectangle is the authoritative reveal target.
+    private func revealSelectedItem(at index: Int? = nil, path: IndexPath? = nil) {
+        guard let selectedID = session?.selectedID,
+              let index = index ?? rows.firstIndex(where: { $0.id == selectedID }) else { return }
+        // Visibility and height constraints belong to ancestor stack views.
+        // Resolve those before asking either document view to reveal an item.
+        panel.contentView?.layoutSubtreeIfNeeded()
+        if usesList {
+            listScroll.layoutSubtreeIfNeeded()
+            table.scrollRowToVisible(index)
+            _ = table.scrollToVisible(table.rect(ofRow: index))
+            return
+        }
+        let path = path ?? IndexPath(item: index, section: 0)
+        cardScroll.layoutSubtreeIfNeeded()
+        cards.layoutSubtreeIfNeeded()
+        cards.scrollToItems(at: [path], scrollPosition: .nearestHorizontalEdge.union(.nearestVerticalEdge))
+        cards.layoutSubtreeIfNeeded()
+        if let frame = cards.layoutAttributesForItem(at: path)?.frame {
+            _ = cards.scrollToVisible(frame)
+        }
+    }
+
     @objc private func layoutChanged() {
         usesList = layoutPicker.selectedSegment == 1
         onLayoutChange?(usesList ? .list : .grid)
         renderedSession = nil
+        listScroll.isHidden = !usesList
+        cardScroll.isHidden = usesList
         cardHeight.isActive = !usesList && !previewPane.isHidden
         layoutPanel(preservePosition: true, resizeToContent: true)
-        render()
+        render(forceRevealSelection: true)
         panel.makeFirstResponder(usesList ? table : cards)
     }
 
@@ -1570,6 +1594,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             preferredSizes[SizePreference(list: usesList, preview: !previewPane.isHidden)] = panel.frame.size
         }
         updateViewportLayout()
+        revealSelectedItem()
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -1583,7 +1608,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         preferredSizes.removeValue(forKey: SizePreference(list: usesList, preview: !previewPane.isHidden))
         initialResultCount = session?.sizingResultCount ?? 0
         layoutPanel(preservePosition: true, resizeToContent: true)
-        render()
+        render(forceRevealSelection: true)
     }
 
     private func focusPreviewNow() {
@@ -1601,6 +1626,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         onPreviewChange?(showsPreview)
         previewedEntry = nil; previewedPermission = nil
         if !showsPreview { preview.cancel() }
-        layoutPanel(preservePosition: true, resizeToContent: true); render()
+        layoutPanel(preservePosition: true, resizeToContent: true); render(forceRevealSelection: true)
     }
 }

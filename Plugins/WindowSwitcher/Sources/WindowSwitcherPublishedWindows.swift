@@ -63,6 +63,8 @@ struct WindowSwitcherPublishedWindows {
             var seenIDs = Set<String>()
             for var entry in merged {
                 guard entry.isWindowEntry, seenIDs.insert(entry.id).inserted else { continue }
+                entry.previewProcessIdentifiers = helpers
+                    .union([entry.processIdentifier, entry.owningProcessIdentifier])
                 if let number = entry.windowNumber, !claimedWindowNumbers.insert(number).inserted { continue }
                 // Register CG-only rows too, before later AX discovery can give
                 // the same window a different public identity.

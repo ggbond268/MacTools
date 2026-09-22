@@ -8,6 +8,115 @@ import XCTest
 @MainActor
 final class WindowSwitcherSessionTests: XCTestCase {
 
+    func testFinalChooserGeometryRevealsSelectionAndMetadataRefreshPreservesScroll() throws {
+        let entries = (0..<60).map { entry(String($0), title: "Window \($0)") }
+        var session = WindowSwitcherSession(entries: entries, selectedID: "59", isPersistent: true,
+                                            originalWindowID: nil)
+        let controller = WindowSwitcherOverlayController()
+        controller.show(session, currentPID: 100, showsPreview: true, preferredLayout: .grid)
+        defer { controller.hide() }
+
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible
+        })
+        panel.contentView?.layoutSubtreeIfNeeded()
+        func collection(in view: NSView) -> WindowSwitcherCardCollection? {
+            if let value = view as? WindowSwitcherCardCollection { return value }
+            return view.subviews.lazy.compactMap(collection).first
+        }
+        let cards = try XCTUnwrap(panel.contentView.flatMap(collection))
+        cards.layoutSubtreeIfNeeded()
+        let selectedPath = IndexPath(item: 59, section: 0)
+        let selectedFrame = try XCTUnwrap(cards.layoutAttributesForItem(at: selectedPath)?.frame)
+        XCTAssertTrue(cards.visibleRect.contains(selectedFrame.insetBy(dx: 0.5, dy: 0.5)))
+
+        let clip = try XCTUnwrap(cards.enclosingScrollView?.contentView)
+        clip.scroll(to: CGPoint(x: 0, y: 96))
+        cards.enclosingScrollView?.reflectScrolledClipView(clip)
+        let manualOrigin = clip.bounds.origin
+        session.reconcile((0..<60).map { entry(String($0), title: "Updated \($0)") })
+        controller.update(session)
+        XCTAssertEqual(clip.bounds.origin.x, manualOrigin.x, accuracy: 0.5)
+        XCTAssertEqual(clip.bounds.origin.y, manualOrigin.y, accuracy: 0.5)
+    }
+
+    func testChooserRevealsSelectionAfterResizeLayoutPreviewAndScrollerChanges() throws {
+        let entries = (0..<60).map { entry(String($0), title: "Window \($0)") }
+        let session = WindowSwitcherSession(entries: entries, selectedID: "59", isPersistent: true,
+                                            originalWindowID: nil)
+        let controller = WindowSwitcherOverlayController()
+        controller.show(session, currentPID: 100, showsPreview: true, preferredLayout: .grid)
+        defer { controller.hide() }
+
+        let panel = try chooserPanel()
+        let cards = try XCTUnwrap(descendant(WindowSwitcherCardCollection.self, in: panel.contentView))
+        let cardScroll = try XCTUnwrap(cards.enclosingScrollView)
+        assertGridSelectionVisible(59, cards: cards, panel: panel)
+
+        var constrainedFrame = panel.frame
+        constrainedFrame.size.width = max(panel.contentMinSize.width, min(constrainedFrame.width, 620))
+        constrainedFrame.size.height = max(panel.contentMinSize.height, min(constrainedFrame.height, 440))
+        panel.setFrame(constrainedFrame, display: false)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        assertGridSelectionVisible(59, cards: cards, panel: panel)
+        let restoredGridPreviewSize = panel.frame.size
+
+        for style in [NSScroller.Style.legacy, .overlay] {
+            cardScroll.scrollerStyle = style
+            cardScroll.tile()
+            controller.windowDidResize(Notification(name: NSWindow.didResizeNotification, object: panel))
+            assertGridSelectionVisible(59, cards: cards, panel: panel)
+        }
+
+        let picker = try XCTUnwrap(descendant(NSSegmentedControl.self, in: panel.contentView) {
+            $0.identifier?.rawValue == "window-switcher-layout"
+        })
+        picker.selectedSegment = 1
+        XCTAssertTrue(picker.sendAction(picker.action, to: picker.target))
+        let table = try XCTUnwrap(descendant(NSTableView.self, in: panel.contentView))
+        assertListSelectionVisible(59, table: table, panel: panel)
+
+        picker.selectedSegment = 0
+        XCTAssertTrue(picker.sendAction(picker.action, to: picker.target))
+        assertGridSelectionVisible(59, cards: cards, panel: panel)
+        XCTAssertEqual(panel.frame.width, restoredGridPreviewSize.width, accuracy: 1)
+        XCTAssertEqual(panel.frame.height, restoredGridPreviewSize.height, accuracy: 1)
+
+        let previewShortcut = try keyEvent("p", code: kVK_ANSI_P, flags: .command, panel: panel)
+        XCTAssertTrue(controller.handleChooserShortcut(previewShortcut))
+        assertGridSelectionVisible(59, cards: cards, panel: panel)
+        XCTAssertTrue(controller.handleChooserShortcut(previewShortcut))
+        assertGridSelectionVisible(59, cards: cards, panel: panel)
+        XCTAssertEqual(panel.frame.width, restoredGridPreviewSize.width, accuracy: 1)
+        XCTAssertEqual(panel.frame.height, restoredGridPreviewSize.height, accuracy: 1)
+    }
+
+    func testKeyboardNavigationAfterManualScrollRevealsSelectionWithoutReloadingVisibleCards() throws {
+        let entries = (0..<60).map { entry(String($0), title: "Window \($0)") }
+        let session = WindowSwitcherSession(entries: entries, selectedID: "30", isPersistent: true,
+                                            originalWindowID: nil)
+        let controller = WindowSwitcherOverlayController()
+        controller.show(session, currentPID: 100, showsPreview: true, preferredLayout: .grid)
+        defer { controller.hide() }
+
+        let panel = try chooserPanel()
+        let cards = try XCTUnwrap(descendant(WindowSwitcherCardCollection.self, in: panel.contentView))
+        let clip = try XCTUnwrap(cards.enclosingScrollView?.contentView)
+        clip.scroll(to: CGPoint(x: clip.bounds.minX, y: max(0, clip.bounds.minY - 24)))
+        cards.enclosingScrollView?.reflectScrolledClipView(clip)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let previouslyVisible = Dictionary(uniqueKeysWithValues: cards.visibleItems().compactMap { item in
+            cards.indexPath(for: item).map { ($0.item, item) }
+        })
+
+        cards.keyDown(with: try keyEvent("→", code: kVK_RightArrow, flags: [], panel: panel))
+        XCTAssertEqual(controller.session?.selectedID, "31")
+        assertGridSelectionVisible(31, cards: cards, panel: panel)
+        for (index, item) in previouslyVisible where cards.item(at: index) != nil {
+            XCTAssertTrue(cards.item(at: index) === item, "Selection-only navigation must not reload visible card controls")
+        }
+    }
+
     func testFindPromotesCyclingAndPreservesNativeSearchInput() throws {
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment["MACTOOLS_RUN_DESKTOP_TESTS"] == "1",
@@ -113,6 +222,61 @@ final class WindowSwitcherSessionTests: XCTestCase {
     private func entry(_ id: String, title: String? = "Document", pid: pid_t = 100) -> WindowSwitcherAppEntry {
         WindowSwitcherAppEntry(id: id, processIdentifier: pid, bundleIdentifier: "org.example.browser",
             appName: "Browser", windowTitle: title, icon: nil, windowElement: nil, isMinimized: false, shortcutToken: nil)
+    }
+
+    private func chooserPanel() throws -> NSPanel {
+        try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible
+        } as? NSPanel)
+    }
+
+    private func descendant<T: NSView>(
+        _ type: T.Type,
+        in root: NSView?,
+        where predicate: @escaping (T) -> Bool = { _ in true }
+    ) -> T? {
+        guard let root else { return nil }
+        if let match = root as? T, predicate(match) { return match }
+        return root.subviews.lazy.compactMap { self.descendant(type, in: $0, where: predicate) }.first
+    }
+
+    private func assertGridSelectionVisible(
+        _ index: Int,
+        cards: WindowSwitcherCardCollection,
+        panel: NSPanel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        panel.contentView?.layoutSubtreeIfNeeded()
+        cards.layoutSubtreeIfNeeded()
+        guard let frame = cards.layoutAttributesForItem(at: IndexPath(item: index, section: 0))?.frame else {
+            XCTFail("Missing card layout attributes", file: file, line: line)
+            return
+        }
+        XCTAssertTrue(cards.visibleRect.contains(frame.insetBy(dx: 0.5, dy: 0.5)), file: file, line: line)
+    }
+
+    private func assertListSelectionVisible(
+        _ row: Int,
+        table: NSTableView,
+        panel: NSPanel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        panel.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(table.visibleRect.contains(table.rect(ofRow: row).insetBy(dx: 0.5, dy: 0.5)),
+                      file: file, line: line)
+    }
+
+    private func keyEvent(
+        _ text: String,
+        code: Int,
+        flags: NSEvent.ModifierFlags,
+        panel: NSPanel
+    ) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: text,
+            charactersIgnoringModifiers: text, isARepeat: false, keyCode: UInt16(code)))
     }
 
     func testSelectionCannotMigrateWhenSnapshotReordersOrRenamesWindows() {

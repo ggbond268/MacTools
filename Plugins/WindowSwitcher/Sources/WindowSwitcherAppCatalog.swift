@@ -700,11 +700,10 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         guard intent.shouldContinue() else { return .cancelled }
         guard isValid, processWorker(for: entry) === worker else { return .unavailable }
         let ownerPID = entry.owningProcessIdentifier
-        let needsExactReveal = isFallback || allSpacesRecords.contains {
-            $0.windowNumber == entry.windowNumber
-                && ($0.processIdentifier == entry.processIdentifier || $0.processIdentifier == ownerPID)
-                && $0.isOnScreen != true && $0.hasSpace == true
-        }
+        // A minimized window on the active or an unknown Space needs ordinary
+        // AX restoration. An explicitly other-Space target still needs the
+        // exact path, which restores it before switching to that Space.
+        let needsExactReveal = isFallback || Self.needsExactSpaceReveal(entry, records: allSpacesRecords)
         let resolved: WindowSwitcherResolvedWindow?
         if needsExactReveal, WindowSwitcherWindowServer.supportsExactActivation, let number = entry.windowNumber {
             resolved = await worker.resolveOffSpaceWindow(number, ownerPID: ownerPID, cancellation: intent.cancellation)
@@ -782,6 +781,20 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         if result == .succeeded && isFrontmost { publication.recency.record(entry.id) }
         refresh()
         return result == .succeeded && !isFrontmost ? .failed : result
+    }
+
+    static func needsExactSpaceReveal(
+        _ entry: WindowSwitcherAppEntry,
+        records: [WindowSwitcherWindowRecord]
+    ) -> Bool {
+        return records.contains {
+            let matches = $0.windowNumber == entry.windowNumber
+                && ($0.processIdentifier == entry.processIdentifier
+                    || $0.processIdentifier == entry.owningProcessIdentifier)
+                && $0.isOnScreen != true && $0.hasSpace == true
+            guard matches else { return false }
+            return !entry.isMinimized || $0.isOnActiveSpace == false
+        }
     }
 
     func closeWindow(_ entry: WindowSwitcherAppEntry) async -> WindowSwitcherActionResult {

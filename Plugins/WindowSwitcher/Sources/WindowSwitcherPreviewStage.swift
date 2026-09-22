@@ -184,6 +184,10 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     }
 
     @objc private func handleMagnification(_ gesture: NSMagnificationGestureRecognizer) {
+        // Inactive nonactivating panels can miss the recognizer's `.began`
+        // callback. Acquire focus on the first delivered phase so pinch never
+        // requires a preparatory click.
+        if gesture.state == .began || window?.isKeyWindow != true { onRequestFocus?() }
         let change = gesture.magnification
         // Consume increments even while a screenshot is unavailable. Retiring
         // pixels must neither cancel the gesture nor accumulate hidden zoom.

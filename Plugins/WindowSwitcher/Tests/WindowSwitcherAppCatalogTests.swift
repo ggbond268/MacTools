@@ -46,6 +46,44 @@ private final class CatalogAXAccess: WindowSwitcherAXAccess, @unchecked Sendable
 
 @MainActor
 final class WindowSwitcherAppCatalogTests: XCTestCase {
+    func testPublishedWindowCarriesOnlyCatalogVerifiedPreviewProcesses() {
+        let entry = WindowSwitcherAppEntry(id: "window", processIdentifier: 42,
+            bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "Window", icon: nil,
+            windowElement: AXUIElementCreateApplication(42), isMinimized: false,
+            windowNumber: 7, shortcutToken: nil)
+        var publication = WindowSwitcherPublishedWindows()
+        publication.update(snapshots: [42: [entry]], records: [], recordsAreFresh: true,
+            helperProcessIdentifiers: [42: [43, 44]])
+
+        XCTAssertEqual(publication.entries.first?.previewProcessIdentifiers, [42, 43, 44])
+    }
+
+    func testMinimizedWindowUsesRestorePathUnlessExplicitlyOnAnotherSpace() {
+        var minimized = WindowSwitcherAppEntry(id: "minimized", processIdentifier: 42,
+            bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "Window", icon: nil,
+            windowElement: AXUIElementCreateApplication(42), isMinimized: true,
+            windowNumber: 7, shortcutToken: nil)
+        minimized.windowOwnerPID = 43
+        var record = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 43,
+            title: "Window", isOnScreen: false, bounds: CGRect(x: 20, y: 20, width: 800, height: 600))
+        record.hasSpace = true
+        record.isOnActiveSpace = true
+        XCTAssertFalse(WindowSwitcherAppCatalog.needsExactSpaceReveal(minimized, records: [record]))
+
+        record.isOnActiveSpace = nil
+        XCTAssertFalse(WindowSwitcherAppCatalog.needsExactSpaceReveal(minimized, records: [record]))
+
+        record.isOnActiveSpace = false
+        XCTAssertTrue(WindowSwitcherAppCatalog.needsExactSpaceReveal(minimized, records: [record]))
+
+        var visibleEntry = WindowSwitcherAppEntry(id: "other-space", processIdentifier: 42,
+            bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "Window", icon: nil,
+            windowElement: AXUIElementCreateApplication(42), isMinimized: false,
+            windowNumber: 7, shortcutToken: nil)
+        visibleEntry.windowOwnerPID = 43
+        XCTAssertTrue(WindowSwitcherAppCatalog.needsExactSpaceReveal(visibleEntry, records: [record]))
+    }
+
     func testInvalidationRefreshesChangedWindowsWithoutScanningOtherHosts() async throws {
         let first = CatalogAXAccess(number: 7, elementPID: 201)
         let second = CatalogAXAccess(number: 8, elementPID: 202)
