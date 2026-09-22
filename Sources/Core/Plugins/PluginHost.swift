@@ -7,8 +7,6 @@ import MacToolsPluginKit
 enum FeatureSettingsPane: Hashable {
     case actionsAndShortcuts
     case automation
-    case dashboardLayout
-    case featurePanelLayout
     case marketplace
     case configuration(String)
 }
@@ -27,6 +25,7 @@ enum SettingsPresentationRequest: Equatable {
 }
 
 enum AppPresentationRequest: Equatable {
+    case composeActionInput(ActionInputItem)
     case settings(SettingsPresentationRequest)
     case toggleCommandPalette
     case toggleDashboard
@@ -41,6 +40,8 @@ enum AppShortcutAction: String, CaseIterable, Hashable {
     case toggleDashboard = "app.toggle-dashboard"
     case toggleFeaturePanel = "app.toggle-feature-panel"
     case openCommandPalette = "app.open-command-palette"
+
+    var isPanelAction: Bool { self == .toggleDashboard || self == .toggleFeaturePanel }
 
     var title: String {
         switch self {
@@ -123,10 +124,8 @@ enum AppShortcutAction: String, CaseIterable, Hashable {
         switch self {
         case .openSettings, .openCommandPalette:
             .general
-        case .toggleDashboard:
-            .feature(.dashboardLayout)
-        case .toggleFeaturePanel:
-            .feature(.featurePanelLayout)
+        case .toggleDashboard, .toggleFeaturePanel:
+            .feature(.actionsAndShortcuts)
         }
     }
 
@@ -141,68 +140,16 @@ enum AppShortcutAction: String, CaseIterable, Hashable {
 
 }
 
-private extension FeatureSettingsPane {
-    init(landingPage: PluginSettingsLandingPage) {
-        switch landingPage {
-        case .dashboard:
-            self = .dashboardLayout
-        case .featurePanel:
-            self = .featurePanelLayout
-        case .marketplace:
-            self = .marketplace
-        }
-    }
-
-    var landingPage: PluginSettingsLandingPage? {
-        switch self {
-        case .actionsAndShortcuts, .automation:
-            nil
-        case .dashboardLayout:
-            .dashboard
-        case .featurePanelLayout:
-            .featurePanel
-        case .marketplace:
-            .marketplace
-        case .configuration:
-            nil
-        }
-    }
-}
-
 struct PluginHostCapabilities: Equatable, Sendable {
-    let supportsDashboard: Bool
-    let supportsFeaturePanel: Bool
+    let panelKinds: Set<PluginPanelItemKind>
     let settingsLayout: PluginSettingsLayout?
-
-    var hasSettings: Bool {
-        settingsLayout != nil
-    }
-
-    var supportedSurfaces: Set<PluginDisplaySurface> {
-        var surfaces: Set<PluginDisplaySurface> = []
-        if supportsDashboard {
-            surfaces.insert(.dashboard)
-        }
-        if supportsFeaturePanel {
-            surfaces.insert(.featurePanel)
-        }
-        return surfaces
-    }
+    var hasSettings: Bool { settingsLayout != nil }
 }
 
-struct PluginSurfaceLayoutItem: Identifiable {
-    let id: String
-    let title: String
-    let description: String
-    let iconName: String
-    let iconTint: Color
-    let capabilities: PluginHostCapabilities
-    let isVisible: Bool
-    let isActive: Bool
-    let canUninstall: Bool
-    let removesDataOnUninstall: Bool
-    let category: String?
-    let releaseChannel: String?
+struct MenuBarPanelLayoutEntry: Identifiable {
+    let item: PanelCatalogItem
+    let entry: MenuBarPanelEntry
+    var id: String { entry.id }
 }
 
 struct ActionOwnerAppearance {
@@ -377,13 +324,6 @@ final class PluginHost: ObservableObject {
         let plugin: any MacToolsPlugin
         let capabilities: PluginHostCapabilities
 
-        var hasPrimaryPanel: Bool {
-            capabilities.supportsFeaturePanel
-        }
-
-        var hasComponentPanel: Bool {
-            capabilities.supportsDashboard
-        }
 
         var hasSettings: Bool {
             capabilities.hasSettings
@@ -398,6 +338,32 @@ final class PluginHost: ObservableObject {
         let plugin: any MacToolsPlugin
     }
 
+    private struct ShortcutResolutionSnapshot {
+        let revision: UInt64
+        let descriptors: [ShortcutDescriptor]
+    }
+
+    private var shortcutDefinitionRevision: UInt64 = 0
+    private var shortcutResolutionSnapshot: ShortcutResolutionSnapshot?
+
+    /// Immutable inputs shared by one synchronous update. Plugin declarations
+    /// are read again on the next update, including dynamic defaults and titles.
+    private struct PluginDescriptorSnapshot {
+        let defaults: [PluginDescriptor]
+        let byID: [String: PluginDescriptor]
+        let ordered: [PluginDescriptor]
+
+        init(defaults: [PluginDescriptor], orderedIDs: [String]) {
+            self.defaults = defaults
+            let byID = Dictionary(
+                defaults.map { ($0.metadata.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            self.byID = byID
+            ordered = orderedIDs.compactMap { byID[$0] }
+        }
+    }
+
     private struct PreferencesActionRestoreContext {
         let selection: PreferencesBackupSelection
         let payloadDefinedActionReferencesByPluginID: [String: Set<ActionReference>]
@@ -408,9 +374,18 @@ final class PluginHost: ObservableObject {
 
     private let builtInPlugins: [any MacToolsPlugin]
     private let shortcutStore: ShortcutStore
-    private let pluginDisplayPreferencesStore: PluginDisplayPreferencesStore
+    private let pluginOrderingStore: PluginOrderingStore
+    let menuBarPanelStore: MenuBarPanelStore
+    let menuBarIconCoordinator: PluginMenuBarIconCoordinator
+    @Published private(set) var menuBarPanels: [MenuBarPanelDefinition] = []
+    private var visibleMenuBarPanelID: String?
+    private var menuBarPanelContentCache: [String: MenuBarPanelContentSnapshot] = [:]
+    /// Emitted after a complete panel update, including layout-only mutations.
+    let menuBarPanelContentDidChange = PassthroughSubject<Void, Never>()
+    var menuBarPanelPresentationHandler: ((String, Bool) -> Void)?
     private let preferencesBackupStore: any PreferencesBackupApplicationStoring
     private let automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator?
+    private let cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator?
     let preferencesBackupChangeReporter: PreferencesBackupChangeReporter
     private let globalShortcutManager: GlobalShortcutManager
     private let displayConfigurationObserver: (any DisplayConfigurationObserving)?
@@ -421,6 +396,17 @@ final class PluginHost: ObservableObject {
     private let pluginStateChangeRebuildDelay: Duration
     let dynamicPluginManager: DynamicPluginManager?
     private let pluginCatalogManager: PluginCatalogManager?
+    let actionInputRegistry = ActionInputRegistry()
+    let actionInputAliases: CommandPaletteAliasStore
+
+    var commandPaletteAliasResolver: CommandPaletteAliasResolver {
+        CommandPaletteAliasResolver(items: actionInputRegistry.items, overrides: actionInputAliases.overrides)
+    }
+
+    func setActionInputAlias(_ alias: String?, for item: ActionInputItem) throws {
+        try actionInputAliases.set(alias, for: item, items: actionInputRegistry.items)
+        objectWillChange.send()
+    }
     let actionRegistry: ActionRegistry
     let actionExecutor: ActionExecutor
     let actionConfirmationService: ActionConfirmationRouter
@@ -448,40 +434,25 @@ final class PluginHost: ObservableObject {
     private var dynamicPluginManifestsByID: [String: PluginPackageManifest] = [:]
     private var dynamicPluginInstalledAtByID: [String: Date] = [:]
     private var shortcutErrors: [String: String] = [:]
+    private let shortcutBindingDeliveries = PluginShortcutBindingTracker()
     private var appShortcutErrors: [AppShortcutAction: String] = [:]
-    private var componentViewCache: [String: PluginComponentViewItem] = [:]
+    let panelCoordinator = PluginPanelCoordinator()
     private var settingsViewCache: [SettingsViewCacheKey: PluginSettingsContentViewItem] = [:]
-    private var visiblePanelSurfaces: Set<PluginPanelSurface> = []
-    private var visiblePanelSurfacePluginIDs: [PluginPanelSurface: Set<String>] = [:]
     private var isolatedPluginFailures: [String: String] = [:]
     private var isHandlingPluginAction = false
     private var didLoadDynamicPlugins = false
+    private var areCloudPreferencesReady = false
     private var displayTopologyRefreshTask: Task<Void, Never>?
     private var pluginStateChangeRebuildTask: Task<Void, Never>?
     private var runtimeLocaleCancellable: AnyCancellable?
     private var applicationActivityState: PluginApplicationActivityState
     private var dirtyPluginIDs: Set<String> = []
-    private var cachedPanelStatesByID: [String: PluginPanelState] = [:]
-    private var cachedPrimaryPanelIndicatorsByID: [String: PluginPrimaryPanelIndicator] = [:]
-    private var evaluatedPrimaryPanelIndicatorPluginIDs: Set<String> = []
-    private var cachedPrimaryPanelCompactIndicatorsByID: [String: PluginPrimaryPanelCompactIndicator] = [:]
-    private var evaluatedPrimaryPanelCompactIndicatorPluginIDs: Set<String> = []
-    private var cachedComponentStatesByID: [String: PluginComponentState] = [:]
-    private var loggedCapabilityMismatchPluginIDs: Set<String> = []
     private var builtInCapabilitiesByID: [String: PluginHostCapabilities] = [:]
     private var dynamicResolvedCapabilitiesByID: [String: PluginHostCapabilities] = [:]
 
-    @Published private(set) var panelItems: [PluginPanelItem] = []
-    @Published private(set) var primaryPanelIndicatorsByID: [String: PluginPrimaryPanelIndicator] = [:]
-    @Published private(set) var primaryPanelCompactIndicatorsByID: [String: PluginPrimaryPanelCompactIndicator] = [:]
-    @Published private(set) var componentItems: [PluginComponentItem] = []
-    // Legacy management projection retained for failure isolation and older
-    // tests. Layout settings use the per-surface order projections below.
-    @Published private(set) var featureManagementItems: [PluginFeatureManagementItem] = []
-    @Published private(set) var dashboardLayoutItems: [PluginSurfaceLayoutItem] = []
-    @Published private(set) var dashboardHiddenLayoutItems: [PluginSurfaceLayoutItem] = []
-    @Published private(set) var featurePanelLayoutItems: [PluginSurfaceLayoutItem] = []
-    @Published private(set) var featurePanelHiddenLayoutItems: [PluginSurfaceLayoutItem] = []
+    var availablePanelItems: [PanelCatalogItem] { panelCoordinator.catalog.filter(\.isAvailable) }
+    var panelItems: [PluginPanelRowSnapshot] { panelItems(in: MenuBarPanelDefinition.featuresID) }
+    var componentItems: [PluginPanelWidgetSnapshot] { componentItems(in: MenuBarPanelDefinition.componentsID) }
     @Published private(set) var pluginSettingsItems: [PluginSettingsPageItem] = []
     @Published private(set) var permissionCards: [PluginPermissionCard] = []
     private(set) lazy var permissionCoordinator = PermissionCoordinator(
@@ -520,11 +491,14 @@ final class PluginHost: ObservableObject {
     @Published private(set) var automaticPreferencesBackupEnabled = false
     @Published private(set) var automaticPreferencesBackupSummary =
         AutomaticPreferencesBackupSummary.empty
+    @Published private(set) var cloudPreferencesSyncEnabled = false
+    @Published private(set) var cloudPreferencesSyncStatus: CloudPreferencesSyncStatus = .offline(reason: .disabled)
+    @Published private(set) var cloudPreferencesSyncDirectoryURL: URL?
 
     /// The app shell installs this while the application is running. The host
     /// emits typed requests but never manipulates windows or popovers directly.
     var appPresentationHandler: ((AppPresentationRequest) -> Void)?
-    var componentDetailPresentationHandler: ((String, String) -> Void)?
+    var componentDetailHandlersByPanelID: [String: (String, String) -> Void] = [:]
 
     private let openPermissionSettings: (URL) -> Void
     private let permissionGuidanceHandler: PermissionCoordinator.GuidanceHandler
@@ -566,13 +540,16 @@ final class PluginHost: ObservableObject {
             dynamicPluginManager: dynamicPluginManager,
             pluginCatalogManager: pluginCatalogManager,
             shortcutStore: shortcutStore,
-            pluginDisplayPreferencesStore: PluginDisplayPreferencesStore(
+            pluginOrderingStore: PluginOrderingStore(
                 preferencesBackupChangeReporter: preferencesBackupChangeReporter
             ),
             preferencesBackupStore: preferencesBackupStore,
             preferencesBackupChangeReporter: preferencesBackupChangeReporter,
             automaticPreferencesBackupCoordinator: enablesAutomaticPreferencesBackups
                 ? AutomaticPreferencesBackupCoordinator(userDefaults: shortcutStore.userDefaults)
+                : nil,
+            cloudPreferencesSyncCoordinator: enablesAutomaticPreferencesBackups
+                ? CloudPreferencesSyncCoordinator(userDefaults: shortcutStore.userDefaults)
                 : nil,
             globalShortcutManager: GlobalShortcutManager(),
             displayConfigurationObserver: SystemDisplayConfigurationObserver(),
@@ -587,11 +564,12 @@ final class PluginHost: ObservableObject {
         dynamicPluginManager: DynamicPluginManager? = nil,
         pluginCatalogManager: PluginCatalogManager? = nil,
         shortcutStore: ShortcutStore,
-        pluginDisplayPreferencesStore: PluginDisplayPreferencesStore,
+        pluginOrderingStore: PluginOrderingStore,
         preferencesBackupStore: any PreferencesBackupApplicationStoring,
         preferencesBackupChangeReporter providedPreferencesBackupChangeReporter:
             PreferencesBackupChangeReporter? = nil,
         automaticPreferencesBackupCoordinator: AutomaticPreferencesBackupCoordinator? = nil,
+        cloudPreferencesSyncCoordinator: CloudPreferencesSyncCoordinator? = nil,
         globalShortcutManager: GlobalShortcutManager,
         displayConfigurationObserver: (any DisplayConfigurationObserving)? = nil,
         accessibilityPermissionObserver: (any AccessibilityPermissionObserving)? = nil,
@@ -614,7 +592,7 @@ final class PluginHost: ObservableObject {
         let preferencesBackupChangeReporter = providedPreferencesBackupChangeReporter
             ?? PreferencesBackupChangeReporter()
         shortcutStore.preferencesBackupChangeReporter = preferencesBackupChangeReporter
-        pluginDisplayPreferencesStore.preferencesBackupChangeReporter =
+        pluginOrderingStore.preferencesBackupChangeReporter =
             preferencesBackupChangeReporter
         preferencesBackupStore.preferencesBackupChangeReporter = preferencesBackupChangeReporter
 
@@ -625,10 +603,17 @@ final class PluginHost: ObservableObject {
 
             return $0.metadata.order < $1.metadata.order
         }
+        self.actionInputAliases = CommandPaletteAliasStore(defaults: shortcutStore.userDefaults)
         self.shortcutStore = shortcutStore
-        self.pluginDisplayPreferencesStore = pluginDisplayPreferencesStore
+        self.pluginOrderingStore = pluginOrderingStore
+        self.menuBarPanelStore = MenuBarPanelStore(
+            userDefaults: shortcutStore.userDefaults, reporter: preferencesBackupChangeReporter
+        )
+        self.menuBarPanels = menuBarPanelStore.configuration.displayPanels
+        self.menuBarIconCoordinator = PluginMenuBarIconCoordinator(userDefaults: shortcutStore.userDefaults)
         self.preferencesBackupStore = preferencesBackupStore
         self.automaticPreferencesBackupCoordinator = automaticPreferencesBackupCoordinator
+        self.cloudPreferencesSyncCoordinator = cloudPreferencesSyncCoordinator
         self.preferencesBackupChangeReporter = preferencesBackupChangeReporter
         self.globalShortcutManager = globalShortcutManager
         self.openPermissionSettings = openPermissionSettings
@@ -688,8 +673,9 @@ final class PluginHost: ObservableObject {
         )
 
         preferencesBackupChangeReporter.onCommittedChange = {
-            [weak automaticPreferencesBackupCoordinator] _ in
+            [weak automaticPreferencesBackupCoordinator, weak cloudPreferencesSyncCoordinator] _ in
             automaticPreferencesBackupCoordinator?.committedPreferencesDidChange()
+            cloudPreferencesSyncCoordinator?.committedPreferencesDidChange()
         }
 
         self.automationController.onCatalogChange = { [weak self] in
@@ -707,22 +693,12 @@ final class PluginHost: ObservableObject {
         configureCallbacks(for: self.builtInPlugins)
 
         if let dynamicPluginManager {
-            // The retired global checkbox becomes hidden on every surface
-            // the plugin supports. Consume the package-store marker before
-            // loading dynamic code, but do not hold or deactivate packages:
-            // surface visibility is intentionally independent of lifecycle.
+            dynamicPluginManager.onPluginWillDeactivate = { [weak self] pluginID, reason in
+                self?.menuBarIconCoordinator.unregister(pluginID: pluginID, reason: reason)
+            }
             let legacyHiddenPluginIDs = dynamicPluginManager.legacyHiddenPluginIDs()
-            if pluginDisplayPreferencesStore.addLegacyHiddenPluginIDs(legacyHiddenPluginIDs) {
+            if menuBarPanelStore.migrateLegacyHiddenPlugins(legacyHiddenPluginIDs) {
                 dynamicPluginManager.clearLegacyHiddenPluginIDs()
-            } else {
-                // An unknown future display payload must remain untouched until
-                // the user makes an explicit edit. Acknowledge the package-store
-                // marker after that edit durably captures the staged state, so a
-                // later launch cannot reapply stale legacy visibility.
-                pluginDisplayPreferencesStore.onNextSuccessfulPersistence = {
-                    [weak dynamicPluginManager] in
-                    dynamicPluginManager?.clearLegacyHiddenPluginIDs()
-                }
             }
             if loadDynamicPluginsOnInit {
                 self.dynamicPlugins = dynamicPluginManager.loadInstalledPlugins()
@@ -730,11 +706,12 @@ final class PluginHost: ObservableObject {
             } else {
                 dynamicPluginManager.prepareInstalledPluginsWithoutLoading()
             }
-            self.dynamicPluginCapabilitiesByID = dynamicPluginManager.installedCapabilitiesByID()
-            self.dynamicPluginCategoriesByID = dynamicPluginManager.installedCategoriesByID()
-            self.dynamicPluginReleaseChannelsByID = dynamicPluginManager.installedReleaseChannelsByID()
-            self.dynamicPluginManifestsByID = dynamicPluginManager.installedManifestsByID()
-            self.dynamicPluginInstalledAtByID = dynamicPluginManager.installedAtByID()
+            let installedMetadata = dynamicPluginManager.installedMetadata()
+            self.dynamicPluginCapabilitiesByID = installedMetadata.capabilitiesByID
+            self.dynamicPluginCategoriesByID = installedMetadata.categoriesByID
+            self.dynamicPluginReleaseChannelsByID = installedMetadata.releaseChannelsByID
+            self.dynamicPluginManifestsByID = installedMetadata.manifestsByID
+            self.dynamicPluginInstalledAtByID = installedMetadata.installedAtByID
             self.pluginManagementItems = dynamicPluginManager.pluginManagementItems
             self.pluginCatalogStatus = pluginCatalogManager?.status ?? .unavailable
             configureCallbacks(for: self.dynamicPlugins)
@@ -789,7 +766,40 @@ final class PluginHost: ObservableObject {
             }
         }
 
+        if let cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncCoordinator.isReadyToSync = { [weak self] in
+                self?.areCloudPreferencesReady ?? false
+            }
+            cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator.isEnabled
+            cloudPreferencesSyncStatus = cloudPreferencesSyncCoordinator.status
+            cloudPreferencesSyncDirectoryURL = cloudPreferencesSyncCoordinator.syncDirectoryURL
+            cloudPreferencesSyncCoordinator.snapshotProvider = { [weak self] in
+                self?.makePreferencesBackup()
+            }
+            cloudPreferencesSyncCoordinator.importHandler = { [weak self] backup in
+                guard let self else { return }
+                let result = try self.importCloudPreferences(backup)
+                guard result.shortcutErrors.isEmpty else {
+                    throw NSError(
+                        domain: "MacTools.CloudPreferencesSync",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: result.shortcutErrors
+                            .sorted { $0.key < $1.key }
+                            .map(\.value)
+                            .joined(separator: "\n")]
+                    )
+                }
+            }
+            cloudPreferencesSyncCoordinator.statusHandler = { [weak self] status in
+                self?.cloudPreferencesSyncStatus = status
+            }
+            cloudPreferencesSyncCoordinator.directoryURLHandler = { [weak self] url in
+                self?.cloudPreferencesSyncDirectoryURL = url
+            }
+        }
+
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     isolated deinit {
@@ -813,11 +823,6 @@ final class PluginHost: ObservableObject {
         preferencesBackupStore.setLanguagePreference(rawValue: rawValue)
     }
 
-    @discardableResult
-    func setMenuBarClickBehaviorPreference(rawValue: String) -> Bool {
-        preferencesBackupStore.setMenuBarClickBehavior(rawValue: rawValue)
-    }
-
     func createAutomaticPreferencesBackupNow() async throws -> AutomaticPreferencesBackupWriteResult {
         guard let automaticPreferencesBackupCoordinator else {
             throw CocoaError(.featureUnsupported)
@@ -834,12 +839,48 @@ final class PluginHost: ObservableObject {
 
     func flushAutomaticPreferencesBackupBeforeTermination() {
         automaticPreferencesBackupCoordinator?.flushPendingBackupBeforeTermination()
+        cloudPreferencesSyncCoordinator?.flushPendingExportBeforeTermination()
+    }
+
+    func setCloudPreferencesSyncEnabled(_ enabled: Bool) {
+        cloudPreferencesSyncCoordinator?.setEnabled(enabled)
+        cloudPreferencesSyncEnabled = cloudPreferencesSyncCoordinator?.isEnabled ?? false
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func setCloudPreferencesSyncDirectoryURL(_ url: URL?) {
+        cloudPreferencesSyncCoordinator?.setSyncDirectoryURL(url)
+        cloudPreferencesSyncDirectoryURL = url
+        if let coordinator = cloudPreferencesSyncCoordinator {
+            cloudPreferencesSyncStatus = coordinator.status
+        }
+    }
+
+    func triggerCloudPreferencesSync() async throws {
+        guard let cloudPreferencesSyncCoordinator else {
+            throw CocoaError(.featureUnsupported)
+        }
+        try await cloudPreferencesSyncCoordinator.syncNow()
+    }
+
+    func resolveCloudPreferencesConflict(_ choice: CloudPreferencesConflictChoice) async throws {
+        try await cloudPreferencesSyncCoordinator?.resolveConflict(choice)
+    }
+
+    func openCloudPreferencesSyncFolder() {
+        guard let url = cloudPreferencesSyncDirectoryURL ?? cloudPreferencesSyncCoordinator?.syncDirectoryURL else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func deactivateAllPlugins(reason: PluginDeactivationReason = .hostShutdown) {
+        menuBarIconCoordinator.deactivateAll(reason: reason)
         pluginStateChangeRebuildTask?.cancel()
         pluginStateChangeRebuildTask = nil
-        hideAllPanelSurfaces()
+        hideAllPanelItems()
 
         for plugin in activePlugins {
             guardPluginCall(plugin, operation: "deactivate plugin") {
@@ -858,8 +899,7 @@ final class PluginHost: ObservableObject {
         }
 
         actionRegistry.invalidateAvailability()
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
     }
 
     /// Refreshes only providers whose live presentation is about to be shown.
@@ -931,11 +971,9 @@ final class PluginHost: ObservableObject {
         }
         return PreferencesBackup(
             application: preferencesBackupStore.applicationPreferences(),
-            pluginDisplay: pluginDisplayPreferencesStore.backupSnapshot(
-                defaultPluginIDs: defaultPluginIDs,
-                dashboardDefaultPluginIDs: defaultPluginIDs(for: .dashboard),
-                featurePanelDefaultPluginIDs: defaultPluginIDs(for: .featurePanel)
-            ),
+            pluginDisplay: PluginDisplayPreferencesBackup(
+                orderedPluginIDs: orderedPluginIDs(), hiddenPluginIDs: [],
+                panelConfiguration: menuBarPanelStore.configuration),
             shortcutCustomizations: selection.includesShortcuts ? shortcutCustomizations : [:],
             actionShortcutAssignments: selection.includesShortcuts
                 ? shortcutAssignmentService.assignments.filter {
@@ -1072,21 +1110,114 @@ final class PluginHost: ObservableObject {
         return result
     }
 
+    private struct CloudLocalPreferences {
+        let workflows: [WorkflowDefinition]
+        let rules: [AutomationRule]
+        let shortcuts: [ActionShortcutAssignmentRecord]
+        let presets: [ActionInvocationPreset]
+        let shortcutCustomizations: [String: ShortcutCustomization]
+        let protectedPluginIDs: Set<String>
+        let pluginPreferences: [String: Data]
+
+        var workflowIDs: Set<UUID> { Set(workflows.map(\.id)) }
+    }
+
+    /// Cloud updates replace portable records only. Local records are captured
+    /// from their stores, since a portable backup deliberately omits them.
+    func importCloudPreferences(_ backup: PreferencesBackup) throws -> PreferencesImportResult {
+        let exported = makePreferencesBackup()
+        let portable = CloudPreferencesSyncCoordinator.filterMachineSpecificPreferences(exported)
+        let automation = automationController.preferencesBackupSnapshot()
+        let portableWorkflowIDs = Set((portable.workflows ?? []).map(\.id))
+        let portableRuleIDs = Set((portable.automationRules ?? []).map(\.id))
+        let portableShortcutIDs = Set(portable.actionShortcutAssignments.map(\.id))
+        let portablePresetIDs = Set((portable.actionInvocationPresets ?? []).map(\.id))
+        let rules = automation.rules.filter { !portableRuleIDs.contains($0.id) }
+        let shortcuts = shortcutAssignmentService.assignments.filter { !portableShortcutIDs.contains($0.id) }
+        let presets = actionPresetStore.presets().filter { !portablePresetIDs.contains($0.id) }
+        var protectedIDs = Set(automation.workflows.filter { !portableWorkflowIDs.contains($0.id) }.map(\.id))
+        protectedIDs.formUnion(rules.map(\.workflowID))
+        let references = shortcuts.map(\.reference) + presets.map(\.reference)
+        protectedIDs.formUnion(references.compactMap { WorkflowExecutionAnalysis.nestedWorkflowID(for: $0.key) })
+        var previousCount = -1
+        while previousCount != protectedIDs.count {
+            previousCount = protectedIDs.count
+            for workflow in automation.workflows where protectedIDs.contains(workflow.id) {
+                protectedIDs.formUnion(workflow.steps.compactMap {
+                    WorkflowExecutionAnalysis.nestedWorkflowID(for: $0.reference.key)
+                })
+            }
+        }
+        let workflows = automation.workflows.filter { protectedIDs.contains($0.id) }
+        let dependencyReferences = references + workflows.flatMap { $0.steps.map(\.reference) }
+        // Plugin payloads are opaque, replacement-based archives. A provider used
+        // by preserved local automation must retain its presets as well.
+        let protectedPluginIDs = Set(dependencyReferences.compactMap { reference -> String? in
+            guard WorkflowExecutionAnalysis.nestedWorkflowID(for: reference.key) == nil,
+                  let plugin = corePlugin(for: reference.key.providerID),
+                  let provider = plugin as? any PluginActionReferenceBackupProviding else { return nil }
+            let disposition = guardedValue(for: plugin, operation: "preserve local action dependencies",
+                                           provider.backupDisposition(for: reference))
+            guard disposition == .requiresPluginPreferences else { return nil }
+            return reference.key.providerID
+        })
+        let customizations = shortcutStore.customizations(for: shortcutDescriptors().map(\.itemID))
+            .filter { portable.shortcutCustomizations[$0.key] == nil }
+        let local = CloudLocalPreferences(
+            workflows: workflows, rules: rules, shortcuts: shortcuts, presets: presets,
+            shortcutCustomizations: customizations, protectedPluginIDs: protectedPluginIDs,
+            pluginPreferences: exported.pluginPreferences
+        )
+        return try restorePreferences(backup, preserving: local)
+    }
+
+    private func preservingLocalWorkflows(
+        _ context: PreferencesActionRestoreContext, local: CloudLocalPreferences?
+    ) -> PreferencesActionRestoreContext {
+        guard let local else { return context }
+        return PreferencesActionRestoreContext(
+            selection: context.selection,
+            payloadDefinedActionReferencesByPluginID: context.payloadDefinedActionReferencesByPluginID,
+            importedWorkflowIDs: context.importedWorkflowIDs.union(local.workflowIDs),
+            restorableWorkflowIDs: context.restorableWorkflowIDs.union(local.workflowIDs),
+            resolvableWorkflowIDs: context.resolvableWorkflowIDs.union(local.workflowIDs)
+        )
+    }
+
     func importPreferences(
         _ backup: PreferencesBackup,
         selection requestedSelection: PreferencesBackupSelection? = nil
+    ) throws -> PreferencesImportResult {
+        try restorePreferences(backup, selection: requestedSelection)
+    }
+
+    private func restorePreferences(
+        _ backup: PreferencesBackup,
+        selection requestedSelection: PreferencesBackupSelection? = nil,
+        preserving local: CloudLocalPreferences? = nil
     ) throws -> PreferencesImportResult {
         let availableSelection = backup.effectiveSelection
         let selection = (requestedSelection ?? availableSelection).intersecting(availableSelection)
         _ = try preferencesImportPreview(for: backup, selection: selection)
         try automaticPreferencesBackupCoordinator?.createSafetySnapshotBeforeImport()
-        var restoreContext = makePreferencesActionRestoreContext(
+        var restoreContext = preservingLocalWorkflows(makePreferencesActionRestoreContext(
             backup: backup,
             selection: selection
-        )
+        ), local: local)
         let selectedPluginPreferences = backup.pluginPreferences.filter {
             selection.pluginPreferenceIDs.contains($0.key)
+                && !(local?.protectedPluginIDs.contains($0.key) ?? false)
         }
+        let restoredPluginPreferences = selectedPluginPreferences.reduce(into: [String: Data]()) { result, entry in
+            result[entry.key] = if let existing = local?.pluginPreferences[entry.key] {
+                CloudPreferencesSyncCoordinator.preservingMachineSpecificPluginPreferences(
+                    incoming: entry.value, local: existing, pluginID: entry.key
+                )
+            } else { entry.value }
+        }
+        let shortcutCustomizations = backup.shortcutCustomizations.merging(
+            local?.shortcutCustomizations ?? [:], uniquingKeysWith: { _, local in local }
+        )
         preferencesBackupRestoreContext = restoreContext
         defer {
             preferencesBackupRestoreContext = nil
@@ -1096,32 +1227,14 @@ final class PluginHost: ObservableObject {
         }
 
         if selection.includesPluginLayout {
-            pluginDisplayPreferencesStore.setOrderedPluginIDs(
-                backup.pluginDisplay.orderedPluginIDs,
-                defaultPluginIDs: defaultPluginIDs
-            )
-            pluginDisplayPreferencesStore.setOrderedPluginIDs(
-                backup.pluginDisplay.dashboardOrderedPluginIDs ?? backup.pluginDisplay.orderedPluginIDs,
-                for: .dashboard,
-                defaultPluginIDs: defaultPluginIDs(for: .dashboard)
-            )
-            pluginDisplayPreferencesStore.setOrderedPluginIDs(
-                backup.pluginDisplay.featurePanelOrderedPluginIDs ?? backup.pluginDisplay.orderedPluginIDs,
-                for: .featurePanel,
-                defaultPluginIDs: defaultPluginIDs(for: .featurePanel)
-            )
-            // A legacy backup has one global checkbox. Map it to both supported
-            // surfaces; current backups restore the two independent values.
-            pluginDisplayPreferencesStore.setHiddenPluginIDs(
-                Set(backup.pluginDisplay.dashboardHiddenPluginIDs ?? backup.pluginDisplay.hiddenPluginIDs),
-                for: .dashboard,
-                defaultPluginIDs: defaultPluginIDs(for: .dashboard)
-            )
-            pluginDisplayPreferencesStore.setHiddenPluginIDs(
-                Set(backup.pluginDisplay.featurePanelHiddenPluginIDs ?? backup.pluginDisplay.hiddenPluginIDs),
-                for: .featurePanel,
-                defaultPluginIDs: defaultPluginIDs(for: .featurePanel)
-            )
+            let panelConfiguration = backup.pluginDisplay.panelConfiguration
+                ?? PanelLayoutMigrator.migrate(LegacyPanelLayout(),
+                    preferences: LegacyPanelDisplayPreferences(backup: backup.pluginDisplay))
+                    .applyingLegacyClickBehavior(backup.application.menuBarClickBehavior)
+            menuBarPanelStore.replace(panelConfiguration, replacingUnreadable: true)
+            menuBarPanels = menuBarPanelStore.configuration.displayPanels
+            pluginOrderingStore.setOrderedPluginIDs(
+                backup.pluginDisplay.orderedPluginIDs, defaultPluginIDs: defaultPluginIDs)
         }
 
         let actionSurfacePluginIDs = Set(activePlugins.compactMap { plugin in
@@ -1131,7 +1244,7 @@ final class PluginHost: ObservableObject {
                 : nil
         })
         var shortcutErrors: [String: String] = [:]
-        let providerPreferences = selectedPluginPreferences.filter {
+        let providerPreferences = restoredPluginPreferences.filter {
             !actionSurfacePluginIDs.contains($0.key)
         }
         let restoredProviderIDs = restorePortablePluginPreferences(providerPreferences)
@@ -1144,11 +1257,11 @@ final class PluginHost: ObservableObject {
         }
         // Only a successfully validated and persisted payload can authorize actions that depend
         // on that payload. This closes the gap between preflight decoding and stateful restore.
-        restoreContext = makePreferencesActionRestoreContext(
+        restoreContext = preservingLocalWorkflows(makePreferencesActionRestoreContext(
             backup: backup,
             selection: selection,
             restoredPluginPreferenceIDs: restoredProviderIDs
-        )
+        ), local: local)
         preferencesBackupRestoreContext = restoreContext
         // Portable plugin settings can create action catalog identities (for example,
         // restored Fan Control preset UUIDs). Rebuild before dependent references.
@@ -1161,14 +1274,15 @@ final class PluginHost: ObservableObject {
             let restorableIDs = restoreContext.restorableWorkflowIDs
             let restored = automationController.restorePreferences(
                 workflows: workflows.compactMap { workflow in
-                    restorableIDs.contains(workflow.id)
+                    restorableIDs.contains(workflow.id) && !(local?.workflowIDs.contains(workflow.id) ?? false)
                         ? migratedWorkflowForRestore(workflow)
                         : nil
-                },
-                rules: rules.filter {
-                    restorableIDs.contains($0.workflowID)
-                        && AutomationRulePortabilityAnalysis.isPortable($0)
-                }
+                } + (local?.workflows ?? []),
+                rules: rules.filter { rule in
+                    restorableIDs.contains(rule.workflowID)
+                        && AutomationRulePortabilityAnalysis.isPortable(rule)
+                        && !(local?.rules.contains(where: { $0.id == rule.id }) ?? false)
+                } + (local?.rules ?? [])
             )
             if !restored {
                 shortcutErrors["automation"] = FeatureL10n.string("无法保存工作流。")
@@ -1186,7 +1300,7 @@ final class PluginHost: ObservableObject {
         // Action-surface layouts are restored only after their referenced providers and
         // workflow dependency graph are known, so a selective import cannot retain a
         // dangling Grid or Trackpad action.
-        let surfacePreferences = selectedPluginPreferences.filter {
+        let surfacePreferences = restoredPluginPreferences.filter {
             actionSurfacePluginIDs.contains($0.key)
         }
         let restoredSurfaceIDs = restorePortablePluginPreferences(surfacePreferences)
@@ -1204,7 +1318,7 @@ final class PluginHost: ObservableObject {
                     uniqueKeysWithValues: AppShortcutAction.allCases.map { action in
                         (
                             action,
-                            backup.shortcutCustomizations[action.rawValue]
+                            shortcutCustomizations[action.rawValue]
                                 ?? .inheritDefault
                         )
                     }
@@ -1213,7 +1327,7 @@ final class PluginHost: ObservableObject {
                     descriptors.map { descriptor in
                         (
                             descriptor.itemID,
-                            backup.shortcutCustomizations[descriptor.itemID]
+                            shortcutCustomizations[descriptor.itemID]
                                 ?? .inheritDefault
                         )
                     },
@@ -1237,9 +1351,10 @@ final class PluginHost: ObservableObject {
                         customizations: targetCustomizations,
                         descriptors: descriptors
                     )
-                    let importedAssignments = backup.actionShortcutAssignments.filter {
-                        actionReferenceRestorePortability($0.reference) != .knownNonPortable
-                    }
+                    let importedAssignments = backup.actionShortcutAssignments.filter { assignment in
+                        actionReferenceRestorePortability(assignment.reference) != .knownNonPortable
+                            && !(local?.shortcuts.contains(where: { $0.id == assignment.id }) ?? false)
+                    } + (local?.shortcuts ?? [])
                     switch shortcutAssignmentService.validateImport(
                         importedAssignments,
                         reservedRegistrations: reservedState.registrations,
@@ -1258,7 +1373,7 @@ final class PluginHost: ObservableObject {
                         case .success:
                             shortcutErrors.merge(
                                 applyImportedShortcutCustomizations(
-                                    backup.shortcutCustomizations,
+                                    shortcutCustomizations,
                                     bridgesLegacyActionAssignments: false,
                                     notifiesActionBackedDescriptors: false
                                 ),
@@ -1271,7 +1386,7 @@ final class PluginHost: ObservableObject {
             } else {
                 shortcutErrors.merge(
                     applyImportedShortcutCustomizations(
-                        backup.shortcutCustomizations,
+                        shortcutCustomizations,
                         bridgesLegacyActionAssignments: true
                     ),
                     uniquingKeysWith: { existing, _ in existing }
@@ -1281,7 +1396,8 @@ final class PluginHost: ObservableObject {
         if selection.includesRunLinks,
            let presets = backup.actionInvocationPresets,
            !actionPresetStore.replaceAllForRecovery(presets.compactMap { preset in
-               guard actionReferenceRestorePortability(preset.reference) != .knownNonPortable else {
+               guard actionReferenceRestorePortability(preset.reference) != .knownNonPortable,
+                     !(local?.presets.contains(where: { $0.id == preset.id }) ?? false) else {
                    return nil
                }
                return ActionInvocationPreset(
@@ -1290,11 +1406,10 @@ final class PluginHost: ObservableObject {
                    createdAt: preset.createdAt,
                    formatVersion: preset.formatVersion
                )
-           }) {
+           } + (local?.presets ?? [])) {
             shortcutErrors["run-links"] = FeatureL10n.string("无法保存运行链接预设。")
         }
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
         return PreferencesImportResult(
             installedPluginIDs: [],
             pluginInstallationFailures: [:],
@@ -1314,14 +1429,16 @@ final class PluginHost: ObservableObject {
                 localizationRefreshing.refreshLocalization()
             }
         }
-        componentViewCache.removeAll()
+        panelCoordinator.clearWidgetViews()
         settingsViewCache.removeAll()
-        cachedPanelStatesByID.removeAll()
-        cachedComponentStatesByID.removeAll()
         syncPluginManagementState()
+        menuBarIconCoordinator.refreshPrimaryIconOwner(
+            pluginTitle: menuBarIconCoordinator.primaryIconOwner.flatMap {
+                dynamicPluginManifestsByID[$0.pluginID]?.localizedDisplayName
+            }
+        )
         localizationRevision &+= 1
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
     }
 
     func refreshDisplayTopology() {
@@ -1329,146 +1446,58 @@ final class PluginHost: ObservableObject {
         refreshDisplayTopologyNow()
     }
 
-    func isSwitchOn(for pluginID: String) -> Bool {
-        panelItems.first(where: { $0.id == pluginID })?.isOn ?? false
+    func isSwitchOn(for itemID: String) -> Bool {
+        guard let item = panelCoordinator.item(for: itemID),
+              case let .row(row) = item.definition.content else { return false }
+        return row.state.isOn
     }
 
-    func setSwitchValue(_ isOn: Bool, for pluginID: String) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "set switch") {
-                primaryPanel.handleAction(.setSwitch(isOn))
-            }
-        }
+    func setSwitchValue(_ isOn: Bool, for itemID: String) {
+        performPanelAction(.setSwitch(isOn), itemID: itemID)
     }
 
-    func setDisclosureExpanded(_ isExpanded: Bool, for pluginID: String) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "set disclosure") {
-                primaryPanel.handleAction(.setDisclosureExpanded(isExpanded))
-            }
-        }
+    func setDisclosureExpanded(_ isExpanded: Bool, for itemID: String) {
+        panelCoordinator.setExpanded(isExpanded, id: itemID)
+        performPanelAction(.setDisclosureExpanded(panelCoordinator.hasExpandedPlacement(for: itemID)), itemID: itemID)
     }
 
-    func setPanelSelectionValue(
-        _ optionID: String,
-        controlID: String,
-        for pluginID: String
-    ) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "set selection") {
-                primaryPanel.handleAction(.setSelection(controlID: controlID, optionID: optionID))
-            }
-        }
+    func setPanelSelectionValue(_ optionID: String, controlID: String, for itemID: String) {
+        performPanelAction(.setSelection(controlID: controlID, optionID: optionID), itemID: itemID)
     }
 
-    func setPanelNavigationSelectionValue(
-        _ optionID: String,
-        controlID: String,
-        for pluginID: String
-    ) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "set navigation selection") {
-                primaryPanel.handleAction(
-                    .setNavigationSelection(controlID: controlID, optionID: optionID)
-                )
-            }
-        }
+    func setPanelNavigationSelectionValue(_ optionID: String, controlID: String, for itemID: String) {
+        panelCoordinator.setNavigationSelection(optionID, controlID: controlID, id: itemID)
+        performPanelAction(.setNavigationSelection(controlID: controlID, optionID: optionID), itemID: itemID)
     }
 
-    func clearPanelNavigationSelection(
-        controlID: String,
-        for pluginID: String
-    ) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "clear navigation selection") {
-                primaryPanel.handleAction(.clearNavigationSelection(controlID: controlID))
-            }
-        }
+    func clearPanelNavigationSelection(controlID: String, for itemID: String) {
+        panelCoordinator.setNavigationSelection(nil, controlID: controlID, id: itemID)
+        performPanelAction(.clearNavigationSelection(controlID: controlID), itemID: itemID)
     }
 
-    func setPanelDateValue(
-        _ date: Date,
-        controlID: String,
-        for pluginID: String
-    ) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "set date") {
-                primaryPanel.handleAction(.setDate(controlID: controlID, value: date))
-            }
-        }
+    func setPanelDateValue(_ date: Date, controlID: String, for itemID: String) {
+        performPanelAction(.setDate(controlID: controlID, value: date), itemID: itemID)
     }
 
-    func setPanelSliderValue(
-        _ value: Double,
-        controlID: String,
-        for pluginID: String,
-        phase: PluginPanelAction.SliderPhase
-    ) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
-
-        let isolatedPluginCountAtStart = isolatedPluginFailures.count
-        handlePluginAction(rebuildAfterAction: phase == .ended) {
-            guardPluginCall(plugin, operation: "set slider") {
-                primaryPanel.handleAction(.setSlider(controlID: controlID, value: value, phase: phase))
-            }
-        }
-
-        if phase == .changed, isolatedPluginFailures.count > isolatedPluginCountAtStart {
-            rebuildDerivedState()
-        }
+    func setPanelSliderValue(_ value: Double, controlID: String, for itemID: String,
+                             phase: PluginPanelAction.SliderPhase) {
+        performPanelAction(.setSlider(controlID: controlID, value: value, phase: phase),
+                           itemID: itemID, rebuild: phase == .ended)
     }
 
-    func invokePanelAction(controlID: String, for pluginID: String) {
-        guard let plugin = corePlugin(for: pluginID),
-              let primaryPanel = plugin.primaryPanel
-        else {
-            return
-        }
+    func invokePanelAction(controlID: String, for itemID: String) {
+        performPanelAction(.invokeAction(controlID: controlID), itemID: itemID)
+    }
 
-        handlePluginAction {
-            guardPluginCall(plugin, operation: "invoke panel action") {
-                primaryPanel.handleAction(.invokeAction(controlID: controlID))
-            }
+    private func performPanelAction(_ action: PluginPanelAction, itemID: String, rebuild: Bool = true) {
+        guard let item = panelCoordinator.item(for: itemID),
+              let plugin = corePlugin(for: item.key.pluginID),
+              !isPluginIsolated(plugin), case let .row(row) = item.definition.content else { return }
+        handlePluginAction(rebuildAfterAction: false) {
+            guardPluginCall(plugin, operation: "perform panel item action") { row.action(action) }
+        }
+        if rebuild || isPluginIsolated(plugin) {
+            rebuildDerivedState(dirtyPluginIDs: [item.key.pluginID])
         }
     }
 
@@ -1792,8 +1821,7 @@ final class PluginHost: ObservableObject {
                 binding: resolution == .swap ? previousTargetBinding : nil
             )
         }
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
         return nil
     }
 
@@ -1827,8 +1855,7 @@ final class PluginHost: ObservableObject {
         switch result {
         case .success:
             appShortcutErrors.removeValue(forKey: action)
-            rebuildDerivedState()
-            syncGlobalShortcuts()
+            rebuildDerivedState(synchronizingShortcuts: true)
             return nil
         case let .failure(error):
             appShortcutErrors[action] = error.localizedDescription
@@ -1848,8 +1875,7 @@ final class PluginHost: ObservableObject {
         case let .failure(error):
             appShortcutErrors[action] = error.localizedDescription
         }
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
     }
 
     func clearAppShortcutError(_ action: AppShortcutAction) {
@@ -1897,8 +1923,7 @@ final class PluginHost: ObservableObject {
         )
         switch result {
         case .success:
-            rebuildDerivedState()
-            syncGlobalShortcuts()
+            rebuildDerivedState(synchronizingShortcuts: true)
             notifyChangedActionBackedShortcutBindings(previous: previousBindings)
         case .failure:
             break
@@ -1914,8 +1939,7 @@ final class PluginHost: ObservableObject {
         ) else {
             return
         }
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
         notifyChangedActionBackedShortcutBindings(previous: previousBindings)
     }
 
@@ -2011,6 +2035,19 @@ final class PluginHost: ObservableObject {
         )
     }
 
+    private func resetShortcuts(pluginID: String, definitionIDs: [String]) {
+        let ids = Set(definitionIDs)
+        guard !ids.isEmpty else { return }
+        let descriptors = shortcutDescriptors()
+        let targets = descriptors.filter { $0.pluginID == pluginID && ids.contains($0.definition.id) }
+        guard !targets.isEmpty else { return }
+        for descriptor in targets {
+            applyShortcutCustomization(.inheritDefault, for: descriptor,
+                                       descriptors: descriptors, updatesPresentation: false)
+        }
+        rebuildDerivedState(synchronizingShortcuts: true)
+    }
+
     func presentPluginSettings(pluginID: String) {
         rebuildDerivedState()
 
@@ -2057,43 +2094,10 @@ final class PluginHost: ObservableObject {
         appPresentationHandler?(.settings(.permissions))
     }
 
-    func presentActionsAndShortcutsSettings() {
-        appPresentationHandler?(.settings(.feature(.actionsAndShortcuts)))
-    }
-
-    /// Chooses the entry page for a normal Plugins-tab selection. Explicit
-    /// navigation to Marketplace or a plugin configuration bypasses this so
-    /// the requested destination is always respected.
-    func pluginSettingsLandingPage() -> FeatureSettingsPane {
-        let dashboardIsAvailable = !dashboardLayoutItems.isEmpty || !dashboardHiddenLayoutItems.isEmpty
-        let featurePanelIsAvailable = !featurePanelLayoutItems.isEmpty || !featurePanelHiddenLayoutItems.isEmpty
-
-        let landingPage: PluginSettingsLandingPage
-        if !dashboardIsAvailable && !featurePanelIsAvailable {
-            landingPage = .marketplace
-        } else if let savedPage = pluginDisplayPreferencesStore.lastPluginSettingsLandingPage(),
-                  isAvailable(savedPage, dashboardIsAvailable: dashboardIsAvailable, featurePanelIsAvailable: featurePanelIsAvailable) {
-            landingPage = savedPage
-        } else if dashboardIsAvailable {
-            landingPage = .dashboard
-        } else {
-            landingPage = .featurePanel
-        }
-
-        // This automatic route must not replace the user's saved choice. For
-        // example, temporarily having only settings-only plugins should not
-        // make Marketplace their permanent landing page after they install a
-        // layout-capable plugin again.
-        return FeatureSettingsPane(landingPage: landingPage)
-    }
-
     @discardableResult
     func selectFeatureSettingsPane(_ pane: FeatureSettingsPane) -> Bool {
         switch pane {
-        case .actionsAndShortcuts, .automation, .dashboardLayout, .featurePanelLayout, .marketplace:
-            if let landingPage = pane.landingPage {
-                pluginDisplayPreferencesStore.setLastPluginSettingsLandingPage(landingPage)
-            }
+        case .actionsAndShortcuts, .automation, .marketplace:
             return true
         case let .configuration(pluginID):
             guard pluginSettingsItems.contains(where: { $0.id == pluginID }) else {
@@ -2209,223 +2213,39 @@ final class PluginHost: ObservableObject {
         rebuildDerivedState()
     }
 
-    /// Moves a plugin within a surface's visible order while leaving hidden
-    /// plugins in their remembered slots.
-    func movePlugin(id pluginID: String, toOffset targetOffset: Int, on surface: PluginDisplaySurface) {
-        let defaultPluginIDs = defaultPluginIDs(for: surface)
-        var orderedPluginIDs = visiblePluginIDs(for: surface)
 
-        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
-            return
-        }
-
-        let clampedOffset = min(max(targetOffset, 0), orderedPluginIDs.count)
-        guard currentIndex != clampedOffset, currentIndex + 1 != clampedOffset else {
-            return
-        }
-
-        orderedPluginIDs.move(
-            fromOffsets: IndexSet(integer: currentIndex),
-            toOffset: clampedOffset
-        )
-        pluginDisplayPreferencesStore.setVisiblePluginIDs(
-            orderedPluginIDs,
-            for: surface,
-            defaultPluginIDs: defaultPluginIDs
-        )
-        rebuildDerivedState()
+    func componentViewItem(for itemID: String, dismiss: @escaping () -> Void) -> PluginPanelWidgetViewItem {
+        let content = panelCoordinator.widgetView(for: itemID, dismiss: dismiss) { [weak self] detailID in
+            guard let self, let entry = self.panelCoordinator.entry(for: itemID),
+                  let panelID = self.menuBarPanelStore.configuration.panelID(for: entry.placement.id),
+                  self.visibleMenuBarPanelID == panelID else { return }
+            self.componentDetailHandlersByPanelID[panelID]?(itemID, detailID)
+        } ?? AnyView(EmptyView())
+        return PluginPanelWidgetViewItem(id: itemID, content: content)
     }
 
-    /// Moves only currently rendered items. Runtime-hidden plugins keep their slots,
-    /// and the preferences store also preserves slots hidden by the user's settings.
-    func moveRenderedPlugin(id pluginID: String, toOffset targetOffset: Int, on surface: PluginDisplaySurface) {
-        var renderedIDs = surface == .dashboard ? componentItems.map(\.id) : panelItems.map(\.id)
-        guard let currentIndex = renderedIDs.firstIndex(of: pluginID) else { return }
-        let clampedOffset = min(max(targetOffset, 0), renderedIDs.count)
-        guard currentIndex != clampedOffset, currentIndex + 1 != clampedOffset else { return }
-
-        let renderedIDSet = Set(renderedIDs)
-        renderedIDs.move(fromOffsets: IndexSet(integer: currentIndex), toOffset: clampedOffset)
-        var reorderedIDs = renderedIDs.makeIterator()
-        let orderedIDs = visiblePluginIDs(for: surface).map { id in
-            renderedIDSet.contains(id) ? reorderedIDs.next()! : id
-        }
-        pluginDisplayPreferencesStore.setVisiblePluginIDs(
-            orderedIDs,
-            for: surface,
-            defaultPluginIDs: defaultPluginIDs(for: surface)
-        )
-        rebuildDerivedState()
+    func componentPreviewView(for itemID: String,
+                              reportContentHeight: @escaping (CGFloat) -> Void = { _ in }) -> AnyView? {
+        guard let item = panelCoordinator.item(for: itemID),
+              case let .widget(widget) = item.definition.content,
+              let plugin = corePlugin(for: item.key.pluginID) else { return nil }
+        return guardedValue(for: plugin, operation: "make widget preview",
+            widget.makeView(PluginPanelWidgetContext(pluginID: item.key.pluginID,
+                itemID: item.key.itemID, placementID: nil, dismiss: {},
+                reportContentHeight: reportContentHeight)))
     }
 
-    func setPluginVisible(_ isVisible: Bool, id pluginID: String, on surface: PluginDisplaySurface) {
-        pluginDisplayPreferencesStore.setPluginVisible(
-            isVisible,
-            pluginID: pluginID,
-            on: surface,
-            defaultPluginIDs: defaultPluginIDs(for: surface)
-        )
-        rebuildDerivedState()
-    }
-
-    func resetPluginOrder(on surface: PluginDisplaySurface) {
-        pluginDisplayPreferencesStore.resetOrder(
-            for: surface,
-            defaultPluginIDs: defaultPluginIDs(for: surface)
-        )
-        rebuildDerivedState()
-    }
-
-    func canMoveFeatureManagementItem(id pluginID: String, by offset: Int) -> Bool {
-        let orderedPluginIDs = orderedPluginIDs()
-
-        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
-            return false
-        }
-
-        let targetIndex = currentIndex + offset
-        return orderedPluginIDs.indices.contains(targetIndex)
-    }
-
-    func moveFeatureManagementItem(id pluginID: String, by offset: Int) {
-        var orderedPluginIDs = orderedPluginIDs()
-
-        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
-            return
-        }
-
-        let targetIndex = currentIndex + offset
-
-        guard orderedPluginIDs.indices.contains(targetIndex) else {
-            return
-        }
-
-        let movedPluginID = orderedPluginIDs.remove(at: currentIndex)
-        orderedPluginIDs.insert(movedPluginID, at: targetIndex)
-
-        pluginDisplayPreferencesStore.setOrderedPluginIDs(
-            orderedPluginIDs,
-            defaultPluginIDs: defaultPluginIDs
-        )
-        rebuildDerivedState()
-    }
-
-    func moveFeatureManagementItem(id pluginID: String, toOffset targetOffset: Int) {
-        var orderedPluginIDs = orderedPluginIDs()
-
-        guard let currentIndex = orderedPluginIDs.firstIndex(of: pluginID) else {
-            return
-        }
-
-        let clampedOffset = min(max(targetOffset, 0), orderedPluginIDs.count)
-
-        guard currentIndex != clampedOffset, currentIndex + 1 != clampedOffset else {
-            return
-        }
-
-        orderedPluginIDs.move(
-            fromOffsets: IndexSet(integer: currentIndex),
-            toOffset: clampedOffset
-        )
-
-        pluginDisplayPreferencesStore.setOrderedPluginIDs(
-            orderedPluginIDs,
-            defaultPluginIDs: defaultPluginIDs
-        )
-        rebuildDerivedState()
-    }
-
-    func moveFeatureManagementItems(fromOffsets: IndexSet, toOffset: Int) {
-        var orderedPluginIDs = orderedPluginIDs()
-        orderedPluginIDs.move(fromOffsets: fromOffsets, toOffset: toOffset)
-
-        pluginDisplayPreferencesStore.setOrderedPluginIDs(
-            orderedPluginIDs,
-            defaultPluginIDs: defaultPluginIDs
-        )
-        rebuildDerivedState()
-    }
-
-    func componentViewItem(for itemID: String, dismiss: @escaping () -> Void) -> PluginComponentViewItem {
-        if let cachedItem = componentViewCache[itemID] {
-            return cachedItem
-        }
-
-        guard let plugin = corePlugin(for: itemID),
-              let componentPanel = plugin.componentPanel
-        else {
-            let item = PluginComponentViewItem(id: itemID, content: AnyView(EmptyView()))
-            componentViewCache[itemID] = item
-            return item
-        }
-
-        let context = PluginComponentContext(
-            pluginID: itemID,
-            dismiss: dismiss,
-            isPanelVisible: true
-        )
-        let content = guardedValue(
-            for: plugin,
-            operation: "make component view",
-            componentPanel.makeView(context: context)
-        ) ?? AnyView(EmptyView())
-
-        let item = PluginComponentViewItem(
-            id: itemID,
-            content: AnyView(content.id(localizationRevision))
-        )
-        componentViewCache[itemID] = item
-        if isPluginIsolated(plugin) {
-            rebuildDerivedState()
-        }
-        return item
-    }
-
-    func componentDetailContent(
-        pluginID: String,
-        detailID: String,
-        dismiss: @escaping () -> Void
-    ) -> PluginComponentDetailContent? {
-        guard
-            let plugin = corePlugin(for: pluginID),
-            let presenting = plugin as? any PluginComponentDetailPresenting
-        else {
-            return nil
-        }
-
-        guard let content = presenting.makeComponentDetailContent(
-            detailID: detailID,
-            dismiss: dismiss
-        ) else {
-            return nil
-        }
-
-        return guardedValue(
-            for: plugin,
-            operation: "make component detail",
-            content
-        )
-    }
-
-    func setPanelSurface(_ surface: PluginPanelSurface, visible isVisible: Bool) {
-        if isVisible {
-            visiblePanelSurfaces.insert(surface)
-        } else {
-            visiblePanelSurfaces.remove(surface)
-        }
-
-        let visiblePluginIDs = isVisible ? pluginIDs(for: surface) : []
-        updateVisiblePanelSurface(surface, visiblePluginIDs: visiblePluginIDs)
+    func componentDetailContent(placementID itemID: String, detailID: String,
+                                dismiss: @escaping () -> Void) -> PluginPanelDetailContent? {
+        guard let item = panelCoordinator.item(for: itemID),
+              let plugin = corePlugin(for: item.key.pluginID),
+              case let .widget(widget) = item.definition.content else { return nil }
+        return guardedOptionalValue(for: plugin, operation: "make panel item detail",
+                                    widget.makeDetail?(detailID, dismiss))
     }
 
     func isComponentViewCached(for itemID: String) -> Bool {
-        componentViewCache[itemID] != nil
-    }
-
-    func prewarmComponentViews(dismiss: @escaping () -> Void) {
-        for item in componentItems {
-            _ = componentViewItem(for: item.id, dismiss: dismiss)
-        }
+        panelCoordinator.isWidgetViewCached(itemID)
     }
 
     func pluginSettingsContentViewItem(
@@ -2544,12 +2364,23 @@ final class PluginHost: ObservableObject {
     }
 
     func discardComponentViews() {
-        componentViewCache.removeAll()
+        panelCoordinator.clearWidgetViews()
+    }
+
+    func recheckPluginRequirements() {
+        dynamicPluginManager?.reloadInstalledPlugins()
+        syncPluginManagementState()
     }
 
     func refreshPluginCatalog() async {
-        await pluginCatalogManager?.refreshCatalog()
-        syncPluginManagementState()
+        let installedMetadata = await pluginCatalogManager?.refreshCatalog()
+        syncPluginManagementState(installedMetadata: installedMetadata)
+    }
+
+    private func startCloudPreferencesSyncIfReady() {
+        guard dynamicPluginManager == nil || didLoadDynamicPlugins else { return }
+        areCloudPreferencesReady = true
+        cloudPreferencesSyncCoordinator?.start()
     }
 
     func loadDynamicPluginsIfNeeded() {
@@ -2562,6 +2393,7 @@ final class PluginHost: ObservableObject {
         configureCallbacks(for: dynamicPlugins)
         syncPluginManagementState()
         refreshAll()
+        startCloudPreferencesSyncIfReady()
     }
 
     var hasInstalledDynamicPlugins: Bool {
@@ -2708,7 +2540,8 @@ final class PluginHost: ObservableObject {
 
     func uninstallDynamicPlugin(pluginID: String, removeData: Bool = false) throws {
         try dynamicPluginManager?.uninstallPlugin(pluginID: pluginID, removeData: removeData)
-        pluginDisplayPreferencesStore.removePlugin(pluginID)
+        pluginOrderingStore.removePlugin(pluginID)
+        menuBarPanelStore.removePlugin(id: pluginID)
         shortcutStore.removeCustomizations(forPluginID: pluginID)
         shortcutErrors = shortcutErrors.filter { !$0.key.hasPrefix("\(pluginID).shortcut.") }
         isolatedPluginFailures.removeValue(forKey: pluginID)
@@ -3143,6 +2976,15 @@ final class PluginHost: ObservableObject {
         for plugin in plugins {
             let pluginID = plugin.metadata.id
 
+            if let inputRequester = plugin as? any PluginActionInputPresentationRequesting {
+                inputRequester.requestActionInput = { [weak self, weak plugin] key in
+                    guard let self, let plugin, key.providerID == pluginID,
+                          self.corePlugin(for: pluginID) === plugin,
+                          let item = self.actionInputRegistry.items.first(where: { $0.id == key }) else { return }
+                    self.appPresentationHandler?(.composeActionInput(item))
+                }
+            }
+
             plugin.onStateChange = { [weak self] in
                 self?.rebuildDerivedStateAfterPluginChange(pluginID: pluginID)
             }
@@ -3154,6 +2996,12 @@ final class PluginHost: ObservableObject {
                     forPluginID: pluginID,
                     shortcutDefinitionID: shortcutDefinitionID
                 )
+            }
+            if let requester = plugin as? any PluginShortcutResetRequesting {
+                requester.resetShortcutCustomizations = { [weak self, weak plugin] definitionIDs in
+                    guard let self, let plugin, self.corePlugin(for: pluginID) === plugin else { return }
+                    self.resetShortcuts(pluginID: pluginID, definitionIDs: definitionIDs)
+                }
             }
             if let inlineShortcutConsumer = plugin as?
                 any PluginInlineShortcutSettingsContextConsuming {
@@ -3192,8 +3040,7 @@ final class PluginHost: ObservableObject {
                         bindingsByActionID: bindings
                     ) {
                     case .success:
-                        self.rebuildDerivedState()
-                        self.syncGlobalShortcuts()
+                        self.rebuildDerivedState(synchronizingShortcuts: true)
                         self.notifyChangedActionBackedShortcutBindings(
                             previous: previousBindings
                         )
@@ -3224,8 +3071,7 @@ final class PluginHost: ObservableObject {
                         bindingsByActionID: bindings,
                         mutation: mutation
                     )
-                    self.rebuildDerivedState()
-                    self.syncGlobalShortcuts()
+                    self.rebuildDerivedState(synchronizingShortcuts: true)
                     self.notifyChangedActionBackedShortcutBindings(
                         previous: previousBindings
                     )
@@ -3252,11 +3098,6 @@ final class PluginHost: ObservableObject {
                     self?.appPresentationHandler?(.showDashboard)
                 }
             }
-            if let componentDetailPresenting = plugin as? any PluginComponentDetailPresenting {
-                componentDetailPresenting.requestComponentDetailPresentation = { [weak self] detailID in
-                    self?.componentDetailPresentationHandler?(pluginID, detailID)
-                }
-            }
             if let actionGridConsumer = plugin as? any ActionGridHostContextConsuming {
                 actionGridConsumer.actionGridHostContext = makeActionGridHostContext()
             }
@@ -3279,6 +3120,10 @@ final class PluginHost: ObservableObject {
             configureHostStatusItemCallbacks(for: [plugin])
         }
         configureTrackpadGestureBridge()
+        let pendingIconPluginIDs: Set<String>? = dynamicPluginManager != nil && !didLoadDynamicPlugins
+            ? nil
+            : Set(pluginManagementItems.filter { $0.state == .restartRequired }.map(\.id))
+        menuBarIconCoordinator.synchronize(with: activePlugins, pendingPluginIDs: pendingIconPluginIDs)
     }
 
     private let trackpadGestureBridge = TrackpadGestureBridge()
@@ -3328,12 +3173,10 @@ final class PluginHost: ObservableObject {
     }
 
     private func replaceDynamicPlugins(_ plugins: [any MacToolsPlugin]) {
-        let previouslyVisibleSurfaces = visiblePanelSurfaces
-        hideAllPanelSurfaces()
-        visiblePanelSurfaces = previouslyVisibleSurfaces
+        hideAllPanelItems()
+        for plugin in dynamicPlugins { panelCoordinator.removePlugin(plugin.metadata.id) }
         discardComponentViews()
         settingsViewCache.removeAll()
-        loggedCapabilityMismatchPluginIDs.removeAll()
         dynamicResolvedCapabilitiesByID.removeAll()
         syncPluginManagementState()
         dynamicPlugins = plugins.sorted {
@@ -3344,16 +3187,16 @@ final class PluginHost: ObservableObject {
             return $0.metadata.order < $1.metadata.order
         }
         configureCallbacks(for: dynamicPlugins)
-        rebuildDerivedState()
-        syncGlobalShortcuts()
+        rebuildDerivedState(synchronizingShortcuts: true)
     }
 
-    private func syncPluginManagementState() {
-        dynamicPluginCapabilitiesByID = dynamicPluginManager?.installedCapabilitiesByID() ?? [:]
-        dynamicPluginCategoriesByID = dynamicPluginManager?.installedCategoriesByID() ?? [:]
-        dynamicPluginReleaseChannelsByID = dynamicPluginManager?.installedReleaseChannelsByID() ?? [:]
-        dynamicPluginManifestsByID = dynamicPluginManager?.installedManifestsByID() ?? [:]
-        dynamicPluginInstalledAtByID = dynamicPluginManager?.installedAtByID() ?? [:]
+    private func syncPluginManagementState(installedMetadata: InstalledPluginMetadata? = nil) {
+        let metadata = installedMetadata ?? dynamicPluginManager?.installedMetadata()
+        dynamicPluginCapabilitiesByID = metadata?.capabilitiesByID ?? [:]
+        dynamicPluginCategoriesByID = metadata?.categoriesByID ?? [:]
+        dynamicPluginReleaseChannelsByID = metadata?.releaseChannelsByID ?? [:]
+        dynamicPluginManifestsByID = metadata?.manifestsByID ?? [:]
+        dynamicPluginInstalledAtByID = metadata?.installedAtByID ?? [:]
         pluginManagementItems = dynamicPluginManager?.pluginManagementItems ?? []
         pluginCatalogStatus = pluginCatalogManager?.status ?? .unavailable
     }
@@ -3380,10 +3223,10 @@ final class PluginHost: ObservableObject {
     }
 
     @discardableResult
-    private func rebuildPermissionProjections() -> Set<String> {
+    private func rebuildPermissionProjections(plugins: [any MacToolsPlugin]) -> Set<String> {
         var permissionCenterRequirements: [PermissionCenterRequirement] = []
         var missingPermissionCardIDs = Set<String>()
-        permissionCards = orderedCorePlugins().flatMap { plugin -> [PluginPermissionCard] in
+        permissionCards = plugins.flatMap { plugin -> [PluginPermissionCard] in
             let requirements = guardedValue(
                 for: plugin,
                 operation: "read permission requirements",
@@ -3446,289 +3289,46 @@ final class PluginHost: ObservableObject {
         return missingPermissionCardIDs
     }
 
-    private func rebuildDerivedState(dirtyPluginIDs: Set<String>? = nil) {
+    private func rebuildDerivedState(
+        dirtyPluginIDs: Set<String>? = nil,
+        synchronizingShortcuts: Bool = false
+    ) {
+        shortcutDefinitionRevision &+= 1
         if dirtyPluginIDs == nil {
             cancelScheduledPluginStateRebuild()
         }
 
         synchronizeInputGestureClaims()
 
-        let defaultDescriptors = defaultPluginDescriptors()
-        pluginDisplayPreferencesStore.migrateLegacyHiddenPluginIDs(
-            dashboardDefaultPluginIDs: defaultDescriptors
-                .filter { $0.capabilities.supportedSurfaces.contains(.dashboard) }
-                .map(\.metadata.id),
-            featurePanelDefaultPluginIDs: defaultDescriptors
-                .filter { $0.capabilities.supportedSurfaces.contains(.featurePanel) }
-                .map(\.metadata.id)
-        )
-
+        let descriptors = pluginDescriptorSnapshot()
         let isolatedPluginCountAtStart = isolatedPluginFailures.count
-        let orderedDescriptors = orderedPluginDescriptors()
-        let descriptorIDs = Set(orderedDescriptors.map(\.metadata.id))
-        var panelStatesByID = dirtyPluginIDs == nil ? [:] : cachedPanelStatesByID.filter {
-            descriptorIDs.contains($0.key)
-        }
-        var primaryPanelIndicatorsByID = dirtyPluginIDs == nil
-            ? [:]
-            : cachedPrimaryPanelIndicatorsByID.filter { descriptorIDs.contains($0.key) }
-        var evaluatedIndicatorPluginIDs = dirtyPluginIDs == nil
-            ? Set<String>()
-            : evaluatedPrimaryPanelIndicatorPluginIDs.intersection(descriptorIDs)
-        var primaryPanelCompactIndicatorsByID = dirtyPluginIDs == nil
-            ? [:]
-            : cachedPrimaryPanelCompactIndicatorsByID.filter { descriptorIDs.contains($0.key) }
-        var evaluatedCompactIndicatorPluginIDs = dirtyPluginIDs == nil
-            ? Set<String>()
-            : evaluatedPrimaryPanelCompactIndicatorPluginIDs.intersection(descriptorIDs)
-        var componentStatesByID = dirtyPluginIDs == nil ? [:] : cachedComponentStatesByID.filter {
-            descriptorIDs.contains($0.key)
-        }
-
+        let orderedDescriptors = descriptors.ordered
         for descriptor in orderedDescriptors {
-            let pluginID = descriptor.metadata.id
-            let shouldReadPlugin = dirtyPluginIDs?.contains(pluginID) ?? true
-            let plugin = descriptor.plugin
-
-            if descriptor.hasPrimaryPanel,
-               !isPluginIsolated(plugin),
-               let primaryPanel = plugin.primaryPanel {
-                if shouldReadPlugin || panelStatesByID[pluginID] == nil {
-                    if let state = guardedValue(
-                        for: plugin,
-                        operation: "read primary panel state",
-                        primaryPanel.primaryPanelState
-                    ) {
-                        panelStatesByID[pluginID] = state
-                    } else {
-                        panelStatesByID.removeValue(forKey: pluginID)
-                    }
-                }
-
-                if let indicatorProvider = plugin as? any PluginPrimaryPanelIndicatorProviding {
-                    if shouldReadPlugin || !evaluatedIndicatorPluginIDs.contains(pluginID) {
-                        evaluatedIndicatorPluginIDs.insert(pluginID)
-                        if let indicator = guardedOptionalValue(
-                            for: plugin,
-                            operation: "read primary panel indicator",
-                            indicatorProvider.primaryPanelIndicator
-                        ) {
-                            primaryPanelIndicatorsByID[pluginID] = indicator
-                        } else {
-                            primaryPanelIndicatorsByID.removeValue(forKey: pluginID)
-                        }
-                    }
-                } else {
-                    evaluatedIndicatorPluginIDs.remove(pluginID)
-                    primaryPanelIndicatorsByID.removeValue(forKey: pluginID)
-                }
-
-                if let indicatorProvider = plugin as? any PluginPrimaryPanelCompactIndicatorProviding {
-                    if shouldReadPlugin || !evaluatedCompactIndicatorPluginIDs.contains(pluginID) {
-                        evaluatedCompactIndicatorPluginIDs.insert(pluginID)
-                        if let indicator = guardedOptionalValue(
-                            for: plugin,
-                            operation: "read compact primary panel indicator",
-                            indicatorProvider.primaryPanelCompactIndicator
-                        ) {
-                            primaryPanelCompactIndicatorsByID[pluginID] = indicator
-                        } else {
-                            primaryPanelCompactIndicatorsByID.removeValue(forKey: pluginID)
-                        }
-                    }
-                } else {
-                    evaluatedCompactIndicatorPluginIDs.remove(pluginID)
-                    primaryPanelCompactIndicatorsByID.removeValue(forKey: pluginID)
-                }
-            } else {
-                panelStatesByID.removeValue(forKey: pluginID)
-                evaluatedIndicatorPluginIDs.remove(pluginID)
-                primaryPanelIndicatorsByID.removeValue(forKey: pluginID)
-                evaluatedCompactIndicatorPluginIDs.remove(pluginID)
-                primaryPanelCompactIndicatorsByID.removeValue(forKey: pluginID)
-            }
-
-            if descriptor.hasComponentPanel,
-               !isPluginIsolated(plugin),
-               let componentPanel = plugin.componentPanel {
-                if shouldReadPlugin || componentStatesByID[pluginID] == nil {
-                    if let state = guardedValue(
-                        for: plugin,
-                        operation: "read component panel state",
-                        componentPanel.componentPanelState
-                    ) {
-                        componentStatesByID[pluginID] = state
-                    } else {
-                        componentStatesByID.removeValue(forKey: pluginID)
-                    }
-                }
-            } else {
-                componentStatesByID.removeValue(forKey: pluginID)
+            let id = descriptor.metadata.id
+            guard dirtyPluginIDs == nil || dirtyPluginIDs!.contains(id) ||
+                    !panelCoordinator.hasSnapshot(for: id) else { continue }
+            guard let items = guardedValue(for: descriptor.plugin, operation: "read panel items",
+                                           descriptor.plugin.panelItems) else { continue }
+            do {
+                try panelCoordinator.update(pluginID: id, metadata: descriptor.metadata,
+                    definitions: items, allowedKinds: descriptor.capabilities.panelKinds,
+                    sourceDefaultDescription: descriptor.plugin.metadata.defaultDescription)
+            } catch {
+                // Keep the last validated snapshot and its identity contract until
+                // the plugin publishes valid definitions or is actually unloaded.
+                AppLog.pluginHost.error("Invalid panel items for \(id, privacy: .public): \(String(describing: error), privacy: .public)")
             }
         }
+        synchronizePanelLayout(pluginOrder: orderedDescriptors.map(\.metadata.id))
+        let missingPermissionCardIDs = rebuildPermissionProjections(plugins: orderedDescriptors.map(\.plugin))
 
-        cachedPanelStatesByID = panelStatesByID
-        cachedPrimaryPanelIndicatorsByID = primaryPanelIndicatorsByID
-        evaluatedPrimaryPanelIndicatorPluginIDs = evaluatedIndicatorPluginIDs
-        cachedPrimaryPanelCompactIndicatorsByID = primaryPanelCompactIndicatorsByID
-        evaluatedPrimaryPanelCompactIndicatorPluginIDs = evaluatedCompactIndicatorPluginIDs
-        cachedComponentStatesByID = componentStatesByID
-        self.primaryPanelIndicatorsByID = primaryPanelIndicatorsByID
-        self.primaryPanelCompactIndicatorsByID = primaryPanelCompactIndicatorsByID
+        synchronizeActionRegistry(descriptors: orderedDescriptors)
 
-        let featurePanelOrderedDescriptors = visiblePluginDescriptors(for: .featurePanel)
-        let dashboardOrderedDescriptors = visiblePluginDescriptors(for: .dashboard)
-        let featurePanelHiddenDescriptors = hiddenPluginDescriptors(for: .featurePanel)
-        let dashboardHiddenDescriptors = hiddenPluginDescriptors(for: .dashboard)
-
-        panelItems = featurePanelOrderedDescriptors.compactMap { descriptor in
-            guard descriptor.hasPrimaryPanel else {
-                return nil
-            }
-
-            let plugin = descriptor.plugin
-            let metadata = descriptor.metadata
-            guard
-                let primaryPanel = plugin.primaryPanel,
-                let state = panelStatesByID[metadata.id]
-            else {
-                return nil
-            }
-
-            guard state.isVisible else {
-                return nil
-            }
-
-            let description = localizedDescription(
-                state.errorMessage ?? state.subtitle,
-                pluginMetadata: plugin.metadata,
-                localizedMetadata: metadata
-            )
-            let descriptor = primaryPanel.primaryPanelDescriptor
-
-            return PluginPanelItem(
-                id: metadata.id,
-                title: metadata.title,
-                iconName: metadata.iconName,
-                iconTint: metadata.iconTint,
-                controlStyle: descriptor.controlStyle,
-                menuActionBehavior: descriptor.menuActionBehavior,
-                description: description.isEmpty ? metadata.defaultDescription : description,
-                helpText: description.isEmpty ? metadata.defaultDescription : description,
-                descriptionTone: state.errorMessage == nil ? .secondary : .error,
-                isOn: state.isOn,
-                isExpanded: state.isExpanded,
-                isEnabled: state.isEnabled,
-                detail: state.detail,
-                buttonActionID: descriptor.controlStyle == .button ? "execute" : nil,
-                buttonTitle: descriptor.buttonTitle
-            )
-        }
-
-        componentItems = dashboardOrderedDescriptors.compactMap { descriptor in
-            guard descriptor.hasComponentPanel else {
-                return nil
-            }
-
-            let plugin = descriptor.plugin
-            let metadata = descriptor.metadata
-            guard
-                let componentPanel = plugin.componentPanel,
-                let state = componentStatesByID[metadata.id]
-            else {
-                return nil
-            }
-
-            guard state.isVisible else {
-                return nil
-            }
-
-            let description = localizedDescription(
-                state.errorMessage ?? state.subtitle,
-                pluginMetadata: plugin.metadata,
-                localizedMetadata: metadata
-            )
-
-            return PluginComponentItem(
-                id: metadata.id,
-                title: metadata.title,
-                iconName: metadata.iconName,
-                iconTint: metadata.iconTint,
-                description: description.isEmpty ? metadata.defaultDescription : description,
-                helpText: description.isEmpty ? metadata.defaultDescription : description,
-                descriptionTone: state.errorMessage == nil ? .secondary : .error,
-                span: componentPanel.descriptor.span,
-                isActive: state.isActive,
-                isEnabled: state.isEnabled
-            )
-        }
-        trimComponentViewCache(keeping: Set(componentItems.map(\.id)))
-        syncVisiblePanelSurfaces()
-
-        featureManagementItems = orderedDescriptors.compactMap { descriptor in
-            let metadata = descriptor.metadata
-            guard !descriptor.capabilities.supportedSurfaces.isEmpty else {
-                return nil
-            }
-            return PluginFeatureManagementItem(
-                id: metadata.id,
-                title: metadata.title,
-                description: metadata.defaultDescription,
-                iconName: metadata.iconName,
-                iconTint: metadata.iconTint,
-                isVisible: true,
-                isActive: (
-                    panelStatesByID[metadata.id]?.isOn == true
-                        || componentStatesByID[metadata.id]?.isActive == true
-                ),
-                presentation: presentation(for: descriptor),
-                category: dynamicPluginCategoriesByID[metadata.id] ?? nil,
-                releaseChannel: dynamicPluginReleaseChannelsByID[metadata.id] ?? nil
-            )
-        }
-
-        dashboardLayoutItems = dashboardOrderedDescriptors.map { descriptor in
-            surfaceLayoutItem(
-                for: descriptor,
-                surface: .dashboard,
-                isVisible: true,
-                panelStatesByID: panelStatesByID,
-                componentStatesByID: componentStatesByID
-            )
-        }
-        dashboardHiddenLayoutItems = dashboardHiddenDescriptors.map { descriptor in
-            surfaceLayoutItem(
-                for: descriptor,
-                surface: .dashboard,
-                isVisible: false,
-                panelStatesByID: panelStatesByID,
-                componentStatesByID: componentStatesByID
-            )
-        }
-        featurePanelLayoutItems = featurePanelOrderedDescriptors.map { descriptor in
-            surfaceLayoutItem(
-                for: descriptor,
-                surface: .featurePanel,
-                isVisible: true,
-                panelStatesByID: panelStatesByID,
-                componentStatesByID: componentStatesByID
-            )
-        }
-        featurePanelHiddenLayoutItems = featurePanelHiddenDescriptors.map { descriptor in
-            surfaceLayoutItem(
-                for: descriptor,
-                surface: .featurePanel,
-                isVisible: false,
-                panelStatesByID: panelStatesByID,
-                componentStatesByID: componentStatesByID
-            )
-        }
-
-        let missingPermissionCardIDs = rebuildPermissionProjections()
-
-        synchronizeActionRegistry()
-
-        let shortcutDescriptors = shortcutDescriptors()
+        let shortcutSnapshot = makeShortcutResolutionSnapshot(from: orderedDescriptors)
+        let shortcutDescriptors = shortcutSnapshot.descriptors
+        let globalShortcutConflicts = globalShortcutRegistrationSelection(
+            for: shortcutDescriptors
+        ).conflictOwners
         var shortcutMutationMetadataByRowID: [String: ShortcutMutationMetadata] = [:]
         shortcutItems = shortcutDescriptors.flatMap { descriptor -> [ShortcutSettingsItem] in
             // Ordinary global shortcuts backed by canonical Actions are managed only in
@@ -3756,6 +3356,10 @@ final class PluginHost: ObservableObject {
                     canClear: !descriptor.definition.isRequired && binding != nil,
                     usesDefaultValue: customization == .inheritDefault,
                     errorMessage: shortcutErrors[descriptor.itemID]
+                        ?? eventShortcutConflictError(for: descriptor, descriptors: shortcutDescriptors)
+                        ?? globalShortcutConflicts[descriptor.itemID].map {
+                            ShortcutValidationError.duplicate(ownerDescription: $0).localizedDescription
+                        }
                         ?? binding.flatMap {
                             MacToolsReservedShortcutBindings.validationError(for: $0)?
                                 .localizedDescription
@@ -3808,7 +3412,8 @@ final class PluginHost: ObservableObject {
             }
         }
 
-        pluginSettingsSearchItems = orderedCorePlugins().flatMap { plugin -> [PluginProvidedSettingsSearchItem] in
+        pluginSettingsSearchItems = orderedDescriptors.flatMap { descriptor -> [PluginProvidedSettingsSearchItem] in
+            let plugin = descriptor.plugin
             guard let provider = plugin as? any PluginSettingsSearchProviding else {
                 return []
             }
@@ -3823,7 +3428,7 @@ final class PluginHost: ObservableObject {
             }
         }
 
-        pluginCommandItems = orderedPluginDescriptors().flatMap { descriptor -> [PluginCommandItem] in
+        pluginCommandItems = orderedDescriptors.flatMap { descriptor -> [PluginCommandItem] in
             let plugin = descriptor.plugin
             guard let provider = plugin as? any PluginCommandProviding else {
                 return []
@@ -3844,6 +3449,7 @@ final class PluginHost: ObservableObject {
         }
 
         pluginSettingsItems = buildPluginSettingsItems(
+            descriptors: orderedDescriptors,
             permissionCards: permissionCards,
             missingPermissionCardIDs: missingPermissionCardIDs,
             shortcutItems: shortcutItems
@@ -3857,14 +3463,28 @@ final class PluginHost: ObservableObject {
         }
         trimSettingsViewCache(keeping: Set(pluginSettingsItems.map(\.id)))
 
-        let newHasActivePlugin = panelStatesByID.contains { $0.value.isOn }
-            || componentStatesByID.contains { $0.value.isActive }
+        let newHasActivePlugin = panelCoordinator.catalog.contains {
+            switch $0.definition.content {
+            case .row(let row): row.state.isOn
+            case .widget(let widget): widget.state.isActive
+            }
+        }
         if hasActivePlugin != newHasActivePlugin {
             hasActivePlugin = newHasActivePlugin
         }
 
+        // Publish the presentation once, after registry consumers and shortcut
+        // registrations have settled. Consumers above read the live registry.
+        if synchronizingShortcuts {
+            syncGlobalShortcuts()
+        } else {
+            updateActionShortcutCatalog(descriptors: orderedDescriptors, shortcuts: shortcutSnapshot)
+        }
+
         if isolatedPluginFailures.count > isolatedPluginCountAtStart {
-            rebuildDerivedState()
+            rebuildDerivedState(synchronizingShortcuts: synchronizingShortcuts)
+        } else {
+            menuBarPanelContentDidChange.send()
         }
     }
 
@@ -3915,6 +3535,7 @@ final class PluginHost: ObservableObject {
     }
 
     private func rebuildDerivedStateAfterPluginChange(pluginID: String) {
+        shortcutDefinitionRevision &+= 1
         guard !isHandlingPluginAction else {
             return
         }
@@ -3962,8 +3583,7 @@ final class PluginHost: ObservableObject {
             }
 
             actionRegistry.invalidateAvailability()
-            rebuildDerivedState(dirtyPluginIDs: pluginIDs)
-            syncGlobalShortcuts()
+            rebuildDerivedState(dirtyPluginIDs: pluginIDs, synchronizingShortcuts: true)
         }
     }
 
@@ -3979,10 +3599,11 @@ final class PluginHost: ObservableObject {
         dirtyPluginIDs.removeAll()
     }
 
-    private func synchronizeActionRegistry() {
+    private func synchronizeActionRegistry(descriptors: [PluginDescriptor]) {
         var registrations = [hostActionRegistration()]
 
-        for plugin in orderedCorePlugins() {
+        for descriptor in descriptors where !isPluginIsolated(descriptor.plugin) {
+            let plugin = descriptor.plugin
             if let provider = plugin as? any PluginActionProviding {
                 let definitions = guardedValue(
                     for: plugin,
@@ -4010,6 +3631,7 @@ final class PluginHost: ObservableObject {
                 registrations.append(
                     legacyCommandActionRegistration(
                         for: plugin,
+                        providerTitle: descriptor.metadata.title,
                         definitions: definitions
                     )
                 )
@@ -4028,7 +3650,14 @@ final class PluginHost: ObservableObject {
         )
 
         let issues = actionRegistry.synchronize(registrations)
-        actionRegistryIssues = issues
+        actionInputRegistry.synchronize(activePlugins, readDescriptors: { plugin in
+            guard let provider = plugin as? any PluginActionInputProviding else { return [] }
+            return self.guardedValue(for: plugin, operation: "read action input descriptors",
+                                     provider.actionInputDescriptors) ?? []
+        }, definitionLookup: { self.actionRegistry.definition(for: $0) })
+        if actionRegistryIssues != issues {
+            actionRegistryIssues = issues
+        }
         if issues.isEmpty {
             AppLog.pluginHost.info(
                 "Action registry synchronized providers=\(registrations.count, privacy: .public) catalog=\(self.actionRegistry.catalogEntries.count, privacy: .public) issues=0"
@@ -4041,10 +3670,11 @@ final class PluginHost: ObservableObject {
         }
         automationController.migrateReferencesIfNeeded()
         migrateLegacyAppActionShortcutsIfNeeded()
-        migrateLegacyPluginActionShortcutsIfNeeded()
-        removeRetiredPluginActionShortcutsIfNeeded()
-        actionCatalogEntries = actionRegistry.catalogEntries
-        actionShortcutCatalogItems = buildActionShortcutCatalogItems()
+        migrateLegacyPluginActionShortcutsIfNeeded(plugins: descriptors.map(\.plugin))
+        removeRetiredPluginActionShortcutsIfNeeded(plugins: descriptors.map(\.plugin))
+        if actionCatalogEntries != actionRegistry.catalogEntries {
+            actionCatalogEntries = actionRegistry.catalogEntries
+        }
         for plugin in activePlugins {
             (plugin as? any ActionGridHostContextConsuming)?.actionSurfaceCatalogDidChange()
             (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionCatalogDidChange()
@@ -4310,6 +3940,7 @@ final class PluginHost: ObservableObject {
     }
 
     private func migrateLegacyAppActionShortcutsIfNeeded() {
+        guard !actionShortcutStore.hasMigratedLegacyAppAssignments else { return }
         let candidates = AppShortcutAction.allCases.compactMap { action
             -> (reference: ActionReference, binding: ShortcutBinding)? in
             guard let binding = shortcutStore.resolvedBinding(
@@ -4327,16 +3958,17 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func migrateLegacyPluginActionShortcutsIfNeeded() {
-        for plugin in orderedCorePlugins() {
-            guard let provider = plugin as? any PluginLegacyActionShortcutProviding else {
+    private func migrateLegacyPluginActionShortcutsIfNeeded(plugins: [any MacToolsPlugin]) {
+        for plugin in plugins {
+            guard !actionShortcutStore.hasMigratedLegacyPluginAssignments(pluginID: plugin.metadata.id),
+                  let provider = plugin as? any PluginLegacyActionShortcutProviding else {
                 continue
             }
-            let assignments = guardedValue(
+            guard let assignments = guardedValue(
                 for: plugin,
                 operation: "read legacy action shortcuts",
                 provider.legacyActionShortcutAssignments
-            ) ?? []
+            ) else { continue }
             actionShortcutStore.migrateLegacyPluginAssignments(
                 pluginID: plugin.metadata.id,
                 assignments: assignments
@@ -4364,8 +3996,8 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func removeRetiredPluginActionShortcutsIfNeeded() {
-        for plugin in orderedCorePlugins() {
+    private func removeRetiredPluginActionShortcutsIfNeeded(plugins: [any MacToolsPlugin]) {
+        for plugin in plugins {
             guard let provider = plugin as? any PluginRetiredActionShortcutProviding else {
                 continue
             }
@@ -4388,7 +4020,7 @@ final class PluginHost: ObservableObject {
 
     private func hostActionRegistration() -> ActionProviderRegistration {
         let providerID = "mactools"
-        let definitions = AppShortcutAction.allCases.map { action in
+        let definitions = AppShortcutAction.allCases.filter { !$0.isPanelAction }.map { action in
             ActionDefinition(
                 key: ActionKey(providerID: providerID, actionID: action.rawValue),
                 title: action.title,
@@ -4398,11 +4030,22 @@ final class PluginHost: ObservableObject {
                 capabilities: [.foregroundInteractive]
             )
         }
+        let panelDefinitions = menuBarPanels.map { panel in
+            ActionDefinition(
+                key: panelActionReference(id: panel.id).key,
+                title: panel.title,
+                description: FeatureL10n.string("显示、隐藏或切换到此面板。"),
+                systemImage: panel.systemImage,
+                externalInvocationPolicy: .unavailable,
+                capabilities: [.foregroundInteractive]
+            )
+        }
+        let allDefinitions = definitions + panelDefinitions
         return ActionProviderRegistration(
             providerID: providerID,
             identity: ObjectIdentifier(self),
-            definitions: definitions,
-            catalogEntries: definitions.map {
+            definitions: allDefinitions,
+            catalogEntries: allDefinitions.map {
                 ActionCatalogEntry(
                     reference: ActionReference(key: $0.key),
                     title: $0.title,
@@ -4411,6 +4054,13 @@ final class PluginHost: ObservableObject {
             },
             availability: { _ in .available },
             begin: { [weak self] invocation in
+                if let self,
+                   let panel = self.menuBarPanels.first(where: {
+                       !$0.isDefault && self.panelActionReference(id: $0.id).key == invocation.reference.key
+                   }), let handler = self.menuBarPanelPresentationHandler {
+                    handler(panel.id, true)
+                    return .success(ActionExecutionHandle(operation: { .succeeded() }))
+                }
                 guard let self,
                       let action = AppShortcutAction(rawValue: invocation.reference.key.actionID),
                       let appPresentationHandler = self.appPresentationHandler else {
@@ -4508,10 +4158,10 @@ final class PluginHost: ObservableObject {
 
     private func legacyCommandActionRegistration(
         for plugin: any MacToolsPlugin,
+        providerTitle: String,
         definitions commandDefinitions: [PluginCommandDefinition]
     ) -> ActionProviderRegistration {
         let providerID = plugin.metadata.id
-        let providerTitle = localizedMetadata(for: plugin.metadata).title
         let definitions = commandDefinitions.map { command in
             ActionDefinition(
                 key: ActionKey(providerID: providerID, actionID: command.id),
@@ -4716,11 +4366,10 @@ final class PluginHost: ObservableObject {
             return
         }
 
+        shortcutDefinitionRevision &+= 1
         isolatedPluginFailures[pluginID] = message
-        removePluginFromVisiblePanelSurfaces(pluginID, notify: false)
-        cachedPanelStatesByID.removeValue(forKey: pluginID)
-        cachedComponentStatesByID.removeValue(forKey: pluginID)
-        componentViewCache.removeValue(forKey: pluginID)
+        menuBarIconCoordinator.unregister(pluginID: pluginID, reason: .disabled)
+        panelCoordinator.removePlugin(pluginID)
         settingsViewCache = settingsViewCache.filter { $0.key.pluginID != pluginID }
         shortcutErrors = shortcutErrors.filter { !$0.key.hasPrefix("\(pluginID).shortcut.") }
 
@@ -4742,7 +4391,9 @@ final class PluginHost: ObservableObject {
         plugin.onStateChange = nil
         (plugin as? any PluginActionSafetyStateChangeProviding)?.onActionSafetyStateChange = nil
         plugin.requestPermissionGuidance = nil
+        (plugin as? any PluginActionInputPresentationRequesting)?.requestActionInput = nil
         plugin.shortcutBindingResolver = nil
+        (plugin as? any PluginShortcutResetRequesting)?.resetShortcutCustomizations = nil
         (plugin as? any PluginFocusedWindowTargetConsuming)?
             .focusedWindowTargetProvider = nil
         if let presetApplying = plugin as? any PluginActionShortcutPresetApplying {
@@ -4756,7 +4407,6 @@ final class PluginHost: ObservableObject {
         }
         (plugin as? any PluginSettingsPresenting)?.requestSettingsPresentation = nil
         (plugin as? any PluginDashboardPresenting)?.requestDashboardPresentation = nil
-        (plugin as? any PluginComponentDetailPresenting)?.requestComponentDetailPresentation = nil
         (plugin as? any ActionGridHostContextConsuming)?.actionGridHostContext = nil
         (plugin as? any TrackpadActionHostContextConsuming)?.trackpadActionHostContext = nil
         (plugin as? any PluginActionExecutionHostContextConsuming)?.actionExecutionHostContext = nil
@@ -4807,17 +4457,20 @@ final class PluginHost: ObservableObject {
     }
 
     private func buildPluginSettingsItems(
+        descriptors: [PluginDescriptor],
         permissionCards: [PluginPermissionCard],
         missingPermissionCardIDs: Set<String>,
         shortcutItems: [ShortcutSettingsItem]
     ) -> [PluginSettingsPageItem] {
-        orderedPluginDescriptors().compactMap { descriptor in
+        let permissionCardsByPluginID = Dictionary(grouping: permissionCards, by: \.pluginID)
+        let shortcutItemsByPluginID = Dictionary(grouping: shortcutItems, by: \.pluginID)
+        return descriptors.filter { !isPluginIsolated($0.plugin) }.compactMap { descriptor in
             let pluginID = descriptor.metadata.id
-            let matchingPermissionCards = permissionCards.filter { $0.pluginID == pluginID }
+            let matchingPermissionCards = permissionCardsByPluginID[pluginID] ?? []
             let matchingMissingPermissionCardIDs = missingPermissionCardIDs.intersection(
                 matchingPermissionCards.map(\.id)
             )
-            let matchingShortcutItems = shortcutItems.filter { $0.pluginID == pluginID }
+            let matchingShortcutItems = shortcutItemsByPluginID[pluginID] ?? []
             let shortcutSettingsGroups: [PluginShortcutSettingsGroupConfiguration]
             if descriptor.hasSettings,
                let provider = descriptor.plugin as? any PluginGroupedShortcutSettingsProviding,
@@ -4942,41 +4595,11 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func surfaceLayoutItem(
-        for descriptor: PluginDescriptor,
-        surface: PluginDisplaySurface,
-        isVisible: Bool,
-        panelStatesByID: [String: PluginPanelState],
-        componentStatesByID: [String: PluginComponentState]
-    ) -> PluginSurfaceLayoutItem {
-        let metadata = descriptor.metadata
-        let isActive: Bool
-        switch surface {
-        case .dashboard:
-            isActive = componentStatesByID[metadata.id]?.isActive == true
-        case .featurePanel:
-            isActive = panelStatesByID[metadata.id]?.isOn == true
-        }
-        return PluginSurfaceLayoutItem(
-            id: metadata.id,
-            title: metadata.title,
-            description: metadata.defaultDescription,
-            iconName: metadata.iconName,
-            iconTint: metadata.iconTint,
-            capabilities: descriptor.capabilities,
-            isVisible: isVisible,
-            isActive: isActive,
-            canUninstall: dynamicPluginManifestsByID[metadata.id] != nil,
-            removesDataOnUninstall: dynamicPluginManifestsByID[metadata.id]?
-                .effectiveUninstallDataPolicy == .removePrivateData,
-            category: dynamicPluginCategoriesByID[metadata.id] ?? nil,
-            releaseChannel: dynamicPluginReleaseChannelsByID[metadata.id] ?? nil
-        )
-    }
 
-    private func shortcutDescriptors() -> [ShortcutDescriptor] {
-        orderedCorePlugins().flatMap { plugin in
-            let metadata = localizedMetadata(for: plugin.metadata)
+    private func shortcutDescriptors(from descriptors: [PluginDescriptor]? = nil) -> [ShortcutDescriptor] {
+        (descriptors ?? orderedPluginDescriptors()).filter { !isPluginIsolated($0.plugin) }.flatMap { descriptor in
+            let plugin = descriptor.plugin
+            let metadata = descriptor.metadata
             let definitions = guardedValue(
                 for: plugin,
                 operation: "read shortcut definitions",
@@ -4998,18 +4621,20 @@ final class PluginHost: ObservableObject {
         }
     }
 
+    private func makeShortcutResolutionSnapshot(from descriptors: [PluginDescriptor]) -> ShortcutResolutionSnapshot {
+        // Capture before invoking getters: an exception or reentrant state
+        // change invalidates reuse even if it occurs while reading definitions.
+        let revision = shortcutDefinitionRevision
+        return ShortcutResolutionSnapshot(revision: revision, descriptors: shortcutDescriptors(from: descriptors))
+    }
+
     private var defaultPluginIDs: [String] {
         defaultPluginDescriptors().map(\.metadata.id)
     }
 
-    private func defaultPluginIDs(for surface: PluginDisplaySurface) -> [String] {
-        defaultPluginDescriptors()
-            .filter { $0.capabilities.supportedSurfaces.contains(surface) }
-            .map(\.metadata.id)
-    }
 
     private func orderedPluginIDs() -> [String] {
-        pluginDisplayPreferencesStore.orderedPluginIDs(defaultPluginIDs: defaultPluginIDs)
+        pluginOrderingStore.orderedPluginIDs(defaultPluginIDs: defaultPluginIDs)
     }
 
     private func orderedPlugins() -> [any MacToolsPlugin] {
@@ -5023,34 +4648,19 @@ final class PluginHost: ObservableObject {
     }
 
     private func orderedPluginDescriptors() -> [PluginDescriptor] {
-        let descriptorsByID = descriptorsByID()
-
-        return orderedPluginIDs().compactMap { descriptorsByID[$0] }
+        pluginDescriptorSnapshot().ordered
     }
 
-    private func visiblePluginDescriptors(for surface: PluginDisplaySurface) -> [PluginDescriptor] {
-        let descriptorsByID = descriptorsByID()
-        return visiblePluginIDs(for: surface).compactMap { descriptorsByID[$0] }
-    }
-
-    private func hiddenPluginDescriptors(for surface: PluginDisplaySurface) -> [PluginDescriptor] {
-        let descriptorsByID = descriptorsByID()
-        return hiddenPluginIDs(for: surface).compactMap { descriptorsByID[$0] }
-    }
-
-    private func visiblePluginIDs(for surface: PluginDisplaySurface) -> [String] {
-        pluginDisplayPreferencesStore.visiblePluginIDs(
-            for: surface,
-            defaultPluginIDs: defaultPluginIDs(for: surface)
+    private func pluginDescriptorSnapshot() -> PluginDescriptorSnapshot {
+        let descriptors = defaultPluginDescriptors()
+        return PluginDescriptorSnapshot(
+            defaults: descriptors,
+            orderedIDs: pluginOrderingStore.orderedPluginIDs(
+                defaultPluginIDs: descriptors.map(\.metadata.id)
+            )
         )
     }
 
-    private func hiddenPluginIDs(for surface: PluginDisplaySurface) -> [String] {
-        pluginDisplayPreferencesStore.hiddenPluginIDs(
-            for: surface,
-            defaultPluginIDs: defaultPluginIDs(for: surface)
-        )
-    }
 
     private func pluginsByID() -> [String: any MacToolsPlugin] {
         activePlugins.reduce(into: [String: any MacToolsPlugin]()) { result, plugin in
@@ -5058,16 +4668,6 @@ final class PluginHost: ObservableObject {
 
             if result[id] == nil {
                 result[id] = plugin
-            }
-        }
-    }
-
-    private func descriptorsByID() -> [String: PluginDescriptor] {
-        defaultPluginDescriptors().reduce(into: [String: PluginDescriptor]()) { result, descriptor in
-            let id = descriptor.metadata.id
-
-            if result[id] == nil {
-                result[id] = descriptor
             }
         }
     }
@@ -5118,215 +4718,30 @@ final class PluginHost: ObservableObject {
         )
     }
 
-    private func localizedDescription(
-        _ description: String,
-        pluginMetadata: PluginMetadata,
-        localizedMetadata: PluginMetadata
-    ) -> String {
-        // Replace only the metadata default; panel-specific descriptions and
-        // errors must remain intact even if their text happens to be localized.
-        description == pluginMetadata.defaultDescription
-            ? localizedMetadata.defaultDescription
-            : description
-    }
-
     private func builtInCapabilities(for plugin: any MacToolsPlugin) -> PluginHostCapabilities {
-        if let cachedCapabilities = builtInCapabilitiesByID[plugin.metadata.id] {
-            return cachedCapabilities
-        }
-
-        let capabilities = PluginHostCapabilities(
-            supportsDashboard: plugin.componentPanel != nil,
-            supportsFeaturePanel: plugin.primaryPanel != nil,
-            settingsLayout: plugin.settingsPage?.body.layout
-        )
+        if let cached = builtInCapabilitiesByID[plugin.metadata.id] { return cached }
+        let capabilities = PluginHostCapabilities(panelKinds: Set(PluginPanelItemKind.allCases),
+                                                  settingsLayout: plugin.settingsPage?.body.layout)
         builtInCapabilitiesByID[plugin.metadata.id] = capabilities
         return capabilities
     }
 
     private func dynamicCapabilities(for plugin: any MacToolsPlugin) -> PluginHostCapabilities {
-        if let cachedCapabilities = dynamicResolvedCapabilitiesByID[plugin.metadata.id] {
-            return cachedCapabilities
-        }
-
-        guard let declared = dynamicPluginCapabilitiesByID[plugin.metadata.id] else {
-            let capabilities = PluginHostCapabilities(
-                supportsDashboard: plugin.componentPanel != nil,
-                supportsFeaturePanel: plugin.primaryPanel != nil,
-                settingsLayout: plugin.settingsPage?.body.layout
-            )
-            dynamicResolvedCapabilitiesByID[plugin.metadata.id] = capabilities
-            return capabilities
-        }
-
-        let runtimeSupportsFeaturePanel = plugin.primaryPanel != nil
-        let runtimeSupportsDashboard = plugin.componentPanel != nil
-        let hasPanelMismatch = declared.primaryPanel != runtimeSupportsFeaturePanel
-            || declared.componentPanel != runtimeSupportsDashboard
-
-        if hasPanelMismatch,
-           loggedCapabilityMismatchPluginIDs.insert(plugin.metadata.id).inserted {
-            AppLog.pluginHost.warning(
-                "Plugin \(plugin.metadata.id, privacy: .public) panel capability mismatch; declared primary=\(declared.primaryPanel, privacy: .public), component=\(declared.componentPanel, privacy: .public), runtime primary=\(runtimeSupportsFeaturePanel, privacy: .public), component=\(runtimeSupportsDashboard, privacy: .public)"
-            )
-        }
-
+        if let cached = dynamicResolvedCapabilitiesByID[plugin.metadata.id] { return cached }
+        let declared = dynamicPluginCapabilitiesByID[plugin.metadata.id]
         let capabilities = PluginHostCapabilities(
-            supportsDashboard: declared.componentPanel && runtimeSupportsDashboard,
-            supportsFeaturePanel: declared.primaryPanel && runtimeSupportsFeaturePanel,
-            settingsLayout: declared.settings.layout
-        )
+            panelKinds: Set(declared?.panelItems ?? PluginPanelItemKind.allCases),
+            settingsLayout: declared.map { $0.settings.layout } ?? plugin.settingsPage?.body.layout)
         dynamicResolvedCapabilitiesByID[plugin.metadata.id] = capabilities
         return capabilities
     }
 
-    private func presentation(for descriptor: PluginDescriptor) -> PluginFeaturePresentation {
-        switch (
-            descriptor.capabilities.supportsFeaturePanel,
-            descriptor.capabilities.supportsDashboard
-        ) {
-        case (true, true):
-            return .featureAndComponentPanel
-        case (true, false):
-            return .featurePanel
-        case (false, true):
-            return .componentPanel
-        case (false, false):
-            assertionFailure("Settings-only plugins do not have a panel presentation")
-            return .featurePanel
-        }
-    }
+    private func hideAllPanelItems() { panelCoordinator.setVisiblePanel(nil) }
 
-    private func trimComponentViewCache(keeping visibleComponentIDs: Set<String>) {
-        componentViewCache = componentViewCache.filter { visibleComponentIDs.contains($0.key) }
-    }
-
-    private func pluginIDs(for surface: PluginPanelSurface) -> Set<String> {
-        switch surface {
-        case .component:
-            return Set(componentItems.map(\.id))
-        case .primary:
-            return Set(panelItems.map(\.id))
-        }
-    }
-
-    private func syncVisiblePanelSurfaces() {
-        for surface in visiblePanelSurfaces {
-            updateVisiblePanelSurface(
-                surface,
-                visiblePluginIDs: pluginIDs(for: surface)
-            )
-        }
-    }
-
-    private func hideAllPanelSurfaces() {
-        for surface in PluginPanelSurface.allCases {
-            updateVisiblePanelSurface(surface, visiblePluginIDs: [])
-        }
-        visiblePanelSurfaces.removeAll()
-    }
-
-    private func updateVisiblePanelSurface(
-        _ surface: PluginPanelSurface,
-        visiblePluginIDs nextVisiblePluginIDs: Set<String>
-    ) {
-        let previousVisiblePluginIDs = visiblePanelSurfacePluginIDs[surface] ?? []
-        let hiddenPluginIDs = previousVisiblePluginIDs.subtracting(nextVisiblePluginIDs)
-        let shownPluginIDs = nextVisiblePluginIDs.subtracting(previousVisiblePluginIDs)
-
-        guard !hiddenPluginIDs.isEmpty || !shownPluginIDs.isEmpty else {
-            return
-        }
-
-        for pluginID in hiddenPluginIDs {
-            notifyPanelSurfaceHidden(surface, pluginID: pluginID)
-        }
-
-        for pluginID in shownPluginIDs {
-            notifyPanelSurfaceVisible(surface, pluginID: pluginID)
-        }
-
-        let visiblePluginIDs = nextVisiblePluginIDs.filter { pluginID in
-            guard let plugin = corePlugin(for: pluginID) else {
-                return false
-            }
-
-            return !isPluginIsolated(plugin)
-        }
-
-        if visiblePluginIDs.isEmpty {
-            visiblePanelSurfacePluginIDs.removeValue(forKey: surface)
-        } else {
-            visiblePanelSurfacePluginIDs[surface] = visiblePluginIDs
-        }
-    }
-
-    private func notifyPanelSurfaceVisible(_ surface: PluginPanelSurface, pluginID: String) {
-        guard
-            let plugin = corePlugin(for: pluginID),
-            let lifecycleHandler = plugin as? any PluginPanelSurfaceLifecycleHandling
-        else {
-            return
-        }
-
-        guardPluginCall(plugin, operation: "show \(surface) panel surface") {
-            lifecycleHandler.panelSurfaceDidBecomeVisible(surface)
-        }
-    }
-
-    private func notifyPanelSurfaceHidden(_ surface: PluginPanelSurface, pluginID: String) {
-        guard
-            let plugin = corePlugin(for: pluginID),
-            let lifecycleHandler = plugin as? any PluginPanelSurfaceLifecycleHandling
-        else {
-            return
-        }
-
-        guardPluginCall(plugin, operation: "hide \(surface) panel surface") {
-            lifecycleHandler.panelSurfaceDidBecomeHidden(surface)
-        }
-    }
-
-    private func removePluginFromVisiblePanelSurfaces(_ pluginID: String, notify: Bool) {
-        for surface in PluginPanelSurface.allCases {
-            guard var pluginIDs = visiblePanelSurfacePluginIDs[surface] else {
-                continue
-            }
-
-            guard pluginIDs.remove(pluginID) != nil else {
-                continue
-            }
-
-            if notify {
-                notifyPanelSurfaceHidden(surface, pluginID: pluginID)
-            }
-
-            if pluginIDs.isEmpty {
-                visiblePanelSurfacePluginIDs.removeValue(forKey: surface)
-            } else {
-                visiblePanelSurfacePluginIDs[surface] = pluginIDs
-            }
-        }
-    }
 
     private func trimSettingsViewCache(keeping settingsPluginIDs: Set<String>) {
         settingsViewCache = settingsViewCache.filter {
             settingsPluginIDs.contains($0.key.pluginID)
-        }
-    }
-
-    private func isAvailable(
-        _ landingPage: PluginSettingsLandingPage,
-        dashboardIsAvailable: Bool,
-        featurePanelIsAvailable: Bool
-    ) -> Bool {
-        switch landingPage {
-        case .dashboard:
-            dashboardIsAvailable
-        case .featurePanel:
-            featurePanelIsAvailable
-        case .marketplace:
-            true
         }
     }
 
@@ -5403,11 +4818,32 @@ final class PluginHost: ObservableObject {
         )
     }
 
+    private func consumedShortcutBindings(_ binding: ShortcutBinding, for descriptor: ShortcutDescriptor) -> Set<ShortcutBinding> {
+        // Window Switcher's existing phase-based shortcut contract also consumes
+        // Shift for reverse cycling. Account for that chord in host validation
+        // without extending the PluginKit shortcut-definition contract.
+        guard descriptor.pluginID == "window-switcher",
+              descriptor.plugin is any PluginShortcutEventHandling,
+              !binding.modifiers.contains(.shift) else { return [binding] }
+        return [binding, ShortcutBinding(keyCode: binding.keyCode, modifiers: binding.modifiers.union(.shift))]
+    }
+
+    private func shortcutBindingsConflict(_ binding: ShortcutBinding, for descriptor: ShortcutDescriptor,
+                                         with otherBinding: ShortcutBinding, for other: ShortcutDescriptor) -> Bool {
+        // Explicit scope bindings win inside Window Switcher. Its implicit
+        // reverse chord must not shadow a shortcut owned by another plugin.
+        if descriptor.pluginID == other.pluginID { return binding == otherBinding }
+        return !consumedShortcutBindings(binding, for: descriptor)
+            .isDisjoint(with: consumedShortcutBindings(otherBinding, for: other))
+    }
+
     private func pluginShortcutConflict(
         for binding: ShortcutBinding,
         descriptors: [ShortcutDescriptor]
     ) -> ShortcutDescriptor? {
-        descriptors.first { resolvedBinding(for: $0) == binding }
+        descriptors.first { descriptor in
+            resolvedBinding(for: descriptor).map { consumedShortcutBindings($0, for: descriptor).contains(binding) } ?? false
+        }
     }
 
     private func appShortcutConflictError(
@@ -5422,6 +4858,18 @@ final class PluginHost: ObservableObject {
         return ShortcutValidationError.duplicate(
             ownerDescription: "\(conflict.pluginTitle) · \(conflict.definition.title)"
         ).localizedDescription
+    }
+
+    private func eventShortcutConflictError(
+        for descriptor: ShortcutDescriptor,
+        descriptors: [ShortcutDescriptor]
+    ) -> String? {
+        guard descriptor.plugin is any PluginShortcutEventHandling,
+              let binding = legacyResolvedBinding(for: descriptor) else { return nil }
+        do {
+            try validateShortcutCustomization(.custom(binding), for: descriptor, descriptors: descriptors)
+        } catch { return error.localizedDescription }
+        return nil
     }
 
     private func legacyResolvedBinding(
@@ -5623,7 +5071,7 @@ final class PluginHost: ObservableObject {
 
             for otherDescriptor in descriptors.dropFirst(index + 1) {
                 guard let otherBinding = bindingsByID[otherDescriptor.itemID] ?? nil,
-                      otherBinding == binding,
+                      shortcutBindingsConflict(binding, for: descriptor, with: otherBinding, for: otherDescriptor),
                       !canShareShortcutBinding(descriptor, with: otherDescriptor)
                 else {
                     continue
@@ -5660,7 +5108,7 @@ final class PluginHost: ObservableObject {
 
             for descriptor in descriptors {
                 guard let binding = bindingsByID[descriptor.itemID] ?? nil,
-                      binding == appBinding
+                      consumedShortcutBindings(binding, for: descriptor).contains(appBinding)
                 else {
                     continue
                 }
@@ -5681,7 +5129,9 @@ final class PluginHost: ObservableObject {
     private func applyShortcutCustomization(
         _ customization: ShortcutCustomization,
         for descriptor: ShortcutDescriptor,
-        assignmentID: UUID? = nil
+        assignmentID: UUID? = nil,
+        descriptors: [ShortcutDescriptor]? = nil,
+        updatesPresentation: Bool = true
     ) -> String? {
         if let reference = actionReference(for: descriptor) {
             let binding = ShortcutStore.resolve(
@@ -5710,18 +5160,19 @@ final class PluginHost: ObservableObject {
                     binding: shortcutAssignmentService.assignment(for: reference)?.binding
                 )
                 shortcutErrors.removeValue(forKey: descriptor.itemID)
-                rebuildDerivedState()
-                syncGlobalShortcuts()
+                if updatesPresentation {
+                    rebuildDerivedState(synchronizingShortcuts: true)
+                }
                 return nil
             case let .failure(error):
                 shortcutErrors[descriptor.itemID] = error.localizedDescription
-                rebuildDerivedState()
+                if updatesPresentation { rebuildDerivedState() }
                 return error.localizedDescription
             }
         }
 
         do {
-            try validateShortcutCustomization(customization, for: descriptor)
+            try validateShortcutCustomization(customization, for: descriptor, descriptors: descriptors)
             shortcutStore.setCustomization(customization, for: descriptor.itemID)
             notifyShortcutBindingChange(
                 for: descriptor,
@@ -5731,23 +5182,25 @@ final class PluginHost: ObservableObject {
                 )
             )
             shortcutErrors.removeValue(forKey: descriptor.itemID)
-            rebuildDerivedState()
-            syncGlobalShortcuts()
+            if updatesPresentation {
+                rebuildDerivedState(synchronizingShortcuts: true)
+            }
             return nil
         } catch let error as ShortcutValidationError {
             shortcutErrors[descriptor.itemID] = error.localizedDescription
-            rebuildDerivedState()
+            if updatesPresentation { rebuildDerivedState() }
             return error.localizedDescription
         } catch {
             shortcutErrors[descriptor.itemID] = error.localizedDescription
-            rebuildDerivedState()
+            if updatesPresentation { rebuildDerivedState() }
             return error.localizedDescription
         }
     }
 
     private func validateShortcutCustomization(
         _ customization: ShortcutCustomization,
-        for descriptor: ShortcutDescriptor
+        for descriptor: ShortcutDescriptor,
+        descriptors: [ShortcutDescriptor]? = nil
     ) throws {
         let candidate = ShortcutStore.resolve(
             customization: customization,
@@ -5773,10 +5226,10 @@ final class PluginHost: ObservableObject {
                 throw error
             }
 
-            if let conflict = shortcutDescriptors().first(where: {
-                $0.itemID != descriptor.itemID
-                    && resolvedBinding(for: $0) == candidate
-                    && !canShareShortcutBinding(descriptor, with: $0)
+            if let conflict = (descriptors ?? shortcutDescriptors()).first(where: { other in
+                other.itemID != descriptor.itemID
+                    && resolvedBinding(for: other).map { shortcutBindingsConflict(candidate, for: descriptor, with: $0, for: other) } == true
+                    && !canShareShortcutBinding(descriptor, with: other)
             }) {
                 throw ShortcutValidationError.duplicate(
                     ownerDescription: "\(conflict.pluginTitle) · \(conflict.definition.title)"
@@ -5784,10 +5237,22 @@ final class PluginHost: ObservableObject {
             }
 
             if let conflict = AppShortcutAction.allCases.first(where: {
-                resolvedAppShortcutBinding(for: $0) == candidate
+                resolvedAppShortcutBinding(for: $0).map { consumedShortcutBindings(candidate, for: descriptor).contains($0) } ?? false
             }) {
                 throw ShortcutValidationError.duplicate(
                     ownerDescription: conflict.title
+                )
+            }
+
+            if let conflict = shortcutAssignmentService.assignments.first(where: {
+                consumedShortcutBindings(candidate, for: descriptor).contains($0.binding)
+            }) {
+                let reference = conflict.reference
+                let title = actionRegistry.catalogEntries.first(where: { $0.reference == reference })?.title
+                    ?? actionRegistry.definition(for: reference.key)?.title
+                    ?? reference.key.actionID
+                throw ShortcutValidationError.duplicate(
+                    ownerDescription: "\(actionOwnerTitle(providerID: reference.key.providerID)) · \(title)"
                 )
             }
         }
@@ -5837,12 +5302,19 @@ final class PluginHost: ObservableObject {
 
     private func notifyShortcutBindingChange(
         for descriptor: ShortcutDescriptor,
-        binding: ShortcutBinding?
+        binding: ShortcutBinding?,
+        onlyIfChanged: Bool = false
     ) {
         guard let handling = descriptor.plugin as? any PluginShortcutBindingChangeHandling else {
             return
         }
 
+        guard shortcutBindingDeliveries.shouldDeliver(
+            to: descriptor.plugin,
+            shortcutID: descriptor.itemID,
+            binding: binding,
+            force: !onlyIfChanged
+        ) else { return }
         guardPluginCall(descriptor.plugin, operation: "update shortcut binding") {
             handling.shortcutBindingDidChange(id: descriptor.definition.id, binding: binding)
         }
@@ -5921,28 +5393,54 @@ final class PluginHost: ObservableObject {
         return (registrations, ownerDescriptions)
     }
 
+    private func globalShortcutRegistrationSelection(
+        for descriptors: [ShortcutDescriptor]
+    ) -> (registrations: [GlobalShortcutManager.Registration], conflictOwners: [String: String]) {
+        let candidates = descriptors.enumerated().compactMap { index, descriptor
+            -> (index: Int, descriptor: ShortcutDescriptor, binding: ShortcutBinding, isCustom: Bool)? in
+            guard descriptor.definition.scope == .global,
+                  actionReference(for: descriptor) == nil,
+                  let binding = resolvedBinding(for: descriptor),
+                  MacToolsReservedShortcutBindings.validationError(for: binding) == nil else {
+                return nil
+            }
+            let isCustom: Bool = if case .custom = shortcutStore.customization(for: descriptor.itemID) {
+                true
+            } else {
+                false
+            }
+            return (index, descriptor, binding, isCustom)
+        }.sorted { lhs, rhs in
+            lhs.isCustom == rhs.isCustom ? lhs.index < rhs.index : lhs.isCustom
+        }
+
+        var claimedBindings: [ShortcutBinding: ShortcutDescriptor] = [:]
+        var registrations: [GlobalShortcutManager.Registration] = []
+        var conflictOwners: [String: String] = [:]
+        for candidate in candidates {
+            if let owner = claimedBindings[candidate.binding],
+               !canShareShortcutBinding(candidate.descriptor, with: owner) {
+                conflictOwners[candidate.descriptor.itemID] =
+                    "\(owner.pluginTitle) · \(owner.definition.title)"
+                continue
+            }
+            claimedBindings[candidate.binding] = candidate.descriptor
+            registrations.append(GlobalShortcutManager.Registration(
+                shortcutID: candidate.descriptor.itemID,
+                binding: candidate.binding
+            ))
+        }
+        return (registrations, conflictOwners)
+    }
+
     private func syncGlobalShortcuts() {
         let previousShortcutBindingRevision = shortcutBindingRevision
-        let descriptors = shortcutDescriptors()
-        let registrations = descriptors.compactMap { descriptor -> GlobalShortcutManager.Registration? in
-            guard descriptor.definition.scope == .global,
-                  actionReference(for: descriptor) == nil else {
-                return nil
-            }
-
-            guard let binding = resolvedBinding(for: descriptor) else {
-                return nil
-            }
-
-            guard MacToolsReservedShortcutBindings.validationError(for: binding) == nil else {
-                return nil
-            }
-
-            return GlobalShortcutManager.Registration(
-                shortcutID: descriptor.itemID,
-                binding: binding
-            )
-        }
+        let plugins = orderedPluginDescriptors()
+        let snapshot = makeShortcutResolutionSnapshot(from: plugins)
+        let descriptors = snapshot.descriptors
+        let liveIDs = Set(descriptors.map(\.itemID))
+        shortcutBindingDeliveries.retain(shortcutIDs: liveIDs)
+        let registrations = globalShortcutRegistrationSelection(for: descriptors).registrations
 
         let ownerDescriptions = Dictionary(
             descriptors.filter { actionReference(for: $0) == nil }.map {
@@ -5954,9 +5452,21 @@ final class PluginHost: ObservableObject {
             reservedRegistrations: registrations,
             reservedOwnerDescriptions: ownerDescriptions
         )
-        actionShortcutItems = shortcutAssignmentService.settingsItems
-        shortcutBindingRevision = shortcutAssignmentService.revision
-        actionShortcutCatalogItems = buildActionShortcutCatalogItems()
+        // Phase-aware listeners own their event taps. Refresh their host-resolved
+        // bindings after dynamic defaults or action assignments change; do not
+        // Carbon-register their active-only shortcuts.
+        for descriptor in descriptors where descriptor.plugin is any PluginShortcutEventHandling {
+            let binding = eventShortcutConflictError(for: descriptor, descriptors: descriptors) == nil
+                ? legacyResolvedBinding(for: descriptor) : nil
+            notifyShortcutBindingChange(for: descriptor, binding: binding, onlyIfChanged: true)
+        }
+        if actionShortcutItems != shortcutAssignmentService.settingsItems {
+            actionShortcutItems = shortcutAssignmentService.settingsItems
+        }
+        if shortcutBindingRevision != shortcutAssignmentService.revision {
+            shortcutBindingRevision = shortcutAssignmentService.revision
+        }
+        updateActionShortcutCatalog(descriptors: plugins, shortcuts: snapshot)
         if shortcutBindingRevision != previousShortcutBindingRevision {
             notifyActionShortcutAssignmentChanges()
         }
@@ -5973,7 +5483,51 @@ final class PluginHost: ObservableObject {
         }
     }
 
-    private func buildActionShortcutCatalogItems() -> [ActionShortcutCatalogItem] {
+    private func updateActionShortcutCatalog(
+        descriptors: [PluginDescriptor],
+        shortcuts: ShortcutResolutionSnapshot
+    ) {
+        // Availability providers can resolve required exit shortcuts. Reuse
+        // definitions only during this synchronous projection, never bindings.
+        let previousSnapshot = shortcutResolutionSnapshot
+        shortcutResolutionSnapshot = shortcuts
+        defer { shortcutResolutionSnapshot = previousSnapshot }
+        let items = buildActionShortcutCatalogItems(descriptors: descriptors)
+        if actionShortcutCatalogItems != items {
+            actionShortcutCatalogItems = items
+        }
+    }
+
+    private func buildActionShortcutCatalogItems(descriptors: [PluginDescriptor]) -> [ActionShortcutCatalogItem] {
+        // These values are shared by many rows, but may change between host updates.
+        // Keep the cache local so localization, permissions and plugin replacement stay live.
+        var ownerTitles = Dictionary(descriptors.filter { !isPluginIsolated($0.plugin) }.map {
+            ($0.metadata.id, $0.metadata.title)
+        }, uniquingKeysWith: { first, _ in first })
+        var permissionRequirements: [String: [String: String]] = [:]
+        let plugins = Dictionary(activePlugins.map { ($0.metadata.id, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+        func ownerTitle(_ providerID: String) -> String {
+            if let title = ownerTitles[providerID] { return title }
+            let title = actionOwnerTitle(providerID: providerID)
+            ownerTitles[providerID] = title
+            return title
+        }
+        func permissionSummary(_ reference: ActionReference) -> String? {
+            let providerID = reference.key.providerID
+            guard let plugin = plugins[providerID],
+                  let provider = plugin as? any PluginActionPermissionProviding,
+                  let ids = guardedValue(for: plugin, operation: "read action permission requirements",
+                                         provider.permissionRequirementIDs(for: reference.key)) else { return nil }
+            if permissionRequirements[providerID] == nil {
+                let requirements = guardedValue(for: plugin, operation: "read permission requirements",
+                                                plugin.permissionRequirements) ?? []
+                permissionRequirements[providerID] = Dictionary(requirements.map { ($0.id, $0.title) },
+                                                               uniquingKeysWith: { first, _ in first })
+            }
+            let titles = ids.compactMap { permissionRequirements[providerID]?[$0] }
+            return titles.isEmpty ? nil : FeatureL10n.format("所需权限：%@", FeatureL10n.joined(titles))
+        }
         var items: [ActionShortcutCatalogItem] = actionCatalogEntries.flatMap {
             entry -> [ActionShortcutCatalogItem] in
             guard case let .success(action) = actionRegistry.registeredAction(
@@ -5989,6 +5543,8 @@ final class PluginHost: ObservableObject {
             let rows: [ActionShortcutSettingsItem?] = assignmentItems.isEmpty
                 ? [nil]
                 : assignmentItems.map(Optional.some)
+            let title = ownerTitle(entry.reference.key.providerID)
+            let permissions = permissionSummary(entry.reference)
             return rows.map { assignmentItem in
                 let status: ActionShortcutCatalogStatus
                 if let assignmentItem {
@@ -6002,17 +5558,9 @@ final class PluginHost: ObservableObject {
                     reference: entry.reference,
                     assignmentID: assignmentItem?.assignment.id,
                     title: entry.title,
-                    ownerTitle: actionOwnerTitle(providerID: entry.reference.key.providerID),
+                    ownerTitle: title,
                     description: action.definition.description,
-                    permissionSummary: {
-                        let titles = actionPermissionTitles(for: entry.reference)
-                        return titles.isEmpty
-                            ? nil
-                            : FeatureL10n.format(
-                                "所需权限：%@",
-                                FeatureL10n.joined(titles)
-                            )
-                    }(),
+                    permissionSummary: permissions,
                     systemImage: action.definition.systemImage,
                     bindingText: assignmentItem?.bindingText ?? "",
                     status: status,
@@ -6032,9 +5580,7 @@ final class PluginHost: ObservableObject {
                 reference: item.assignment.reference,
                 assignmentID: item.assignment.id,
                 title: item.title,
-                ownerTitle: actionOwnerTitle(
-                    providerID: item.assignment.reference.key.providerID
-                ),
+                ownerTitle: ownerTitle(item.assignment.reference.key.providerID),
                 description: FeatureL10n.string("操作提供方暂时不可用；快捷键分配已保留。"),
                 permissionSummary: nil,
                 systemImage: "puzzlepiece.extension",
@@ -6292,5 +5838,196 @@ final class PluginHost: ObservableObject {
         case system(PluginPermissionKind)
         case fullDiskAccess
         case extensionManagement
+    }
+}
+
+
+struct MenuBarPanelContentSnapshot {
+    let entries: [MenuBarPanelEntry]
+    let components: [PluginPanelWidgetSnapshot]
+    let features: [PluginPanelRowSnapshot]
+}
+
+extension PluginHost {
+    var visibleMenuBarPanels: [MenuBarPanelDefinition] { menuBarPanels.filter { !$0.isHidden } }
+
+    func panelItems(in panelID: String) -> [PluginPanelRowSnapshot] { panelContentSnapshot(in: panelID).features }
+    func componentItems(in panelID: String) -> [PluginPanelWidgetSnapshot] { panelContentSnapshot(in: panelID).components }
+    func panelEntries(in panelID: String) -> [MenuBarPanelEntry] { panelContentSnapshot(in: panelID).entries }
+
+    func panelContentSnapshot(in panelID: String) -> MenuBarPanelContentSnapshot {
+        if let cached = menuBarPanelContentCache[panelID] { return cached }
+        let resolved = panelCoordinator.snapshot(in: panelID)
+        let snapshot = MenuBarPanelContentSnapshot(entries: resolved.map(\.entry),
+            components: resolved.compactMap { panelCoordinator.widgetSnapshot($0.item, id: $0.id) },
+            features: resolved.compactMap { panelCoordinator.rowSnapshot($0.item, id: $0.id) })
+        menuBarPanelContentCache[panelID] = snapshot
+        return snapshot
+    }
+
+    func panelLayoutEntries(in panelID: String) -> [MenuBarPanelLayoutEntry] {
+        panelCoordinator.snapshot(in: panelID).map { MenuBarPanelLayoutEntry(item: $0.item, entry: $0.entry) }
+    }
+
+    func rowIndicator(for id: String) -> PluginPanelRowIndicator? {
+        guard let item = panelCoordinator.item(for: id),
+              case let .row(row) = item.definition.content else { return nil }
+        return row.state.indicator
+    }
+
+    func rowCompactIndicator(for id: String) -> PluginPanelRowCompactIndicator? {
+        guard let item = panelCoordinator.item(for: id),
+              case let .row(row) = item.definition.content else { return nil }
+        return row.state.compactIndicator
+    }
+
+    @discardableResult
+    func addMenuBarPanel() -> String? {
+        guard let id = menuBarPanelStore.addPanel() else { return nil }
+        panelConfigurationDidChange()
+        return id
+    }
+
+    func updateMenuBarPanel(_ panel: MenuBarPanelDefinition) {
+        let previous = menuBarPanelStore.configuration
+        menuBarPanelStore.updatePanel(panel)
+        guard previous != menuBarPanelStore.configuration else { return }
+        panelConfigurationDidChange()
+    }
+
+    @discardableResult
+    func deleteMenuBarPanel(id: String) -> String? {
+        guard menuBarPanels.contains(where: { $0.id == id && !$0.isDefault }) else { return nil }
+        if case let .failure(error) = shortcutAssignmentService.clear(panelActionReference(id: id)) {
+            return error.localizedDescription
+        }
+        menuBarPanelStore.deletePanel(id: id)
+        panelConfigurationDidChange()
+        return nil
+    }
+
+    func moveMenuBarPanel(id: String, toOffset: Int) {
+        menuBarPanelStore.movePanel(id: id, toOffset: toOffset)
+        panelConfigurationDidChange()
+    }
+
+    var lastSelectedMenuBarPanelID: String { menuBarPanelStore.lastSelectedPanelID }
+
+    func rememberMenuBarPanelSelection(id: String) { menuBarPanelStore.rememberSelection(id: id) }
+
+    @discardableResult
+    func restoreDefaultMenuBarPanelLayout() -> String? {
+        let retiredActionIDs = Set(menuBarPanels.filter { !$0.isDefault }.map {
+            panelActionReference(id: $0.id).key.actionID
+        })
+        if !retiredActionIDs.isEmpty,
+           case let .failure(error) = shortcutAssignmentService.removeRetiredAssignments(
+               providerID: "mactools", actionIDs: retiredActionIDs) {
+            return error.localizedDescription
+        }
+        menuBarPanelStore.replace(MenuBarPanelConfiguration(), replacingUnreadable: true)
+        panelConfigurationDidChange()
+        return nil
+    }
+
+    @discardableResult
+    func addPanelItem(_ key: PluginPanelItemKey, to panelID: String) -> Bool {
+        guard panelCoordinator.item(for: key)?.isAvailable == true,
+              visibleMenuBarPanels.contains(where: { $0.id == panelID }),
+              menuBarPanelStore.addItem(key, to: panelID) != nil else { return false }
+        panelConfigurationDidChange()
+        return true
+    }
+
+    @discardableResult
+    func removePanelEntry(_ entry: MenuBarPanelEntry, from panelID: String) -> Bool {
+        guard panelEntries(in: panelID).contains(entry) else { return false }
+        menuBarPanelStore.removePlacement(id: entry.placement.id)
+        panelConfigurationDidChange()
+        return true
+    }
+
+    func movePanelEntry(_ entry: MenuBarPanelEntry, panelID: String, toOffset: Int) {
+        var entries = panelEntries(in: panelID)
+        guard let index = entries.firstIndex(of: entry) else { return }
+        entries.move(fromOffsets: IndexSet(integer: index), toOffset: min(max(toOffset, 0), entries.count))
+        menuBarPanelStore.setOrder(entries.map(\.placement.id), panelID: panelID)
+        panelConfigurationDidChange()
+    }
+
+    func transferPanelEntry(_ entry: MenuBarPanelEntry, from source: String, to destination: String,
+                            at offset: Int) -> MenuBarPanelLayoutChange? {
+        guard source != destination, panelEntries(in: source).contains(entry),
+              visibleMenuBarPanels.contains(where: { $0.id == destination }) else { return nil }
+        var visible = panelEntries(in: destination)
+        visible.insert(entry, at: min(max(offset, 0), visible.count))
+        let before = menuBarPanelStore.configuration
+        menuBarPanelStore.movePlacement(id: entry.placement.id, to: destination,
+                                        visibleOrder: visible.map(\.placement.id))
+        let change = MenuBarPanelLayoutChange(before: before, after: menuBarPanelStore.configuration)
+        guard change.before != change.after else { return nil }
+        panelConfigurationDidChange()
+        return change
+    }
+
+    func canUndoPanelLayoutChange(_ change: MenuBarPanelLayoutChange) -> Bool {
+        menuBarPanelStore.configuration == change.after
+    }
+
+    @discardableResult
+    func undoPanelLayoutChange(_ change: MenuBarPanelLayoutChange) -> Bool {
+        guard canUndoPanelLayoutChange(change), menuBarPanelStore.replace(change.before) else { return false }
+        panelConfigurationDidChange()
+        return true
+    }
+
+    func setVisibleMenuBarPanel(_ panelID: String?) {
+        visibleMenuBarPanelID = panelID
+        panelCoordinator.setVisiblePanel(panelID)
+    }
+
+    func panelActionReference(id: String) -> ActionReference {
+        let actionID: String
+        switch id {
+        case MenuBarPanelDefinition.componentsID: actionID = AppShortcutAction.toggleDashboard.rawValue
+        case MenuBarPanelDefinition.featuresID: actionID = AppShortcutAction.toggleFeaturePanel.rawValue
+        default: actionID = "app.toggle-panel.\(id)"
+        }
+        return ActionReference(key: ActionKey(providerID: "mactools", actionID: actionID))
+    }
+
+    private func synchronizePanelLayout(pluginOrder: [String]? = nil) {
+        panelCoordinator.onLayoutChange = { [weak self] in
+            guard let self else { return }
+            self.menuBarPanelContentCache.removeAll(keepingCapacity: true)
+            self.menuBarPanelContentDidChange.send()
+        }
+        panelCoordinator.invoke = { [weak self] id, action in
+            guard let self, let plugin = self.corePlugin(for: id), !self.isPluginIsolated(plugin) else { return }
+            self.guardPluginCall(plugin, operation: "panel item callback", action)
+        }
+        let order = pluginOrder ?? orderedPluginIDs()
+        menuBarPanelStore.reconcile(panelCoordinator.initialPlacements(pluginOrder: order),
+                                   discoveredPluginIDs: Set(order.filter { panelCoordinator.hasSnapshot(for: $0) }))
+        menuBarPanelContentCache.removeAll(keepingCapacity: true)
+        panelCoordinator.synchronize(configuration: menuBarPanelStore.configuration,
+                                    pluginOrder: order, visiblePanelID: visibleMenuBarPanelID)
+    }
+
+    private func panelConfigurationDidChange() {
+        let panels = menuBarPanelStore.configuration.displayPanels
+        let containersChanged = panels != menuBarPanels
+        if containersChanged { menuBarPanels = panels }
+        if let visibleID = visibleMenuBarPanelID,
+           !panels.contains(where: { $0.id == visibleID && !$0.isHidden }) {
+            visibleMenuBarPanelID = panels.first(where: { !$0.isHidden })?.id
+        }
+        if containersChanged {
+            rebuildDerivedState(dirtyPluginIDs: [], synchronizingShortcuts: true)
+        } else {
+            objectWillChange.send()
+            synchronizePanelLayout()
+            menuBarPanelContentDidChange.send()
+        }
     }
 }
