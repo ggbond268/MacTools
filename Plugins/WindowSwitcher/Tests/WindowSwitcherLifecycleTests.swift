@@ -209,7 +209,7 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         XCTAssertFalse(overlay.isVisible)
     }
 
-    func testRecentUseSearchStartsAtNextWindowAndFailureDoesNotReopen() async {
+    func testRecentUseSearchStartsAtNextWindowAndFailureDoesNotReopen() async throws {
         let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
         catalog.windows = [entry("a"), entry("b")]
         catalog.activationResult = .failed
@@ -224,6 +224,16 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         await eventually { overlay.isVisible }
         XCTAssertNotNil(plugin.session, "The session must remain open until a user selection")
         XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, previousApplicationPID)
+        XCTAssertTrue(overlay.isEditingSearch, "Search Select must focus search when the panel opens")
+        XCTAssertTrue(tap.isEditing)
+        let panel = try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible })
+        _ = try XCTUnwrap(panel.firstResponder as? NSTextView)
+        let text = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil, characters: "b", charactersIgnoringModifiers: "b",
+            isARepeat: false, keyCode: 11))
+        panel.sendEvent(text)
+        XCTAssertEqual(plugin.session?.query, "b", "Typing must reach search without clicking or pressing Find")
+        XCTAssertEqual(plugin.session?.selectedID, "b")
         overlay.onSelect?(catalog.windows[1])
         await eventually { catalog.activated == ["b"] }
         try? await Task.sleep(for: .milliseconds(50))

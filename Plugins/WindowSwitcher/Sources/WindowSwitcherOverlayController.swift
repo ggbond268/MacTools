@@ -246,8 +246,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             }
         )
         PluginPanelPresentation.present(panel)
-        panel.makeFirstResponder(usesList ? table : cards)
         acceptsSearchFocus = true
+        if session.isPersistent && !session.usesDirectKeys {
+            panel.makeFirstResponder(search)
+        } else {
+            panel.makeFirstResponder(usesList ? table : cards)
+        }
         noteCyclingInput()
     }
 
