@@ -125,8 +125,6 @@ final class AIAssistantCoordinator {
             retry()
         case let .reprocess(sourceText):
             reprocess(with: sourceText)
-        case .confirmSource:
-            confirmSource()
         case .stop:
             stop()
         case .hide:
@@ -225,24 +223,8 @@ final class AIAssistantCoordinator {
             return
         }
 
-        // Metadata only: strategy and length, never the captured text itself.
+        // 元数据日志：策略与字符长度，杜绝记录用户实际捕获文本
         AIAssistantLog.capture.notice("Capture succeeded via \(result.strategyID?.rawValue ?? "unknown", privacy: .public), \(sourceText.count, privacy: .public) chars")
-
-        // The simulated-copy fallback reads the pasteboard, so ownership of the
-        // text cannot be proven. Require explicit confirmation instead of
-        // silently sending possibly-unrelated clipboard content to a provider.
-        if result.requiresUserConfirmation {
-            lastSourceText = sourceText
-            retainResultForRerun()
-            present(AIAssistantPanelSnapshot(
-                phase: .awaitingConfirmation,
-                sourceText: sourceText,
-                result: nil,
-                errorMessage: nil,
-                retainedResult: snapshot.retainedResult
-            ))
-            return
-        }
 
         lastSourceText = sourceText
         await process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
@@ -321,23 +303,6 @@ final class AIAssistantCoordinator {
         }
     }
 
-    /// Sends the confirmation-pending source text to the provider after the
-    /// user reviewed the clipboard-derived content.
-    private func confirmSource() {
-        guard snapshot.phase == .awaitingConfirmation,
-              let sourceText = lastSourceText, !sourceText.isEmpty,
-              let prompt = lastPrompt
-        else { return }
-
-        activeTask?.cancel()
-        activeTask = Task { [weak self] in
-            guard let self else { return }
-            let currentSessionID = UUID()
-            self.sessionID = currentSessionID
-            await self.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
-        }
-    }
-
     /// Presents a brand-new run state (fresh capture, failure, or
     /// configuration problem). This always shows the panel and clears any
     /// stale dismissal marker from a previous run.
@@ -359,7 +324,6 @@ final class AIAssistantCoordinator {
     }
 
     private func retry() {
-        guard snapshot.phase != .awaitingConfirmation else { return }
         guard let prompt = lastPrompt else { return }
 
         if let sourceText = lastSourceText {

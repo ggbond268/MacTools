@@ -36,26 +36,19 @@ struct SelectedTextCaptureResult: Equatable, Sendable {
     let isEditable: Bool
     let sourceApplicationBundleID: String?
     let failureReason: String?
-    /// True when the text was read from the pasteboard without a verified
-    /// owner (the simulated-copy fallback). A change count alone cannot prove
-    /// who wrote the content, so the caller must ask the user to confirm this
-    /// text before sending it anywhere.
-    let requiresUserConfirmation: Bool
 
     init(
         text: String?,
         strategyID: SelectedTextCaptureStrategyID?,
         isEditable: Bool,
         sourceApplicationBundleID: String?,
-        failureReason: String?,
-        requiresUserConfirmation: Bool = false
+        failureReason: String?
     ) {
         self.text = text
         self.strategyID = strategyID
         self.isEditable = isEditable
         self.sourceApplicationBundleID = sourceApplicationBundleID
         self.failureReason = failureReason
-        self.requiresUserConfirmation = requiresUserConfirmation
     }
 
     static let missing = missing()

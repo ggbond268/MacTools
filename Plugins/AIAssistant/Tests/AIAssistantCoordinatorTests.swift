@@ -254,33 +254,22 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.snapshot.retainedResult)
     }
 
-    // MARK: - Confirmation flow for unverified pasteboard captures
+    // MARK: - Direct processing for simulated-copy captures
 
-    func testUnverifiedClipboardCaptureRequiresConfirmationBeforeRequest() async {
+    func testSimulatedCopyCaptureProcessesDirectlyWithoutConfirmation() async {
         capturePipeline = StubCapturePipeline(result: .unverified("剪贴板文本"))
         let client = StubProcessingClient(result: .success(Self.makeResult()))
         let coordinator = makeCoordinator(client: client)
 
         coordinator.startProcessing(prompt: Self.makePrompt())
 
-        await waitForPhase(coordinator) { $0 == .awaitingConfirmation }
-
-        // The panel shows the pasteboard-derived text and waits; no provider
-        // request may be issued before the user confirms.
-        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
-        XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
-        XCTAssertEqual(client.callCount, 0)
-
-        coordinator.handle(.retry)
-        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
-        XCTAssertEqual(client.callCount, 0)
-
-        coordinator.handle(.confirmSource)
         await waitForPhase(coordinator) { $0 == .success }
 
-        XCTAssertEqual(client.callCount, 1)
+        // 模拟复制捕获的文本直接发起请求并展示结果，不再弹窗等待确认
+        XCTAssertEqual(coordinator.snapshot.phase, .success)
         XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
         XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+        XCTAssertEqual(client.callCount, 1)
     }
 
     func testExplicitClipboardInputProcessesCopiedTextWithoutCaptureConfirmation() async {
@@ -294,7 +283,6 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertEqual(capturePipeline.captureCount, 0)
         XCTAssertEqual(client.callCount, 1)
         XCTAssertEqual(coordinator.snapshot.sourceText, "Chrome copied text")
-        XCTAssertFalse(panelController.shownSnapshots.contains { $0.phase == .awaitingConfirmation })
     }
 
     func testEmptyClipboardRetryReadsClipboardAgain() async {
@@ -475,8 +463,7 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
                 strategyID: .simulatedCopy,
                 isEditable: false,
                 sourceApplicationBundleID: nil,
-                failureReason: nil,
-                requiresUserConfirmation: true
+                failureReason: nil
             )
         case .missing:
             return SelectedTextCaptureResult(

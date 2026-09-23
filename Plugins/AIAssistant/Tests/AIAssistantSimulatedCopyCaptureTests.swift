@@ -161,7 +161,7 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "original")
     }
 
-    func testSuccessfulResultRequiresUserConfirmation() async {
+    func testSuccessfulSimulatedCopyReturnsCapturedText() async {
         let pasteboard = makePrivatePasteboard(content: "original")
         let box = PasteboardBox(pasteboard)
         let capture = makeCapture(pasteboard: pasteboard) { pid in
@@ -172,10 +172,9 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
 
         let result = await capture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 4242))
 
-        // Simulated-copy text is pasteboard content with no proven owner; the
-        // coordinator must show it for confirmation instead of sending it.
-        XCTAssertTrue(result.requiresUserConfirmation)
+        // 模拟复制成功捕获文本，直接返回文本内容供后续处理使用
         XCTAssertEqual(result.text, "captured")
+        XCTAssertNil(result.failureReason)
     }
 
     // MARK: - Cancellation
@@ -303,7 +302,6 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
 
         XCTAssertEqual(pasteboard.string(forType: .string), "other-app")
         XCTAssertEqual(result.text, "other-app")
-        XCTAssertTrue(result.requiresUserConfirmation)
     }
 
     // MARK: - SerializedAppleScriptRunner

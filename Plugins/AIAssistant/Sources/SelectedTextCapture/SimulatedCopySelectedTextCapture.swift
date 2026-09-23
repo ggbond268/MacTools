@@ -114,11 +114,7 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
             strategyID: strategyID,
             isEditable: false,
             sourceApplicationBundleID: context.frontmostApplicationBundleID,
-            failureReason: nil,
-            // Pasteboard content cannot be attributed: a change count only
-            // proves that something changed. The coordinator must show this
-            // text for confirmation instead of sending it to the provider.
-            requiresUserConfirmation: true
+            failureReason: nil
         )
     }
 
