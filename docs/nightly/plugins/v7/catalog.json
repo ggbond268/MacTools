@@ -1,6 +1,6 @@
 {
   "catalogID" : "com.ggbond.mactools.plugins",
-  "generatedAt" : "2026-09-22T11:48:02Z",
+  "generatedAt" : "2026-09-23T11:44:05Z",
   "minimumHostVersion" : "1.2.1",
   "pluginKitVersion" : 7,
   "plugins" : [
@@ -200,9 +200,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "c75a90186571ed879d030703cc90db838ce58db7912b826c45774ad32d533789",
+        "sha256" : "00e7af4d06b4d6a1c6ef632e137e2a7dc99ae7d3e7e0082588f2b4dfe19dab5d",
         "size" : 538593,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/action-grid.mactoolsplugin.zip"
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/action-grid.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -282,7 +282,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -313,7 +313,7 @@
         ]
       },
       "summary" : "在指针附近打开用户配置的常用操作网格。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -589,9 +589,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "1f121957baafe10e132d74b7fa40a99d0af70db4035c89a50cd22b4951e1ad70",
-        "size" : 945218,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/activity-bar.mactoolsplugin.zip"
+        "sha256" : "cee52b1c29b5a6da6d231fcc1351bcc65c5020f401cb5c819c52947fb54df834",
+        "size" : 945224,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/activity-bar.mactoolsplugin.zip"
       },
       "permissions" : [
         "inputMonitoring"
@@ -677,7 +677,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -708,7 +708,7 @@
         ]
       },
       "summary" : "统计输入、前台应用使用时长和 AI 编程活动",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -840,9 +840,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "02c19730cc2f95d203fb70c3e130e8ed9c53a833a2d23919f0ac72cb62a238b9",
-        "size" : 480728,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/ai-usage.mactoolsplugin.zip"
+        "sha256" : "8978c2ad048f09d1f2968540b68bf30d0927b822236958c946bf0d9edbf28e88",
+        "size" : 480730,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/ai-usage.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -924,7 +924,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -955,7 +955,7 @@
         ]
       },
       "summary" : "查看 Codex 与 Claude Code 订阅额度和重置时间",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "actions" : {
@@ -1174,9 +1174,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "3df1925594f25d69f0706d16ea3821afbd783c7ca68e4ab9ed2415e5b794f664",
-        "size" : 193133,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/app-hotkey.mactoolsplugin.zip"
+        "sha256" : "586e85ebc0412f28d1083987f11c1936da36ceaebc67f6f420d7700acc17dec2",
+        "size" : 193142,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/app-hotkey.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -1257,7 +1257,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -1288,7 +1288,7 @@
         ]
       },
       "summary" : "为常用应用绑定全局快捷键，快速打开或切换到前台",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -1522,9 +1522,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "1c1b663819a8758a5d326720634bf39d9a4d4a57d2228c4d99e0c2dcfaa96d29",
-        "size" : 311756,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/app-volume.mactoolsplugin.zip"
+        "sha256" : "340979594d920e4a5c396607e37843a7a5757b090db198eef5e6f52ba3b915e3",
+        "size" : 311764,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/app-volume.mactoolsplugin.zip"
       },
       "permissions" : [
         "system-audio-recording"
@@ -1606,7 +1606,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -1668,7 +1668,7 @@
         ]
       },
       "summary" : "分别调节正在播放音频的应用音量",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -2013,9 +2013,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "24b376ff80f11b1ff987ff9080f43e6152d4c4dfc27ae56d3179f82766abaed9",
-        "size" : 124343,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/appearance.mactoolsplugin.zip"
+        "sha256" : "282245ef0819d6c18b9b77a21537ce5bfb65cb59faf43dd949aaac3d3929329e",
+        "size" : 124345,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/appearance.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -2095,7 +2095,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -2132,7 +2132,7 @@
         }
       },
       "summary" : "切换系统亮色与深色外观",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -2343,9 +2343,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "4fcb4dce28963e7aa37bddc3b43544c0d1cc8ddd11fdd3fb610d4b650328036e",
-        "size" : 727671,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/apple-shortcuts.mactoolsplugin.zip"
+        "sha256" : "96b384d9e28e17b202b434dd5e731dbbc9226271902cc9fa00896e82f6dc6912",
+        "size" : 727674,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/apple-shortcuts.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -2426,7 +2426,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
           {
@@ -2488,7 +2488,7 @@
         ]
       },
       "summary" : "发现并运行现有的 Apple 快捷指令。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -2767,9 +2767,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "8357e85638c8f331b2008553dae14bab13c7bc0774bc07bda3760be779a9c048",
-        "size" : 97239,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/auto-hide-dock.mactoolsplugin.zip"
+        "sha256" : "cc7373aa6e044a064ce91baf92277374a15771bc541bbab93616051ac1fe8087",
+        "size" : 97252,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/auto-hide-dock.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -2849,7 +2849,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -2880,7 +2880,7 @@
         ]
       },
       "summary" : "自动隐藏程序坞，提供更干净的桌面环境",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -3237,9 +3237,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "2fa1c7ad00212e0225adf823827a0b9a916522c801f8fc405a15360b792b8a09",
-        "size" : 123383,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/auto-hide-menu-bar.mactoolsplugin.zip"
+        "sha256" : "0e007555b493295158647f8d31a351b1e96464f9b5d940c3eeeb6c700829fd54",
+        "size" : 123391,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/auto-hide-menu-bar.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -3319,7 +3319,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -3350,7 +3350,7 @@
         ]
       },
       "summary" : "自动隐藏菜单栏，提供更完整的屏幕显示空间",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -3700,9 +3700,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "9bf874963329699dd4c98f3009a15988f6c26fcc3db4febffab9a2b9b02ae7b7",
-        "size" : 696432,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/auto-input.mactoolsplugin.zip"
+        "sha256" : "cc7fe05cf5e7f8cb1f0707c428965e78da89fc2883b56d94ed9fc900355c0ba5",
+        "size" : 696421,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/auto-input.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -3783,7 +3783,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -3842,7 +3842,7 @@
         ]
       },
       "summary" : "按应用记住并自动切换输入法",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -4301,9 +4301,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f55d9f4abc56efa2eeb2e4286b34f35f6a45786e4da080b3c6ea1955c1fe3f7c",
-        "size" : 299409,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/battery-charge-limit.mactoolsplugin.zip"
+        "sha256" : "99199cd01d49e247321ba9a9ee31d25400a4ffc10240a5e6d869277ca62547c6",
+        "size" : 299420,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/battery-charge-limit.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -4383,7 +4383,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -4471,7 +4471,7 @@
         ]
       },
       "summary" : "设置电池充电上限，达到上限后停止充电；不自动恢复，由用户决定何时继续充电",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -4599,9 +4599,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "aac562c74af50a9d8e9251e2a7774f6b29a398044c17d591b7955727eec5a7d3",
-        "size" : 589714,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/calendar.mactoolsplugin.zip"
+        "sha256" : "0b6e948a542344c7686a33fb1319ab20f43032b26963052f56e2823656a34e8e",
+        "size" : 589716,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/calendar.mactoolsplugin.zip"
       },
       "permissions" : [
         "calendarFullAccess",
@@ -4682,7 +4682,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -4742,7 +4742,7 @@
         ]
       },
       "summary" : "查看日期、节假日和系统日程",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -5352,9 +5352,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f29de93318f13b12a6f88284efe29ab2e25bab6adddcc3ad49f2f619c454c98f",
-        "size" : 6020927,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/clipboard.mactoolsplugin.zip"
+        "sha256" : "1c4f5b347413bfb93ecf986b80d7b2e8d95f0b6a6114234bc29ee524a1189cac",
+        "size" : 6020919,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/clipboard.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -5437,7 +5437,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -5529,7 +5529,7 @@
         }
       },
       "summary" : "搜索历史记录并管理可重复使用的片段和已存项目。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -5727,9 +5727,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "977c64abbb49a32640948ad614b563d6b45931e8832141e00e2e3d5b2e5b4fed",
+        "sha256" : "84c23d733e7362e438f6b24d456931b1c059f6144d10bbf19c435a3449edf9c5",
         "size" : 79245,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/clipboard-clear.mactoolsplugin.zip"
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/clipboard-clear.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -5809,7 +5809,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -5840,7 +5840,7 @@
         ]
       },
       "summary" : "一键清空当前剪贴板内容",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -6041,9 +6041,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "26e082cb1ad95331abe82228b75e6724fda0393b5bb0b2669bda655477be9e87",
-        "size" : 383536,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/cloudflare-r2.mactoolsplugin.zip"
+        "sha256" : "bfed8f4ae7ea3a678e4b1f6bf0f451513bc33ec95691aaacc4199231d74df8e3",
+        "size" : 383539,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/cloudflare-r2.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -6124,7 +6124,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -6183,7 +6183,7 @@
         ]
       },
       "summary" : "上传文件到 Cloudflare R2",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -6329,9 +6329,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "db062c2d1269b1d4c8752da736e442f922314f7eb53dd44fca34239899a6adb5",
-        "size" : 1395558,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/com.mactools.plugin.storage-explorer.mactoolsplugin.zip"
+        "sha256" : "e9f95e9b0fed34db1123a2d9f28b8ce1828fcdc633a772b0472df73f4dd28cec",
+        "size" : 1395551,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/com.mactools.plugin.storage-explorer.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -6426,7 +6426,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -6457,7 +6457,7 @@
         ]
       },
       "summary" : "以层级视图直观分析磁盘占用，找出大文件，在审阅确认后移至废纸篓",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "capabilities" : {
@@ -6588,9 +6588,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "d9a8cc691059d230de96f4832f3eef790ffc13c80a046b341d483395a69c97c6",
-        "size" : 1281865,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/device-battery.mactoolsplugin.zip"
+        "sha256" : "39d8d58fe7025df262d5dc58f90c998cdf45b5246563f71df425b742ce295f98",
+        "size" : 1281867,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/device-battery.mactoolsplugin.zip"
       },
       "permissions" : [
         "inputMonitoring"
@@ -6670,7 +6670,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -6701,7 +6701,7 @@
         ]
       },
       "summary" : "查看 Mac、Apple 移动设备、蓝牙外设和雷柏/迈从鼠标电量",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -6901,9 +6901,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "e4c329693c66982e56bfdf2b4fb110849d3d00a8aa277174190554d6414530a4",
-        "size" : 1798297,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/disk-clean.mactoolsplugin.zip"
+        "sha256" : "bc898c90d1a718c80f6ee3e86cb733f92d1f4d950683b702d21b9cff22d36050",
+        "size" : 1798310,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/disk-clean.mactoolsplugin.zip"
       },
       "permissions" : [
         "full-disk-access"
@@ -6999,7 +6999,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -7030,7 +7030,7 @@
         ]
       },
       "summary" : "扫描系统缓存、开发产物与残留安装包，默认移到废纸篓，执行前校验路径安全",
-      "version" : "3.41.1"
+      "version" : "3.42.1"
     },
     {
       "actions" : {
@@ -7397,9 +7397,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f22e3ca81acc72b89488089dec0b4e2cfc7babca21c79aea55a068e97b53fce9",
-        "size" : 486956,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/display-brightness.mactoolsplugin.zip"
+        "sha256" : "b593dc89982ebc63992e6130f569dd3a85cf187606064e5172e95a1b16c980fb",
+        "size" : 554794,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/display-brightness.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -7479,7 +7479,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -7538,7 +7538,7 @@
         ]
       },
       "summary" : "快速调节每个显示器的亮度",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -7784,9 +7784,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "bd023463dfc98ac06ac35e6a419789b40a6dd125f9c86b6913574e2329c07034",
-        "size" : 172117,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/display-resolution.mactoolsplugin.zip"
+        "sha256" : "312b6c7f9c4ede4a6d3990185c9542d0d1efd3b2920bb7a0290b214a7a14e546",
+        "size" : 172124,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/display-resolution.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -7866,7 +7866,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -7925,7 +7925,7 @@
         ]
       },
       "summary" : "查看并切换每个显示器的分辨率",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -8124,9 +8124,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "887050d92076736e827328fcb06c73c1d7cceb65d685ceecdbc82a29e90f6cd8",
-        "size" : 85935,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/display-sleep.mactoolsplugin.zip"
+        "sha256" : "ad955fb1c26666803aedb7af1de11aa52a916b69712d44ba5a9f7a16b4d7a5ed",
+        "size" : 85936,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/display-sleep.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -8206,7 +8206,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -8237,7 +8237,7 @@
         ]
       },
       "summary" : "一键让所有显示器立即进入休眠",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -8518,9 +8518,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f127d89398fbd3f10cf352a5c30c3736b29e6605ef4a12e55cb8bdde811ba290",
-        "size" : 89236,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/display-true-color.mactoolsplugin.zip"
+        "sha256" : "f3cab10200ca605808af1996aa25df39ad92ac74511ed409054fb1ccb516e635",
+        "size" : 89239,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/display-true-color.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -8600,7 +8600,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -8631,7 +8631,7 @@
         ]
       },
       "summary" : "自动调节显示器颜色以适应环境光",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -8886,9 +8886,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "1e840f7dca0a2349da831883b4c39154c060b20a9028ad0ccb0e31411aabe966",
-        "size" : 379435,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/display-volume.mactoolsplugin.zip"
+        "sha256" : "651439afad533b0fc2e07f1590f1cdb947f8bd6a610d323f4b00d57a8a44fbf2",
+        "size" : 379432,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/display-volume.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -8968,7 +8968,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -9026,7 +9026,7 @@
         ]
       },
       "summary" : "快速调节每个显示器的音量",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "capabilities" : {
@@ -9161,9 +9161,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "19469c96b98fc3c65baabf73276d3217224fa737e4baf5b15acdd5e6edbd89ff",
-        "size" : 167266,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/dock-click-minimize.mactoolsplugin.zip"
+        "sha256" : "8a0e2d371ff9fd8d9004da1f26fd73130eb43c893f59ba88a0b164ea93f56d37",
+        "size" : 167271,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/dock-click-minimize.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -9244,7 +9244,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -9304,7 +9304,7 @@
         ]
       },
       "summary" : "点击活跃 App 的程序坞图标即可将其隐藏（如 Windows）。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -9582,9 +9582,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "d2bde35a30e73394bdd688a731ddf436ac913878fb558bff588f3f8f4de748be",
-        "size" : 110881,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/dock-lock.mactoolsplugin.zip"
+        "sha256" : "021d09b673da09ae5efba15838cf0c35876208d24be4f2b2ce2ceeb3ce6ea32f",
+        "size" : 110882,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/dock-lock.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -9664,7 +9664,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -9723,7 +9723,7 @@
         ]
       },
       "summary" : "防止程序坞在多显示器之间意外移动",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -9856,9 +9856,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "e535e69b7cab3a71846ca3cce4e5d2e08c15bb52bfe001fd336d110d11924b22",
-        "size" : 183053,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/duo-status.mactoolsplugin.zip"
+        "sha256" : "8ffb50bc68cfd9bc95f138bf93fce4e857b88ba78d752d7fa408322896453e95",
+        "size" : 183043,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/duo-status.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -9941,7 +9941,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -9972,7 +9972,7 @@
         ]
       },
       "summary" : "通过独立图标或应用主图标查看电量与网络状态",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "actions" : {
@@ -10172,9 +10172,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "58866799ffcad36e86e5101497a2edf61c1e8aa292b961e6c6a605253becef8e",
-        "size" : 160153,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/eject-disk.mactoolsplugin.zip"
+        "sha256" : "ba0d365c89670898e71512a9a6c1733306034a045ea6930c2f8d12abdb114e47",
+        "size" : 160154,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/eject-disk.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -10254,7 +10254,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -10285,7 +10285,7 @@
         ]
       },
       "summary" : "推出所有可移动磁盘",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -10483,9 +10483,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "aeb2e348805df7ae520ae1a3d494370078c92907cd476885db6a9bb5d46ecfe5",
-        "size" : 121394,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/empty-trash.mactoolsplugin.zip"
+        "sha256" : "8db79eeec4bd0973763970c99f3560250f61ad58a821c0ab6652a0d616cea740",
+        "size" : 121400,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/empty-trash.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -10565,7 +10565,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -10596,7 +10596,7 @@
         ]
       },
       "summary" : "清空废纸篓中的所有项目",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -10815,9 +10815,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "601776c49dca4b68fa36439cf038e9f12d2b633feff3aa3683173e32b0773b31",
-        "size" : 441486,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/fan-control.mactoolsplugin.zip"
+        "sha256" : "c49e5dd0d085981c818b6406f081b6ae966b7c2e79ee23971166495cd2f0ad41",
+        "size" : 441495,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/fan-control.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -10897,7 +10897,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -10985,7 +10985,7 @@
         ]
       },
       "summary" : "管理风扇转速预设，支持自动、全速和自定义策略",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -11186,9 +11186,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "81ac246a8d1acec7f567acd73307060bf918217d2fc187e47c88b43a196af293",
-        "size" : 231436,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/fix-damaged-app.mactoolsplugin.zip"
+        "sha256" : "4d55a4d1c84abf8598df0503d81006586c605ee8feccd642e64b96fee3d01ffa",
+        "size" : 231439,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/fix-damaged-app.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -11268,7 +11268,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -11299,7 +11299,7 @@
         ]
       },
       "summary" : "移除隔离属性，解决「已损坏」或「不受信任」提示",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -11575,9 +11575,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "e52e9640a55a5c560904c771a7a7315d3e4f0d7d1c806441997aa1813d3ffd51",
-        "size" : 205408,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/hide-notch.mactoolsplugin.zip"
+        "sha256" : "b9aceb10f3472deea704477bd7eb063d7e764d110ae8dc34929e55d9e841fa76",
+        "size" : 205394,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/hide-notch.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -11657,7 +11657,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -11688,7 +11688,7 @@
         ]
       },
       "summary" : "自动遮挡刘海屏顶部区域",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -12052,9 +12052,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "d2e01331cde5d4c9077e0a2f812e5899181efff53e08bd5227212810c7cc9adb",
-        "size" : 980201,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/homebrew.mactoolsplugin.zip"
+        "sha256" : "bd15a164035c750190d62a04f23af70b4e9ade479fff6bfda84427a5d6425d2f",
+        "size" : 980207,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/homebrew.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -12137,7 +12137,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -12196,7 +12196,7 @@
         ]
       },
       "summary" : "管理 Homebrew 包、库仓库并执行系统诊断",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -12331,9 +12331,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "424120e7d12d9d2d87a63c54cfe6707898125506b3471279f47ac2bd91d76395",
-        "size" : 542957,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/input-remapping.mactoolsplugin.zip"
+        "sha256" : "130d1b1341b01a4c46bf5e29e835d0b5060d40192f73b22c90844646527de0a8",
+        "size" : 542968,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/input-remapping.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -12414,7 +12414,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -12474,7 +12474,7 @@
         ]
       },
       "summary" : "将输入映射为操作",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -12740,9 +12740,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "02e66229d0cc9a989d8b2b138a20c081bccc9cae52820b3386bca174e5de95df",
-        "size" : 1135903,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/ip-overview.mactoolsplugin.zip"
+        "sha256" : "744f3de9630216a0dddcba83dfb957acd3b3a77b7eea3c10f3a8d2d4ea1b243c",
+        "size" : 1135900,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/ip-overview.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -12853,7 +12853,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -12903,7 +12903,7 @@
         }
       },
       "summary" : "查看出口 IP、本地 IP、归属地与网络测速摘要",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -13257,9 +13257,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "2a4bd4163f72523b3c5dd5e4ae6d3813da4c5b8cd268e67fffd8056b1259006a",
-        "size" : 284245,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/keep-awake.mactoolsplugin.zip"
+        "sha256" : "d3399087d2363ace8a1cd08e67005193cfb63d6e39177fc7c0e4cb430077fb52",
+        "size" : 284238,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/keep-awake.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -13339,7 +13339,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -13370,7 +13370,7 @@
         ]
       },
       "summary" : "保持 Mac 唤醒；可选保持屏幕常亮或让屏幕工具继续工作。MacBook 合盖运行要求连接电源",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -13733,9 +13733,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "2a9357deccd3930513a3cfbc8aed08d950b9cfb5c4053e57728c225570cb9ab4",
-        "size" : 714234,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/launch-control.mactoolsplugin.zip"
+        "sha256" : "5d4e18a78175a29748e5ad068d29c0f791a08e3bdab0ec06c0d05efcd4593e88",
+        "size" : 714235,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/launch-control.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -13815,7 +13815,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -13846,7 +13846,7 @@
         ]
       },
       "summary" : "查看和管理 launchctl 启动项",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -14043,9 +14043,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "96924443a5dcb529e0651c28f8e463d187713404221decd42b6ae83cb474d7ed",
-        "size" : 1008860,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/launchpad.mactoolsplugin.zip"
+        "sha256" : "5afd57d47b3a0cd42487de1552a589de5981f3dd7f16c57406a72642f6d4db8d",
+        "size" : 1008854,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/launchpad.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -14125,7 +14125,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -14156,7 +14156,7 @@
         ]
       },
       "summary" : "用全局热键或菜单栏打开应用网格，搜索并启动。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -14356,9 +14356,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f9cfc80155b3f2fcdb8c3d390aa768f0bf01050bbca4226b20ad15517a34707f",
-        "size" : 84130,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/lock-screen.mactoolsplugin.zip"
+        "sha256" : "344cb68751af122098577b77bfbcb496ff5cfcabcb8c9cf9ed9d6e6ed0764148",
+        "size" : 84140,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/lock-screen.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -14438,7 +14438,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -14469,7 +14469,7 @@
         ]
       },
       "summary" : "一键立即锁定屏幕，进入密码解锁界面",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -15094,9 +15094,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "9c0a89c4028880b1d84a5923fb69e7df914207683f50ed8a19cd1d3845364b18",
-        "size" : 2235033,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/mac-settings.mactoolsplugin.zip"
+        "sha256" : "a98805e59a168c609864ab3313081d28cd4650eefd930193a35ec614aa317d61",
+        "size" : 2235023,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/mac-settings.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -15200,7 +15200,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -15264,7 +15264,7 @@
         }
       },
       "summary" : "搜索并集中调整当前 Mac 的常用设置",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -15481,9 +15481,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "4c29a8233d63eded034c33a2f255bd6b811daefb427b222ccc8065d130523782",
-        "size" : 876169,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/menu-bar-hidden.mactoolsplugin.zip"
+        "sha256" : "f19e1e02721f73738aaa9e7e199ae9153af44550cbec93d0e70a8b87814cb680",
+        "size" : 876165,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/menu-bar-hidden.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -15568,7 +15568,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -15628,7 +15628,7 @@
         ]
       },
       "summary" : "菜单栏图标隐藏功能的设置与弹窗界面",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -15904,9 +15904,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "f34f297f242de29c30e93e0eefe829683338f674f69645708d9dc918c0ffc456",
+        "sha256" : "e6ec2d11f24512e7c1823da37624e8f46de98f6220381fd28ba4cec43f118a6e",
         "size" : 88049,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/microphone-mute.mactoolsplugin.zip"
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/microphone-mute.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -15986,7 +15986,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -16017,7 +16017,7 @@
         ]
       },
       "summary" : "快速静音或恢复默认麦克风输入",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -16215,9 +16215,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "30f3ac6207be3564da15d483913071ca87ebbde29ecea04bfb180925058f51ab",
-        "size" : 187291,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/middle-click.mactoolsplugin.zip"
+        "sha256" : "00c4e042a5ea4d6bc7faa22e390f7f5e109bc429db976f0750c3724ece2a8f33",
+        "size" : 187292,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/middle-click.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -16297,7 +16297,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -16356,7 +16356,7 @@
         ]
       },
       "summary" : "触控板轻点 → 模拟鼠标中键",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -16486,9 +16486,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "b25e5119be6b1572c14b1aa94f46f1d3ce4324b8246ef599771e386b1cfea657",
-        "size" : 239030,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/mouse-enhancer.mactoolsplugin.zip"
+        "sha256" : "49f9a6a2320230df865d5f4a7cef928d7f6b843a2df1e11bab179f92fd2e99b1",
+        "size" : 239021,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/mouse-enhancer.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -16569,7 +16569,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -16629,7 +16629,7 @@
         ]
       },
       "summary" : "分别调整鼠标与触控板的滚动方向",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -16905,9 +16905,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "19b34eb50d38688f88a5d1a8d0f65f82961d0017db2ab634d9168e7ff5b93e95",
-        "size" : 95119,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/night-shift.mactoolsplugin.zip"
+        "sha256" : "1ef61745face89af7aa97d958dcb8a9211a1306db5e748d7f431f1c9eae80b2f",
+        "size" : 95121,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/night-shift.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -16987,7 +16987,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -17018,7 +17018,7 @@
         ]
       },
       "summary" : "降低蓝光，使屏幕颜色更暖",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -17218,9 +17218,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "42e82b492ea85f5892e4fd25db28e2cb6d0fe0eb2e3c1d1133a4ab9d2c349039",
-        "size" : 222350,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/physical-clean-mode.mactoolsplugin.zip"
+        "sha256" : "925d797b15847e4b76b826b57572520fd360dbd5fe3f6ac498afeea3d389e5c9",
+        "size" : 222338,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/physical-clean-mode.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -17300,7 +17300,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -17359,7 +17359,7 @@
         ]
       },
       "summary" : "屏幕全黑并临时禁用键盘输入",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -17556,9 +17556,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "7d46c8b295e77626378f12dbfdd9feed2e1945685f3ee74417cd4fd5fa44e794",
-        "size" : 223091,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/quit-apps.mactoolsplugin.zip"
+        "sha256" : "f980ca1df723b8d9d9268a21e8cd9566c6757fdde2eebb18b141edc410444264",
+        "size" : 223092,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/quit-apps.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -17638,7 +17638,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -17669,7 +17669,7 @@
         ]
       },
       "summary" : "选择并退出正在运行的应用，或一键退出全部",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -17798,9 +17798,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "8d28eae5afe01aa6fce4f33253e92a80ec2f2f82eedb9303f46c739c471f77b4",
-        "size" : 229402,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/right-click.mactoolsplugin.zip"
+        "sha256" : "5be3c8f705fc5469a06f2a4aeebe73ef9dbc42e07a4f49cee38340628d408329",
+        "size" : 229399,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/right-click.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -17880,7 +17880,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -17939,7 +17939,7 @@
         ]
       },
       "summary" : "为 Finder 右键菜单添加新建文件夹和路径复制",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -18152,9 +18152,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "b9ab9949421af05b5c5d58d99b71c15c57f4778ce15e34bc59730ccd166ad349",
-        "size" : 664286,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/saved-scripts.mactoolsplugin.zip"
+        "sha256" : "79eca1876b21f22ccd185e963662b9852dbb50c67bef9c2000091f47bd24a87d",
+        "size" : 664280,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/saved-scripts.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -18238,7 +18238,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -18269,7 +18269,7 @@
         ]
       },
       "summary" : "保存并运行 AppleScript 和 Shell 脚本。",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -18549,9 +18549,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "405324c01c573b2729fa114305c3445fcd05608f442dcb22b7622e65e87d1bc5",
-        "size" : 694136,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/screenshot.mactoolsplugin.zip"
+        "sha256" : "97b7040c195c5bc5278100c3d2f8fd8f5ee879b7b6b9d89649d68d8b13f2c7aa",
+        "size" : 694137,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/screenshot.mactoolsplugin.zip"
       },
       "permissions" : [
         "screen-recording"
@@ -18665,7 +18665,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -18728,7 +18728,7 @@
         }
       },
       "summary" : "区域和窗口截图、标注、文字与二维码识别、贴图、滚动截图和录屏。",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "actions" : {
@@ -19050,9 +19050,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "0ed6d66262bec9018669d05cc4ee47b5b2ffdc1c98afc55d58f022b2979db039",
-        "size" : 594832,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/sidecar.mactoolsplugin.zip"
+        "sha256" : "9acb141f9ab418f9bf10e6d55e8bc3e35ae43ec508cb95b6955189229015c3af",
+        "size" : 594844,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/sidecar.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -19132,7 +19132,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -19191,7 +19191,7 @@
         ]
       },
       "summary" : "连接附近可用的 Sidecar 显示器作为扩展显示器",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -19386,9 +19386,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "e27f5fad3761f55ee152ec10fdc257c1ecc5f85565b8e94704039ec6e62d640b",
-        "size" : 217812,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/siri.mactoolsplugin.zip"
+        "sha256" : "8eccb7306053ab92427712f90a6cedc692b17936cab70b785e43717f095c4526",
+        "size" : 217817,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/siri.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -19469,7 +19469,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
           {
@@ -19503,7 +19503,7 @@
         ]
       },
       "summary" : "从命令面板向 Siri 发送消息",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "actions" : {
@@ -19781,9 +19781,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "0b2e8396820996ad43ddc8b1dcede1abda135389ea1335ace478630db0e6d61e",
-        "size" : 91368,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/stage-manager.mactoolsplugin.zip"
+        "sha256" : "5665c2d32f9c0f4d9170bcb0cf87ef2ce572b6157f52a64c831ad38ac3512fce",
+        "size" : 91375,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/stage-manager.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -19863,7 +19863,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -19894,7 +19894,7 @@
         ]
       },
       "summary" : "开启台前调度，集中显示当前窗口并把其他窗口收纳到侧边",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -20170,9 +20170,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "6d4489daaa45b197b702c135104a732fad8644b6b6b1e100f344bdf99ad69907",
+        "sha256" : "ccccd3468c905ed44348b6c1c32595e7fa4f9c30df9459e4024711e29f6d13fe",
         "size" : 85749,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/system-mute.mactoolsplugin.zip"
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/system-mute.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -20252,7 +20252,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -20283,7 +20283,7 @@
         ]
       },
       "summary" : "快速静音或恢复系统音频输出",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -20642,9 +20642,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "b785fbd5009c3886860968faec6c130088270460f7fbf03aee74132e6a1f54ad",
-        "size" : 116620,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/system-power.mactoolsplugin.zip"
+        "sha256" : "aa7c96f766787e6ed8a0e1d67487de98e06824e0f6e93c1196040e7c5828dfba",
+        "size" : 116612,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/system-power.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -20727,7 +20727,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -20758,7 +20758,7 @@
         ]
       },
       "summary" : "让 Mac 睡眠、退出登录、重新启动或关机",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -20961,9 +20961,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "433254f9c8eb902e4838fdd2fbf6409d980b085714f3df454f078818ccb2b813",
-        "size" : 497495,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/system-soft-restart.mactoolsplugin.zip"
+        "sha256" : "4d5eecc6d10b7d37fc59f9d1debde90c9cd3f0432b1484d24b5acd5ce203fcd2",
+        "size" : 497494,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/system-soft-restart.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -21043,7 +21043,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -21074,7 +21074,7 @@
         ]
       },
       "summary" : "重启 macOS 用户服务，尝试恢复常见运行时异常",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -21267,9 +21267,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "d3c8ad5d09b550c782c557b2c76a5a7ab30d6bb9f7201733450fcff5fe231a39",
-        "size" : 1506619,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/system-status.mactoolsplugin.zip"
+        "sha256" : "882ab1177e37a894107daf7ab902efae832d830e9e9f9077c6915397f7cab7cf",
+        "size" : 1506615,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/system-status.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -21363,7 +21363,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -21394,7 +21394,7 @@
         ]
       },
       "summary" : "实时查看系统状态",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -21524,9 +21524,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "2b39980254b2d0a45d8d3bb712b8c155ffe957ffa7d59c888c0df37eaed8c443",
-        "size" : 1672066,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/trackpad-gestures.mactoolsplugin.zip"
+        "sha256" : "e017f342ecc06e13084027c1de4cae5e47704bfe0be7525c4adf5b606e92a3f9",
+        "size" : 1672062,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/trackpad-gestures.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -21607,7 +21607,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -21667,7 +21667,7 @@
         ]
       },
       "summary" : "将自定义触控板手势映射为 MacTools 操作、快捷键或中键点击",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -21921,9 +21921,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "627febaa92f9e95297b08f236e1375267532993370373da94cf43f042792159e",
-        "size" : 819121,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/translator.mactoolsplugin.zip"
+        "sha256" : "5127398372bf90320252770ae0d5640dc426c2a4e70eeff48d6b6aefa92a0c72",
+        "size" : 819119,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/translator.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility",
@@ -22007,7 +22007,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -22068,7 +22068,7 @@
         ]
       },
       "summary" : "划词与截图快捷键翻译",
-      "version" : "1.41.1"
+      "version" : "1.42.1"
     },
     {
       "actions" : {
@@ -24629,9 +24629,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "991f595715a865668def8b1df038ee904c8bb93d71262bb2025937040d7d05e5",
-        "size" : 1015447,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/window-layouts.mactoolsplugin.zip"
+        "sha256" : "b406a7e9caae320fae3f16520f66b50066ae3c8119b5f044361185cd59f06120",
+        "size" : 1015444,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/window-layouts.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -24712,7 +24712,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -24771,7 +24771,7 @@
         ]
       },
       "summary" : "移动聚焦窗口并调整其大小",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -25028,9 +25028,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "10b7d867158a0a020edb4119d499bc7ddbfef1365723b73215f688569cdf0430",
-        "size" : 1427897,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/window-switcher.mactoolsplugin.zip"
+        "sha256" : "81fd4b13b8428eed47c9ca15ba84a71ee7bcac93d17e2e0c8ac9363ea8d2fb2f",
+        "size" : 1427895,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/window-switcher.mactoolsplugin.zip"
       },
       "permissions" : [
         "accessibility"
@@ -25113,7 +25113,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -25189,7 +25189,7 @@
         }
       },
       "summary" : "用可配置快捷键快速切换正在运行的窗口",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "actions" : {
@@ -25389,9 +25389,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "76422bd89a9d550dd2914b5cfaecfa55c5ad6e87c158c6efed4a92ece043bc05",
-        "size" : 510608,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/xcode-clean.mactoolsplugin.zip"
+        "sha256" : "1f7a7779fb3a22ea1fdc576bcd8a35b088bbbb825b8d1fc1ff412403c7d6c0d0",
+        "size" : 510614,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/xcode-clean.mactoolsplugin.zip"
       },
       "permissions" : [
 
@@ -25472,7 +25472,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -25503,7 +25503,7 @@
         ]
       },
       "summary" : "分类清理 Xcode DerivedData、设备支持、归档与缓存",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     },
     {
       "capabilities" : {
@@ -25633,9 +25633,9 @@
       },
       "minimumHostVersion" : "1.3.1",
       "package" : {
-        "sha256" : "5534e396817a3f2b4375708809420246db0fa9978cfd40a6d43e73372aa0ee03",
-        "size" : 505353,
-        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-41-1/zsh-config.mactoolsplugin.zip"
+        "sha256" : "6b6fe43f24fe98da58ac01589fa2d004511395d1865531b1dde96f203c6ae7fd",
+        "size" : 505350,
+        "url" : "https://github.com/ggbond268/MacTools/releases/download/nightly-42-1/zsh-config.mactoolsplugin.zip"
       },
       "permissions" : [
         "automation"
@@ -25730,7 +25730,7 @@
         ]
       },
       "releaseChannel" : null,
-      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-41-1",
+      "releaseNotesURL" : "https://github.com/ggbond268/MacTools/releases/tag/nightly-42-1",
       "requirements" : {
         "applications" : [
 
@@ -25761,7 +25761,7 @@
         ]
       },
       "summary" : "快速编辑 ~/.zshrc 等 zsh 配置文件，支持内联编辑和常用片段快速插入",
-      "version" : "2.41.1"
+      "version" : "2.42.1"
     }
   ],
   "revoked" : [
@@ -25770,6 +25770,6 @@
   "schemaVersion" : 3,
   "signature" : {
     "algorithm" : "ed25519",
-    "value" : "YBby18FP/1K5uAjKLdt5s8gAjhoh/BLO+N6Ko9un8DbgIxCaAhOQxflIqcrGbJM89jBiYzrP25UPnMuA/UDUDQ=="
+    "value" : "ZmEwgKl6bcChZQCGP/ppphpiXWB1ZJgQoctzAZ2ge2mwZXAFuqqVIsJeQl2aIOVaBT+k7WJzv9HpQwKN2IgODw=="
   }
 }
