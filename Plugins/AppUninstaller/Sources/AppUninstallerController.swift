@@ -87,6 +87,16 @@ final class AppUninstallerController: ObservableObject {
     }
 
     private func describe(_ error: Error) -> String {
+        if let error = error as? MoleEngineError {
+            switch error {
+            case .unavailable: return message("moleUnavailable", "内置 Mole 引擎不可用。")
+            case .timedOut: return message("moleTimedOut", "内置 Mole 检查超时，未更改任何文件。")
+            case .outputTooLarge: return message("moleOutputTooLarge", "内置 Mole 检查返回的数据过多。")
+            case .cleanupFailed: return message("moleCleanupFailed", "内置 Mole 检查已停止，但辅助进程未能完全清理。")
+            case .rejected: return message("moleRejected", "内置 Mole 检查无法完成。")
+            case .incompatible: return message("moleIncompatible", "内置 Mole 引擎返回了不支持的清单格式。")
+            }
+        }
         guard let error = error as? AppUninstallerError else { return error.localizedDescription }
         switch error {
         case .invalidApplication: return message("invalidApplication", "无法读取有效的应用身份。")
@@ -471,8 +481,15 @@ final class AppUninstallerController: ObservableObject {
         onStateChange?()
         removalTask = Task.detached(priority: .userInitiated) { [weak self] in
             do {
-                _ = try await executor.execute(plan)
-                await self?.finishRemoval(nil)
+                let run = try await executor.execute(plan)
+                let failure: String? = if run.complete {
+                    nil
+                } else if run.results.contains(where: { $0.disposition == .needsAttention }) {
+                    await self?.message("removeNeedsAttention", "移除未完成；部分项目需要手动检查，请查看操作记录。")
+                } else {
+                    await self?.message("removePartial", "移除未完成；请查看逐项结果。")
+                }
+                await self?.finishRemoval(failure)
             } catch { await self?.finishRemoval(error) }
         }
     }

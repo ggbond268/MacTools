@@ -7,6 +7,7 @@ bundle:
         rm -rf "$resource_dir"
         ditto "$SRCROOT/Plugins/AppUninstaller/MoleEngineResources" "$resource_dir"
         chmod 755 "$resource_dir/mactools-engine.sh"
+      basedOnDependencyAnalysis: false
       inputFiles:
         - "$(SRCROOT)/Plugins/AppUninstaller/MoleEngineResources/mactools-engine.sh"
         - "$(SRCROOT)/Plugins/AppUninstaller/MoleEngineResources/REVISION"

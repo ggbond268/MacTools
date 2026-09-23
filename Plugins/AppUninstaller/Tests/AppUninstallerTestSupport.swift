@@ -17,9 +17,13 @@ struct UninstallFixture: Sendable {
         try FileManager.default.createDirectory(at: home.appendingPathComponent("Applications"), withIntermediateDirectories: true)
         try Self.makeApp(app)
     }
-    static func makeApp(_ url: URL, identifier: String = "org.test.fixture") throws {
+    static func makeApp(
+        _ url: URL,
+        identifier: String = "org.test.fixture",
+        name: String = "Fixture"
+    ) throws {
         try FileManager.default.createDirectory(at: url.appendingPathComponent("Contents/MacOS"), withIntermediateDirectories: true)
-        let info = ["CFBundleIdentifier": identifier, "CFBundlePackageType": "APPL", "CFBundleExecutable": "fixture", "CFBundleName": "Fixture", "CFBundleVersion": "1"]
+        let info = ["CFBundleIdentifier": identifier, "CFBundlePackageType": "APPL", "CFBundleExecutable": "fixture", "CFBundleName": name, "CFBundleVersion": "1"]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: url.appendingPathComponent("Contents/Info.plist"))
         try Data("fixture executable".utf8).write(to: url.appendingPathComponent("Contents/MacOS/fixture"))
     }
@@ -41,7 +45,8 @@ struct UninstallFixture: Sendable {
 }
 
 struct FixtureEnvironment: UninstallEnvironmentChecking {
-    var snapshot = UninstallEnvironmentSnapshot(runningPaths: [], isManaged: false, homebrewApps: [], restrictions: [], coverage: [])
+    var snapshot = UninstallEnvironmentSnapshot(runningPaths: [], managementState: .unmanaged,
+                                                homebrewApps: [], restrictions: [], coverage: [])
     var onInspect: (@Sendable () throws -> Void)?
     var onValidate: (@Sendable (String?) throws -> Void)?
     func inspect(applicationPath: String) async throws -> UninstallEnvironmentSnapshot { try onInspect?(); return snapshot }

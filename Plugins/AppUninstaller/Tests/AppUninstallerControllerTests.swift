@@ -90,6 +90,74 @@ final class AppUninstallerControllerTests: XCTestCase {
         XCTAssertEqual(runs.filter(\.complete).count, 1)
     }
 
+    func testSingleRemovalReportsFailedTrashResult() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let scan = try fixture.scan()
+        let history = fixture.history()
+        let executor = UninstallExecutor(
+            scanner: fixture.scanner,
+            environment: fixture.environment,
+            history: history,
+            trash: FixtureTrash(directory: fixture.root.appendingPathComponent("FakeTrash"), fail: true)
+        )
+        let controller = AppUninstallerController(
+            service: FixedUninstallReview(scan: scan),
+            executor: executor,
+            history: history,
+            processProvider: { .init(paths: [], complete: true) }
+        )
+        controller.review(fixture.app)
+        try await eventually { controller.scan?.id == scan.id }
+        controller.preparePlan()
+        let plan = try XCTUnwrap(controller.pendingPlan)
+
+        controller.removeReviewedPlan(plan)
+
+        try await eventually { !controller.isRemoving && controller.error != nil }
+        XCTAssertEqual(controller.error, "移除未完成；请查看逐项结果。")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.app.path))
+        let runs = try await history.load()
+        XCTAssertEqual(runs.first?.results.first?.disposition, .failed)
+    }
+
+    func testSingleRemovalReportsNeedsAttentionResult() async throws {
+        let fixture = try UninstallFixture(); defer { fixture.remove() }
+        let scan = try fixture.scan()
+        let history = fixture.history()
+        var environment = fixture.environment
+        environment.onValidate = { stagedPath in
+            guard let stagedPath else { return }
+            try Data("unreviewed".utf8).write(
+                to: URL(fileURLWithPath: stagedPath).appendingPathComponent("Contents/unreviewed")
+            )
+            try UninstallFixture.makeApp(fixture.app)
+        }
+        let executor = UninstallExecutor(
+            scanner: fixture.scanner,
+            environment: environment,
+            history: history,
+            trash: FixtureTrash(directory: fixture.root.appendingPathComponent("FakeTrash"))
+        )
+        let controller = AppUninstallerController(
+            service: FixedUninstallReview(scan: scan),
+            executor: executor,
+            history: history,
+            processProvider: { .init(paths: [], complete: true) }
+        )
+        controller.review(fixture.app)
+        try await eventually { controller.scan?.id == scan.id }
+        controller.preparePlan()
+        let plan = try XCTUnwrap(controller.pendingPlan)
+
+        controller.removeReviewedPlan(plan)
+
+        try await eventually { !controller.isRemoving && controller.error != nil }
+        XCTAssertEqual(controller.error, "移除未完成；部分项目需要手动检查，请查看操作记录。")
+        let runs = try await history.load()
+        XCTAssertEqual(runs.first?.results.first?.disposition, .needsAttention)
+        XCTAssertNotNil(runs.first?.results.first?.destinationPath)
+    }
+
     func testOlderReviewCannotReplaceNewApplicationSelection() async throws {
         let first = try UninstallFixture(); defer { first.remove() }
         let second = try UninstallFixture(); defer { second.remove() }

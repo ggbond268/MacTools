@@ -4,6 +4,25 @@ import XCTest
 
 @MainActor
 final class AppUninstallerSafetyTests: XCTestCase {
+    func testUnreadableProcessFromAnotherLoginUserKeepsSnapshotIncomplete() throws {
+        let snapshot = try UninstallSystemEnvironment.processSnapshot(
+            processIDs: { [42] },
+            inspect: { _ in .unreadable(userID: 502, realUserID: 502) }
+        )
+
+        XCTAssertTrue(snapshot.paths.isEmpty)
+        XCTAssertFalse(snapshot.complete)
+    }
+
+    func testUnreadablePrivilegedServiceDoesNotBlockUserDomainSnapshot() throws {
+        let snapshot = try UninstallSystemEnvironment.processSnapshot(
+            processIDs: { [42] },
+            inspect: { _ in .unreadable(userID: 0, realUserID: 0) }
+        )
+
+        XCTAssertTrue(snapshot.complete)
+    }
+
     func testBundleIdentifierRejectsPathEscapes() {
         for id in ["../Documents", "org.test/../../Data", "org..test", "org.test\0extra", "org.test\n", ".", "..", "org.test_unsafe"] {
             XCTAssertFalse(UninstallPaths.validIdentifier(id), id)
@@ -273,7 +292,8 @@ final class AppUninstallerSafetyTests: XCTestCase {
         XCTAssertThrowsError(try UninstallPlanner.make(scan: scan, selectedIDs: ["/arbitrary/path"]))
         XCTAssertThrowsError(try UninstallPlanner.make(scan: scan, selectedIDs: [fixture.app.path], now: scan.expiresAt))
         var environment = fixture.environment.snapshot
-        environment = .init(runningPaths: [], isManaged: true, homebrewApps: [], restrictions: ["Managed"], coverage: [])
+        environment = .init(runningPaths: [], managementState: .managed,
+                            homebrewApps: [], restrictions: ["Managed"], coverage: [])
         let managed = try fixture.scanner.scan(path: fixture.app.path, environment: environment)
         XCTAssertThrowsError(try UninstallPlanner.make(scan: managed, selectedIDs: [fixture.app.path]))
     }

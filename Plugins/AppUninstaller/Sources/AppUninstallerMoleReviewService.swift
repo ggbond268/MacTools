@@ -21,10 +21,16 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
         let state = try await environment.inspect(applicationPath: path)
         try Task.checkCancellation()
         let inventory = try scanner.inventory(runningPaths: state.runningPaths, includeComponents: true)
+        let vendorEvidence = try scanner.vendorUninstallerEvidence(for: selected, inventory: inventory)
         var application = selected
         var source = selected.source
-        var restrictions = selected.restrictions
-        var vendorUninstallers = selected.vendorUninstallers
+        var restrictions = selected.restrictions + vendorEvidence.restrictions
+        let vendorUninstallers = vendorEvidence.paths
+
+        if !vendorUninstallers.isEmpty {
+            source = .vendorRequired
+            restrictions.append("发现可能的厂商卸载工具，请先检查其说明。")
+        }
 
         switch plan.source {
         case "homebrew":
@@ -32,14 +38,18 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
             restrictions.append("由 Homebrew 管理，请前往 Homebrew 插件卸载。")
         case "vendor":
             source = .vendorRequired
-            restrictions.append(plan.blockedReason ?? "请使用开发者提供的卸载工具。")
+            restrictions.append("请使用开发者提供的卸载工具。")
         case "manual":
             source = .vendorRequired
-            restrictions.append(plan.blockedReason ?? "此应用需要手动处理。")
+            restrictions.append("此应用需要手动处理。")
         default:
             break
         }
-        if state.isManaged {
+        if state.homebrewApps.contains(where: { $0.caseInsensitiveCompare(path) == .orderedSame }) {
+            source = .homebrew
+            restrictions.append("由 Homebrew 管理，请前往 Homebrew 插件卸载。")
+        }
+        if state.managementState != .unmanaged {
             source = .managed
             restrictions.append(contentsOf: state.restrictions)
         } else {
@@ -50,10 +60,9 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
         if plan.requiresSudo {
             restrictions.append("此版本仅支持无需管理员权限的废纸篓移除。")
         }
-        if let blocked = plan.blockedReason, plan.status != "ready", !restrictions.contains(blocked) {
-            restrictions.append(blocked)
+        if plan.status != "ready", !["homebrew", "vendor", "manual"].contains(plan.source) {
+            restrictions.append("Mole 无法安全准备此应用的移除清单。")
         }
-        if plan.source == "vendor", let blocked = plan.blockedReason { vendorUninstallers.append(blocked) }
 
         application = .init(path: selected.path, bundleID: selected.bundleID, name: selected.name,
                             version: selected.version, build: selected.build, executable: selected.executable,
@@ -68,7 +77,7 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
                 && $0.bundleID.caseInsensitiveCompare(application.bundleID) == .orderedSame
         }
         var coverage = inventory.coverage + state.coverage
-        coverage.append(contentsOf: plan.warnings.map { .init(path: "Mole", issue: $0) })
+        coverage.append(contentsOf: plan.warnings.map { .init(path: "Mole", issue: localizedWarning($0)) })
         var candidates: [UninstallCandidate] = []
         var seenPaths = Set<String>()
         for engineCandidate in plan.candidates {
@@ -77,42 +86,26 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
             guard let kind = dataClass(for: engineCandidate.path, application: application) else {
                 if engineCandidate.reviewOnly {
                     coverage.append(.init(path: engineCandidate.path,
-                                          issue: "Mole found a review-only item outside the first-release removal scope."))
+                                          issue: "Mole 发现首版移除范围以外的仅供检查项目。"))
                 }
                 continue
             }
-            var confidence: UninstallConfidence = kind == .application ? .verified : .strong
-            var evidence = evidence(for: kind, bundleID: application.bundleID)
-            var blocked: String?
-            if engineCandidate.reviewOnly {
-                confidence = .protected
-                blocked = "Mole marked this item as review-only."
+            let confidence: UninstallConfidence = engineCandidate.reviewOnly ? .protected
+                : kind == .application ? .verified : .strong
+            let blocked = engineCandidate.reviewOnly ? "Mole 将此项目标记为仅供检查。" : nil
+            if let candidate = try scanner.validatedCandidate(
+                path: engineCandidate.path,
+                kind: kind,
+                application: application,
+                competitors: competitors,
+                inventoryComplete: inventory.complete,
+                initialEvidence: evidence(for: kind, bundleID: application.bundleID),
+                initialConfidence: confidence,
+                initialBlockedReason: blocked,
+                coverage: &coverage
+            ) {
+                candidates.append(candidate)
             }
-            if !competitors.isEmpty, kind != .application {
-                confidence = .protected
-                evidence += competitors.map { .competingApplication($0.path) }
-                blocked = "另一个已安装的应用使用相同标识符。"
-            }
-            if !inventory.complete, kind != .application {
-                blocked = "已安装应用检查不完整，归属仍需核实。"
-            }
-            if !scanner.configuration.permitted(engineCandidate.path, kind: kind, app: application) {
-                confidence = .protected
-                blocked = "此位置不在首版允许的移除范围内。"
-            }
-            var snapshot: UninstallTreeSnapshot?
-            do {
-                snapshot = try scanner.fileSystem.tree(engineCandidate.path, isApplication: kind == .application)
-            } catch {
-                try Task.checkCancellation()
-                if !UninstallFileSystem.isAbsent(error) {
-                    blocked = "大小或路径检查不完整。"
-                    coverage.append(.init(path: engineCandidate.path, issue: blocked))
-                }
-            }
-            candidates.append(.init(path: engineCandidate.path, dataClass: kind,
-                                    confidence: confidence, evidence: evidence,
-                                    snapshot: snapshot, blockedReason: blocked))
         }
 
         guard candidates.contains(where: { $0.path == application.path && $0.dataClass == .application }) else {
@@ -125,7 +118,8 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
         return .init(id: UUID(), observedAt: Date(), application: application,
                      candidates: candidates, coverage: coverage,
                      inventory: inventory.apps, inventoryComplete: inventory.complete,
-                     sourceChecksComplete: plan.status == "ready",
+                     sourceChecksComplete: plan.status == "ready" && state.managementState == .unmanaged
+                        && state.sourceChecksComplete,
                      runningPaths: Array(Set(state.runningPaths + state.activeExecutables)).sorted())
     }
 
@@ -145,6 +139,17 @@ struct MoleBackedUninstallReviewService: UninstallReviewProviding, Sendable {
         case .savedState: [.savedState(bundleID)]
         case .container: [.exactIdentifier(bundleID)]
         default: [.exactIdentifier(bundleID)]
+        }
+    }
+
+    private func localizedWarning(_ warning: String) -> String {
+        switch warning {
+        case "Another installed copy may share data; Mole narrowed the plan.":
+            "另一个已安装副本可能共享数据；Mole 已缩小清单范围。"
+        case "System-level remnants are review-only and are not removable by this plan.":
+            "系统级残留仅供检查，无法通过此清单移除。"
+        default:
+            "Mole 报告一项未识别的检查警告；仅显示已验证项目。"
         }
     }
 }

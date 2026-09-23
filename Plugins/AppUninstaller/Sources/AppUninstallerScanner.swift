@@ -214,29 +214,126 @@ struct UninstallScanner: Sendable {
             .sorted { $0.path < $1.path }, coverage: coverage)
     }
 
+    func validatedCandidate(
+        path: String,
+        kind: UninstallDataClass,
+        application: UninstallApplication,
+        competitors: [UninstallApplication],
+        inventoryComplete: Bool,
+        initialEvidence: [UninstallEvidence],
+        initialConfidence: UninstallConfidence,
+        initialBlockedReason: String? = nil,
+        coverage: inout [UninstallCoverage]
+    ) throws -> UninstallCandidate? {
+        var evidence = initialEvidence
+        var confidence = initialConfidence
+        var blocked = initialBlockedReason
+        if !competitors.isEmpty, kind != .application {
+            confidence = .protected
+            evidence += competitors.map { .competingApplication($0.path) }
+            blocked = "另一个已安装的应用使用相同标识符。"
+        }
+        if application.bundleID.lowercased().hasPrefix("com.apple."), kind != .application {
+            confidence = .protected
+            blocked = "Apple 应用的关联数据将保留。"
+            // Apple-associated locations remain unmeasured and cannot become eligible.
+            do { _ = try fileSystem.identity(at: path) }
+            catch {
+                try Task.checkCancellation()
+                if fileSystem.isMissingCandidate(path, error: error) { return nil }
+            }
+            return .init(path: path, dataClass: kind, confidence: confidence,
+                         evidence: evidence, snapshot: nil, blockedReason: blocked)
+        }
+        if !inventoryComplete, kind != .application {
+            blocked = "已安装应用检查不完整，归属仍需核实。"
+        }
+        if !application.restrictions.isEmpty {
+            blocked = application.restrictions.joined(separator: " ")
+        }
+        if !configuration.permitted(path, kind: kind, app: application) {
+            confidence = .protected
+            blocked = "此位置仅供查看，无法确认独占归属。"
+        }
+        var snapshot: UninstallTreeSnapshot?
+        do {
+            snapshot = try fileSystem.tree(path, isApplication: kind == .application)
+        } catch {
+            try Task.checkCancellation()
+            if fileSystem.isMissingCandidate(path, error: error) { return nil }
+            blocked = "大小或路径检查不完整。"
+            coverage.append(.init(path: path, issue: blocked))
+        }
+        if let identity = snapshot?.identity {
+            let expectedType = kind == .preference ? identity.isRegular
+                : [.application, .cache, .savedState, .support, .container, .groupContainer].contains(kind)
+                    ? identity.isDirectory : true
+            if !expectedType {
+                confidence = .protected
+                blocked = "项目类型与此关联规则不一致。"
+            }
+        }
+        if kind == .container, snapshot?.identity.isDirectory == true {
+            do {
+                let metadata = try fileSystem.plist(path + "/.com.apple.containermanagerd.metadata.plist")
+                if metadata["MCMMetadataIdentifier"] as? String == application.bundleID {
+                    evidence.append(.containerMetadata(application.bundleID))
+                    if confidence != .protected { confidence = competitors.isEmpty ? .verified : .protected }
+                } else {
+                    evidence.append(.conflictingMetadata)
+                    confidence = .protected
+                    blocked = "容器元数据与所选应用不一致。"
+                }
+            } catch {
+                try Task.checkCancellation()
+                confidence = .possible
+                blocked = "无法验证容器的所属应用。"
+            }
+        }
+        return .init(path: path, dataClass: kind, confidence: confidence,
+                     evidence: evidence, snapshot: snapshot, blockedReason: blocked)
+    }
+
+    func vendorUninstallerEvidence(
+        for application: UninstallApplication,
+        inventory: UninstallInventory
+    ) throws -> (paths: [String], restrictions: [String]) {
+        var paths = inventory.apps.filter {
+            $0.path != application.path
+                && URL(fileURLWithPath: $0.path).deletingLastPathComponent().path
+                    == URL(fileURLWithPath: application.path).deletingLastPathComponent().path
+                && $0.name.localizedCaseInsensitiveContains("uninstall")
+                && application.teamID != nil
+                && $0.teamID == application.teamID
+        }.map(\.path)
+        var restrictions: [String] = []
+        for folder in ["Contents", "Contents/Resources"] {
+            do {
+                for name in try fileSystem.children(application.path + "/" + folder, limit: 5_000)
+                    where name.localizedCaseInsensitiveContains("uninstall") {
+                    let item = application.path + "/" + folder + "/" + name
+                    _ = try fileSystem.identity(at: item)
+                    paths.append(item)
+                }
+            } catch {
+                try Task.checkCancellation()
+                if !fileSystem.isMissingCandidate(application.path + "/" + folder, error: error) {
+                    restrictions.append("无法完整检查应用自带的卸载工具。")
+                }
+            }
+        }
+        return (Array(Set(paths)).sorted(), Array(Set(restrictions)).sorted())
+    }
+
     func scan(path: String, environment: UninstallEnvironmentSnapshot) throws -> UninstallScan {
         let selected = try application(path)
         let inventory = try inventory(runningPaths: environment.runningPaths, includeComponents: true)
         var app = selected
         var restrictions = selected.restrictions + environment.restrictions
         var source = selected.source
-        let siblings = inventory.apps.filter {
-            $0.path != selected.path && URL(fileURLWithPath: $0.path).deletingLastPathComponent().path == URL(fileURLWithPath: selected.path).deletingLastPathComponent().path
-                && $0.name.localizedCaseInsensitiveContains("uninstall") && selected.teamID != nil && $0.teamID == selected.teamID
-        }.map(\.path)
-        var vendorUninstallers = siblings
-        for folder in ["Contents", "Contents/Resources"] {
-            do {
-                for name in try fileSystem.children(path + "/" + folder, limit: 5_000) where name.localizedCaseInsensitiveContains("uninstall") {
-                    let item = path + "/" + folder + "/" + name
-                    _ = try fileSystem.identity(at: item)
-                    vendorUninstallers.append(item)
-                }
-            } catch {
-                try Task.checkCancellation()
-                if !fileSystem.isMissingCandidate(path + "/" + folder, error: error) { restrictions.append("无法完整检查应用自带的卸载工具。") }
-            }
-        }
+        let vendorEvidence = try vendorUninstallerEvidence(for: selected, inventory: inventory)
+        let vendorUninstallers = vendorEvidence.paths
+        restrictions.append(contentsOf: vendorEvidence.restrictions)
         if !vendorUninstallers.isEmpty {
             source = .vendorRequired
             restrictions.append("发现可能的厂商卸载工具，请先检查其说明。")
@@ -252,61 +349,12 @@ struct UninstallScanner: Sendable {
         var coverage = inventory.coverage + environment.coverage
         var candidates: [UninstallCandidate] = []
         func candidate(_ path: String, kind: UninstallDataClass, evidence initial: [UninstallEvidence], confidence initialConfidence: UninstallConfidence) throws {
-            var evidence = initial
-            var confidence = initialConfidence
-            var blocked: String?
-            if !competitors.isEmpty && kind != .application {
-                confidence = .protected
-                evidence += competitors.map { .competingApplication($0.path) }
-                blocked = "另一个已安装的应用使用相同标识符。"
+            if let value = try validatedCandidate(path: path, kind: kind, application: app,
+                                                  competitors: competitors, inventoryComplete: inventory.complete,
+                                                  initialEvidence: initial, initialConfidence: initialConfidence,
+                                                  coverage: &coverage) {
+                candidates.append(value)
             }
-            if app.bundleID.lowercased().hasPrefix("com.apple.") && kind != .application {
-                confidence = .protected
-                blocked = "Apple 应用的关联数据将保留。"
-                // These locations are never removable in this flow, so a deep tree scan
-                // would add delay and misleading coverage warnings without changing safety.
-                do { _ = try fileSystem.identity(at: path) }
-                catch {
-                    try Task.checkCancellation()
-                    if fileSystem.isMissingCandidate(path, error: error) { return }
-                }
-                candidates.append(.init(path: path, dataClass: kind, confidence: confidence,
-                    evidence: evidence, snapshot: nil, blockedReason: blocked))
-                return
-            }
-            // An incomplete global inventory cannot prove exclusive ownership of associated
-            // data, but it does not invalidate the selected app bundle's physical identity.
-            if !inventory.complete && kind != .application { blocked = "已安装应用检查不完整，归属仍需核实。" }
-            if !app.restrictions.isEmpty { blocked = app.restrictions.joined(separator: " ") }
-            if !configuration.permitted(path, kind: kind, app: app) { blocked = "此位置仅供查看，无法确认独占归属。" }
-            var snapshot: UninstallTreeSnapshot?
-            do { snapshot = try fileSystem.tree(path, isApplication: kind == .application) }
-            catch {
-                try Task.checkCancellation()
-                if fileSystem.isMissingCandidate(path, error: error) { return }
-                blocked = "大小或路径检查不完整。"
-                coverage.append(.init(path: path, issue: blocked))
-            }
-            if let identity = snapshot?.identity {
-                let expectedType = kind == .preference ? identity.isRegular
-                    : [.application, .cache, .savedState, .support, .container, .groupContainer].contains(kind) ? identity.isDirectory : true
-                if !expectedType {
-                    confidence = .protected
-                    blocked = "项目类型与此关联规则不一致。"
-                }
-            }
-            if kind == .container, snapshot?.identity.isDirectory == true {
-                do {
-                    let metadata = try fileSystem.plist(path + "/.com.apple.containermanagerd.metadata.plist")
-                    if metadata["MCMMetadataIdentifier"] as? String == app.bundleID {
-                        evidence.append(.containerMetadata(app.bundleID)); confidence = competitors.isEmpty ? .verified : .protected
-                    } else {
-                        evidence.append(.conflictingMetadata); confidence = .protected; blocked = "容器元数据与所选应用不一致。"
-                    }
-                } catch {
-                try Task.checkCancellation(); confidence = .possible; blocked = "无法验证容器的所属应用。" }
-            }
-            candidates.append(.init(path: path, dataClass: kind, confidence: confidence, evidence: evidence, snapshot: snapshot, blockedReason: blocked))
         }
         try candidate(path, kind: .application, evidence: [.selectedApplication], confidence: .verified)
         for (folder, kind, suffix) in configuration.roots {
@@ -332,6 +380,7 @@ struct UninstallScanner: Sendable {
               try fileSystem.identity(at: path) == app.identity else { throw AppUninstallerError.changed }
         return UninstallScan(id: UUID(), observedAt: Date(), application: app, candidates: candidates,
                             coverage: coverage, inventory: inventory.apps, inventoryComplete: inventory.complete,
-                            sourceChecksComplete: environment.complete, runningPaths: environment.runningPaths)
+                            sourceChecksComplete: environment.sourceChecksComplete,
+                            runningPaths: environment.runningPaths)
     }
 }

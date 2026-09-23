@@ -545,7 +545,7 @@ struct AppUninstallerView: View {
             Text(l("batch.confirmScope", "仅列出的项目会移入废纸篓。文稿、项目和其他未检查位置不在此清单中；移入废纸篓不会立即释放空间。"))
                 .font(PluginSettingsTheme.Typography.rowDescription).foregroundStyle(.secondary)
             if batch.plans.contains(where: { $0.coverage.contains(where: { $0.issue != nil }) }) {
-                Label(l("batch.partialCoverage", "一个或多个应用的检查不完整；不能继续移除。"), systemImage: "exclamationmark.shield")
+                Label(l("batch.partialCoverage", "一个或多个应用存在未查全的位置；只会移除已验证项目。"), systemImage: "exclamationmark.shield")
                     .foregroundStyle(.orange)
             }
             ScrollView {
@@ -791,6 +791,15 @@ struct AppUninstallerView: View {
         case "后台服务检查未完成。": return l("note.backgroundServiceCheck", raw)
         case "部分运行进程的可执行文件路径不可用，无法确认应用已完全退出。": return l("note.processPathUnknown", raw)
         case "运行进程检查不完整。": return l("note.processCheck", raw)
+        case "请使用开发者提供的卸载工具。": return l("note.moleVendorRequired", raw)
+        case "此应用需要手动处理。": return l("note.moleManualRequired", raw)
+        case "此版本仅支持无需管理员权限的废纸篓移除。": return l("note.moleSudoUnsupported", raw)
+        case "Mole 无法安全准备此应用的移除清单。": return l("note.molePlanBlocked", raw)
+        case "Mole 将此项目标记为仅供检查。": return l("note.moleReviewOnly", raw)
+        case "Mole 发现首版移除范围以外的仅供检查项目。": return l("note.moleOutsideScope", raw)
+        case "另一个已安装副本可能共享数据；Mole 已缩小清单范围。": return l("note.moleSiblingGuard", raw)
+        case "系统级残留仅供检查，无法通过此清单移除。": return l("note.moleSystemReviewOnly", raw)
+        case "Mole 报告一项未识别的检查警告；仅显示已验证项目。": return l("note.moleUnknownWarning", raw)
         case "设备管理": return l("note.deviceManagement", raw)
         case "运行进程": return l("note.runningProcesses", raw)
         case "操作已停止，项目保留原位。": return l("note.itemStopped", raw)
