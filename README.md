@@ -105,6 +105,7 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Utilities & configuration | Translate selected text, run editable AI prompt templates on selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
 
 AI Assistant asks you to confirm text captured through the clipboard before sending it to a provider. Its simulated-copy fallback leaves the clipboard's latest content in place because the writer cannot be verified.
+For a copy-first workflow, enable **Use Clipboard** in AI Assistant settings. After copying text in any app, press a prompt shortcut to process the current clipboard text directly. Leave this setting off when you want shortcuts to capture the current selection.
 
 Clipboard History moves reused items to the front when you copy or paste them from the plugin, including item shortcuts and snippets. Browsing leaves the order unchanged, and sequential paste queues keep their established order. History expires after the configured period of inactivity, measured from its latest use or capture. Count and storage limits apply separately; Saved items and snippets remain available.
 

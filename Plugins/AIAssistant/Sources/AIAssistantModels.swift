@@ -82,6 +82,7 @@ enum AIAssistantPanelPhase: Equatable, Sendable {
 
 enum AIAssistantPanelError: Equatable, Sendable {
     case missingSelection
+    case missingClipboardText
     case missingConfiguration
     case missingPrompt
     case permissionRequired
@@ -95,6 +96,8 @@ enum AIAssistantPanelError: Equatable, Sendable {
         switch self {
         case .missingSelection:
             return localization.string("panelError.missingSelection", defaultValue: "未找到选中文本")
+        case .missingClipboardText:
+            return localization.string("panelError.missingClipboardText", defaultValue: "剪贴板没有文本")
         case .missingConfiguration:
             return localization.string("panelError.missingConfiguration", defaultValue: "请先配置 AI 服务")
         case .missingPrompt:

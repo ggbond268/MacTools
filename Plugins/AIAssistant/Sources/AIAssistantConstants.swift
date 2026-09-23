@@ -12,6 +12,7 @@ enum AIAssistantConstants {
 
     enum StorageKey {
         static let shortcutEnabled = "ai-assistant.shortcut.enabled"
+        static let shortcutUsesClipboard = "ai-assistant.shortcut.uses-clipboard"
         static let providerProfiles = "ai-assistant.providers.profiles"
         static let prompts = "ai-assistant.prompts"
     }

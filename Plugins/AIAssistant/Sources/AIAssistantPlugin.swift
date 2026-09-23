@@ -54,6 +54,7 @@ final class AIAssistantPlugin:
     private let panelController: any AIAssistantPanelControlling
     private let selectedTextCapturePipeline: SelectedTextCapturePipeline
     private let providerFactoryOverride: AIAssistantProviderFactory?
+    private let clipboardTextProvider: () -> String?
     private let providerProfileStore: AIAssistantProviderProfileStore
     private let promptStore: AIAssistantPromptStore
     private let localization: PluginLocalization
@@ -72,6 +73,7 @@ final class AIAssistantPlugin:
         panelController: (any AIAssistantPanelControlling)? = nil,
         selectedTextCapturePipeline: SelectedTextCapturePipeline? = nil,
         providerFactoryOverride: AIAssistantProviderFactory? = nil,
+        clipboardTextProvider: @escaping () -> String? = { NSPasteboard.general.string(forType: .string) },
         localization: PluginLocalization? = nil
     ) {
         let localization = localization ?? PluginLocalization(bundle: context.resourceBundle)
@@ -94,6 +96,7 @@ final class AIAssistantPlugin:
         self.panelController = panelController ?? AIAssistantPanelController(localization: localization)
         self.selectedTextCapturePipeline = selectedTextCapturePipeline ?? .live(localization: localization)
         self.providerFactoryOverride = providerFactoryOverride
+        self.clipboardTextProvider = clipboardTextProvider
         let providerProfileStore = AIAssistantProviderProfileStore(storage: context.storage, localization: localization)
         self.providerProfileStore = providerProfileStore
         self.providerProfiles = providerProfileStore.loadProfiles()
@@ -161,11 +164,7 @@ final class AIAssistantPlugin:
                 PluginShortcutDefinition(
                     id: Self.shortcutID(for: prompt.id),
                     title: prompt.normalizedName,
-                    description: localization.format(
-                        "shortcut.prompt.descriptionFormat",
-                        defaultValue: "用「%@」处理当前选中文本。",
-                        prompt.normalizedName
-                    ),
+                    description: shortcutDescription(for: prompt),
                     actionID: prompt.id,
                     scope: .global,
                     defaultBinding: defaultBinding(for: prompt),
@@ -189,6 +188,21 @@ final class AIAssistantPlugin:
         }
     }
 
+    private func shortcutDescription(for prompt: AIAssistantPrompt) -> String {
+        if shortcutUsesClipboard {
+            return localization.format(
+                "shortcut.prompt.clipboardDescriptionFormat",
+                defaultValue: "用「%@」处理当前剪贴板文本。",
+                prompt.normalizedName
+            )
+        }
+        return localization.format(
+            "shortcut.prompt.descriptionFormat",
+            defaultValue: "用「%@」处理当前选中文本。",
+            prompt.normalizedName
+        )
+    }
+
     var actionDefinitions: [ActionDefinition] {
         prompts
             .filter(\.isEnabled)
@@ -199,11 +213,7 @@ final class AIAssistantPlugin:
                         actionID: prompt.id
                     ),
                     title: prompt.normalizedName,
-                    description: localization.format(
-                        "shortcut.prompt.descriptionFormat",
-                        defaultValue: "用「%@」处理当前选中文本。",
-                        prompt.normalizedName
-                    ),
+                    description: shortcutDescription(for: prompt),
                     keywords: [
                         localization.string("metadata.title", defaultValue: "AI 助手"),
                         prompt.normalizedName,
@@ -217,6 +227,7 @@ final class AIAssistantPlugin:
 
     func permissionRequirementIDs(for actionKey: ActionKey) -> [String] {
         guard actionKey.providerID == metadata.id else { return [] }
+        if shortcutUsesClipboard { return [] }
         return [
             AIAssistantConstants.PermissionID.accessibility,
             AIAssistantConstants.PermissionID.automation,
@@ -235,7 +246,7 @@ final class AIAssistantPlugin:
         guard prompts.contains(where: { $0.id == reference.key.actionID && $0.isEnabled }) else {
             return .unavailable(PluginKitLocalization.actionUnavailable)
         }
-        guard accessibilityTrustProvider() else {
+        guard shortcutUsesClipboard || accessibilityTrustProvider() else {
             return .unavailable(
                 localization.string(
                     "action.unavailable.accessibility",
@@ -337,6 +348,23 @@ final class AIAssistantPlugin:
                 }
             },
             PluginSettingsSection(
+                id: "shortcut-input",
+                title: localization.string("settings.shortcutInput.title", defaultValue: "快捷键输入"),
+                systemImage: "doc.on.clipboard",
+                rows: [
+                    PluginSettingsRow(
+                        id: AIAssistantConstants.StorageKey.shortcutUsesClipboard,
+                        title: localization.string("settings.shortcutInput.clipboard.title", defaultValue: "使用剪贴板"),
+                        description: localization.string(
+                            "settings.shortcutInput.clipboard.description",
+                            defaultValue: "开启后，模板快捷键会直接发送当前剪贴板文本给 AI。请先复制所需内容。"
+                        ),
+                        systemImage: "doc.on.clipboard",
+                        control: .toggle(isOn: shortcutUsesClipboard)
+                    ),
+                ]
+            ),
+            PluginSettingsSection(
                 id: "ai-prompts",
                 title: localization.string("settings.prompts.title", defaultValue: "处理模块"),
                 systemImage: "square.stack.3d.up",
@@ -422,7 +450,12 @@ final class AIAssistantPlugin:
         }
     }
 
-    func handleSettingsAction(_ action: PluginSettingsAction) {}
+    func handleSettingsAction(_ action: PluginSettingsAction) {
+        guard case let .setBoolean(controlID, value) = action,
+              controlID == AIAssistantConstants.StorageKey.shortcutUsesClipboard else { return }
+        storage.set(value, forKey: controlID)
+        onStateChange?()
+    }
 
     func deactivate(reason: PluginDeactivationReason) {
         guard reason.requiresStateCleanup else {
@@ -456,10 +489,11 @@ final class AIAssistantPlugin:
 
         let coordinator = coordinator ?? makeCoordinator()
         self.coordinator = coordinator
-        // Pressing the shortcut for the prompt that owns a hidden session
-        // reopens the existing session without recapturing text or issuing a
-        // new request. A different prompt starts a fresh run.
-        if coordinator.hasSession(forPromptID: prompt.id), !coordinator.isPanelVisible {
+        // Clipboard mode always uses the current copy, including when the
+        // previous session was hidden. Selection mode can reopen that session.
+        if shortcutUsesClipboard {
+            coordinator.startProcessingClipboard(prompt: prompt)
+        } else if coordinator.hasSession(forPromptID: prompt.id), !coordinator.isPanelVisible {
             coordinator.reopenSession()
         } else {
             coordinator.startProcessing(prompt: prompt)
@@ -482,11 +516,15 @@ final class AIAssistantPlugin:
         return storage.bool(forKey: AIAssistantConstants.StorageKey.shortcutEnabled)
     }
 
+    private var shortcutUsesClipboard: Bool {
+        storage.bool(forKey: AIAssistantConstants.StorageKey.shortcutUsesClipboard)
+    }
+
     private var panelSubtitle: String {
         if !isShortcutEnabled {
             return localization.string("panel.subtitle.shortcutPaused", defaultValue: "快捷键已暂停")
         }
-        if !accessibilityTrustProvider() {
+        if !shortcutUsesClipboard && !accessibilityTrustProvider() {
             return localization.string("panel.subtitle.permissionRequired", defaultValue: "启用前需要辅助功能授权")
         }
         if enabledValidProfiles.isEmpty {
@@ -497,6 +535,9 @@ final class AIAssistantPlugin:
         case .missing, .error:
             return localization.string("panel.subtitle.needsProvider", defaultValue: "需要配置 AI 服务")
         case .unknown, .present:
+            if shortcutUsesClipboard {
+                return localization.string("panel.subtitle.clipboardReady", defaultValue: "按下模板快捷键处理剪贴板文本")
+            }
             return localization.string("panel.subtitle.ready", defaultValue: "按下模板快捷键处理选中文本")
         }
     }
@@ -543,6 +584,7 @@ final class AIAssistantPlugin:
                 return self.resolveProvider()
             },
             panelController: panelController,
+            clipboardTextProvider: clipboardTextProvider,
             localization: localization
         )
     }

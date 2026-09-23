@@ -26,6 +26,7 @@ typealias AIAssistantProviderFactory = () -> Result<ResolvedAIProvider, AIAssist
 final class AIAssistantCoordinator {
     private let selectedTextCapturePipeline: any SelectedTextCaptureProviding
     private let providerFactory: AIAssistantProviderFactory
+    private let clipboardTextProvider: () -> String?
     private weak var panelController: AIAssistantPanelControlling?
     private let localization: PluginLocalization
 
@@ -33,6 +34,7 @@ final class AIAssistantCoordinator {
     private var activeTask: Task<Void, Never>?
     private var lastSourceText: String?
     private var lastPrompt: AIAssistantPrompt?
+    private var lastInputWasClipboard = false
     /// The latest terminal snapshot (success or error), used to restore the
     /// session view when the user stops an in-flight run.
     private var finishedSnapshot: AIAssistantPanelSnapshot?
@@ -51,10 +53,12 @@ final class AIAssistantCoordinator {
         selectedTextCapturePipeline: any SelectedTextCaptureProviding,
         providerFactory: @escaping AIAssistantProviderFactory,
         panelController: AIAssistantPanelControlling?,
+        clipboardTextProvider: @escaping () -> String? = { NSPasteboard.general.string(forType: .string) },
         localization: PluginLocalization = PluginLocalization(bundle: .main)
     ) {
         self.selectedTextCapturePipeline = selectedTextCapturePipeline
         self.providerFactory = providerFactory
+        self.clipboardTextProvider = clipboardTextProvider
         self.panelController = panelController
         self.localization = localization
     }
@@ -83,10 +87,35 @@ final class AIAssistantCoordinator {
     // MARK: - Actions
 
     func startProcessing(prompt: AIAssistantPrompt) {
+        lastInputWasClipboard = false
         retainResultForRerun()
         activeTask?.cancel()
         activeTask = Task { [weak self] in
             await self?.runProcessing(prompt: prompt)
+        }
+    }
+
+    /// Processes the clipboard only when the user explicitly selected the
+    /// clipboard shortcut mode in settings. This path does not simulate copy.
+    func startProcessingClipboard(prompt: AIAssistantPrompt) {
+        lastInputWasClipboard = true
+        retainResultForRerun()
+        activeTask?.cancel()
+        activeTask = nil
+        let currentSessionID = UUID()
+        sessionID = currentSessionID
+        lastPrompt = prompt
+        let sourceText = clipboardTextProvider()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastSourceText = sourceText
+
+        guard let sourceText, !sourceText.isEmpty else {
+            setError(.missingClipboardText, sourceText: nil)
+            present(snapshot)
+            return
+        }
+
+        activeTask = Task { [weak self] in
+            await self?.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
         }
     }
 
@@ -142,6 +171,7 @@ final class AIAssistantCoordinator {
         activeTask = nil
         lastSourceText = nil
         lastPrompt = nil
+        lastInputWasClipboard = false
         finishedSnapshot = nil
         isPanelDismissedByUser = false
         snapshot = .idle
@@ -341,9 +371,12 @@ final class AIAssistantCoordinator {
                 await self.process(sourceText: sourceText, prompt: prompt, sessionID: currentSessionID)
             }
         } else {
-            // The previous run failed before any text was captured; retry
-            // attempts capture again for the same prompt.
-            startProcessing(prompt: prompt)
+            if lastInputWasClipboard {
+                startProcessingClipboard(prompt: prompt)
+            } else {
+                // The previous run failed before any text was captured.
+                startProcessing(prompt: prompt)
+            }
         }
     }
 

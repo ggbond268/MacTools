@@ -270,11 +270,65 @@ final class AIAssistantPluginTests: XCTestCase {
         XCTAssertEqual(ids, ["accessibility", "automation"])
     }
 
+    func testClipboardShortcutSettingRoutesToClipboardWithoutSelectionCapture() {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let panel = RecordingAIAssistantPanelController()
+        let plugin = makePlugin(
+            storage: storage,
+            accessibilityTrustProvider: { false },
+            panelController: panel,
+            clipboardTextProvider: { nil }
+        )
+        let actionKey = ActionKey(providerID: "ai-assistant", actionID: "polish")
+        XCTAssertEqual(plugin.permissionRequirementIDs(for: actionKey), ["accessibility", "automation"])
+
+        plugin.handleSettingsAction(.setBoolean(
+            controlID: AIAssistantConstants.StorageKey.shortcutUsesClipboard,
+            value: true
+        ))
+        plugin.handleShortcutAction(id: "polish")
+
+        XCTAssertTrue(storage.bool(forKey: AIAssistantConstants.StorageKey.shortcutUsesClipboard))
+        XCTAssertEqual(plugin.permissionRequirementIDs(for: actionKey), [])
+        XCTAssertEqual(panel.snapshot?.phase, .error(.missingClipboardText))
+    }
+
+    func testClipboardShortcutUsesNewCopyAfterHiddenSession() async {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let panel = RecordingAIAssistantPanelController()
+        var copiedText = "first copy"
+        let plugin = makePlugin(
+            storage: storage,
+            panelController: panel,
+            clipboardTextProvider: { copiedText },
+            providerFactoryOverride: { .failure(AIAssistantProviderError(message: "unconfigured")) }
+        )
+        plugin.handleSettingsAction(.setBoolean(
+            controlID: AIAssistantConstants.StorageKey.shortcutUsesClipboard,
+            value: true
+        ))
+
+        plugin.handleShortcutAction(id: "polish")
+        copiedText = "second copy"
+        panel.onAction?(.hide)
+        plugin.handleShortcutAction(id: "polish")
+
+        for _ in 0..<50 where panel.snapshot?.sourceText != "second copy" {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(panel.snapshot?.sourceText, "second copy")
+        XCTAssertTrue(panel.isVisible)
+    }
+
     // MARK: - Helpers
 
     private func makePlugin(
         storage: AIAssistantInMemoryPluginStorage? = nil,
-        accessibilityTrustProvider: @escaping () -> Bool = { true }
+        accessibilityTrustProvider: @escaping () -> Bool = { true },
+        panelController: RecordingAIAssistantPanelController? = nil,
+        clipboardTextProvider: @escaping () -> String? = { nil },
+        providerFactoryOverride: AIAssistantProviderFactory? = nil
     ) -> AIAssistantPlugin {
         let storage = storage ?? AIAssistantInMemoryPluginStorage()
         return AIAssistantPlugin(
@@ -282,8 +336,10 @@ final class AIAssistantPluginTests: XCTestCase {
             accessibilityTrustProvider: accessibilityTrustProvider,
             accessibilityTrustRequester: { _ in true },
             secretStore: CountingAIAssistantSecretStore(apiKey: "sk-test"),
-            panelController: RecordingAIAssistantPanelController(),
-            selectedTextCapturePipeline: SelectedTextCapturePipeline(strategies: [])
+            panelController: panelController ?? RecordingAIAssistantPanelController(),
+            selectedTextCapturePipeline: SelectedTextCapturePipeline(strategies: []),
+            providerFactoryOverride: providerFactoryOverride,
+            clipboardTextProvider: clipboardTextProvider
         )
     }
 }
@@ -316,12 +372,16 @@ private final class CountingAIAssistantSecretStore: AIAssistantSecretStoring, @u
 private final class RecordingAIAssistantPanelController: AIAssistantPanelControlling {
     var onAction: ((AIAssistantPanelAction) -> Void)?
     var isVisible = false
+    private(set) var snapshot: AIAssistantPanelSnapshot?
 
     func show(snapshot: AIAssistantPanelSnapshot) {
         isVisible = true
+        self.snapshot = snapshot
     }
 
-    func update(snapshot: AIAssistantPanelSnapshot) {}
+    func update(snapshot: AIAssistantPanelSnapshot) {
+        self.snapshot = snapshot
+    }
 
     func hide() {
         isVisible = false

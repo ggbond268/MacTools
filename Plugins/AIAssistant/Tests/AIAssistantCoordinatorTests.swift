@@ -283,6 +283,38 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
     }
 
+    func testExplicitClipboardInputProcessesCopiedTextWithoutCaptureConfirmation() async {
+        capturePipeline = StubCapturePipeline(result: .unverified("simulated copy"))
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client, clipboardTextProvider: { "Chrome copied text" })
+
+        coordinator.startProcessingClipboard(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .success }
+
+        XCTAssertEqual(capturePipeline.captureCount, 0)
+        XCTAssertEqual(client.callCount, 1)
+        XCTAssertEqual(coordinator.snapshot.sourceText, "Chrome copied text")
+        XCTAssertFalse(panelController.shownSnapshots.contains { $0.phase == .awaitingConfirmation })
+    }
+
+    func testEmptyClipboardRetryReadsClipboardAgain() async {
+        var copiedText: String?
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(client: client, clipboardTextProvider: { copiedText })
+
+        coordinator.startProcessingClipboard(prompt: Self.makePrompt())
+        XCTAssertEqual(coordinator.snapshot.phase, .error(.missingClipboardText))
+        XCTAssertEqual(client.callCount, 0)
+
+        copiedText = "new copy"
+        coordinator.handle(.retry)
+        await waitForPhase(coordinator) { $0 == .success }
+
+        XCTAssertEqual(capturePipeline.captureCount, 0)
+        XCTAssertEqual(coordinator.snapshot.sourceText, "new copy")
+        XCTAssertEqual(client.callCount, 1)
+    }
+
     // MARK: - Hidden panel completions
 
     func testCompletionWhileHiddenKeepsPanelHiddenUntilReopen() async {
@@ -315,7 +347,10 @@ final class AIAssistantCoordinatorTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeCoordinator(client: any AIProcessing) -> AIAssistantCoordinator {
+    private func makeCoordinator(
+        client: any AIProcessing,
+        clipboardTextProvider: @escaping () -> String? = { nil }
+    ) -> AIAssistantCoordinator {
         AIAssistantCoordinator(
             selectedTextCapturePipeline: capturePipeline,
             providerFactory: {
@@ -328,7 +363,8 @@ final class AIAssistantCoordinatorTests: XCTestCase {
                     )
                 )
             },
-            panelController: panelController
+            panelController: panelController,
+            clipboardTextProvider: clipboardTextProvider
         )
     }
 

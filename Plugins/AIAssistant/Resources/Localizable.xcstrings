@@ -473,6 +473,30 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵" } }
       }
     },
+    "settings.shortcutInput.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Shortcut Input" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "快捷键输入" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵輸入" } }
+      }
+    },
+    "settings.shortcutInput.clipboard.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Use Clipboard" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用剪贴板" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用剪貼簿" } }
+      }
+    },
+    "settings.shortcutInput.clipboard.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "When enabled, prompt shortcuts send the current clipboard text to AI. Copy the text you want first." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "开启后，模板快捷键会直接发送当前剪贴板文本给 AI。请先复制所需内容。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "開啟後，模板快速鍵會直接傳送目前剪貼簿文字給 AI。請先複製所需內容。" } }
+      }
+    },
     "settings.shortcut.conflict.system": {
       "extractionState": "manual",
       "localizations": {
@@ -753,6 +777,14 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "用「%@」處理目前選取的文字。" } }
       }
     },
+    "shortcut.prompt.clipboardDescriptionFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Process the current clipboard text with \"%@\"." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用「%@」处理当前剪贴板文本。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "用「%@」處理目前剪貼簿文字。" } }
+      }
+    },
     "panel.header.title": {
       "extractionState": "manual",
       "localizations": {
@@ -791,6 +823,14 @@
         "en": { "stringUnit": { "state": "translated", "value": "Press a prompt shortcut to process selected text" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "按下模板快捷键处理选中文本" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "按下模板快速鍵處理選取的文字" } }
+      }
+    },
+    "panel.subtitle.clipboardReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Press a prompt shortcut to process clipboard text" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "按下模板快捷键处理剪贴板文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "按下模板快速鍵處理剪貼簿文字" } }
       }
     },
     "panel.status.capturing": {
@@ -983,6 +1023,14 @@
         "en": { "stringUnit": { "state": "translated", "value": "No selected text found." } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "未找到选中文本" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "未找到選取的文字" } }
+      }
+    },
+    "panelError.missingClipboardText": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The clipboard has no text." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "剪贴板没有文本" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "剪貼簿沒有文字" } }
       }
     },
     "panelError.missingConfiguration": {
