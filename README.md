@@ -104,6 +104,8 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
 | Utilities & configuration | Translate selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
 
+Clipboard History can paste URL-only links copied from another device into text fields while retaining their URL format for compatible apps. Plain-text clipboard actions can also read these links.
+
 Clipboard History moves reused items to the front when you copy or paste them from the plugin, including item shortcuts and snippets. Browsing leaves the order unchanged, and sequential paste queues keep their established order. History expires after the configured period of inactivity, measured from its latest use or capture. Count and storage limits apply separately; Saved items and snippets remain available.
 
 Clipboard history defaults to a 512 MB content capacity, with 64 MB, 256 MB, 512 MB, 1 GB, and 5 GB options. Existing saved capacity settings are preserved.
