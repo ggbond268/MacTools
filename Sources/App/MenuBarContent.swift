@@ -2019,6 +2019,9 @@ private struct PluginPanelDetailView: View {
                 control: control,
                 onChange: { value, phase in
                     onSliderChange(control.id, value, phase)
+                },
+                onAccessoryInvoke: {
+                    onActionInvoke(control.id, control.actionBehavior)
                 }
             )
         case .switchRow:
@@ -2491,6 +2494,7 @@ private struct NavigationListRow: View {
 private struct SliderControl: View {
     let control: PluginPanelControl
     let onChange: (Double, PluginPanelAction.SliderPhase) -> Void
+    let onAccessoryInvoke: () -> Void
 
     @State private var localValue = 0.0
     @State private var isEditing = false
@@ -2546,6 +2550,14 @@ private struct SliderControl: View {
                     "plugin.panel.displayBrightnessFallback",
                     defaultValue: "显示器亮度"
                 ))
+
+                if let systemName = control.actionIconSystemName {
+                    SliderAccessoryButton(
+                        systemName: systemName,
+                        title: control.actionTitle,
+                        action: onAccessoryInvoke
+                    )
+                }
             }
         }
         .padding(.horizontal, FeatureRowLayout.detailControlHorizontalPadding)
@@ -2591,6 +2603,39 @@ private struct SliderControl: View {
 
         let snappedValue = (clampedValue / step).rounded() * step
         return min(max(snappedValue, bounds.lowerBound), bounds.upperBound)
+    }
+}
+
+/// Trailing icon button of a slider row. It sends `.invokeAction` with the slider's control ID
+/// and stays active while the slider is disabled, so it can bring back what the slider controls.
+private struct SliderAccessoryButton: View {
+    let systemName: String
+    let title: String?
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.menuBarPanelTheme) private var theme
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(foregroundStyle)
+                .frame(width: 22, height: 18)
+                .background {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isHovered ? theme.surfaces.hover : Color.clear)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(title ?? "")
+        .accessibilityLabel(title ?? "")
+    }
+
+    private var foregroundStyle: Color {
+        isHovered ? theme.text.primary : theme.text.secondary
     }
 }
 

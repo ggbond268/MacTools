@@ -612,6 +612,9 @@ public struct PluginPanelControl: Identifiable {
     public let sliderStep: Double?
     public let valueLabel: String?
     public let actionTitle: String?
+    /// On `.actionRow`, the row icon. On `.slider`, a trailing icon button that sends
+    /// `.invokeAction(controlID:)` with this control's ID and stays active while the slider is
+    /// disabled; `actionTitle` is its help text.
     public let actionIconSystemName: String?
     public let actionBehavior: PluginMenuActionBehavior
     public let showsLeadingDivider: Bool

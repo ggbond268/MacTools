@@ -845,7 +845,7 @@ enum Arm64DDCServiceMatcher {
         return encodedValue == 0 ? nil : encodedValue
     }
 
-    private static func displayInfoDictionary(for displayID: CGDirectDisplayID) -> NSDictionary? {
+    static func displayInfoDictionary(for displayID: CGDirectDisplayID) -> NSDictionary? {
         guard let createInfoDictionary = PrivateDDCBridge.coreDisplayCreateInfoDictionary else {
             return nil
         }

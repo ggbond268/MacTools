@@ -98,7 +98,7 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Capture & clipboard | Annotate screenshots, use OCR and QR recognition, pin images, capture scrolling content, and record a region. Keep encrypted local clipboard history, snippets, and paste queues, with a default clipboard content limit of 30 MB per item. |
 | Windows & workspace | Switch and arrange windows, launch apps, manage Stage Manager, and customize Finder's right-click menu. |
 | Keyboard, mouse & trackpad | Remap inputs, assign gestures and app shortcuts, tune scrolling, add middle-click, and type text with Auto Input. |
-| Displays & appearance | Adjust brightness and resolution, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
+| Displays & appearance | Adjust brightness and resolution, turn individual displays off, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
 | Audio & power | Control system, microphone, app, and display volume; keep the Mac awake; manage fans and charging limits; lock, sleep, or shut down. |
 | Monitoring & calendar | Follow system performance, device batteries, activity statistics, AI usage, and network status. Check your calendar and upcoming events. |
 | Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
