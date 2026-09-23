@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 import MacToolsPluginKit
 @testable import MacTools
@@ -106,6 +107,46 @@ final class DisplayBrightnessPluginTests: XCTestCase {
         XCTAssertEqual(controller.brightnessWrites.map(\.displayID), [7, 9])
     }
 
+    func testSliderPowerButtonTurnsItsDisplayOffAndBackOn() async throws {
+        let controller = MockDisplayBrightnessController()
+        controller.snapshotValue = DisplayBrightnessSnapshot(
+            displays: [
+                makeBrightnessDisplay(id: 7, name: "Studio Display", brightness: 0.72),
+                makeBrightnessDisplay(id: 9, name: "LG UltraFine", brightness: 0.41),
+            ],
+            errorMessage: nil
+        )
+        let coordinator = MockDisplayDisableCoordinator(entries: [
+            DisplayDisableEntry(id: 7, name: "Studio Display", isBuiltin: false, isDisabled: false,
+                                isDisableAllowed: true, unavailableReason: nil),
+            DisplayDisableEntry(id: 9, name: "LG UltraFine", isBuiltin: false, isDisabled: false,
+                                isDisableAllowed: false, unavailableReason: "last"),
+            DisplayDisableEntry(id: 1, name: "Built-in Display", isBuiltin: true, isDisabled: true,
+                                isDisableAllowed: false, unavailableReason: nil),
+        ])
+        let plugin = DisplayBrightnessPlugin(controller: controller, displayDisableCoordinator: coordinator)
+        plugin.handleAction(.setDisclosureExpanded(true))
+
+        let controls = try XCTUnwrap(plugin.rowState.detail?.primaryControls)
+        // A display switched off by MacTools keeps a greyed slider whose button turns it back on.
+        XCTAssertEqual(
+            controls.map(\.id),
+            ["display.7.brightness", "display.9.brightness", "display.1.brightness"]
+        )
+        XCTAssertEqual(controls.map(\.actionIconSystemName), ["power", nil, "power"])
+        XCTAssertEqual(controls.map(\.isEnabled), [true, true, false])
+
+        plugin.handleAction(.invokeAction(controlID: "display.1.brightness"))
+        XCTAssertEqual(coordinator.restoredDisplayIDs, [1])
+
+        let disabled = expectation(description: "display switched off")
+        coordinator.onDisable = { _ in disabled.fulfill() }
+        plugin.handleAction(.invokeAction(controlID: "display.7.brightness"))
+        await fulfillment(of: [disabled], timeout: 1)
+
+        XCTAssertEqual(coordinator.disabledDisplayIDs, [7])
+    }
+
     func testShortcutFollowingMouseAdjustsOnlyMouseDisplay() throws {
         let controller = MockDisplayBrightnessController()
         controller.snapshotValue = DisplayBrightnessSnapshot(
@@ -158,4 +199,32 @@ final class DisplayBrightnessPluginTests: XCTestCase {
         XCTAssertEqual(controller.brightnessWrites[1].value, 0.40, accuracy: 0.0001)
     }
 
+}
+
+@MainActor
+private final class MockDisplayDisableCoordinator: DisplayDisableCoordinating {
+    private(set) var snapshot: DisplayDisableSnapshot
+    var onSnapshotChange: (() -> Void)?
+    var onDisable: ((CGDirectDisplayID) -> Void)?
+    private(set) var disabledDisplayIDs: [CGDirectDisplayID] = []
+    private(set) var restoredDisplayIDs: [CGDirectDisplayID] = []
+
+    init(entries: [DisplayDisableEntry]) {
+        snapshot = DisplayDisableSnapshot(isSupported: true, entries: entries, message: nil)
+    }
+
+    func refreshSnapshot() {}
+
+    func disableDisplay(_ displayID: CGDirectDisplayID) async {
+        disabledDisplayIDs.append(displayID)
+        onDisable?(displayID)
+    }
+
+    func restoreDisplay(_ displayID: CGDirectDisplayID) {
+        restoredDisplayIDs.append(displayID)
+    }
+
+    func restoreAllDisplays() {}
+    func reconcileTopology() {}
+    func stopObserving() {}
 }

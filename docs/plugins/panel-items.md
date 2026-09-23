@@ -134,6 +134,13 @@ track the set of visible item IDs in the plugin. Start shared work when the firs
 item appears and stop it only when the last item disappears; widget previews must
 not initiate that work.
 
+A row detail slider may carry one trailing icon button. Set `actionIconSystemName`
+on the `.slider` control, with `actionTitle` as its tooltip and accessibility label,
+and handle `.invokeAction(controlID:)` for the slider's control ID. The button stays
+active when the slider is disabled, so omit the icon while the action is unavailable.
+Older hosts ignore the icon; raise `minHostVersion` when the action has no other
+entry point.
+
 ## Panel layout and editing
 
 Live panels follow saved item order. Equal-height widgets share a row while their

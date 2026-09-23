@@ -136,8 +136,6 @@ final class DisplayBrightnessPlugin:
     private enum Constants {
         static let displayControlPrefix = "display."
         static let brightnessControlSuffix = ".brightness"
-        static let disableBuiltInDisplayControlID = "built-in-display-disable"
-        static let restoreBuiltInDisplayControlID = "built-in-display-restore"
         static let disableBuiltInDisplayActionID = "disable-built-in-display"
         static let restoreBuiltInDisplayActionID = "restore-built-in-display"
         static let shortcutGroupID = "display-brightness.shortcuts"
@@ -162,7 +160,9 @@ final class DisplayBrightnessPlugin:
     private let localization: PluginLocalization
     private var isExpanded = false
     private var displayDisableActionTask: Task<Void, Never>?
-    private var displayTopologyTask: Task<Void, Never>?
+    /// Last known brightness, shown on the greyed slider of a display that is switched off.
+    private var lastBrightnessByDisplayID: [CGDirectDisplayID: Double] = [:]
+    private var displayOrder: [CGDirectDisplayID] = []
     private var shortcutAcceleration = DisplayBrightnessShortcutAcceleration()
     private var shortcutSessions: [String: DisplayBrightnessShortcutSession] = [:]
 
@@ -179,6 +179,7 @@ final class DisplayBrightnessPlugin:
         self.displayDisableCoordinator = displayDisableCoordinator ?? DisplayDisableCoordinator(
             service: Self.defaultDisplayDisableService(),
             store: UserDefaultsDisplayDisableStateStore(),
+            lidObserver: SystemDisplayLidObserver(),
             localization: localization
         )
         self.showsDisplayDisableControls = showsDisplayDisableControls
@@ -198,6 +199,9 @@ final class DisplayBrightnessPlugin:
             )
         )
         self.controller.onStateChange = { [weak self] in
+            self?.onStateChange?()
+        }
+        self.displayDisableCoordinator.onSnapshotChange = { [weak self] in
             self?.onStateChange?()
         }
     }
@@ -226,6 +230,7 @@ final class DisplayBrightnessPlugin:
             isAvailable: true,
             detail: isExpanded ? buildDetail(for: snapshot.displays) : nil,
             errorMessage: snapshot.errorMessage
+                ?? (showsDisplayDisableControls ? displayDisableCoordinator.snapshot.message : nil)
         )
     }
 
@@ -357,16 +362,19 @@ final class DisplayBrightnessPlugin:
         }
 
         displayDisableCoordinator.refreshSnapshot()
-        let snapshot = displayDisableCoordinator.snapshot
+        let builtIn = displayDisableCoordinator.snapshot.builtIn
         switch reference.key.actionID {
         case Constants.disableBuiltInDisplayActionID:
-            return snapshot.isDisableAllowed
+            guard let builtIn, !builtIn.isDisabled else {
+                return .unavailable(builtIn == nil ? noBuiltInDisplayMessage : PluginKitLocalization.actionUnavailable)
+            }
+            return builtIn.isDisableAllowed
                 ? .available
-                : .unavailable(snapshot.message ?? PluginKitLocalization.actionUnavailable)
+                : .unavailable(builtIn.unavailableReason ?? PluginKitLocalization.actionUnavailable)
         case Constants.restoreBuiltInDisplayActionID:
-            return snapshot.isRestoreAllowed
+            return builtIn?.isDisabled == true
                 ? .available
-                : .unavailable(snapshot.message ?? PluginKitLocalization.actionUnavailable)
+                : .unavailable(PluginKitLocalization.actionUnavailable)
         default:
             return .unavailable(PluginKitLocalization.actionUnavailable)
         }
@@ -375,11 +383,16 @@ final class DisplayBrightnessPlugin:
     func beginAction(_ invocation: ActionInvocation) throws -> ActionExecutionHandle {
         if invocation.reference.key.actionID == Constants.disableBuiltInDisplayActionID {
             let coordinator = displayDisableCoordinator
+            let noBuiltInDisplayMessage = noBuiltInDisplayMessage
             return ActionExecutionHandle { [weak self, coordinator] in
-                await coordinator.disableBuiltInDisplay()
+                coordinator.refreshSnapshot()
+                guard let builtIn = coordinator.snapshot.builtIn, !builtIn.isDisabled else {
+                    return .failed(message: noBuiltInDisplayMessage)
+                }
+                await coordinator.disableDisplay(builtIn.id)
                 self?.onStateChange?()
                 let snapshot = coordinator.snapshot
-                return snapshot.status == .disabled
+                return snapshot.entry(for: builtIn.id)?.isDisabled == true
                     ? .succeeded()
                     : .failed(message: snapshot.message ?? PluginKitLocalization.actionUnavailable)
             }
@@ -387,13 +400,16 @@ final class DisplayBrightnessPlugin:
         if invocation.reference.key.actionID == Constants.restoreBuiltInDisplayActionID {
             let coordinator = displayDisableCoordinator
             return ActionExecutionHandle { [weak self, coordinator] in
-                coordinator.restoreBuiltInDisplay()
+                coordinator.refreshSnapshot()
+                guard let builtIn = coordinator.snapshot.builtIn, builtIn.isDisabled else {
+                    return .failed(message: PluginKitLocalization.actionUnavailable)
+                }
+                coordinator.restoreDisplay(builtIn.id)
                 self?.onStateChange?()
                 let snapshot = coordinator.snapshot
-                if snapshot.status == .failed || snapshot.isRestoreAllowed {
-                    return .failed(message: snapshot.message ?? PluginKitLocalization.actionUnavailable)
-                }
-                return .succeeded()
+                return snapshot.builtIn?.isDisabled == true
+                    ? .failed(message: snapshot.message ?? PluginKitLocalization.actionUnavailable)
+                    : .succeeded()
             }
         }
 
@@ -473,12 +489,8 @@ final class DisplayBrightnessPlugin:
 
     func refreshDisplayTopology() {
         controller.refresh()
-        let coordinator = displayDisableCoordinator
-        displayTopologyTask?.cancel()
-        displayTopologyTask = Task { @MainActor [weak self, coordinator] in
-            await coordinator.reconcileTopology()
-            self?.onStateChange?()
-        }
+        displayDisableCoordinator.reconcileTopology()
+        onStateChange?()
     }
 
     func handleAction(_ action: PluginPanelAction) {
@@ -533,13 +545,21 @@ final class DisplayBrightnessPlugin:
         }
     }
 
+    func activate(context: PluginRuntimeContext) {
+        // A switch-off lasts only for the process that made it. The window server normally
+        // reverts it on exit; restore anything a previous run still left off, in case it did not.
+        displayDisableCoordinator.restoreAllDisplays()
+    }
+
     func deactivate(reason: PluginDeactivationReason) {
         displayDisableActionTask?.cancel()
-        displayTopologyTask?.cancel()
+        displayDisableActionTask = nil
         stopAllShortcutActions()
         controller.cancelOutstandingWrites()
-        guard reason.requiresStateCleanup else { return }
-        displayDisableCoordinator.restoreBuiltInDisplay()
+        if reason.requiresStateCleanup {
+            displayDisableCoordinator.restoreAllDisplays()
+        }
+        displayDisableCoordinator.stopObserving()
     }
 
     static func parseDisplayID(from controlID: String) -> CGDirectDisplayID? {
@@ -558,6 +578,9 @@ final class DisplayBrightnessPlugin:
             controlID.endIndex,
             offsetBy: -Constants.brightnessControlSuffix.count
         )
+        guard startIndex <= endIndex else {
+            return nil
+        }
         return CGDirectDisplayID(controlID[startIndex..<endIndex])
     }
 
@@ -570,145 +593,144 @@ final class DisplayBrightnessPlugin:
     }
 
     private func buildDetail(for displays: [DisplayBrightnessDisplay]) -> PluginPanelDetail {
-        let brightnessControls = displays.map { display in
-            PluginPanelControl(
-                id: "\(Constants.displayControlPrefix)\(display.display.id)\(Constants.brightnessControlSuffix)",
-                kind: .slider,
-                options: [],
-                selectedOptionID: nil,
-                dateValue: nil,
-                minimumDate: nil,
-                displayedComponents: nil,
-                datePickerStyle: nil,
-                sectionTitle: display.display.name,
-                sliderValue: display.brightness,
-                sliderBounds: 0...1,
-                sliderStep: 0.01,
-                valueLabel: Self.percentText(for: display.brightness),
-                isEnabled: true
-            )
+        let disableSnapshot = displayDisableCoordinator.snapshot
+        for display in displays {
+            lastBrightnessByDisplayID[display.id] = display.brightness
         }
 
+        var rows = displays.map { display in
+            BrightnessRow(
+                id: display.id,
+                name: display.display.name,
+                brightness: display.brightness,
+                isAdjustable: true,
+                disableEntry: switchableEntry(for: display.id, in: disableSnapshot)
+            )
+        }
+        // A display switched off by MacTools, or one without a brightness backend, keeps a
+        // greyed slider so its power button stays where the person expects it.
+        let sliderIDs = Set(displays.map(\.id))
+        for entry in disableSnapshot.entries where !sliderIDs.contains(entry.id) {
+            guard let disableEntry = switchableEntry(for: entry.id, in: disableSnapshot) else {
+                continue
+            }
+            rows.append(BrightnessRow(
+                id: entry.id,
+                name: entry.name,
+                brightness: lastBrightnessByDisplayID[entry.id] ?? 0,
+                isAdjustable: false,
+                disableEntry: disableEntry
+            ))
+        }
+        rememberDisplayOrder(rows.map(\.id))
+        rows.sort { (displayOrder.firstIndex(of: $0.id) ?? 0) < (displayOrder.firstIndex(of: $1.id) ?? 0) }
+
         return PluginPanelDetail(
-            primaryControls: brightnessControls + displayDisableControls(),
+            primaryControls: rows.map(brightnessControl(for:)),
             secondaryPanel: nil
         )
     }
 
-    private func displayDisableControls() -> [PluginPanelControl] {
-        guard showsDisplayDisableControls else {
-            return []
-        }
-
-        let snapshot = displayDisableCoordinator.snapshot
-        switch snapshot.status {
-        case .unsupported:
-            return [displayDisableActionControl(
-                id: Constants.disableBuiltInDisplayControlID,
-                title: localization.string(
-                    "displayDisable.action.disable",
-                    defaultValue: "关闭内建显示屏"
-                ),
-                iconName: "display",
-                isEnabled: false
-            )]
-        case .unavailable:
-            var controls = [displayDisableActionControl(
-                id: Constants.disableBuiltInDisplayControlID,
-                title: localization.string(
-                    "displayDisable.action.disable",
-                    defaultValue: "关闭内建显示屏"
-                ),
-                iconName: "display",
-                isEnabled: false
-            )]
-            if snapshot.isRestoreAllowed {
-                controls.append(displayDisableActionControl(
-                    id: Constants.restoreBuiltInDisplayControlID,
-                    title: localization.string(
-                        "displayDisable.action.restore",
-                        defaultValue: "恢复内建显示屏"
-                    ),
-                    iconName: "display",
-                    isEnabled: true
-                ))
-            }
-            return controls
-        case .disabled:
-            return [displayDisableActionControl(
-                id: Constants.restoreBuiltInDisplayControlID,
-                title: localization.string(
-                    "displayDisable.action.restore",
-                    defaultValue: "恢复内建显示屏"
-                ),
-                iconName: "display",
-                isEnabled: snapshot.isRestoreAllowed
-            )]
-        case .available, .failed, .busy:
-            var controls: [PluginPanelControl] = []
-            controls.append(displayDisableActionControl(
-                id: Constants.disableBuiltInDisplayControlID,
-                title: localization.string(
-                    "displayDisable.action.disable",
-                    defaultValue: "关闭内建显示屏"
-                ),
-                iconName: "display",
-                isEnabled: snapshot.isDisableAllowed
-            ))
-            if snapshot.isRestoreAllowed {
-                controls.append(displayDisableActionControl(
-                    id: Constants.restoreBuiltInDisplayControlID,
-                    title: localization.string(
-                        "displayDisable.action.restore",
-                        defaultValue: "恢复内建显示屏"
-                    ),
-                    iconName: "display",
-                    isEnabled: true
-                ))
-            }
-            return controls
-        }
+    private struct BrightnessRow {
+        let id: CGDirectDisplayID
+        let name: String
+        let brightness: Double
+        let isAdjustable: Bool
+        /// Present when the trailing power button can switch this display off or back on.
+        let disableEntry: DisplayDisableEntry?
     }
 
-    private func displayDisableActionControl(
-        id: String,
-        title: String,
-        iconName: String,
-        isEnabled: Bool
-    ) -> PluginPanelControl {
-        PluginPanelControl(
-            id: id,
-            kind: .actionRow,
+    private func brightnessControl(for row: BrightnessRow) -> PluginPanelControl {
+        let isOff = row.disableEntry?.isDisabled == true
+        let valueLabel: String?
+        if isOff {
+            valueLabel = localization.string("displayDisable.status.off", defaultValue: "已关闭")
+        } else {
+            valueLabel = row.isAdjustable ? Self.percentText(for: row.brightness) : nil
+        }
+
+        return PluginPanelControl(
+            id: "\(Constants.displayControlPrefix)\(row.id)\(Constants.brightnessControlSuffix)",
+            kind: .slider,
             options: [],
             selectedOptionID: nil,
             dateValue: nil,
             minimumDate: nil,
             displayedComponents: nil,
             datePickerStyle: nil,
-            sectionTitle: nil,
-            actionTitle: title,
-            actionIconSystemName: iconName,
-            showsLeadingDivider: true,
-            isEnabled: isEnabled
+            sectionTitle: row.name,
+            sliderValue: row.brightness,
+            sliderBounds: 0...1,
+            sliderStep: 0.01,
+            valueLabel: valueLabel,
+            actionTitle: row.disableEntry.map(displayDisableTitle(for:)),
+            actionIconSystemName: row.disableEntry == nil ? nil : "power",
+            isEnabled: row.isAdjustable && !isOff
         )
     }
 
+    /// Keeps each display's row in the place it first appeared, so switching a display off or
+    /// back on does not move its row.
+    private func rememberDisplayOrder(_ displayIDs: [CGDirectDisplayID]) {
+        for displayID in displayIDs where !displayOrder.contains(displayID) {
+            displayOrder.append(displayID)
+        }
+    }
+
+    /// The display-disable entry whose power button can act now: switch off an allowed display,
+    /// or switch back on one MacTools turned off.
+    private func switchableEntry(
+        for displayID: CGDirectDisplayID,
+        in snapshot: DisplayDisableSnapshot
+    ) -> DisplayDisableEntry? {
+        guard showsDisplayDisableControls, snapshot.isSupported,
+              let entry = snapshot.entry(for: displayID),
+              entry.isDisabled || entry.isDisableAllowed
+        else {
+            return nil
+        }
+        return entry
+    }
+
+    private func displayDisableTitle(for entry: DisplayDisableEntry) -> String {
+        switch (entry.isBuiltin, entry.isDisabled) {
+        case (true, false):
+            return localization.string("displayDisable.action.disable", defaultValue: "关闭内建显示屏")
+        case (true, true):
+            return localization.string("displayDisable.action.restore", defaultValue: "恢复内建显示屏")
+        case (false, false):
+            return localization.format("displayDisable.action.disableFormat", defaultValue: "关闭“%@”", entry.name)
+        case (false, true):
+            return localization.format("displayDisable.action.restoreFormat", defaultValue: "恢复“%@”", entry.name)
+        }
+    }
+
+    /// The slider's power button: switch its display off, or back on when MacTools turned it off.
     private func handleInvokeAction(controlID: String) {
-        switch controlID {
-        case Constants.disableBuiltInDisplayControlID:
-            displayDisableActionTask?.cancel()
-            let coordinator = displayDisableCoordinator
-            displayDisableActionTask = Task { @MainActor [weak self, coordinator] in
-                await coordinator.disableBuiltInDisplay()
-                self?.onStateChange?()
-            }
-        case Constants.restoreBuiltInDisplayControlID:
-            displayDisableActionTask?.cancel()
-            displayDisableCoordinator.restoreBuiltInDisplay()
-            onStateChange?()
-        default:
+        guard let displayID = Self.parseDisplayID(from: controlID),
+              let entry = displayDisableCoordinator.snapshot.entry(for: displayID),
+              displayDisableActionTask == nil
+        else {
             return
         }
+
+        if entry.isDisabled {
+            displayDisableCoordinator.restoreDisplay(displayID)
+            onStateChange?()
+            return
+        }
+
+        let coordinator = displayDisableCoordinator
+        displayDisableActionTask = Task { @MainActor [weak self, coordinator] in
+            await coordinator.disableDisplay(displayID)
+            self?.displayDisableActionTask = nil
+            self?.onStateChange?()
+        }
+        onStateChange?()
+    }
+
+    private var noBuiltInDisplayMessage: String {
+        localization.string("displayDisable.message.noBuiltInDisplay", defaultValue: "未检测到内建显示屏")
     }
 
     private static func percentText(for brightness: Double) -> String {
