@@ -45,6 +45,51 @@ final class DisplayDisableCoordinatorRecoveryTests: XCTestCase {
         XCTAssertTrue(fixture.store.records.isEmpty)
     }
 
+    func testRestoreDropsExternalDisplayThatWasUnplugged() {
+        let builtIn = makeDisplay(id: 1, isBuiltin: true)
+        let record = DisplayDisableRecord(
+            createdAt: Date(timeIntervalSince1970: 1),
+            displayID: 2,
+            name: "Display 2",
+            isBuiltin: false,
+            vendorNumber: 0x10AC,
+            modelNumber: 0x4242,
+            serialNumber: 0x21,
+            survivorIdentities: [DisplaySurvivorIdentity(id: 1, vendorNumber: nil, modelNumber: nil, serialNumber: nil)]
+        )
+        let service = FakeDisplayDisableService(onlineDisplays: [builtIn])
+        let store = FakeDisplayDisableStore(records: [record])
+        let coordinator = makeCoordinator(service: service, store: store)
+
+        coordinator.restoreAllDisplays()
+
+        XCTAssertTrue(store.records.isEmpty)
+        XCTAssertNil(coordinator.snapshot.message)
+        XCTAssertNil(coordinator.snapshot.entry(for: 2))
+    }
+
+    /// Disabling the plugin with the lid closed must still bring the built-in display back once
+    /// the lid opens, even though the process keeps running.
+    func testDeactivationKeepsWatchingLidUntilBuiltInIsRestored() {
+        let fixture = makeDisabledBuiltInFixture()
+        fixture.service.isLidClosed = true
+
+        fixture.coordinator.deactivate(restoringDisplays: true)
+
+        XCTAssertTrue(fixture.service.setEnabledCalls.isEmpty)
+        XCTAssertTrue(fixture.lidObserver.isObserving)
+
+        fixture.service.isLidClosed = false
+        fixture.lidObserver.simulateLidChange()
+
+        XCTAssertEqual(
+            fixture.service.setEnabledCalls,
+            [.init(displayID: fixture.disabledBuiltIn.id, enabled: true)]
+        )
+        XCTAssertTrue(fixture.store.records.isEmpty)
+        XCTAssertFalse(fixture.lidObserver.isObserving)
+    }
+
     func testClosedLidDefersBuiltInRestoreUntilLidOpens() {
         let fixture = makeDisabledBuiltInFixture()
         fixture.service.isLidClosed = true
@@ -278,6 +323,9 @@ private final class FakeDisplayDisableService: DisplayDisableServicing {
     }
 
     func setDisplay(_ displayID: CGDirectDisplayID, enabled: Bool) throws {
+        guard onlineDisplays.contains(where: { $0.id == displayID }) else {
+            throw DisplayDisableServiceError.configureDisplayFailed(.illegalArgument)
+        }
         setEnabledCalls.append(SetEnabledCall(displayID: displayID, enabled: enabled))
         onlineDisplays = onlineDisplays.map { display in
             guard display.id == displayID else { return display }

@@ -160,9 +160,9 @@ final class DisplayBrightnessPlugin:
     private let localization: PluginLocalization
     private var isExpanded = false
     private var displayDisableActionTask: Task<Void, Never>?
-    /// Last known brightness, shown on the greyed slider of a display that is switched off.
-    private var lastBrightnessByDisplayID: [CGDirectDisplayID: Double] = [:]
-    private var displayOrder: [CGDirectDisplayID] = []
+    /// Where a display's slider sat, and its brightness, when it was switched off, so its greyed
+    /// row keeps that place and value.
+    private var offDisplayPlacements: [CGDirectDisplayID: OffDisplayPlacement] = [:]
     private var shortcutAcceleration = DisplayBrightnessShortcutAcceleration()
     private var shortcutSessions: [String: DisplayBrightnessShortcutSession] = [:]
 
@@ -208,8 +208,9 @@ final class DisplayBrightnessPlugin:
 
     var rowState: PluginPanelRowState {
         let snapshot = controller.snapshot()
+        let disableMessage = showsDisplayDisableControls ? displayDisableCoordinator.snapshot.message : nil
 
-        guard !snapshot.displays.isEmpty else {
+        guard !snapshot.displays.isEmpty || hasOffDisplayRows else {
             return PluginPanelRowState(
                 subtitle: localization.string(
                     "panel.subtitle.noDisplays",
@@ -219,19 +220,26 @@ final class DisplayBrightnessPlugin:
                 isEnabled: false,
                 isAvailable: true,
                 detail: nil,
-                errorMessage: snapshot.errorMessage
+                errorMessage: snapshot.errorMessage ?? disableMessage
             )
         }
 
         return PluginPanelRowState(
-            subtitle: subtitle(for: snapshot.displays),
+            subtitle: snapshot.displays.isEmpty
+                ? localization.string("panel.subtitle.noDisplays", defaultValue: "未检测到可调节亮度的显示器")
+                : subtitle(for: snapshot.displays),
             isOn: false,
             isEnabled: true,
             isAvailable: true,
             detail: isExpanded ? buildDetail(for: snapshot.displays) : nil,
-            errorMessage: snapshot.errorMessage
-                ?? (showsDisplayDisableControls ? displayDisableCoordinator.snapshot.message : nil)
+            errorMessage: snapshot.errorMessage ?? disableMessage
         )
+    }
+
+    /// Whether a display without a brightness slider still needs a row for its power button.
+    private var hasOffDisplayRows: Bool {
+        let snapshot = displayDisableCoordinator.snapshot
+        return snapshot.entries.contains { switchableEntry(for: $0.id, in: snapshot) != nil }
     }
 
     var permissionRequirements: [PluginPermissionRequirement] { [] }
@@ -389,6 +397,7 @@ final class DisplayBrightnessPlugin:
                 guard let builtIn = coordinator.snapshot.builtIn, !builtIn.isDisabled else {
                     return .failed(message: noBuiltInDisplayMessage)
                 }
+                self?.rememberPlacement(of: builtIn.id)
                 await coordinator.disableDisplay(builtIn.id)
                 self?.onStateChange?()
                 let snapshot = coordinator.snapshot
@@ -490,6 +499,8 @@ final class DisplayBrightnessPlugin:
     func refreshDisplayTopology() {
         controller.refresh()
         displayDisableCoordinator.reconcileTopology()
+        let snapshot = displayDisableCoordinator.snapshot
+        offDisplayPlacements = offDisplayPlacements.filter { snapshot.entry(for: $0.key)?.isDisabled == true }
         onStateChange?()
     }
 
@@ -556,10 +567,7 @@ final class DisplayBrightnessPlugin:
         displayDisableActionTask = nil
         stopAllShortcutActions()
         controller.cancelOutstandingWrites()
-        if reason.requiresStateCleanup {
-            displayDisableCoordinator.restoreAllDisplays()
-        }
-        displayDisableCoordinator.stopObserving()
+        displayDisableCoordinator.deactivate(restoringDisplays: reason.requiresStateCleanup)
     }
 
     static func parseDisplayID(from controlID: String) -> CGDirectDisplayID? {
@@ -594,10 +602,6 @@ final class DisplayBrightnessPlugin:
 
     private func buildDetail(for displays: [DisplayBrightnessDisplay]) -> PluginPanelDetail {
         let disableSnapshot = displayDisableCoordinator.snapshot
-        for display in displays {
-            lastBrightnessByDisplayID[display.id] = display.brightness
-        }
-
         var rows = displays.map { display in
             BrightnessRow(
                 id: display.id,
@@ -607,27 +611,50 @@ final class DisplayBrightnessPlugin:
                 disableEntry: switchableEntry(for: display.id, in: disableSnapshot)
             )
         }
+
         // A display switched off by MacTools, or one without a brightness backend, keeps a
         // greyed slider so its power button stays where the person expects it.
         let sliderIDs = Set(displays.map(\.id))
-        for entry in disableSnapshot.entries where !sliderIDs.contains(entry.id) {
-            guard let disableEntry = switchableEntry(for: entry.id, in: disableSnapshot) else {
-                continue
+        let extraRows = disableSnapshot.entries
+            .filter { !sliderIDs.contains($0.id) }
+            .compactMap { entry -> (index: Int, row: BrightnessRow)? in
+                guard let disableEntry = switchableEntry(for: entry.id, in: disableSnapshot) else {
+                    return nil
+                }
+                let placement = offDisplayPlacements[entry.id]
+                let row = BrightnessRow(
+                    id: entry.id,
+                    name: entry.name,
+                    brightness: placement?.brightness ?? 0,
+                    isAdjustable: false,
+                    disableEntry: disableEntry
+                )
+                return (placement?.index ?? Int.max, row)
             }
-            rows.append(BrightnessRow(
-                id: entry.id,
-                name: entry.name,
-                brightness: lastBrightnessByDisplayID[entry.id] ?? 0,
-                isAdjustable: false,
-                disableEntry: disableEntry
-            ))
+            .sorted { $0.index < $1.index }
+        for extra in extraRows {
+            rows.insert(extra.row, at: min(extra.index, rows.count))
         }
-        rememberDisplayOrder(rows.map(\.id))
-        rows.sort { (displayOrder.firstIndex(of: $0.id) ?? 0) < (displayOrder.firstIndex(of: $1.id) ?? 0) }
 
         return PluginPanelDetail(
             primaryControls: rows.map(brightnessControl(for:)),
             secondaryPanel: nil
+        )
+    }
+
+    private struct OffDisplayPlacement {
+        let index: Int
+        let brightness: Double
+    }
+
+    private func rememberPlacement(of displayID: CGDirectDisplayID) {
+        let displays = controller.snapshot().displays
+        guard let index = displays.firstIndex(where: { $0.id == displayID }) else {
+            return
+        }
+        offDisplayPlacements[displayID] = OffDisplayPlacement(
+            index: index,
+            brightness: displays[index].brightness
         )
     }
 
@@ -667,14 +694,6 @@ final class DisplayBrightnessPlugin:
             actionIconSystemName: row.disableEntry == nil ? nil : "power",
             isEnabled: row.isAdjustable && !isOff
         )
-    }
-
-    /// Keeps each display's row in the place it first appeared, so switching a display off or
-    /// back on does not move its row.
-    private func rememberDisplayOrder(_ displayIDs: [CGDirectDisplayID]) {
-        for displayID in displayIDs where !displayOrder.contains(displayID) {
-            displayOrder.append(displayID)
-        }
     }
 
     /// The display-disable entry whose power button can act now: switch off an allowed display,
@@ -720,6 +739,7 @@ final class DisplayBrightnessPlugin:
             return
         }
 
+        rememberPlacement(of: displayID)
         let coordinator = displayDisableCoordinator
         displayDisableActionTask = Task { @MainActor [weak self, coordinator] in
             await coordinator.disableDisplay(displayID)

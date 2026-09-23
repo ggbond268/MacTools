@@ -15,13 +15,18 @@ protocol DisplayDisableCoordinating: AnyObject {
     /// switched off by anything else are never touched.
     func restoreAllDisplays()
     func reconcileTopology()
-    func stopObserving()
+    /// Stops lid observation, except while a cleanup restore of the built-in display still waits
+    /// for the lid to open: the observer then keeps this coordinator alive until it finishes.
+    func deactivate(restoringDisplays: Bool)
 }
 
 @MainActor
 final class DisplayDisableCoordinator: DisplayDisableCoordinating {
     private enum RestoreResult {
         case restored
+        /// An external display that is no longer connected. Reconnecting turns it back on, so
+        /// there is nothing left to restore.
+        case disconnected
         case lidClosed
         case failed
     }
@@ -36,9 +41,9 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
     private(set) var snapshot: DisplayDisableSnapshot
     var onSnapshotChange: (() -> Void)?
     private var message: String?
-    /// The display whose switch-off is still being verified. Reconciles that run meanwhile must
-    /// not drop or restore its record before the transaction has settled.
-    private var pendingDisableID: CGDirectDisplayID?
+    /// Displays whose switch-off is still being verified. Reconciles that run meanwhile must not
+    /// drop or restore their records before the transaction has settled.
+    private var pendingDisableIDs = Set<CGDirectDisplayID>()
 
     init(
         service: any DisplayDisableServicing,
@@ -65,6 +70,9 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
     }
 
     func disableDisplay(_ displayID: CGDirectDisplayID) async {
+        guard !pendingDisableIDs.contains(displayID) else {
+            return
+        }
         let displays = service.listDisplays()
         guard let target = displays.first(where: { $0.id == displayID && $0.isDrawable }) else {
             finish(message: string("displayDisable.message.displayDisconnected", "显示器已断开连接"))
@@ -91,8 +99,8 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
             survivorIdentities: survivors.map(survivorIdentity(for:))
         ))
         store.records = records
-        pendingDisableID = target.id
-        defer { pendingDisableID = nil }
+        pendingDisableIDs.insert(target.id)
+        defer { pendingDisableIDs.remove(target.id) }
 
         do {
             presentationPreparation()
@@ -116,8 +124,13 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         }
 
         presentationPreparation()
-        if (try? service.setDisplay(target.id, enabled: true)) != nil {
+        do {
+            try service.setDisplay(target.id, enabled: true)
             removeRecord(displayID: target.id)
+        } catch {
+            DisplayBrightnessLog.plugin.error(
+                "could not roll back unverified switch-off of display \(target.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
         }
         finish(message: string("displayDisable.message.disableFailedRestored", "关闭显示器失败，已尝试恢复"))
     }
@@ -130,7 +143,7 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         }
 
         switch restore(records[index], displays: service.listDisplays()) {
-        case .restored:
+        case .restored, .disconnected:
             records.remove(at: index)
             message = nil
         case .lidClosed:
@@ -155,7 +168,7 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         }
         for var record in pending {
             let result = restore(record, displays: displays)
-            guard result != .restored else {
+            guard result != .restored, result != .disconnected else {
                 continue
             }
             // Every later reconcile retries it: after the lid opens, or on the next start at
@@ -170,6 +183,11 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         } else {
             message = remaining.isEmpty ? nil : lidClosedMessage
         }
+        if !remaining.isEmpty {
+            DisplayBrightnessLog.plugin.notice(
+                "\(remaining.count, privacy: .public) switched-off display(s) remain after restoring all"
+            )
+        }
         syncLidObserver()
         refreshSnapshot()
     }
@@ -179,7 +197,7 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         var records = store.records.filter { record in
             // A display that is back on, re-enabled elsewhere or reconnected, is no longer
             // ours to manage.
-            record.displayID == pendingDisableID
+            pendingDisableIDs.contains(record.displayID)
                 || !displays.contains { $0.isDrawable && record.matchesTarget($0) }
         }
 
@@ -191,7 +209,7 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         var restoredAny = false
         var restoreFailed = false
         for record in records.sorted(by: { $0.isBuiltin && !$1.isBuiltin }) {
-            guard record.displayID != pendingDisableID,
+            guard !pendingDisableIDs.contains(record.displayID),
                   record.restoreRequested || !survivorRemains(for: record, displays: displays)
             else {
                 kept.append(record)
@@ -202,6 +220,8 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
             case .restored:
                 restoredAny = true
                 displays = service.listDisplays()
+            case .disconnected:
+                continue
             case .lidClosed:
                 // The lid observer retries once the lid opens.
                 kept.append(record)
@@ -215,7 +235,7 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         // Never leave the Mac without a usable display: if nothing drawable remains, bring back
         // one display MacTools switched off, whatever its survivors say.
         if !restoredAny, !displays.contains(where: \.isDrawable) {
-            for (index, record) in records.enumerated() where record.displayID != pendingDisableID {
+            for (index, record) in records.enumerated() where !pendingDisableIDs.contains(record.displayID) {
                 if restore(record, displays: displays) == .restored {
                     records.remove(at: index)
                     restoredAny = true
@@ -234,8 +254,16 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
         refreshSnapshot()
     }
 
-    func stopObserving() {
-        lidObserver.stopObserving()
+    func deactivate(restoringDisplays: Bool) {
+        if restoringDisplays {
+            restoreAllDisplays()
+        }
+        // A deactivated plugin cannot finish a built-in restore the closed lid deferred, and the
+        // process may keep running long after, so keep watching the lid until it is done.
+        let awaitsLidOpen = restoringDisplays && store.records.contains(where: \.isBuiltin)
+        if !awaitsLidOpen {
+            lidObserver.stopObserving()
+        }
     }
 
     private func restore(_ record: DisplayDisableRecord, displays: [DisplayDisableDisplay]) -> RestoreResult {
@@ -255,8 +283,13 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
                 try service.setDisplay(displayID, enabled: true)
                 return .restored
             } catch {
-                continue
+                DisplayBrightnessLog.plugin.error(
+                    "could not restore display \(displayID, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             }
+        }
+        if !record.isBuiltin, !displays.contains(where: record.matchesTarget) {
+            return .disconnected
         }
         return .failed
     }
@@ -331,10 +364,11 @@ final class DisplayDisableCoordinator: DisplayDisableCoordinating {
             return
         }
 
-        lidObserver.startObserving { [weak self] in
-            guard let self else { return }
-            self.reconcileTopology()
-            self.onSnapshotChange?()
+        // Captured strongly on purpose: the cycle ends when observation stops, which lets a
+        // deferred restore finish even after the plugin that owns this coordinator deactivates.
+        lidObserver.startObserving { [self] in
+            reconcileTopology()
+            onSnapshotChange?()
         }
     }
 

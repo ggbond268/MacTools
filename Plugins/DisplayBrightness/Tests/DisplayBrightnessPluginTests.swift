@@ -226,5 +226,5 @@ private final class MockDisplayDisableCoordinator: DisplayDisableCoordinating {
 
     func restoreAllDisplays() {}
     func reconcileTopology() {}
-    func stopObserving() {}
+    func deactivate(restoringDisplays: Bool) {}
 }

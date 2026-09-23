@@ -76,8 +76,14 @@ final class SystemDisplayDisableService: DisplayDisableServicing {
         Self.readLidClosed()
     }
 
+    /// The power-management root domain, which publishes the clamshell state. The caller
+    /// releases the returned service; 0 when it cannot be found.
+    static func rootDomainService() -> io_service_t {
+        IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+    }
+
     static func readLidClosed() -> Bool? {
-        let rootDomain = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        let rootDomain = rootDomainService()
         guard rootDomain != 0 else {
             return nil
         }
@@ -210,7 +216,7 @@ final class SystemDisplayLidObserver: DisplayLidObserving {
             return
         }
 
-        let rootDomain = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        let rootDomain = SystemDisplayDisableService.rootDomainService()
         guard rootDomain != 0 else {
             DisplayBrightnessLog.plugin.error("could not find IOPMrootDomain to observe the lid")
             return
