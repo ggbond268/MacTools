@@ -112,7 +112,7 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Keyboard, mouse & trackpad | Remap inputs, assign gestures and app shortcuts, tune scrolling, add middle-click, and type text with Auto Input. |
 | Displays & appearance | Adjust brightness and resolution, turn individual displays off, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
 | Audio & power | Control system, microphone, app, and display volume; keep the Mac awake; manage fans and charging limits; lock, sleep, or shut down. |
-| Monitoring & calendar | Follow system performance, device batteries, activity statistics, AI usage, and network status. Check your calendar and upcoming events. |
+| Monitoring & calendar | Follow system performance, device batteries, activity statistics, AI usage, and network status, or combine battery, Wi-Fi, and volume into one resizable menu bar icon with the battery percentage, status colors, detailed network states, and a Bluetooth audio mark. Check your calendar and upcoming events. |
 | Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
 | Utilities & configuration | Translate selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
 

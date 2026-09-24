@@ -86,6 +86,7 @@
       "duo",
       "battery",
       "wifi",
+      "volume",
       "network",
       "menu bar",
       "status"
@@ -157,7 +158,8 @@
     "dataObserved": [
       "battery-state",
       "wifi-signal",
-      "network-connection-state"
+      "network-connection-state",
+      "output-volume"
     ],
     "dataPersisted": [
       "plugin-configuration"

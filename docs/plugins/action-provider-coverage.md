@@ -42,7 +42,7 @@ The maintenance providers use deliberately narrow contracts:
 These plugins should not publish a canonical action merely to appear in action pickers:
 
 - `AIUsage` presents subscription quota snapshots. Credential authorization and refresh controls remain in its settings and Dashboard component; it does not expose account access through automation or Run Links.
-- `DuoStatus` displays battery and network snapshots in a standalone or host-primary menu-bar icon. Its settings request exclusive placement through the host; it has no repeatable system mutation to publish as an action.
+- `DuoStatus` displays battery, network, and volume snapshots in one standalone or host-primary menu-bar icon. Its settings request exclusive placement through the host and otherwise expose only appearance options; it has no repeatable system mutation to publish as an action.
 - `Calendar`, `DeviceBattery`, and `SystemStatus` primarily present information without a stable repeatable mutation. Calendar's selected-date context belongs in its view, while app launching is already covered by App Hotkeys.
 - `MacSettings`, `MouseEnhancer`, and `ZshConfig` are configuration editors. Mac Settings consumes existing canonical providers for settings that already have one, while runnable shell tasks belong in Saved Scripts.
 - `InputRemapping` is an input-lifecycle and configuration surface rather than one stable repeatable operation. If it adopts canonical MacTools actions as mapping outputs, it remains an action consumer rather than publishing a parallel provider surface.
