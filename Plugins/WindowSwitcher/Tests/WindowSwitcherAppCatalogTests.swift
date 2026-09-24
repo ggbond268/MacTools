@@ -79,6 +79,21 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
         XCTAssertEqual(published.compactMap(\.windowNumber), [8])
     }
 
+    func testSoleTitlelessAXSurfaceWithoutSpaceIsNotPublished() {
+        let entry = WindowSwitcherAppEntry(id: "ghost", processIdentifier: 42,
+            bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "", icon: nil,
+            windowElement: AXUIElementCreateApplication(42), isMinimized: false,
+            windowNumber: 7, shortcutToken: nil)
+        var ghost = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 42,
+            title: "", isOnScreen: false, bounds: CGRect(x: 0, y: 0, width: 500, height: 500))
+        ghost.hasSpace = false
+        var publication = WindowSwitcherPublishedWindows()
+
+        publication.update(snapshots: [42: [entry]], records: [ghost], recordsAreFresh: true)
+
+        XCTAssertTrue(publication.entries.isEmpty)
+    }
+
     func testMinimizedWindowUsesRestorePathUnlessExplicitlyOnAnotherSpace() {
         var minimized = WindowSwitcherAppEntry(id: "minimized", processIdentifier: 42,
             bundleIdentifier: "fixture", appName: "Fixture", windowTitle: "Window", icon: nil,

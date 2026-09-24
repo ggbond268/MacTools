@@ -793,6 +793,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
         modeBeforeSearch = nil
         activeMode = configuredMode
+        previewImage.prefersGestureFocus = configuredMode == .directCycle
         session.normalizeSelection()
         self.session = session
         actionMessage = nil

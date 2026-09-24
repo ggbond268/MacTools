@@ -637,7 +637,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             fallbackEntry.isOnFullscreenSpace = record.isOnFullscreenSpace == true
             return fallbackEntry
         }
-        return windows.isEmpty && fallback.isEmpty ? entries : windows + fallback
+        return windows + fallback
     }
 
     static func sameBounds(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
