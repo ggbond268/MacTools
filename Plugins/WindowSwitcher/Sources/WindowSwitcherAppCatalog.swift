@@ -344,8 +344,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
         guard !discovery.isDragging() else { scheduleRefresh(); return }
         if windowRecordsPending { refreshAllSpaces() }
         let pids = dirtyHosts.sorted {
-            let lhsActive = applicationsByPID[$0]?.isActive == true
-            let rhsActive = applicationsByPID[$1]?.isActive == true
+            let lhsActive = activeWorkerPID(for: $0) != nil
+            let rhsActive = activeWorkerPID(for: $1) != nil
             return lhsActive == rhsActive ? $0 < $1 : lhsActive
         }
         for pid in pids {
@@ -368,7 +368,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 guard let self, running, workers[pid] === worker else { return }
                 var entries = windowEntries(from: result, app: app, ownerPID: pid)
                 var helperUnavailable = false
-                for helperPID in helperPIDsByHost[pid] ?? [] {
+                var helperFocusIDs: [pid_t: String] = [:]
+                for helperPID in (helperPIDsByHost[pid] ?? []).sorted() {
                     guard let helperApp = applicationsByPID[helperPID] else { continue }
                     let helperWorker = ensureWorker(pid: helperPID, launchDate: helperApp.launchDate,
                                                     applicationLifetime: helperApp.lifetime)
@@ -376,6 +377,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                     guard running, workers[pid] === worker else { return }
                     guard workers[helperPID] === helperWorker else { continue }
                     if helperScan.unavailable { helperUnavailable = true }
+                    helperFocusIDs[helperPID] = helperScan.focusedID
                     entries = WindowSwitcherListing.preferringUniqueWindowNumbers(
                         entries + windowEntries(from: helperScan, app: app, ownerPID: helperPID))
                 }
@@ -396,8 +398,8 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 }
                 snapshots[pid] = entries
                 if previous != entries { markPublicationDirty() }
-                if applicationsByPID[pid]?.isActive == true {
-                    pendingFocus[pid] = (result.focusedID, unavailableScan)
+                if let activePID = activeWorkerPID(for: pid) {
+                    pendingFocus[pid] = (activePID == pid ? result.focusedID : helperFocusIDs[activePID], unavailableScan)
                     markPublicationDirty()
                 }
                 if invocation == invocationGeneration {
@@ -407,6 +409,15 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
             }
         }
         schedulePublication()
+    }
+
+    private func activeWorkerPID(for hostPID: pid_t) -> pid_t? {
+        if let helperPID = (helperPIDsByHost[hostPID] ?? []).sorted().first(where: {
+            applicationsByPID[$0]?.isActive == true
+        }) {
+            return helperPID
+        }
+        return applicationsByPID[hostPID]?.isActive == true ? hostPID : nil
     }
 
     func entries(sortMode: WindowSwitcherSortMode) -> [WindowSwitcherAppEntry] {
@@ -503,7 +514,7 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 removedProcesses.removeAll()
                 rebuildPublication()
             }
-            for (pid, focus) in pendingFocus where applicationsByPID[pid]?.isActive == true {
+            for (pid, focus) in pendingFocus where activeWorkerPID(for: pid) != nil {
                 let entries = publication.entries.filter { $0.processIdentifier == pid }
                 let id = entries.first { ($0.workerWindowID ?? $0.id) == focus.id }?.id
                 publication.recency.observeForeground(entries: entries, focusedWindowID: id, unavailable: focus.unavailable)
@@ -576,6 +587,17 @@ final class WindowSwitcherAppCatalog: WindowSwitcherCatalog {
                 guard claimed.insert(number).inserted else { return nil }
                 if let knownID = knownWindowIDs[number] { window.id = knownID }
                 if let record = recordsByNumber[number] {
+                    // AX can expose titleless compositor surfaces as ordinary
+                    // windows. A WindowServer record with no Space and no
+                    // on-screen presence confirms that this is not a window
+                    // the user can switch to. Keep minimized windows, whose
+                    // Space membership may be absent while they are restored.
+                    let hasTitle = window.windowTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    if !window.isMinimized,
+                       !hasTitle,
+                       record.hasSpace == false, record.isOnScreen != true {
+                        return nil
+                    }
                     window.windowOwnerPID = record.processIdentifier
                     window.isOnOtherDesktop = record.isOnActiveSpace == false
                     window.isOnFullscreenSpace = window.isOnFullscreenSpace || record.isOnFullscreenSpace == true

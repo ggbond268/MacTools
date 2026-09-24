@@ -124,11 +124,13 @@ final class WindowSwitcherPreview {
         let now = Date()
         cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < cacheLifetime }
         if var cached = cache[key] {
+            WindowSwitcherPinchDiagnostics.record("preview cache hit generation=\(generation)")
             cached.usedAt = now
             cache[key] = cached
             onChange?(cached.image, nil)
             if now.timeIntervalSince(cached.capturedAt) < 2 { pending = nil; return }
         } else {
+            WindowSwitcherPinchDiagnostics.record("preview cache miss generation=\(generation)")
             onChange?(nil, captureTimedOut ? unavailableMessage : nil)
         }
         debouncePendingCapture()
@@ -232,6 +234,7 @@ final class WindowSwitcherPreview {
         }
         guard !captureTimedOut else { return true }
         if let image {
+            WindowSwitcherPinchDiagnostics.record("preview capture ready generation=\(generation) detail=\(detail)")
             let now = Date()
             if !detail { cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now) }
             while cache.count > 8, let oldest = cache.min(by: { $0.value.usedAt < $1.value.usedAt })?.key {

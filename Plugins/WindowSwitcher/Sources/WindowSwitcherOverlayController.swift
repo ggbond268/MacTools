@@ -13,6 +13,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     var onCancel: (() -> Void)?
     var onSessionChange: ((WindowSwitcherSession) -> Void)?
     var onPreviewChange: ((Bool) -> Void)?
+    var onModeChange: ((WindowSwitcherMode) -> Void)?
     var onSearchEditingChange: ((Bool) -> Void)?
     var onMenuTrackingChange: ((Bool) -> Void)?
     private var menuGeneration = 0
@@ -27,6 +28,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         var searchEventFilter: ((NSEvent) -> NSEvent)?
         var searchTransitionHandler: ((NSEvent) -> Bool)?
         override func sendEvent(_ event: NSEvent) {
+            if event.type == .magnify {
+                WindowSwitcherPinchDiagnostics.record("panel magnify phase=\(event.phase.rawValue) delta=\(event.magnification) key=\(isKeyWindow) active=\(NSApp.isActive)")
+            }
             if searchShortcutHandler?(event) == true { return }
             let filtered = searchEventFilter?(event) ?? event
             if filtered.type == .keyDown {
@@ -63,10 +67,15 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             if keyHandler?(event) != true { super.keyDown(with: event) }
         }
     }
+    private final class ModeButton: NSButton {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    }
     private let chooserFocus: WindowSwitcherChooserFocus
     private var isAcquiringChooserFocus = false
     private let dismissalMonitor = PluginPanelDismissalMonitor()
-    private let panel = Panel(contentRect: .zero, styleMask: PluginPanelPresentation.styleMask, backing: .buffered, defer: false)
+    // Trackpad magnification is routed to the active app. An activating chooser
+    // receives the first pinch without requiring a click on its preview.
+    private let panel = Panel(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
     private let table = Table()
     private let cards = WindowSwitcherCardCollection()
     private let cardScroll = NSScrollView()
@@ -106,9 +115,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private let scope = WindowSwitcherScopeControl()
     private var minimumScopeWidth: NSLayoutConstraint!
     private let display = NSPopUpButton()
-    private let modeIcon = NSImageView()
-    private let modeTitle = NSTextField(labelWithString: "")
+    private let modeButton = ModeButton(frame: .zero)
     private let modeHint = NSTextField(labelWithString: "")
+    private var configuredMode: WindowSwitcherMode = .searchSelect
+    private var activeMode: WindowSwitcherMode = .searchSelect
     private let enterSearchButton = WindowSwitcherToolbarButton(title: "", target: nil, action: nil)
     private let searchHeader = NSStackView()
     private let inlineSearch = NSView()
@@ -124,6 +134,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     private let footer = NSTextField(wrappingLabelWithString: "")
     private let empty = NSTextField(wrappingLabelWithString: "")
     private let previewImage = WindowSwitcherPreviewStage()
+    private var localPinchMonitor: Any?
+    private var globalPinchMonitor: Any?
     private let dragHandle = WindowSwitcherDragHandle()
     private let snapCoordinator = PluginWindowSnapCoordinator()
     nonisolated(unsafe) private var scrollObservers: [NSObjectProtocol] = []
@@ -173,7 +185,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         previewImage.contextMenu = { [weak self] in self?.previewZoomMenu(tracksMenu: true) }
         self.preview.onChange = { [weak self] image, message in
             guard let self else { return }
-            if message != nil { self.previewImage.clearTransition() }
+            if message != nil {
+                self.previewImage.clearTransition()
+                self.previewImage.cancelPendingMagnification()
+            }
             self.previewImage.image = image
             self.loadingTask?.cancel()
             self.previewLabel.isHidden = image != nil || message == nil
@@ -196,14 +211,17 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
 
-    deinit {
+    isolated deinit {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         scrollObservers.forEach(NotificationCenter.default.removeObserver)
+        if let localPinchMonitor { NSEvent.removeMonitor(localPinchMonitor) }
+        if let globalPinchMonitor { NSEvent.removeMonitor(globalPinchMonitor) }
     }
 
     var isVisible: Bool { panel.isVisible }
 
-    func show(_ session: WindowSwitcherSession, currentPID: pid_t?, showsPreview: Bool, preferredLayout: WindowSwitcherLayout? = nil) {
+    func show(_ session: WindowSwitcherSession, currentPID: pid_t?, showsPreview: Bool,
+              preferredLayout: WindowSwitcherLayout? = nil, mode: WindowSwitcherMode? = nil) {
         acceptsSearchFocus = false
         menuGeneration += 1
         isPresentingMenu = false
@@ -211,6 +229,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         searchTransitionTask?.cancel()
         showsSearchTransition = false
         self.session = session
+        configuredMode = mode ?? (session.usesDirectKeys ? .keyWindow : session.isPersistent ? .searchSelect : .directCycle)
+        activeMode = configuredMode
+        previewImage.prefersGestureFocus = configuredMode == .directCycle
         self.currentPID = currentPID
         self.showsPreview = showsPreview
         renderedSession = nil
@@ -227,7 +248,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         search.stringValue = session.query
         clearSearchButton.isHidden = session.query.isEmpty
         searchSurface.isFocused = false
-        configureSearchPresentation(inline: !session.isPersistent || session.usesDirectKeys)
+        configureSearchPresentation(inline: true)
+        if configuredMode == .searchSelect { expandInlineSearch(animated: false) }
         actionMessage = nil
         previewedEntry = nil; previewedPermission = nil
         render()
@@ -246,12 +268,19 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             }
         )
         PluginPanelPresentation.present(panel)
+        startPinchEventDiagnostics()
+        if WindowSwitcherPinchDiagnostics.isEnabled {
+            let pointer = NSEvent.mouseLocation
+            WindowSwitcherPinchDiagnostics.record("show panel key=\(panel.isKeyWindow) active=\(NSApp.isActive) frontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1) top=\(NSWindow.windowNumber(at: pointer, belowWindowWithWindowNumber: 0)) chooser=\(panel.windowNumber) nonactivating=\(panel.styleMask.contains(.nonactivatingPanel)) persistent=\(session.isPersistent) directKeys=\(session.usesDirectKeys)")
+        }
+        panel.contentView?.layoutSubtreeIfNeeded()
         acceptsSearchFocus = true
         if session.isPersistent && !session.usesDirectKeys {
             panel.makeFirstResponder(search)
         } else {
             panel.makeFirstResponder(usesList ? table : cards)
         }
+        previewImage.focusIfPointerInside()
         noteCyclingInput()
     }
 
@@ -261,6 +290,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
     }
 
     func hide(restoringFocus: Bool = true) {
+        WindowSwitcherPinchDiagnostics.record("hide panel key=\(panel.isKeyWindow) active=\(NSApp.isActive)")
+        stopPinchEventDiagnostics()
         dismissalMonitor.stop()
         acceptsSearchFocus = false
         menuGeneration += 1
@@ -279,9 +310,58 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         searchHeldModifiers = []
         previewedEntry = nil; previewedPermission = nil
         previewImage.clearTransition()
+        previewImage.cancelPendingMagnification()
         preview.cancel()
         loadingTask?.cancel()
         snapCoordinator.cancelDragging()
+    }
+
+    private func startPinchEventDiagnostics() {
+        guard WindowSwitcherPinchDiagnostics.isEnabled else { return }
+        stopPinchEventDiagnostics()
+        let gestureEvents: NSEvent.EventTypeMask = [.magnify, .scrollWheel, .gesture, .smartMagnify, .rotate]
+        localPinchMonitor = NSEvent.addLocalMonitorForEvents(matching: gestureEvents) { [weak self] event in
+            guard let self, self.isVisible else { return event }
+            let mouseLocation = NSEvent.mouseLocation
+            let point = self.previewImage.convert(
+                self.panel.convertPoint(fromScreen: mouseLocation), from: nil)
+            let insidePreview = self.previewImage.bounds.contains(point)
+            if insidePreview || event.type == .magnify {
+                let topWindow = NSWindow.windowNumber(at: mouseLocation, belowWindowWithWindowNumber: 0)
+                let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
+                let change = event.type == .magnify ? event.magnification :
+                    event.type == .scrollWheel ? event.scrollingDeltaY : 0
+                WindowSwitcherPinchDiagnostics.record(
+                    "local event=\(event.type.rawValue) phase=\(event.phase.rawValue) delta=\(change) window=\(event.windowNumber) chooser=\(self.panel.windowNumber) top=\(topWindow) previewPointer=\(insidePreview) key=\(self.panel.isKeyWindow) active=\(NSApp.isActive) frontmost=\(frontmostPID)")
+            }
+            return event
+        }
+        globalPinchMonitor = NSEvent.addGlobalMonitorForEvents(matching: gestureEvents) { [weak self] event in
+            let eventType = event.type.rawValue
+            let phase = event.phase.rawValue
+            let windowNumber = event.windowNumber
+            let change = event.type == .magnify ? event.magnification :
+                event.type == .scrollWheel ? event.scrollingDeltaY : 0
+            Task { @MainActor [weak self] in
+                guard let self, self.isVisible else { return }
+                let mouseLocation = NSEvent.mouseLocation
+                let point = self.previewImage.convert(
+                    self.panel.convertPoint(fromScreen: mouseLocation), from: nil)
+                guard self.previewImage.bounds.contains(point) || eventType == NSEvent.EventType.magnify.rawValue else { return }
+                let topWindow = NSWindow.windowNumber(at: mouseLocation, belowWindowWithWindowNumber: 0)
+                let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
+                WindowSwitcherPinchDiagnostics.record(
+                    "global event=\(eventType) phase=\(phase) delta=\(change) window=\(windowNumber) chooser=\(self.panel.windowNumber) top=\(topWindow) previewPointer=\(self.previewImage.bounds.contains(point)) key=\(self.panel.isKeyWindow) active=\(NSApp.isActive) frontmost=\(frontmostPID)")
+            }
+        }
+        WindowSwitcherPinchDiagnostics.record("gesture monitors local=\(localPinchMonitor != nil) global=\(globalPinchMonitor != nil)")
+    }
+
+    private func stopPinchEventDiagnostics() {
+        if let localPinchMonitor { NSEvent.removeMonitor(localPinchMonitor) }
+        if let globalPinchMonitor { NSEvent.removeMonitor(globalPinchMonitor) }
+        localPinchMonitor = nil
+        globalPinchMonitor = nil
     }
 
     func showMessage(_ message: String) {
@@ -405,7 +485,6 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                 self.searchHeldModifiers = (self.session?.invocationModifiers ?? []).intersection(NSEvent.modifierFlags)
             }
             self.searchSurface.isFocused = true
-            self.beginSearch()
             self.onSearchEditingChange?(true)
         }
         search.delegate = self
@@ -534,15 +613,19 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         footer.maximumNumberOfLines = 0
         let actions = NSStackView(views: [openButton, closeButton, quitButton, NSView()])
         actions.orientation = .horizontal
-        modeTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-        modeTitle.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode")
+        modeButton.font = .systemFont(ofSize: 12, weight: .semibold)
+        modeButton.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode")
+        modeButton.bezelStyle = .inline
+        modeButton.isBordered = true
+        modeButton.showsBorderOnlyWhileMouseInside = true
+        modeButton.imagePosition = .imageLeading
+        modeButton.target = self; modeButton.action = #selector(cycleMode)
         modeHint.font = .systemFont(ofSize: 12)
         modeHint.textColor = .labelColor
         modeHint.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode-hint")
         modeHint.lineBreakMode = .byTruncatingTail
         modeHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        modeTitle.lineBreakMode = .byTruncatingTail
-        modeTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        modeButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         enterSearchButton.controlSize = .small
         enterSearchButton.imagePosition = .imageOnly
         enterSearchButton.contentTintColor = .secondaryLabelColor
@@ -561,11 +644,9 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         minimumScopeWidth.priority = .defaultHigh
         let minimumDisplayWidth = display.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
         minimumDisplayWidth.priority = .defaultHigh
-        let modeRow = NSStackView(views: [modeIcon, modeTitle, modeHint, NSView(), recordingCancel])
+        let modeRow = NSStackView(views: [modeButton, modeHint, NSView(), recordingCancel])
         modeRow.orientation = .horizontal; modeRow.alignment = .centerY; modeRow.spacing = 8
         modeRow.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        modeIcon.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        modeIcon.heightAnchor.constraint(equalToConstant: 14).isActive = true
         recordingCancel.target = self; recordingCancel.action = #selector(cancelShortcutRecording)
         recordingCancel.bezelStyle = .rounded; recordingCancel.controlSize = .small
         recordingCancel.identifier = NSUserInterfaceItemIdentifier("window-shortcut-recording-cancel")
@@ -667,12 +748,16 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         }
     }
 
-    private func expandInlineSearch() {
+    private func expandInlineSearch(animated: Bool = true) {
         guard usesInlineSearch, !isInlineSearchExpanded else { return }
         isInlineSearchExpanded = true
         panel.contentView?.layoutSubtreeIfNeeded()
         searchSurface.isHidden = false
         inlineSearchMinimumWidth.constant = 150
+        if !animated {
+            inlineSearchWidth.constant = 240
+            return
+        }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
             context.allowsImplicitAnimation = true
@@ -707,6 +792,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             session.usesDirectKeys = modeBeforeSearch.usesDirectKeys
         }
         modeBeforeSearch = nil
+        activeMode = configuredMode
         session.normalizeSelection()
         self.session = session
         actionMessage = nil
@@ -910,12 +996,14 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         updating = false
         updateShortcutBadges()
         if showsPreview && !previewPane.isHidden, selected != previewedEntry || preview.isPermissionGranted != previewedPermission {
+            WindowSwitcherPinchDiagnostics.record("selection preview changed window=\(selected?.isWindowEntry == true) image=\(previewImage.image != nil) outgoing=\(previewImage.hasOutgoingImage)")
             if selected?.id != previewedEntry?.id || selected?.processIdentifier != previewedEntry?.processIdentifier ||
                 selected?.applicationLaunchDate != previewedEntry?.applicationLaunchDate || selected?.windowNumber != previewedEntry?.windowNumber {
                 if selected?.isWindowEntry == true {
                     previewImage.retireImage()
                 } else {
                     previewImage.clearTransition()
+                    previewImage.cancelPendingMagnification()
                     previewImage.image = nil
                 }
             }
@@ -1081,6 +1169,8 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
             }
         }
         recordingEntryID = nil
+        activeMode = .searchSelect
+        previewImage.prefersGestureFocus = false
         session.beginSearch(); self.session = session
         onSessionChange?(session)
         if needsRender { render() }
@@ -1102,26 +1192,59 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     func noteCyclingInput() { updateModeIndicator() }
 
+    @objc private func cycleMode() {
+        guard recordingEntryID == nil else { return }
+        onModeChange?(configuredMode.next)
+    }
+
+    func applyMode(_ mode: WindowSwitcherMode, session value: WindowSwitcherSession) {
+        configuredMode = mode
+        activeMode = mode
+        previewImage.prefersGestureFocus = mode == .directCycle
+        searchTransitionTask?.cancel()
+        showsSearchTransition = false
+        searchHeldModifiers = []
+        modeBeforeSearch = nil
+        if isEditingSearch { panel.makeFirstResponder(usesList ? table : cards) }
+        search.stringValue = ""
+        clearSearchButton.isHidden = true
+        if !usesInlineSearch { configureSearchPresentation(inline: true) }
+        if mode == .searchSelect {
+            expandInlineSearch(animated: false)
+        } else if isInlineSearchExpanded {
+            isInlineSearchExpanded = false
+            searchSurface.isHidden = true
+            inlineSearchWidth.constant = 0
+            inlineSearchMinimumWidth.constant = 0
+        }
+        session = value
+        renderedSession = nil
+        render()
+        layoutPanel(preservePosition: true, resizeToContent: true)
+        render(forceRevealSelection: true)
+        panel.makeFirstResponder(mode == .searchSelect ? search : (usesList ? table : cards))
+    }
+
     private func updateModeIndicator() {
         guard let session else { return }
         let keys = [(NSEvent.ModifierFlags.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
             .filter { session.invocationModifiers.contains($0.0) }.map(\.1).joined()
         let releaseKeys = keys.isEmpty ? localization.string("chooser.modifierKeys", defaultValue: "修饰键") : keys
-        modeTitle.stringValue = localization.string(session.isPersistent ? "chooser.modeSearch" : "chooser.modeCycle",
-            defaultValue: session.isPersistent ? "搜索选择" : "循环切换")
-        modeHint.stringValue = session.isPersistent
+        modeButton.title = localization.string(activeMode == .searchSelect ? "chooser.modeSearch" : "chooser.modeCycle",
+            defaultValue: activeMode == .searchSelect ? "搜索选择" : "循环切换")
+        modeHint.stringValue = activeMode == .searchSelect || session.isPersistent
             ? localization.string("chooser.modeSearchHint", defaultValue: "回车切换 · Esc 关闭")
             : localization.format("chooser.modeCycleHint", defaultValue: "松开 %@ 切换", releaseKeys)
         if session.isPersistent && showsSearchTransition {
             modeHint.stringValue = localization.format("chooser.searchTransitionHint",
                 defaultValue: "可松开 %@，此窗口会保持打开。", releaseKeys)
         }
-        modeIcon.image = NSImage(systemSymbolName: session.isPersistent ? "magnifyingglass" : "arrow.2.circlepath",
-                                 accessibilityDescription: modeTitle.stringValue)
-        if session.usesDirectKeys {
-            modeTitle.stringValue = localization.string("settings.mode.legacy", defaultValue: "按键直达")
+        modeButton.image = NSImage(systemSymbolName: activeMode == .searchSelect ? "magnifyingglass" : "arrow.2.circlepath",
+                                   accessibilityDescription: modeButton.title)
+        if activeMode == .keyWindow {
+            modeButton.title = localization.string("settings.mode.legacy", defaultValue: "按键直达")
             modeHint.stringValue = localization.string("chooser.legacyHint", defaultValue: "按快捷键切换 · 点击按键修改")
-            modeIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: modeTitle.stringValue)
+            modeButton.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: modeButton.title)
         }
         let isRecording = recordingEntryID != nil
         if isRecording {
@@ -1130,7 +1253,10 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         modeHint.isHidden = false
         modeHint.toolTip = isRecording ? shortcutRecordingHelp : nil
         modeHint.setAccessibilityHelp(modeHint.toolTip)
-        modeTitle.toolTip = modeHint.stringValue
+        modeButton.toolTip = localization.string("chooser.changeMode", defaultValue: "点击切换模式")
+        modeButton.setAccessibilityLabel(modeButton.title)
+        modeButton.setAccessibilityHelp(modeButton.toolTip)
+        modeButton.isEnabled = !isRecording
         recordingCancel.title = localization.string("chooser.cancel", defaultValue: "取消")
         recordingCancel.isHidden = !isRecording
         inlineSearch.isHidden = isRecording || !usesInlineSearch
@@ -1140,7 +1266,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         search.placeholderString = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
     }
 
-    func controlTextDidBeginEditing(_ obj: Notification) { searchSurface.isFocused = true; beginSearch(); onSearchEditingChange?(true) }
+    func controlTextDidBeginEditing(_ obj: Notification) { searchSurface.isFocused = true; onSearchEditingChange?(true) }
     func controlTextDidEndEditing(_ obj: Notification) { searchSurface.isFocused = false; onSearchEditingChange?(false) }
     @objc private func clearSearch() {
         search.stringValue = ""
@@ -1613,12 +1739,21 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
 
     private func focusPreviewNow() {
         guard panel.isVisible, !previewPane.isHidden else { return }
-        // Ordinary presentation stays nonactivating. A deliberate preview click
-        // retains the foreground compatibility path needed by native gestures.
+        WindowSwitcherPinchDiagnostics.record("focus begin key=\(panel.isKeyWindow) active=\(NSApp.isActive)")
+        // Prepare foreground ownership when the preview needs native gesture delivery.
         isAcquiringChooserFocus = true
         defer { isAcquiringChooserFocus = false }
-        chooserFocus.acquire()
+        if !NSApp.isActive || !panel.isKeyWindow { chooserFocus.acquire() }
         panel.makeKey()
+        if previewImage.prefersGestureFocus { panel.makeFirstResponder(previewImage) }
+        WindowSwitcherPinchDiagnostics.record("focus requested key=\(panel.isKeyWindow) active=\(NSApp.isActive) previewResponder=\(panel.firstResponder === previewImage)")
+        if WindowSwitcherPinchDiagnostics.isEnabled {
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                guard let self, self.panel.isVisible else { return }
+                WindowSwitcherPinchDiagnostics.record("focus settled key=\(self.panel.isKeyWindow) active=\(NSApp.isActive) previewResponder=\(self.panel.firstResponder === self.previewImage)")
+            }
+        }
     }
 
     @objc private func previewChanged() {

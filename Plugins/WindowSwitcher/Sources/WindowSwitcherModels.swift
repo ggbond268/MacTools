@@ -20,6 +20,14 @@ enum WindowSwitcherMode: String, Codable, CaseIterable, Identifiable {
     case directCycle
 
     var id: String { rawValue }
+
+    var next: WindowSwitcherMode {
+        switch self {
+        case .searchSelect: .directCycle
+        case .directCycle: .keyWindow
+        case .keyWindow: .searchSelect
+        }
+    }
 }
 
 enum WindowSwitcherSortMode: String, Codable, CaseIterable, Identifiable {

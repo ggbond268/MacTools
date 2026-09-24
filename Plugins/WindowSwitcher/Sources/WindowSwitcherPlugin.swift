@@ -130,13 +130,18 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         }
         self.overlayController.onSessionChange = { [weak self] session in
             self?.session = session
-            self?.shortcutTap.setEditing(session.usesDirectKeys || self?.overlayController.isEditingSearch == true || self?.overlayController.isPresentingMenu == true)
+            self?.shortcutTap.setEditing(session.usesDirectKeys ||
+                (session.isPersistent && self?.overlayController.isEditingSearch == true) ||
+                self?.overlayController.isPresentingMenu == true)
         }
         self.overlayController.onSearchEditingChange = { [weak self] editing in
-            self?.shortcutTap.setEditing(editing || self?.session?.usesDirectKeys == true || self?.overlayController.isPresentingMenu == true)
+            self?.shortcutTap.setEditing((editing && self?.session?.isPersistent == true) ||
+                self?.session?.usesDirectKeys == true || self?.overlayController.isPresentingMenu == true)
         }
         self.overlayController.onMenuTrackingChange = { [weak self] tracking in
-            self?.shortcutTap.setEditing(tracking || self?.overlayController.isEditingSearch == true || self?.session?.usesDirectKeys == true)
+            self?.shortcutTap.setEditing(tracking ||
+                (self?.session?.isPersistent == true && self?.overlayController.isEditingSearch == true) ||
+                self?.session?.usesDirectKeys == true)
         }
         self.overlayController.onLayoutChange = { [weak self] layout in
             self?.store.setPreferredLayout(layout)
@@ -144,6 +149,9 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         self.overlayController.onPreviewChange = { [weak self] value in
             self?.store.setShowsPreview(value)
             self?.onStateChange?()
+        }
+        self.overlayController.onModeChange = { [weak self] mode in
+            self?.changeModeFromChooser(mode)
         }
         self.overlayController.onCancel = { [weak self] in
             self?.cancelSession()
@@ -609,6 +617,24 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
         onStateChange?()
     }
 
+    private func changeModeFromChooser(_ mode: WindowSwitcherMode) {
+        guard var session, overlayController.isVisible else { return }
+        store.setMode(mode)
+        session.query = ""
+        session.invocationModifiers = []
+        // A mouse-selected mode stays open until Enter or Escape. The next
+        // shortcut invocation retains Cycle mode's release-to-switch behavior.
+        session.isPersistent = true
+        session.usesDirectKeys = mode == .keyWindow
+        session.reconcile(mode == .keyWindow
+            ? store.assignShortcuts(to: appCatalog.entries(sortMode: store.configuration.sortMode))
+            : appCatalog.entries(sortMode: store.configuration.sortMode))
+        self.session = session
+        shortcutTap.setEditing(mode == .keyWindow)
+        overlayController.applyMode(mode, session: session)
+        onStateChange?()
+    }
+
     private func handleShortcutPressed(reversed: Bool, isRepeat: Bool, currentApp: Bool = false) {
         guard store.configuration.isEnabled, ensureAccessibilityForInvocation() else { return }
         // Tab switching remains available while searching. Preserve ordinary custom
@@ -701,7 +727,7 @@ final class WindowSwitcherPlugin: MacToolsPlugin, AccessibilityPermissionRefresh
             if !persistent { try? await Task.sleep(for: .milliseconds(140)) }
             guard !Task.isCancelled, let self, sessionGeneration == generation, let session else { return }
             overlayController.show(session, currentPID: invocationPID, showsPreview: store.configuration.showsPreview,
-                                   preferredLayout: store.configuration.preferredLayout)
+                                   preferredLayout: store.configuration.preferredLayout, mode: store.configuration.mode)
         }
     }
 

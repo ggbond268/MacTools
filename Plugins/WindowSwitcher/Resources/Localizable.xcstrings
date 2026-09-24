@@ -3059,6 +3059,23 @@
         }
       }
     },
+    "chooser.changeMode": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击切换模式"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to switch modes"
+          }
+        }
+      }
+    },
     "chooser.modeSearch": {
       "extractionState": "manual",
       "localizations": {

@@ -4,4 +4,4 @@ type: fixed
 area: Window Switcher
 ---
 
-Window Switcher keeps selected results visible, restores minimized windows, supports grid scrolling and immediate pinch zoom, and improves previews for helper-rendered windows.
+Window Switcher keeps selections visible, restores minimized windows, and scrolls grids. Search Select shares Cycle's toolbar; preview pinch follows Tab changes and helper app activity is tracked.

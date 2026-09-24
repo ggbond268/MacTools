@@ -4,6 +4,61 @@ import XCTest
 
 @MainActor
 final class WindowSwitcherPreviewTests: XCTestCase {
+    func testPreviewKeepsGestureResponderWhileNextScreenshotLoads() {
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let stage = WindowSwitcherPreviewStage(frame: panel.contentView!.bounds)
+        panel.contentView = stage
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        XCTAssertTrue(panel.makeFirstResponder(stage))
+
+        stage.retireImage()
+        XCTAssertTrue(stage.acceptsFirstResponder)
+        XCTAssertTrue(panel.firstResponder === stage)
+    }
+
+    func testPinchDuringPreviewCaptureZoomsTheSelectedImageWhenItArrives() {
+        let stage = WindowSwitcherPreviewStage(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        stage.retireImage()
+        let anchor = CGPoint(x: 250, y: 150)
+        stage.consumeMagnification(change: 0, state: .began, anchor: anchor)
+        stage.consumeMagnification(change: 0.4, state: .changed, anchor: anchor)
+        stage.consumeMagnification(change: 0, state: .ended, anchor: anchor)
+        XCTAssertEqual(stage.zoomScale, 1)
+
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        XCTAssertEqual(stage.zoomScale, 1.4, accuracy: 0.001)
+    }
+
+    func testActivePinchFollowsTabSelectionAndWaitsForNextPreview() {
+        let stage = WindowSwitcherPreviewStage(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let anchor = CGPoint(x: 250, y: 150)
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        stage.consumeMagnification(change: 0, state: .began, anchor: anchor)
+        stage.consumeMagnification(change: 0.4, state: .changed, anchor: anchor)
+        XCTAssertEqual(stage.zoomScale, 1.4, accuracy: 0.001)
+
+        stage.retireImage()
+        stage.consumeMagnification(change: 0.2, state: .changed, anchor: anchor)
+        XCTAssertEqual(stage.zoomScale, 1)
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        XCTAssertEqual(stage.zoomScale, 1.2, accuracy: 0.001)
+    }
+
+    func testCompletedPinchDoesNotCarryAcrossTabSelection() {
+        let stage = WindowSwitcherPreviewStage(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let anchor = CGPoint(x: 250, y: 150)
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        stage.consumeMagnification(change: 0, state: .began, anchor: anchor)
+        stage.consumeMagnification(change: 0.4, state: .changed, anchor: anchor)
+        stage.consumeMagnification(change: 0, state: .ended, anchor: anchor)
+        stage.retireImage()
+        stage.consumeMagnification(change: 0.4, state: .changed, anchor: anchor)
+        stage.image = NSImage(size: NSSize(width: 800, height: 500))
+        XCTAssertEqual(stage.zoomScale, 1)
+    }
+
     func testExactCaptureWindowIDWins() {
         var entry = makeEntry(number: 7)
         entry.previewProcessIdentifiers = [99]

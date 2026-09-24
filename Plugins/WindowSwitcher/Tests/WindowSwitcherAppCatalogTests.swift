@@ -6,6 +6,7 @@ import XCTest
 private final class CatalogAXAccess: WindowSwitcherAXAccess, @unchecked Sendable {
     struct State {
         var number: CGWindowID?
+        var focused = false
         var beforeRead: (() -> Void)?
         var reads = 0
         var actions: [String] = []
@@ -27,7 +28,8 @@ private final class CatalogAXAccess: WindowSwitcherAXAccess, @unchecked Sendable
         return read { $0.number == nil ? [] : [window] }
     }
     func element(_ owner: AXUIElement, attribute: String) -> AXUIElement? {
-        attribute == kAXCloseButtonAttribute ? owner : nil
+        if attribute == kAXFocusedWindowAttribute, read({ $0.focused }) { return window }
+        return attribute == kAXCloseButtonAttribute ? owner : nil
     }
     func windowAttributes(_ window: AXUIElement) -> [Any]? {
         var point = CGPoint(x: 20, y: 20)
@@ -56,6 +58,25 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
             helperProcessIdentifiers: [42: [43, 44]])
 
         XCTAssertEqual(publication.entries.first?.previewProcessIdentifiers, [42, 43, 44])
+    }
+
+    func testTitlelessAXSurfaceWithoutSpaceIsNotPublished() {
+        func entry(_ number: CGWindowID, title: String) -> WindowSwitcherAppEntry {
+            WindowSwitcherAppEntry(id: "window-\(number)", processIdentifier: 42,
+                bundleIdentifier: "fixture", appName: "Fixture", windowTitle: title, icon: nil,
+                windowElement: AXUIElementCreateApplication(42), isMinimized: false,
+                windowNumber: number, shortcutToken: nil)
+        }
+        var ghost = WindowSwitcherWindowRecord(windowNumber: 7, processIdentifier: 42,
+            title: "", isOnScreen: nil, bounds: CGRect(x: 0, y: 0, width: 500, height: 500))
+        ghost.hasSpace = false
+        var real = WindowSwitcherWindowRecord(windowNumber: 8, processIdentifier: 42,
+            title: "", isOnScreen: true, bounds: CGRect(x: 20, y: 20, width: 800, height: 600))
+        real.hasSpace = true
+
+        let published = WindowSwitcherAppCatalog.mergeAllSpacesEntries(
+            [entry(7, title: ""), entry(8, title: "")], records: [ghost, real])
+        XCTAssertEqual(published.compactMap(\.windowNumber), [8])
     }
 
     func testMinimizedWindowUsesRestorePathUnlessExplicitlyOnAnotherSpace() {
@@ -149,6 +170,7 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
     }
 
     private func makeCatalog(host: CatalogAXAccess, helper: CatalogAXAccess,
+                             helperIsActive: Bool = false,
                              accessFactory: (@Sendable (pid_t) -> any WindowSwitcherAXAccess)? = nil) -> WindowSwitcherAppCatalog {
         let records = WindowSwitcherWindowRecords(windowRecordProvider: {
             guard let number = helper.read({ $0.number }) else { return [] }
@@ -160,7 +182,7 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
             discovery: .init(applications: {
                 [.init(processIdentifier: 42, bundleIdentifier: "fixture.host", bundlePath: "/Fixture.app", localizedName: "Fixture"),
                  .init(processIdentifier: 43, bundleIdentifier: "fixture.host.helper", bundlePath: "/Fixture.app/Helper.app",
-                       localizedName: "Helper", isRegular: false)]
+                       localizedName: "Helper", isRegular: false, isActive: helperIsActive)]
             }, isAccessibilityTrusted: { true }, isDragging: { false }))
     }
 
@@ -229,5 +251,22 @@ final class WindowSwitcherAppCatalogTests: XCTestCase {
         XCTAssertEqual(result, .requested)
         XCTAssertEqual(helper.read { $0.actions }, [kAXPressAction])
         XCTAssertTrue(host.read { $0.actions.isEmpty })
+    }
+
+    func testActiveVerifiedHelperRecordsItsFocusedWindowAsRecentUse() async throws {
+        let host = CatalogAXAccess(number: nil, elementPID: 201)
+        let helper = CatalogAXAccess(number: 8, elementPID: 202)
+        helper.update { $0.focused = true }
+        let catalog = makeCatalog(host: host, helper: helper, helperIsActive: true)
+        defer { catalog.stop() }
+        catalog.start()
+
+        try await waitUntil {
+            catalog.refresh()
+            return catalog.focusedWindowID != nil
+        }
+        let focused = try XCTUnwrap(catalog.focusedWindowID)
+        XCTAssertEqual(catalog.entries(sortMode: .recentUse).first?.id, focused)
+        XCTAssertEqual(catalog.entries(sortMode: .recentUse).first?.axWorkerPID, 43)
     }
 }
