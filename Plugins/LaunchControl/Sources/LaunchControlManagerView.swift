@@ -444,7 +444,7 @@ struct LaunchControlManagerView: View {
                     LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(controller.snapshot.scanLogEntries.enumerated()), id: \.offset) { index, entry in
                             Text(entry)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(PluginTypography.code.font)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -715,7 +715,7 @@ struct LaunchControlManagerView: View {
 
     private func fieldTitle(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(PluginTypography.code.font.weight(.semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -1097,7 +1097,7 @@ private struct LaunchControlNoteEditor: View {
             }
 
             TextEditor(text: $draft)
-                .font(.system(size: 12))
+                .font(PluginTypography.body.font)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 60, maxHeight: 120)
                 .padding(6)
@@ -1108,7 +1108,7 @@ private struct LaunchControlNoteEditor: View {
                             "manager.note.placeholder",
                             defaultValue: "为这个启动项添加本地备注（仅保存在本机，不写入 plist）。"
                         ))
-                            .font(.system(size: 12))
+                            .font(PluginTypography.body.font)
                             .foregroundStyle(.tertiary)
                             .padding(.horizontal, 11)
                             .padding(.top, 13)

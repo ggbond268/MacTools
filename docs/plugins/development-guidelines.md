@@ -6,8 +6,6 @@ These requirements apply to plugins maintained in this repository and contributi
 
 The current API is **PluginKit 7**, with a minimum host of **MacTools 1.3.1** for that compatibility line. Declare the first compatible host for every API you consume; an unchanged older protocol does not make a new symbol available to an older app.
 
-The public `PluginTypography` and `PluginMetricValue` APIs require MacTools 2.0.0. System Status declares that minimum when using these native text and numeric readout roles.
-
 | Concern | Contract |
 | --- | --- |
 | Plugin identity | One plugin instance per package; `plugin.json.id` equals `PluginMetadata.id`. Keep plugin, item, action, permission, and shortcut IDs stable. |
@@ -47,14 +45,21 @@ Keep adjacent plugin tests limited to the main action, durable state, and conseq
 
 ## Visual and interaction design
 
-Use the existing host surfaces and semantic tokens before adding custom UI.
+These rules apply to host and plugin UI across settings, menu-bar panels, widgets, and floating windows. Prefer native macOS appearance and behavior, using standard SwiftUI/AppKit controls and semantic system styling. Use Apple's [macOS Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos) as the platform reference, applying the guidance to the app's menu-bar utility context and supported macOS versions.
+
+Keep equivalent controls consistent in typography, SF Symbol usage, spacing roles, color meaning, and interaction feedback. Settings forms, compact menu-bar panels, and task-oriented windows may use different density and grouping while retaining the same visual language. Preserve native menu presentation where a surface uses a system menu.
+
+Follow the [shared typography contract](typography.md) for text roles, native AppKit metrics, compact layouts, color semantics, and content-specific exceptions. `PluginSettingsTheme.Typography` delegates to the shared roles; preserve those existing settings accessors when extending other surfaces.
+
+Before implementing a UI change, identify the surface below and inspect a comparable existing implementation. Reuse its host renderer, component, and semantic tokens. When a reusable control or style is missing, extend the appropriate shared layer and use it in the affected UI; avoid per-plugin copies of fonts, colors, spacing, or control styles. Keep unrelated UI migrations out of the change.
 
 | Surface | Use |
 | --- | --- |
+| Menu-bar panels | Host panel renderers and `MenuBarPanelThemeStyle`; plugin content uses the declarative panel API and public PluginKit themes. |
 | Widget cards and charts | `@Environment(\.pluginComponentTheme)` for surfaces, text, status, and categorical data colors. Keep meaningful brand colors and feature thresholds distinct from neutral theme styling. |
 | Settings | `PluginSettingsPage.form` with declarative rows by default; a custom section for a complex region, or `.workspace` for a full manager/editor. |
 | Custom settings content | `PluginSettingsTheme.Typography` and `.Spacing`, `PluginSettingsItem`, and `.pluginSettingsCardBackground(.standard/.recessed)`. |
-| Floating palettes | `PluginPaletteSurface` and the [global presentation contract](global-panel-presentation.md). Keep app activation separate from keyboard focus. |
+| Floating palettes | `PluginPaletteSurface`, the [shared palette appearance](palette-appearance.md), and the [global presentation contract](global-panel-presentation.md). Keep app activation separate from keyboard focus. |
 
 The host owns page titles, descriptions, permission cards, shortcuts, search, validation, and the surrounding background. Do not duplicate page chrome or draw another outer card inside a grouped Form. Plugins must not depend on `Sources/App/SettingsStyle.swift` or copy private host styles.
 
@@ -69,7 +74,9 @@ Compare native and custom surfaces in light and dark appearance, including incre
 
 Use semantic fonts, SF Symbols, native bordered buttons, small control sizes, and switch-style toggles where appropriate. Give controls predictable widths and numeric readouts stable alignment. Long localized titles and paths must not displace controls or cause clipping. Custom settings should follow `FanControlPresetManagerView` for typography and grouping.
 
-Respect the user's layout, appearance, accessibility, and system preferences. Check the themes, keyboard/focus behavior, labels, and loading/error/empty states affected by the change. Visual-only changes normally use screenshots and manual verification; state transitions and actions need focused behavior coverage only where existing tests leave a gap. Keep copy brief and user-facing.
+Preserve native keyboard navigation, focus indication, text selection and editing, input-method composition, and disabled-control behavior. Custom controls must retain the relevant accessibility labels, values, and actions. Let system controls and materials adapt to the current OS and user preferences; gate newer visual APIs with availability checks and maintain native fallbacks for the supported macOS versions. Custom themes should retain readable text and recognizable control states.
+
+Respect the user's layout, appearance, accessibility, and system preferences. Compare changed controls with equivalent controls on existing settings and panel surfaces to catch unintended differences. Check the themes, keyboard/focus behavior, labels, and loading/error/empty states affected by the change. Visual-only changes normally use screenshots and manual verification; state transitions and actions need focused behavior coverage only where existing tests leave a gap. Keep copy brief and user-facing.
 
 ## Performance and energy
 

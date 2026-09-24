@@ -97,7 +97,7 @@ struct PluginPanelIconWidget: View {
             VStack(spacing: Layout.titleSpacing) {
                 icon
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(theme.text.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)

@@ -244,7 +244,7 @@ enum MenuBarPanelLayout {
         // back to a list when translated labels would be compressed or truncated.
         guard control.options.contains(where: { $0.subtitle != nil }) else { return false }
         let width = control.options.reduce(CGFloat(0)) { result, option in
-            result + (option.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width + 20
+            result + (option.title as NSString).size(withAttributes: [.font: PluginTypography.control.nsFont]).width + 20
         }
         return width > segmentedContentWidth
     }
@@ -255,7 +255,7 @@ enum MenuBarPanelLayout {
         let rect = (subtitle as NSString).boundingRect(
             with: CGSize(width: segmentedContentWidth - 10, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: NSFont.systemFont(ofSize: 11)]
+            attributes: [.font: PluginTypography.detail.nsFont]
         )
         return ceil(rect.height) + 2
     }
@@ -358,10 +358,6 @@ private enum FeatureRowLayout {
     static let actionButtonWidth: CGFloat = 45
     static let actionButtonHeight: CGFloat = 21
     static let actionButtonHorizontalPadding: CGFloat = 5
-    static let actionButtonChineseFontSize: CGFloat = 11
-    static let actionButtonLocalizedFontSize: CGFloat = 9
-    static let actionButtonLocalizedMinimumScale: CGFloat = 0.7
-    static let copyFeedbackFontSize: CGFloat = 8.5
     static let copyFeedbackSourceOpacity: CGFloat = 0.16
 }
 
@@ -1315,7 +1311,7 @@ struct FeatureRowView: View {
                             .fill(theme.surfaces.control)
 
                         Image(systemName: PluginSystemImage.resolvedName(item.iconName))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(PluginTypography.control.font.weight(.semibold))
                             .foregroundStyle(item.isEnabled ? theme.text.secondary : theme.text.disabled)
                     }
                     .frame(width: FeatureRowLayout.iconSize, height: FeatureRowLayout.iconSize)
@@ -1329,17 +1325,15 @@ struct FeatureRowView: View {
                         }
                     } label: {
                         Text(actionButtonTitle)
-                            .font(.system(size: actionButtonFontSize))
+                            .font(PluginTypography.detail.font)
                             .lineLimit(1)
-                            .minimumScaleFactor(actionButtonMinimumScale)
-                            .allowsTightening(true)
                             .foregroundStyle(
                                 item.isEnabled ? theme.text.onAccent : theme.text.disabled
                             )
                             .padding(.horizontal, FeatureRowLayout.actionButtonHorizontalPadding)
                             .frame(
-                                width: FeatureRowLayout.actionButtonWidth,
-                                height: FeatureRowLayout.actionButtonHeight
+                                minWidth: FeatureRowLayout.actionButtonWidth,
+                                minHeight: FeatureRowLayout.actionButtonHeight
                             )
                             .background(
                                 item.isEnabled
@@ -1419,7 +1413,7 @@ struct FeatureRowView: View {
                     .fill(theme.surfaces.control)
 
                 Image(systemName: PluginSystemImage.resolvedName(item.iconName))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PluginTypography.control.font.weight(.semibold))
                     .foregroundStyle(item.isEnabled ? theme.text.secondary : theme.text.disabled)
             }
             .frame(width: FeatureRowLayout.iconSize, height: FeatureRowLayout.iconSize)
@@ -1472,27 +1466,11 @@ struct FeatureRowView: View {
         item.buttonTitle ?? AppL10n.plugins("plugin.panel.actionFallback", defaultValue: "操作")
     }
 
-    private var actionButtonUsesChineseTypography: Bool {
-        PluginRuntimeLocalization.locale.language.languageCode?.identifier == "zh"
-    }
-
-    private var actionButtonFontSize: CGFloat {
-        actionButtonUsesChineseTypography
-            ? FeatureRowLayout.actionButtonChineseFontSize
-            : FeatureRowLayout.actionButtonLocalizedFontSize
-    }
-
-    private var actionButtonMinimumScale: CGFloat {
-        actionButtonUsesChineseTypography
-            ? 1
-            : FeatureRowLayout.actionButtonLocalizedMinimumScale
-    }
-
     private var rowText: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(PluginTypography.sectionTitle.font)
                     .foregroundStyle(item.isEnabled ? theme.text.primary : theme.text.disabled)
                     .lineLimit(1)
                     .layoutPriority(1)
@@ -1522,7 +1500,7 @@ struct FeatureRowView: View {
             }
             Text(indicator.text)
         }
-            .font(.system(size: 8.5, weight: .semibold))
+            .font(PluginTypography.caption.font.weight(.medium))
             .foregroundStyle(item.isEnabled ? theme.text.secondary : theme.text.disabled)
             .lineLimit(1)
             .padding(.horizontal, 5)
@@ -1550,7 +1528,7 @@ struct FeatureRowView: View {
                 .help(icon.accessibilityLabel)
             }
         }
-        .font(.system(size: 8.5, weight: .semibold))
+        .font(PluginTypography.caption.font.weight(.medium))
         .foregroundStyle(item.isEnabled ? theme.text.secondary : theme.text.disabled)
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -1579,7 +1557,7 @@ struct FeatureRowView: View {
 
     private var descriptionText: some View {
         Text(item.description)
-            .font(.system(size: 10.5, weight: .medium))
+            .font(PluginTypography.detail.font)
             .foregroundStyle(
                 item.isEnabled
                     ? (item.descriptionTone == .error ? theme.status.critical : theme.text.secondary)
@@ -1750,10 +1728,9 @@ private struct IPOverviewInlineValueText: View {
 
     var body: some View {
         Text(value.text)
-            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+            .font(PluginTypography.caption.font.monospaced())
             .foregroundStyle(value.isEnabled ? theme.text.secondary : theme.text.disabled)
             .lineLimit(1)
-            .minimumScaleFactor(0.72)
             .allowsTightening(true)
             .featureRowDoubleClickCopy(
                 copiedText: copiedText,
@@ -1783,7 +1760,7 @@ private struct FeatureRowDoubleClickCopyModifier: ViewModifier {
                 .opacity(isCopied ? FeatureRowLayout.copyFeedbackSourceOpacity : 1)
 
             Text(copiedText)
-                .font(.system(size: FeatureRowLayout.copyFeedbackFontSize, weight: .semibold))
+                .font(PluginTypography.caption.font.weight(.medium))
                 .foregroundStyle(theme.status.success)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -2055,7 +2032,7 @@ private struct DescriptiveSegmentedControl: View {
             } else {
                 if let title = control.sectionTitle {
                     Text(title)
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(PluginTypography.detail.font)
                         .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                         .padding(.leading, 5)
                 }
@@ -2064,7 +2041,7 @@ private struct DescriptiveSegmentedControl: View {
             if let subtitle = control.options.first(where: { $0.id == control.selectedOptionID })?.subtitle,
                !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: 11))
+                    .font(PluginTypography.detail.font)
                     .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 5)
@@ -2108,7 +2085,7 @@ private struct PluginPanelSegmentedControl: NSViewRepresentable {
         if nsView.selectedSegment != selectedIndex {
             nsView.selectedSegment = selectedIndex
         }
-        nsView.font = .systemFont(ofSize: control.options.contains(where: { $0.subtitle != nil }) ? 12 : 13)
+        nsView.font = (control.options.contains(where: { $0.subtitle != nil }) ? PluginTypography.control : .body).nsFont
         nsView.setAccessibilityLabel(control.sectionTitle)
         nsView.isEnabled = control.isEnabled
         nsView.selectedSegmentBezelColor = NSColor(theme.accent)
@@ -2153,13 +2130,13 @@ private struct SwitchRowControl: View {
         HStack(spacing: 8) {
             if let iconName = control.actionIconSystemName {
                 Image(systemName: PluginSystemImage.resolvedName(iconName))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(PluginTypography.control.font.weight(.medium))
                     .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     .frame(width: 14, height: 14)
             }
 
             Text(control.actionTitle ?? control.sectionTitle ?? "")
-                .font(.system(size: 12, weight: .medium))
+                .font(PluginTypography.control.font.weight(.medium))
                 .foregroundStyle(control.isEnabled ? theme.text.primary : theme.text.disabled)
                 .lineLimit(1)
 
@@ -2202,7 +2179,7 @@ private struct ActionRowControl: View {
         VStack(alignment: .leading, spacing: 4) {
             if let sectionTitle = control.sectionTitle, !sectionTitle.isEmpty {
                 Text(sectionTitle)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(PluginTypography.detail.font)
                     .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     .lineLimit(2)
                     .padding(.horizontal, FeatureRowLayout.detailControlHorizontalPadding)
@@ -2214,12 +2191,12 @@ private struct ActionRowControl: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: control.actionIconSystemName ?? "arrow.up.right.square")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(PluginTypography.control.font.weight(.medium))
                         .foregroundStyle(actionIconTint)
                         .frame(width: 14, height: 14)
 
                     Text(control.actionTitle ?? "")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(PluginTypography.control.font.weight(.medium))
                         .foregroundStyle(control.isEnabled ? theme.text.primary : theme.text.disabled)
                         .lineLimit(1)
 
@@ -2271,7 +2248,7 @@ private struct SelectListControl: View {
         VStack(alignment: .leading, spacing: 3) {
             if let title = control.sectionTitle {
                 Text(title)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(PluginTypography.detail.font)
                     .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     .padding(.leading, 5)
                     .padding(.bottom, 1)
@@ -2317,7 +2294,7 @@ private struct SelectListRow: View {
                     .frame(width: 12)
 
                 Text(title)
-                    .font(.system(size: 11.5))
+                    .font(PluginTypography.control.font)
                     .foregroundStyle(isEnabled ? theme.text.primary : theme.text.disabled)
 
                 Spacer()
@@ -2352,7 +2329,7 @@ private struct NavigationListControl: View {
         VStack(alignment: .leading, spacing: MenuBarPanelLayout.navigationSectionTitleSpacing) {
             if let sectionTitle = control.sectionTitle {
                 Text(sectionTitle)
-                    .font(.system(size: 10.5, weight: .medium))
+                    .font(PluginTypography.detail.font)
                     .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     .padding(.leading, FeatureRowLayout.detailControlHorizontalPadding + 5)
             }
@@ -2418,7 +2395,7 @@ private struct NavigationListRow: View {
             HStack(spacing: 8) {
                 if let leadingIconSystemName {
                     Image(systemName: leadingIconSystemName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(PluginTypography.sectionTitle.font)
                         .foregroundStyle(isEnabled ? leadingIconTint : theme.text.disabled)
                         .frame(width: 16)
                         .accessibilityHidden(true)
@@ -2426,12 +2403,12 @@ private struct NavigationListRow: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(PluginTypography.control.font.weight(.semibold))
                         .foregroundStyle(isEnabled ? theme.text.primary : theme.text.disabled)
 
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(PluginTypography.detail.font)
                             .foregroundStyle(isEnabled ? theme.text.secondary : theme.text.disabled)
                     }
                 }
@@ -2507,7 +2484,7 @@ private struct SliderControl: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     if let title = control.sectionTitle, !title.isEmpty {
                         Text(title)
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(PluginTypography.sectionTitle.font)
                             .foregroundStyle(control.isEnabled ? theme.text.primary : theme.text.disabled)
                             .lineLimit(1)
                     }
@@ -2516,7 +2493,7 @@ private struct SliderControl: View {
 
                     if let valueLabel = control.valueLabel {
                         Text(valueLabel)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(PluginTypography.detail.font)
                             .foregroundStyle(control.isEnabled ? theme.text.secondary : theme.text.disabled)
                     }
                 }
@@ -2673,7 +2650,7 @@ private struct SecondarySlidingPanel: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PluginTypography.control.font.weight(.semibold))
                     .foregroundStyle(theme.text.primary)
                     .lineLimit(1)
 

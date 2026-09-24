@@ -138,7 +138,7 @@ private struct CalendarHeaderView: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(PluginTypography.sectionTitle.font)
                 .foregroundStyle(theme.text.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(1)
@@ -150,7 +150,7 @@ private struct CalendarHeaderView: View {
             )
             Button(action: onToday) {
                 Text(localization.string("header.today.button", defaultValue: "今天"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(PluginTypography.detail.font.weight(.semibold))
                     .foregroundStyle(isTodayHovered ? theme.text.primary : theme.text.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -183,7 +183,7 @@ private struct CalendarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
+                .font(PluginTypography.control.font.weight(.semibold))
                 .foregroundStyle(isHovered ? theme.text.primary : theme.text.secondary)
                 .frame(width: 24, height: 20)
                 .background(isHovered ? theme.surfaces.controlHover : .clear,
@@ -207,7 +207,7 @@ private struct CalendarWeekdayRow: View {
         HStack(spacing: gridSpacing) {
             ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
                 Text(symbol)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(PluginTypography.caption.font.weight(.medium))
                     .foregroundStyle(theme.text.secondary)
                     .frame(width: dayCellSize)
             }
@@ -287,10 +287,12 @@ struct CalendarDayCell: View {
 
                     if !day.alternateCalendarText.isEmpty {
                         Text(day.alternateCalendarText)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(PluginTypography.caption.font)
                             .foregroundStyle(secondaryTextStyle)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.65)
+                            .truncationMode(.tail)
+                            .frame(width: CalendarComponentLayout.dayCellSize - 4)
+                            .help(alternateCalendarDescription)
                     }
                 }
                 .padding(.horizontal, 2)
@@ -338,7 +340,7 @@ struct CalendarDayCell: View {
     private var accessibilityLabel: String {
         var parts = [day.dayNumber]
         if !day.alternateCalendarText.isEmpty {
-            parts.append(day.alternateCalendarText)
+            parts.append(alternateCalendarDescription)
         }
         if day.isToday {
             parts.append(localization.string("accessibility.today", defaultValue: "今天"))
@@ -358,6 +360,16 @@ struct CalendarDayCell: View {
         return parts.joined(
             separator: localization.string("list.separator.comma", defaultValue: "，")
         )
+    }
+
+    private var alternateCalendarDescription: String {
+        guard !day.alternateCalendarDateText.isEmpty else { return day.alternateCalendarText }
+        guard !day.alternateCalendarDateText.contains(day.alternateCalendarText) else {
+            return day.alternateCalendarDateText
+        }
+        return day.alternateCalendarDateText
+            + localization.string("list.separator.comma", defaultValue: "，")
+            + day.alternateCalendarText
     }
 }
 
@@ -386,6 +398,7 @@ struct CalendarHolidayBadge: View {
             .foregroundStyle(colors.foreground)
             .frame(width: 12, height: 12)
             .background(colors.background, in: Circle())
+            .accessibilityHidden(true)
     }
 }
 
@@ -569,12 +582,12 @@ private struct CalendarFloatingEventPopoverContent: View {
         VStack(alignment: .leading, spacing: 7) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(PluginTypography.detail.font.weight(.semibold))
                     .lineLimit(1)
 
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(PluginTypography.caption.font.weight(.medium))
                         .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
                 }
@@ -597,7 +610,7 @@ private struct CalendarFloatingEventPopoverContent: View {
                             events.count - 6
                         )
                     )
-                        .font(.system(size: 10, weight: .medium))
+                        .font(PluginTypography.caption.font.weight(.medium))
                         .foregroundStyle(theme.text.secondary)
                 }
             }
@@ -671,12 +684,12 @@ private struct CalendarEventRow: View {
                 .frame(width: 6, height: 6)
 
             Text(event.title)
-                .font(.system(size: 10.5, weight: .medium))
+                .font(PluginTypography.detail.font)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(event.timeText)
-                .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                .font(PluginTypography.caption.font.monospacedDigit())
                 .foregroundStyle(theme.text.secondary)
                 .lineLimit(1)
         }

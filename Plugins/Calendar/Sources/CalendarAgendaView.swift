@@ -18,11 +18,11 @@ struct CalendarAgendaView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Label(localization.string("agenda.title", defaultValue: "近期日程"), systemImage: "calendar.badge.clock")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PluginTypography.sectionTitle.font)
                     .foregroundStyle(theme.text.primary)
                 Spacer(minLength: 4)
                 Text(CalendarAgendaPresentation.rangeText(dates: dates))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(PluginTypography.caption.font.monospacedDigit())
                     .foregroundStyle(theme.text.secondary)
                     .lineLimit(1)
             }
@@ -79,7 +79,7 @@ struct CalendarAgendaView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(day.dayNumber)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(PluginTypography.sectionTitle.font)
                     .foregroundStyle(theme.text.primary)
                     .frame(width: 30, height: 30)
                     .background(
@@ -91,21 +91,21 @@ struct CalendarAgendaView: View {
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(CalendarAgendaPresentation.dayTitle(day.date, today: today, localization: localization))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(PluginTypography.detail.font.weight(.semibold))
                         .foregroundStyle(theme.text.primary)
                     let subtitle = CalendarDayPresentation.dateSubtitle(
                         for: day, includesOverflowCount: false, localization: localization
                     )
                     if !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.system(size: 9.5))
+                            .font(PluginTypography.caption.font)
                             .foregroundStyle(theme.text.secondary)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
                 Text(CalendarAgendaPresentation.shortDate(day.date))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(PluginTypography.caption.font.monospacedDigit())
                     .foregroundStyle(theme.text.secondary)
             }
             .padding(.bottom, 2)
@@ -119,7 +119,7 @@ struct CalendarAgendaView: View {
     private func status(_ text: String, actionTitle: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
             Text(text)
-                .font(.system(size: 11))
+                .font(PluginTypography.detail.font)
                 .foregroundStyle(theme.text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -145,12 +145,12 @@ private struct CalendarAgendaEventRow: View {
                     .frame(width: 3, height: 28)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(event.title)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(PluginTypography.detail.font.weight(.medium))
                         .foregroundStyle(theme.text.primary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text([event.timeText, event.calendarTitle].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.system(size: 10))
+                        .font(PluginTypography.caption.font)
                         .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
                 }

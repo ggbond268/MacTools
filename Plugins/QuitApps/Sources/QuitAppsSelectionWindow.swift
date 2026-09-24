@@ -233,7 +233,7 @@ private struct QuitAppsSelectionView: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.red)
             Text(localization.string("selection.title", defaultValue: "退出应用"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(PluginTypography.pageTitle.font)
                 .foregroundStyle(.primary)
             Spacer()
             Text(localization.format(
@@ -246,7 +246,7 @@ private struct QuitAppsSelectionView: View {
             if !viewModel.selectedEntries.isEmpty {
                 Button(action: { viewModel.invertSelection() }) {
                     Text(localization.string("selection.invert", defaultValue: "反选"))
-                        .font(.system(size: 12))
+                        .font(PluginTypography.control.font)
                         .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
@@ -295,34 +295,18 @@ private struct QuitAppsSelectionView: View {
                 viewModel.confirmQuit(onDone: onDismiss)
             }) {
                 Text(viewModel.confirmTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(nsColor: .systemRed).opacity(0.85), Color(nsColor: .systemRed)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-                    )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(.red)
             .disabled(viewModel.entries.isEmpty)
 
             Button(action: onDismiss) {
                 Text(localization.string("selection.cancel", defaultValue: "取消"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -370,7 +354,7 @@ private struct AppIconCell: View {
                 }
 
                 Text(entry.displayName)
-                    .font(.system(size: 11))
+                    .font(PluginTypography.detail.font)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(entry.isSelected ? Color.red : Color.primary)

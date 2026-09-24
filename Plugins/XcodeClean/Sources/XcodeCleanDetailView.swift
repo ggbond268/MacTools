@@ -246,7 +246,7 @@ struct XcodeCleanDetailView: View {
                 .frame(width: 14, height: 14)
 
             Text(entry.text)
-                .font(.system(size: 11, design: .monospaced))
+                .font(PluginTypography.code.font)
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
                 .lineLimit(3)
@@ -337,7 +337,7 @@ struct XcodeCleanDetailView: View {
                 }
 
                 Text(candidate.path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(PluginTypography.code.font)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
