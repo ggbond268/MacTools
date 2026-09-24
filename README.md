@@ -132,7 +132,7 @@ Clipboard selection and scrolling respond immediately. Rapid navigation skips tr
 
 Screenshots work on macOS 14+; region recording and per-app volume require macOS 15+. Hardware controls depend on device support. See the [feature guides](docs/README.md) for details.
 
-Screenshot selection remains available on each display after switching desktops or entering and leaving full-screen apps.
+Screenshot selection remains available on each display after switching desktops or entering and leaving full-screen apps. Closing a selection releases its capture cursor.
 
 **Take your setup with you:** export and import preferences, keep local backups, or sync supported settings through a cloud or shared folder. The app supports **11 languages** and follows your system language by default.
 

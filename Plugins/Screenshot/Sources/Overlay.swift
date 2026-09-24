@@ -899,6 +899,8 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
                 updateHover(at: p)
             }
         }
+        // A double-click action can synchronously dismiss this overlay.
+        guard cgImage != nil else { return }
         cursor(at: p).set()
         invalidateAnnotations()
     }
