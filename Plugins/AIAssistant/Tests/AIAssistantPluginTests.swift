@@ -1,3 +1,4 @@
+import AppKit
 import MacToolsPluginKit
 import XCTest
 @testable import AIAssistantPlugin
@@ -12,6 +13,26 @@ final class AIAssistantPluginTests: XCTestCase {
         XCTAssertEqual(plugin.metadata.defaultDescription, "划词调用 AI 翻译、总结、润色等")
         XCTAssertFalse(plugin.panelItems.isEmpty)
         XCTAssertNotNil(plugin.settingsPage)
+    }
+
+    func testSelectionShortcutUsesHostTargetResolvedAtActionStart() async {
+        let capture = RecordingTargetCapture()
+        let plugin = makePlugin(strategies: [capture])
+        var providerCalls = 0
+        plugin.focusedWindowTargetProvider = {
+            providerCalls += 1
+            return PluginFocusedWindowTarget(application: .current)
+        }
+
+        plugin.handleShortcutAction(id: "translate")
+        plugin.focusedWindowTargetProvider = { nil }
+
+        for _ in 0..<100 where capture.capturedPID == nil {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(providerCalls, 1)
+        XCTAssertEqual(capture.capturedPID, NSRunningApplication.current.processIdentifier)
     }
 
     func testShortcutDefinitionsDynamicallyFollowEnabledPrompts() {
@@ -270,7 +291,7 @@ final class AIAssistantPluginTests: XCTestCase {
         XCTAssertEqual(ids, ["accessibility", "automation"])
     }
 
-    func testClipboardShortcutSettingRoutesToClipboardWithoutSelectionCapture() {
+    func testClipboardSettingAllowsFallbackWithoutAccessibilityPermission() async {
         let storage = AIAssistantInMemoryPluginStorage()
         let panel = RecordingAIAssistantPanelController()
         let plugin = makePlugin(
@@ -287,10 +308,38 @@ final class AIAssistantPluginTests: XCTestCase {
             value: true
         ))
         plugin.handleShortcutAction(id: "polish")
+        for _ in 0..<100 where panel.snapshot?.phase != .error(.missingClipboardText) {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
 
         XCTAssertTrue(storage.bool(forKey: AIAssistantConstants.StorageKey.shortcutUsesClipboard))
         XCTAssertEqual(plugin.permissionRequirementIDs(for: actionKey), [])
         XCTAssertEqual(panel.snapshot?.phase, .error(.missingClipboardText))
+    }
+
+    func testSameShortcutPrefersDirectSelectionOverClipboard() async {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let panel = RecordingAIAssistantPanelController()
+        let selection = StaticSelectionCapture(text: "selected text")
+        let plugin = makePlugin(
+            storage: storage,
+            panelController: panel,
+            clipboardTextProvider: { "earlier copy" },
+            providerFactoryOverride: { .failure(AIAssistantProviderError(message: "unconfigured")) },
+            strategies: [selection]
+        )
+        plugin.handleSettingsAction(.setBoolean(
+            controlID: AIAssistantConstants.StorageKey.shortcutUsesClipboard,
+            value: true
+        ))
+
+        plugin.handleShortcutAction(id: "polish")
+        for _ in 0..<100 where panel.snapshot?.sourceText == nil {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(selection.captureCount, 1)
+        XCTAssertEqual(panel.snapshot?.sourceText, "selected text")
     }
 
     func testClipboardShortcutUsesNewCopyAfterHiddenSession() async {
@@ -309,6 +358,9 @@ final class AIAssistantPluginTests: XCTestCase {
         ))
 
         plugin.handleShortcutAction(id: "polish")
+        for _ in 0..<100 where panel.snapshot?.sourceText != "first copy" {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
         copiedText = "second copy"
         panel.onAction?(.hide)
         plugin.handleShortcutAction(id: "polish")
@@ -328,7 +380,8 @@ final class AIAssistantPluginTests: XCTestCase {
         accessibilityTrustProvider: @escaping () -> Bool = { true },
         panelController: RecordingAIAssistantPanelController? = nil,
         clipboardTextProvider: @escaping () -> String? = { nil },
-        providerFactoryOverride: AIAssistantProviderFactory? = nil
+        providerFactoryOverride: AIAssistantProviderFactory? = nil,
+        strategies: [any SelectedTextCapturing] = []
     ) -> AIAssistantPlugin {
         let storage = storage ?? AIAssistantInMemoryPluginStorage()
         return AIAssistantPlugin(
@@ -337,9 +390,42 @@ final class AIAssistantPluginTests: XCTestCase {
             accessibilityTrustRequester: { _ in true },
             secretStore: CountingAIAssistantSecretStore(apiKey: "sk-test"),
             panelController: panelController ?? RecordingAIAssistantPanelController(),
-            selectedTextCapturePipeline: SelectedTextCapturePipeline(strategies: []),
+            selectedTextCapturePipeline: SelectedTextCapturePipeline(strategies: strategies),
             providerFactoryOverride: providerFactoryOverride,
             clipboardTextProvider: clipboardTextProvider
+        )
+    }
+}
+
+@MainActor
+private final class RecordingTargetCapture: SelectedTextCapturing {
+    let strategyID: SelectedTextCaptureStrategyID = .accessibility
+    private(set) var capturedPID: pid_t?
+
+    func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
+        capturedPID = context.frontmostApplicationProcessIdentifier
+        return .missing
+    }
+}
+
+@MainActor
+private final class StaticSelectionCapture: SelectedTextCapturing {
+    let strategyID: SelectedTextCaptureStrategyID = .accessibility
+    let text: String
+    private(set) var captureCount = 0
+
+    init(text: String) {
+        self.text = text
+    }
+
+    func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
+        captureCount += 1
+        return SelectedTextCaptureResult(
+            text: text,
+            strategyID: strategyID,
+            isEditable: false,
+            sourceApplicationBundleID: context.frontmostApplicationBundleID,
+            failureReason: nil
         )
     }
 }

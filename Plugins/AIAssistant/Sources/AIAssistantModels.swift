@@ -72,6 +72,7 @@ enum AIAssistantPanelPhase: Equatable, Sendable {
     case idle
     case capturing
     case processing
+    case awaitingConfirmation
     case success
     case error(AIAssistantPanelError)
 }
@@ -127,6 +128,7 @@ struct AIAssistantPanelSnapshot: Equatable, Sendable {
 enum AIAssistantPanelAction: Equatable, Sendable {
     case retry
     case reprocess(sourceText: String)
+    case confirmSource
     /// 取消正在运行的捕获或请求，但保持会话可见
     case stop
     /// 隐藏面板，但不取消任务或废弃会话

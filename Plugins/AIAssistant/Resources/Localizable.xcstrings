@@ -492,9 +492,9 @@
     "settings.shortcutInput.clipboard.description": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "When enabled, prompt shortcuts send the current clipboard text to AI. Copy the text you want first." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "开启后，模板快捷键会直接发送当前剪贴板文本给 AI。请先复制所需内容。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "開啟後，模板快速鍵會直接傳送目前剪貼簿文字給 AI。請先複製所需內容。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Prefer selected text. If no selection is found and the clipboard stays unchanged, use the text you copied earlier." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "优先处理选中文本；未选中且剪贴板未变化时，使用已复制的文本。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "優先處理選取的文字；未選取且剪貼簿未變動時，使用已複製的文字。" } }
       }
     },
     "settings.shortcut.conflict.system": {
@@ -780,9 +780,9 @@
     "shortcut.prompt.clipboardDescriptionFormat": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Process the current clipboard text with \"%@\"." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用「%@」处理当前剪贴板文本。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "用「%@」處理目前剪貼簿文字。" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Process selected text with \"%@\", or use the clipboard when no selection is found." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用「%@」处理选中文本，未选中时使用剪贴板。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "用「%@」處理選取的文字，未選取時使用剪貼簿。" } }
       }
     },
     "panel.header.title": {

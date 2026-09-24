@@ -3,4 +3,4 @@ release: plugin
 type: changed
 ---
 
-AI Assistant can use explicitly copied clipboard text for prompt shortcuts without asking for a second confirmation when clipboard input is enabled in settings.
+AI Assistant shortcuts now prefer directly readable selected text, then use an unchanged clipboard when clipboard input is enabled. Simulated-copy text still requires confirmation.

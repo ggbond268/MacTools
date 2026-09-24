@@ -26,7 +26,8 @@ final class AIAssistantPlugin:
     PluginActionPermissionProviding,
     PluginShortcutEventHandling,
     PluginGroupedShortcutSettingsProviding,
-    PluginShortcutBindingValidating
+    PluginShortcutBindingValidating,
+    PluginFocusedWindowTargetConsuming
 {
     private enum APIKeyState: Equatable {
         case unknown
@@ -46,6 +47,7 @@ final class AIAssistantPlugin:
     var requestPermissionGuidance: ((String) -> Void)?
     var shortcutBindingResolver: ((String) -> ShortcutBinding?)?
     var requestSettingsPresentation: (() -> Void)?
+    var focusedWindowTargetProvider: (() -> PluginFocusedWindowTarget?)?
 
     private let storage: PluginStorage
     private let accessibilityTrustProvider: () -> Bool
@@ -192,7 +194,7 @@ final class AIAssistantPlugin:
         if shortcutUsesClipboard {
             return localization.format(
                 "shortcut.prompt.clipboardDescriptionFormat",
-                defaultValue: "用「%@」处理当前剪贴板文本。",
+                defaultValue: "用「%@」处理选中文本，未选中时使用剪贴板。",
                 prompt.normalizedName
             )
         }
@@ -357,7 +359,7 @@ final class AIAssistantPlugin:
                         title: localization.string("settings.shortcutInput.clipboard.title", defaultValue: "使用剪贴板"),
                         description: localization.string(
                             "settings.shortcutInput.clipboard.description",
-                            defaultValue: "开启后，模板快捷键会直接发送当前剪贴板文本给 AI。请先复制所需内容。"
+                            defaultValue: "优先处理选中文本；未选中且剪贴板未变化时，使用已复制的文本。"
                         ),
                         systemImage: "doc.on.clipboard",
                         control: .toggle(isOn: shortcutUsesClipboard)
@@ -489,14 +491,19 @@ final class AIAssistantPlugin:
 
         let coordinator = coordinator ?? makeCoordinator()
         self.coordinator = coordinator
-        // Clipboard mode always uses the current copy, including when the
-        // previous session was hidden. Selection mode can reopen that session.
-        if shortcutUsesClipboard {
-            coordinator.startProcessingClipboard(prompt: prompt)
-        } else if coordinator.hasSession(forPromptID: prompt.id), !coordinator.isPanelVisible {
+        // Clipboard-enabled shortcuts still prefer a direct selection. A hidden
+        // session is reopened only in selection-only mode.
+        if !shortcutUsesClipboard, coordinator.hasSession(forPromptID: prompt.id), !coordinator.isPanelVisible {
             coordinator.reopenSession()
         } else {
-            coordinator.startProcessing(prompt: prompt)
+            let context = SelectedTextCaptureContext(
+                frontmostApplication: focusedWindowTargetProvider?()?.application
+            )
+            coordinator.startProcessing(
+                prompt: prompt,
+                context: context,
+                useClipboardWhenNoSelection: shortcutUsesClipboard
+            )
         }
     }
 

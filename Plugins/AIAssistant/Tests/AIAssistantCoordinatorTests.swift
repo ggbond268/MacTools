@@ -254,51 +254,130 @@ final class AIAssistantCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.snapshot.retainedResult)
     }
 
-    // MARK: - Direct processing for simulated-copy captures
+    // MARK: - Confirmation for simulated-copy captures
 
-    func testSimulatedCopyCaptureProcessesDirectlyWithoutConfirmation() async {
+    func testSimulatedCopyCaptureRequiresConfirmationBeforeRequest() async {
         capturePipeline = StubCapturePipeline(result: .unverified("剪贴板文本"))
         let client = StubProcessingClient(result: .success(Self.makeResult()))
         let coordinator = makeCoordinator(client: client)
 
         coordinator.startProcessing(prompt: Self.makePrompt())
 
-        await waitForPhase(coordinator) { $0 == .success }
-
-        // 模拟复制捕获的文本直接发起请求并展示结果，不再弹窗等待确认
-        XCTAssertEqual(coordinator.snapshot.phase, .success)
+        await waitForPhase(coordinator) { $0 == .awaitingConfirmation }
         XCTAssertEqual(coordinator.snapshot.sourceText, "剪贴板文本")
-        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
+        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
+        XCTAssertTrue(panelController.isVisible)
+        XCTAssertEqual(client.callCount, 0)
+
+        coordinator.handle(.retry)
+        XCTAssertEqual(coordinator.snapshot.phase, .awaitingConfirmation)
+        XCTAssertEqual(client.callCount, 0)
+
+        coordinator.handle(.confirmSource)
+        await waitForPhase(coordinator) { $0 == .success }
         XCTAssertEqual(client.callCount, 1)
+        XCTAssertEqual(coordinator.snapshot.result?.text, "处理结果")
     }
 
-    func testExplicitClipboardInputProcessesCopiedTextWithoutCaptureConfirmation() async {
-        capturePipeline = StubCapturePipeline(result: .unverified("simulated copy"))
+    func testDiscardingUnconfirmedCaptureDoesNotSendText() async {
+        capturePipeline = StubCapturePipeline(result: .unverified("unrelated clipboard text"))
         let client = StubProcessingClient(result: .success(Self.makeResult()))
-        let coordinator = makeCoordinator(client: client, clipboardTextProvider: { "Chrome copied text" })
+        let coordinator = makeCoordinator(client: client)
 
-        coordinator.startProcessingClipboard(prompt: Self.makePrompt())
+        coordinator.startProcessing(prompt: Self.makePrompt())
+        await waitForPhase(coordinator) { $0 == .awaitingConfirmation }
+        coordinator.handle(.discard)
+        coordinator.handle(.confirmSource)
+
+        XCTAssertEqual(coordinator.snapshot.phase, .idle)
+        XCTAssertEqual(client.callCount, 0)
+    }
+
+    func testUnchangedClipboardIsUsedWhenSelectionIsMissing() async {
+        capturePipeline = StubCapturePipeline(result: .missing)
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(
+            client: client,
+            clipboardTextProvider: { "Chrome copied text" },
+            clipboardChangeCountProvider: { 10 }
+        )
+
+        coordinator.startProcessing(prompt: Self.makePrompt(), useClipboardWhenNoSelection: true)
         await waitForPhase(coordinator) { $0 == .success }
 
-        XCTAssertEqual(capturePipeline.captureCount, 0)
+        XCTAssertEqual(capturePipeline.captureCount, 1)
         XCTAssertEqual(client.callCount, 1)
         XCTAssertEqual(coordinator.snapshot.sourceText, "Chrome copied text")
+        XCTAssertFalse(panelController.shownSnapshots.contains { $0.phase == .awaitingConfirmation })
+    }
+
+    func testChangedClipboardDuringCaptureDoesNotSendEarlierOrUnrelatedText() async {
+        capturePipeline = StubCapturePipeline(result: .missing)
+        var changeCount = 10
+        capturePipeline.onCapture = { changeCount = 11 }
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(
+            client: client,
+            clipboardTextProvider: { "earlier copy" },
+            clipboardChangeCountProvider: { changeCount }
+        )
+
+        coordinator.startProcessing(prompt: Self.makePrompt(), useClipboardWhenNoSelection: true)
+        await waitForPhase(coordinator) { $0 == .error(.missingSelection) }
+
+        XCTAssertEqual(client.callCount, 0)
+        XCTAssertNil(coordinator.snapshot.sourceText)
+    }
+
+    func testSimulatedCopyStillRequiresConfirmationWithClipboardFallbackEnabled() async {
+        capturePipeline = StubCapturePipeline(result: .unverified("new copy"))
+        let client = StubProcessingClient(result: .success(Self.makeResult()))
+        let coordinator = makeCoordinator(
+            client: client,
+            clipboardTextProvider: { "earlier copy" },
+            clipboardChangeCountProvider: { 10 }
+        )
+
+        coordinator.startProcessing(prompt: Self.makePrompt(), useClipboardWhenNoSelection: true)
+        await waitForPhase(coordinator) { $0 == .awaitingConfirmation }
+
+        XCTAssertEqual(coordinator.snapshot.sourceText, "new copy")
+        XCTAssertEqual(client.callCount, 0)
+    }
+
+    func testCaptureUsesContextResolvedBeforeAsyncTaskAndRetainsItOnRetry() async {
+        capturePipeline = StubCapturePipeline(result: .missing)
+        let coordinator = makeCoordinator(client: StubProcessingClient(result: .success(Self.makeResult())))
+        let context = SelectedTextCaptureContext(
+            frontmostApplicationBundleID: "com.example.editor",
+            frontmostApplicationProcessIdentifier: 4242
+        )
+
+        coordinator.startProcessing(prompt: Self.makePrompt(), context: context)
+        await waitForPhase(coordinator) { $0 == .error(.missingSelection) }
+        XCTAssertEqual(capturePipeline.contexts.last?.frontmostApplicationProcessIdentifier, 4242)
+        XCTAssertEqual(capturePipeline.contexts.last?.frontmostApplicationBundleID, "com.example.editor")
+
+        coordinator.handle(.retry)
+        await waitForCondition(coordinator) { _ in self.capturePipeline.captureCount == 2 }
+        XCTAssertEqual(capturePipeline.contexts.last?.frontmostApplicationProcessIdentifier, 4242)
     }
 
     func testEmptyClipboardRetryReadsClipboardAgain() async {
+        capturePipeline = StubCapturePipeline(result: .missing)
         var copiedText: String?
         let client = StubProcessingClient(result: .success(Self.makeResult()))
         let coordinator = makeCoordinator(client: client, clipboardTextProvider: { copiedText })
 
-        coordinator.startProcessingClipboard(prompt: Self.makePrompt())
-        XCTAssertEqual(coordinator.snapshot.phase, .error(.missingClipboardText))
+        coordinator.startProcessing(prompt: Self.makePrompt(), useClipboardWhenNoSelection: true)
+        await waitForPhase(coordinator) { $0 == .error(.missingClipboardText) }
         XCTAssertEqual(client.callCount, 0)
 
         copiedText = "new copy"
         coordinator.handle(.retry)
         await waitForPhase(coordinator) { $0 == .success }
 
-        XCTAssertEqual(capturePipeline.captureCount, 0)
+        XCTAssertEqual(capturePipeline.captureCount, 2)
         XCTAssertEqual(coordinator.snapshot.sourceText, "new copy")
         XCTAssertEqual(client.callCount, 1)
     }
@@ -337,7 +416,8 @@ final class AIAssistantCoordinatorTests: XCTestCase {
 
     private func makeCoordinator(
         client: any AIProcessing,
-        clipboardTextProvider: @escaping () -> String? = { nil }
+        clipboardTextProvider: @escaping () -> String? = { nil },
+        clipboardChangeCountProvider: @escaping () -> Int = { 10 }
     ) -> AIAssistantCoordinator {
         AIAssistantCoordinator(
             selectedTextCapturePipeline: capturePipeline,
@@ -352,7 +432,8 @@ final class AIAssistantCoordinatorTests: XCTestCase {
                 )
             },
             panelController: panelController,
-            clipboardTextProvider: clipboardTextProvider
+            clipboardTextProvider: clipboardTextProvider,
+            clipboardChangeCountProvider: clipboardChangeCountProvider
         )
     }
 
@@ -441,6 +522,8 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
 
     var outcome: Outcome
     private(set) var captureCount = 0
+    private(set) var contexts: [SelectedTextCaptureContext] = []
+    var onCapture: (() -> Void)?
 
     init(result: Outcome) {
         self.outcome = result
@@ -448,6 +531,8 @@ private final class StubCapturePipeline: SelectedTextCaptureProviding {
 
     func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
         captureCount += 1
+        contexts.append(context)
+        onCapture?()
         switch outcome {
         case let .success(text):
             return SelectedTextCaptureResult(
