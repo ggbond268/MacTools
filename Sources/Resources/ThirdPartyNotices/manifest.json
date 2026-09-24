@@ -101,6 +101,22 @@
       "licenseFile": "Sources/Resources/ThirdPartyNotices/activity-bar-LICENSE.txt"
     },
     {
+      "id": "status-trio",
+      "name": "Status Trio",
+      "repository": "https://github.com/lingyired/status-trio",
+      "revision": "c22607cb830c55fe1f54be2fe866e9171d71ecf5",
+      "license": "Apache-2.0",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:duo-status"
+      ],
+      "paths": [
+        "Plugins/DuoStatus"
+      ],
+      "licenseFile": "Sources/Resources/ThirdPartyNotices/status-trio-LICENSE.txt"
+    },
+    {
       "id": "middleclick",
       "name": "MiddleClick",
       "repository": "https://github.com/artginzburg/MiddleClick",

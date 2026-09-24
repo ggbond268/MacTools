@@ -133,6 +133,122 @@ final class DuoStatusPluginTests: XCTestCase {
         XCTAssertFalse(plugin is any PluginActionProviding)
     }
 
+    func testAudioIsMonitoredOnlyWhileAnOptionRendersIt() {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        XCTAssertEqual(fixture.monitor.refreshScope, [.battery, .wifi])
+
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "bottom-indicator", optionID: "volume"))
+        XCTAssertEqual(fixture.monitor.refreshScope, [.battery, .wifi, .volume])
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "bottom-indicator", optionID: "wifi"))
+        XCTAssertEqual(fixture.monitor.refreshScope, [.battery, .wifi])
+
+        fixture.plugin.handleSettingsAction(.setBoolean(controlID: "shows-bluetooth-audio-glyph", value: true))
+        XCTAssertEqual(fixture.monitor.refreshScope, [.battery, .wifi, .volume])
+        fixture.plugin.handleSettingsAction(.setBoolean(controlID: "shows-bluetooth-audio-glyph", value: false))
+        XCTAssertEqual(fixture.monitor.refreshScope, [.battery, .wifi])
+    }
+
+    func testUntouchedOptionsKeepShippingIconAndPersistNothing() {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        XCTAssertEqual(fixture.menuBar.options, .default)
+        XCTAssertNil(fixture.storage.object(forKey: "icon-size"))
+        XCTAssertNil(fixture.storage.object(forKey: "bottom-indicator"))
+    }
+
+    func testOptionChangeRedrawsAndSurvivesRelaunch() {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        var iconChanges = 0
+        fixture.plugin.onMenuBarIconChange = { _ in iconChanges += 1 }
+        let updates = fixture.menuBar.updateCount
+
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "icon-size", optionID: "large"))
+        fixture.plugin.handleSettingsAction(.setBoolean(controlID: "distinguishes-hotspot", value: true))
+        XCTAssertEqual(fixture.menuBar.options?.iconSize, .large)
+        XCTAssertEqual(fixture.menuBar.options?.distinguishesHotspot, true)
+        XCTAssertEqual(fixture.menuBar.updateCount, updates + 2)
+        XCTAssertEqual(iconChanges, 2)
+
+        // Re-sending the current value is not a change.
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "icon-size", optionID: "large"))
+        XCTAssertEqual(iconChanges, 2)
+
+        let menuBar = MenuBarFake()
+        let relaunched = DuoStatusPlugin(context: fixture.context, monitor: MonitorFake(), menuBar: menuBar)
+        let coordinator = PluginMenuBarIconCoordinator(userDefaults: fixture.defaults)
+        coordinator.synchronize(with: [relaunched], pendingPluginIDs: [])
+        relaunched.activate(context: fixture.context)
+        XCTAssertEqual(menuBar.options?.iconSize, .large)
+        XCTAssertEqual(menuBar.options?.distinguishesHotspot, true)
+    }
+
+    func testCriticalThresholdPersistsOnlyCommittedClampedValues() {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        fixture.plugin.handleSettingsAction(.setNumber(
+            controlID: "battery-critical-threshold", value: 35, phase: .changed
+        ))
+        XCTAssertNil(fixture.storage.object(forKey: "battery-critical-threshold"))
+        fixture.plugin.handleSettingsAction(.setNumber(
+            controlID: "battery-critical-threshold", value: 90, phase: .committed
+        ))
+        XCTAssertEqual(fixture.storage.object(forKey: "battery-critical-threshold") as? Int, 50)
+        XCTAssertEqual(fixture.menuBar.options?.batteryCriticalThreshold, 50)
+    }
+
+    func testTooltipNamesPreciseWiFiStateAndDotSource() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        // The hotspot glyph is off by default, but the tooltip still says what it is.
+        fixture.monitor.emit(.init(wifi: .hotspot, wifiSignalLevel: 3, network: .connected,
+                                   volume: .init(scalar: 0.5)))
+        let tooltip = try XCTUnwrap(fixture.menuBar.tooltip)
+        XCTAssertTrue(tooltip.contains("3/4"))
+        XCTAssertNotEqual(tooltip, try tooltipText(for: .connected(level: 3)))
+        XCTAssertFalse(tooltip.contains("50%"))
+
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "bottom-indicator", optionID: "volume"))
+        XCTAssertTrue(try XCTUnwrap(fixture.menuBar.tooltip).contains("50%"))
+    }
+
+    func testVolumeStyleIsOfferedOnlyForVolumeAndSurvivesRelaunch() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        XCTAssertFalse(try settingsRowIDs(fixture.plugin).contains("volume-style"))
+
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "bottom-indicator", optionID: "volume"))
+        XCTAssertTrue(try settingsRowIDs(fixture.plugin).contains("volume-style"))
+        fixture.plugin.handleSettingsAction(.setSelection(controlID: "volume-style", optionID: "bar"))
+        XCTAssertEqual(fixture.menuBar.options?.volumeStyle, .bar)
+
+        let menuBar = MenuBarFake()
+        let relaunched = DuoStatusPlugin(context: fixture.context, monitor: MonitorFake(), menuBar: menuBar)
+        let coordinator = PluginMenuBarIconCoordinator(userDefaults: fixture.defaults)
+        coordinator.synchronize(with: [relaunched], pendingPluginIDs: [])
+        relaunched.activate(context: fixture.context)
+        XCTAssertEqual(menuBar.options?.volumeStyle, .bar)
+    }
+
+    private func settingsRowIDs(_ plugin: DuoStatusPlugin) throws -> [String] {
+        guard case let .form(sections) = plugin.settingsPage?.body else {
+            XCTFail("Missing form")
+            return []
+        }
+        return sections.flatMap { section -> [String] in
+            guard case let .rows(rows) = section.content else { return [] }
+            return rows.map(\.id)
+        }
+    }
+
+    private func tooltipText(for wifi: DuoSystemStatusSnapshot.WiFi) throws -> String {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+        fixture.monitor.emit(.init(wifi: wifi, network: .connected))
+        return try XCTUnwrap(fixture.menuBar.tooltip)
+    }
+
     @MainActor
     private final class Fixture {
         let storage = StorageFake()
@@ -203,6 +319,7 @@ private final class MonitorFake: DuoSystemStatusMonitoring {
     var onChange: ((DuoSystemStatusSnapshot) -> Void)?
     private(set) var isRunning = false
     private(set) var startCount = 0
+    private(set) var refreshScope: DuoSystemStatusRefreshScope?
 
     func start() {
         guard !isRunning else { return }
@@ -212,6 +329,7 @@ private final class MonitorFake: DuoSystemStatusMonitoring {
 
     func stop() { isRunning = false }
     func refresh() {}
+    func setRefreshScope(_ scope: DuoSystemStatusRefreshScope) { refreshScope = scope }
 
     func emit(_ snapshot: DuoSystemStatusSnapshot) {
         self.snapshot = snapshot
@@ -223,15 +341,17 @@ private final class MonitorFake: DuoSystemStatusMonitoring {
 private final class MenuBarFake: DuoStatusMenuBarPresenting {
     var openSettings: (() -> Void)?
     private(set) var snapshot: DuoSystemStatusSnapshot?
+    private(set) var options: DuoStatusIconOptions?
     private(set) var tooltip: String?
     private(set) var isVisible = false
     private(set) var updateCount = 0
     private(set) var creationCount = 0
 
-    func update(snapshot: DuoSystemStatusSnapshot, tooltip: String) {
+    func update(snapshot: DuoSystemStatusSnapshot, options: DuoStatusIconOptions, tooltip: String) {
         if !isVisible { creationCount += 1 }
         isVisible = true
         self.snapshot = snapshot
+        self.options = options
         self.tooltip = tooltip
         updateCount += 1
     }
@@ -239,6 +359,7 @@ private final class MenuBarFake: DuoStatusMenuBarPresenting {
     func remove() {
         isVisible = false
         snapshot = nil
+        options = nil
         tooltip = nil
     }
 }
