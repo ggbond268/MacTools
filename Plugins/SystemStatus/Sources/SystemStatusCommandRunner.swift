@@ -20,14 +20,40 @@ enum SystemStatusCommandRunner {
         arguments: [String],
         timeout: TimeInterval
     ) async -> SystemStatusCommandResult? {
-        await withCheckedContinuation { continuation in
-            SystemStatusCommandExecution(
-                path: path,
-                arguments: arguments,
-                timeout: timeout,
-                continuation: continuation
-            ).start()
+        let cancellation = SystemStatusCommandCancellation()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let execution = SystemStatusCommandExecution(
+                    path: path, arguments: arguments, timeout: timeout, continuation: continuation
+                )
+                cancellation.install(execution)
+                execution.start()
+            }
+        } onCancel: {
+            cancellation.cancel()
         }
+    }
+}
+
+private final class SystemStatusCommandCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var execution: SystemStatusCommandExecution?
+    private var isCancelled = false
+
+    func install(_ execution: SystemStatusCommandExecution) {
+        lock.lock()
+        self.execution = execution
+        let cancelled = isCancelled
+        lock.unlock()
+        if cancelled { execution.cancel() }
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let execution = execution
+        lock.unlock()
+        execution?.cancel()
     }
 }
 
@@ -67,6 +93,7 @@ private final class SystemStatusCommandExecution: @unchecked Sendable {
     private var drainWorkItem: DispatchWorkItem?
     private var leaderDidExit = false
     private var didTimeOut = false
+    private var didCancel = false
     private var closedStreamCount = 0
     private var didFinish = false
 
@@ -94,6 +121,7 @@ private final class SystemStatusCommandExecution: @unchecked Sendable {
 
     func start() {
         controlQueue.async { [self] in
+            guard !didFinish else { return }
             do {
                 let launch = try spawn()
                 let processLease = PluginProcessGroupLease(processID: launch.processID)
@@ -112,6 +140,18 @@ private final class SystemStatusCommandExecution: @unchecked Sendable {
             } catch {
                 finishWithoutResult()
             }
+        }
+    }
+
+    func cancel() {
+        controlQueue.async { [self] in
+            guard !didFinish else { return }
+            didCancel = true
+            guard lease != nil else { finishWithoutResult(); return }
+            timeoutWorkItem?.cancel()
+            timeoutWorkItem = nil
+            lease?.signal(SIGTERM)
+            scheduleForcedKill()
         }
     }
 
@@ -297,7 +337,7 @@ private final class SystemStatusCommandExecution: @unchecked Sendable {
         )
         let pendingContinuation = continuation
         continuation = nil
-        pendingContinuation?.resume(returning: result)
+        pendingContinuation?.resume(returning: didCancel ? nil : result)
     }
 
     private func finishWithoutResult() {

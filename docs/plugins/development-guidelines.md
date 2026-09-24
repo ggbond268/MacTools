@@ -6,6 +6,8 @@ These requirements apply to plugins maintained in this repository and contributi
 
 The current API is **PluginKit 7**, with a minimum host of **MacTools 1.3.1** for that compatibility line. Declare the first compatible host for every API you consume; an unchanged older protocol does not make a new symbol available to an older app.
 
+The public `PluginTypography` and `PluginMetricValue` APIs require MacTools 2.0.0. System Status declares that minimum when using these native text and numeric readout roles.
+
 | Concern | Contract |
 | --- | --- |
 | Plugin identity | One plugin instance per package; `plugin.json.id` equals `PluginMetadata.id`. Keep plugin, item, action, permission, and shortcut IDs stable. |

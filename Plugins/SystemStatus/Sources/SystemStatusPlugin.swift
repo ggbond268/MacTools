@@ -51,7 +51,8 @@ final class SystemStatusPlugin:
                 width: 4,
                 height: PluginPanelWidgetLayoutMetrics.default.heightSpan(
                     fittingContentHeight: SystemStatusComponentLayout.contentHeight(
-                        for: settingsController.configuration.visiblePanelMetricKinds
+                        for: settingsController.configuration.visiblePanelMetricKinds,
+                        processLimit: settingsController.configuration.processLimit
                     )
                 )
             )!
@@ -101,9 +102,12 @@ final class SystemStatusPlugin:
             settingsController: resolvedSettingsController,
             localization: localization
         )
+        resolvedViewModel.configure(resolvedSettingsController.configuration)
         resolvedSettingsController.onConfigurationChange = { [weak self] in
-            self?.onStateChange?()
-            self?.persistentPreferencesChanges.didPersist()
+            guard let self else { return }
+            self.viewModel.configure(self.settingsController.configuration)
+            onStateChange?()
+            persistentPreferencesChanges.didPersist()
         }
     }
 
@@ -175,7 +179,7 @@ final class SystemStatusPlugin:
                 systemImage: "square.grid.2x2",
                 footer: localization.string(
                     "settings.panel.description",
-                    defaultValue: "选择组件面板显示的内容，并拖拽调整顺序。"
+                    defaultValue: "选择显示内容，拖拽排序，展开配置详情。"
                 ),
                 presentation: .edgeToEdge
             ) { [settingsController, viewModel, localization] _ in
@@ -236,6 +240,7 @@ final class SystemStatusPlugin:
             content: AnyView(
                 SystemStatusMetricDetailView(
                     viewModel: viewModel,
+                    settingsController: settingsController,
                     kind: kind,
                     localization: localization
                 )
@@ -326,77 +331,27 @@ final class SystemStatusPlugin:
 }
 
 @MainActor
-struct SystemStatusSamplingSchedule: Sendable {
-    let backgroundFastInterval: Duration
-    let menuBarFastInterval: Duration
-    let foregroundFastInterval: Duration
-    let backgroundSlowInterval: TimeInterval
-    let menuBarSlowInterval: TimeInterval
-    let foregroundSlowInterval: TimeInterval
-    let backgroundProcessInterval: TimeInterval
-    let foregroundProcessInterval: TimeInterval
-    let backgroundHistoryInterval: TimeInterval
-    let foregroundHistoryInterval: TimeInterval
-
-    static let production = SystemStatusSamplingSchedule(
-        backgroundFastInterval: .seconds(30),
-        menuBarFastInterval: .seconds(3),
-        foregroundFastInterval: .seconds(3),
-        backgroundSlowInterval: 300,
-        menuBarSlowInterval: 3,
-        foregroundSlowInterval: 15,
-        backgroundProcessInterval: 300,
-        foregroundProcessInterval: 15,
-        backgroundHistoryInterval: 300,
-        foregroundHistoryInterval: 60
-    )
-}
-
-@MainActor
 final class SystemStatusViewModel: ObservableObject {
     enum ForegroundConsumer: Hashable {
         case dashboard
         case menuBarPopover
+        case detail(UUID, SystemStatusMetricKind)
     }
 
-    private static let processCandidateLimit = 6
+    private var configuration = SystemStatusConfiguration.default
+    private var processLimit: SystemStatusProcessLimit { configuration.processLimit }
+    private var isActive = false
+    private var generation = 0
+    private var runningMode: SamplingMode?
+    private var runningPlan: SystemStatusSamplingPlan?
+    private var lastSamples: [SystemStatusSamplingDemand: TimeInterval] = [:]
+    private(set) var activeDemand: SystemStatusSamplingDemand = []
     @Published private(set) var snapshot = SystemStatusSnapshot.empty
 
     private enum SamplingMode: Equatable {
         case background
-        case menuBar(requiresSlowSampling: Bool)
+        case menuBar
         case foreground
-
-        func fastInterval(schedule: SystemStatusSamplingSchedule) -> Duration {
-            switch self {
-            case .background:
-                return schedule.backgroundFastInterval
-            case .menuBar:
-                return schedule.menuBarFastInterval
-            case .foreground:
-                return schedule.foregroundFastInterval
-            }
-        }
-
-        func slowInterval(schedule: SystemStatusSamplingSchedule) -> TimeInterval {
-            switch self {
-            case .background:
-                return schedule.backgroundSlowInterval
-            case let .menuBar(requiresSlowSampling):
-                return requiresSlowSampling ? schedule.menuBarSlowInterval : schedule.backgroundSlowInterval
-            case .foreground:
-                return schedule.foregroundSlowInterval
-            }
-        }
-
-        func processInterval(schedule: SystemStatusSamplingSchedule) -> TimeInterval {
-            switch self {
-            case .background, .menuBar:
-                return schedule.backgroundProcessInterval
-            case .foreground:
-                return schedule.foregroundProcessInterval
-            }
-        }
 
         func historyInterval(schedule: SystemStatusSamplingSchedule) -> TimeInterval {
             switch self {
@@ -411,140 +366,175 @@ final class SystemStatusViewModel: ObservableObject {
     private let sampler: any SystemStatusSampling
     private let historyStore: any SystemStatusHistoryStoring
     private let schedule: SystemStatusSamplingSchedule
+    private let uptime: () -> TimeInterval
     private var samplingTask: Task<Void, Never>?
     private var mode: SamplingMode = .background
     private var menuBarMode: SamplingMode?
     private(set) var foregroundConsumers: Set<ForegroundConsumer> = []
 
     var isSamplingForeground: Bool { mode == .foreground }
-    private var lastSlowDate: Date?
-    private var lastProcessDate: Date?
     private var lastHistoryDate: Date?
     private var displayHistory: [SystemStatusHistoryPoint] = []
+    private var pendingHistory: [SystemStatusHistoryPoint] = []
+    private var collectionID = UUID()
     private var didLoadHistory = false
     private var lastDisplayHistoryPublishDate: Date?
 
-    private static let displayHistoryRetention: TimeInterval = 24 * 60 * 60
-    private static let highResolutionDisplayHistoryRetention: TimeInterval = 30 * 60
-    private static let historicalDisplayHistoryBucket: TimeInterval = 60
-    private static let maximumDisplayHistoryCount = SystemStatusHistoryStore.maximumSampleCount
     private static let foregroundDisplayHistoryInterval: TimeInterval = 2
     private static let backgroundDisplayHistoryInterval: TimeInterval = 30
 
     init(
         sampler: any SystemStatusSampling = SystemStatusSampler(),
         historyStore: (any SystemStatusHistoryStoring)? = nil,
-        schedule: SystemStatusSamplingSchedule = .production
+        schedule: SystemStatusSamplingSchedule = .production,
+        uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.sampler = sampler
         self.historyStore = historyStore ?? SystemStatusHistoryStore(
             fileURL: SystemStatusHistoryStore.defaultFileURL(supportDirectory: nil)
         )
         self.schedule = schedule
+        self.uptime = uptime
     }
 
-    func start() {
-        startForeground()
+    func configure(_ configuration: SystemStatusConfiguration) {
+        let previousLimit = self.configuration.processLimit
+        self.configuration = configuration
+        if previousLimit != configuration.processLimit { lastSamples[.processes] = nil }
+        reconcileSampling(force: previousLimit != configuration.processLimit && activeDemand.contains(.processes))
     }
+
+    func start() { startForeground() }
 
     func startForeground(for consumer: ForegroundConsumer = .dashboard) {
         guard foregroundConsumers.insert(consumer).inserted else { return }
-        let previousMode = mode
+        isActive = true
         mode = .foreground
-
-        if previousMode != .foreground, samplingTask != nil {
-            restartSamplingLoop()
-            return
-        }
-
-        startSamplingIfNeeded()
+        reconcileSampling()
     }
 
-    func startMenuBar(requiresSlowSampling: Bool) {
-        menuBarMode = .menuBar(requiresSlowSampling: requiresSlowSampling)
-        guard mode != .foreground else {
-            startSamplingIfNeeded()
-            return
-        }
-
-        let previousMode = mode
-        mode = menuBarMode ?? .background
-
-        if previousMode != mode, samplingTask != nil {
-            restartSamplingLoop()
-            return
-        }
-
-        startSamplingIfNeeded()
+    func startMenuBar() {
+        menuBarMode = .menuBar
+        isActive = true
+        if foregroundConsumers.isEmpty { mode = menuBarMode ?? .background }
+        reconcileSampling()
     }
 
     func stopMenuBar() {
         menuBarMode = nil
-        guard mode != .foreground else {
-            return
-        }
-
-        mode = .background
+        if foregroundConsumers.isEmpty { mode = .background }
+        reconcileSampling()
     }
 
     func startBackground() {
-        startSamplingIfNeeded()
+        isActive = true
+        reconcileSampling()
     }
 
     func returnToBackground(from consumer: ForegroundConsumer = .dashboard) {
         foregroundConsumers.remove(consumer)
-        guard foregroundConsumers.isEmpty else { return }
-        mode = menuBarMode ?? .background
+        if foregroundConsumers.isEmpty { mode = menuBarMode ?? .background }
+        reconcileSampling()
+    }
+
+    private func samplingPlan(panelVisible: Bool? = nil) -> SystemStatusSamplingPlan {
+        let details = Set(foregroundConsumers.compactMap { consumer -> SystemStatusMetricKind? in
+            if case let .detail(_, kind) = consumer { return kind }
+            return nil
+        })
+        return SystemStatusSamplingPlan(
+            background: .background(configuration: configuration),
+            menuBar: .menuBar(configuration.menuBarItems),
+            foreground: .foreground(configuration: configuration,
+                panelVisible: panelVisible ?? (foregroundConsumers.contains(.dashboard) || foregroundConsumers.contains(.menuBarPopover)),
+                detailKinds: details),
+            schedule: schedule
+        )
+    }
+
+    private func reconcileSampling(force: Bool = false) {
+        let plan = isActive ? samplingPlan() : SystemStatusSamplingPlan(background: [], menuBar: [], foreground: [], schedule: schedule)
+        let demand = plan.demand
+        var updated = snapshot
+        // Pausing a collector preserves the last displayed reading. Only disabled
+        // surfaces or plugin shutdown discard it, even when the sampling plan is unchanged.
+        updated.removeUnrequestedValues(isActive ? samplingPlan(panelVisible: true).demand : [])
+        guard force || runningPlan != plan || runningMode != mode else {
+            publishSnapshotIfChanged(updated)
+            return
+        }
+        // New intervals determine when existing readings are due; reopening a surface
+        // must not force another counter read before a useful interval has elapsed.
+        lastSamples = lastSamples.filter { demand.contains($0.key) }
+        if activeDemand.isEmpty { lastHistoryDate = nil }
+        let crossedIdleBoundary = demand.isEmpty || activeDemand.isEmpty
+        if demand.hasHistory, !activeDemand.hasHistory { collectionID = UUID() }
+        runningPlan = plan
+        activeDemand = demand
+        runningMode = mode
+        generation += 1
+        let revision = generation
+        samplingTask?.cancel()
+        samplingTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            await sampler.setDemand(demand)
+            guard !Task.isCancelled, revision == generation else { return }
+            if !demand.hasHistory { await flushHistory(referenceDate: Date()) }
+            guard !Task.isCancelled, revision == generation else { return }
+            guard !demand.isEmpty else {
+                if revision == generation { samplingTask = nil }
+                return
+            }
+            if demand.hasHistory { await loadHistory() }
+            guard !Task.isCancelled, revision == generation else { return }
+            await runSamplingLoop(plan: plan, revision: revision)
+        }
+        // A configuration boundary is an unavailable observation, not an interpolated measurement.
+        if crossedIdleBoundary, !displayHistory.isEmpty {
+            let gap = SystemStatusHistoryPoint(timestamp: Date().timeIntervalSince1970)
+            appendDisplayHistoryPoint(gap, referenceDate: Date())
+            pendingHistory.append(gap)
+            updated.history = displayHistory
+        }
+        publishSnapshotIfChanged(updated)
     }
 
     func refreshSnapshotNow(referenceDate: Date = Date()) async {
-        await collectFast(referenceDate: referenceDate, mode: .foreground, forcePublishHistory: true)
-
-        let slowSample = await sampler.collectSlow()
-        guard !Task.isCancelled else { return }
-        var slowSnapshot = snapshot
-        slowSnapshot.disk = slowSnapshot.disk.replacingCapacity(from: slowSample.disk)
-        slowSnapshot.battery = slowSample.battery
-        slowSnapshot.gpu = slowSample.gpu
-        slowSnapshot.hardware = slowSample.hardware
-        publishSnapshotIfChanged(slowSnapshot)
-
-        let processes = await sampler.collectTopProcesses(limit: Self.processCandidateLimit)
-        guard !Task.isCancelled else { return }
-        var processSnapshot = snapshot
-        processSnapshot.topProcesses = await Self.resolveApplicationNames(for: processes)
-        publishSnapshotIfChanged(processSnapshot)
-
-        let point = SystemStatusHistoryPoint(timestamp: referenceDate.timeIntervalSince1970, snapshot: snapshot)
-        appendDisplayHistoryPoint(point, referenceDate: referenceDate)
-        publishDisplayHistory(referenceDate: referenceDate, force: true)
-        _ = await historyStore.append(point, referenceDate: referenceDate)
-        guard !Task.isCancelled else { return }
+        samplingTask?.cancel()
+        generation += 1
+        let revision = generation
+        let demand = samplingPlan(panelVisible: true).demand
+        defer {
+            if revision == generation {
+                if isActive { reconcileSampling(force: true) }
+                else {
+                    samplingTask = Task { [sampler] in
+                        guard !Task.isCancelled else { return }
+                        await sampler.setDemand([])
+                    }
+                }
+            }
+        }
+        var updated = snapshot
+        updated.removeUnrequestedValues(demand)
+        publishSnapshotIfChanged(updated)
+        await sampler.setDemand(demand)
+        guard !Task.isCancelled, revision == generation, !demand.isEmpty else { return }
+        if demand.hasHistory { await loadHistory() }
+        guard !Task.isCancelled, revision == generation else { return }
+        await collectSources(demand, referenceDate: referenceDate, revision: revision)
+        guard !Task.isCancelled, revision == generation else { return }
+        let completedAt = Date()
+        recordHistory(referenceDate: completedAt, demand: demand, sampled: demand)
+        await persistHistoryIfNeeded(referenceDate: completedAt, mode: .foreground, demand: demand)
     }
 
     func stop() {
-        samplingTask?.cancel()
-        samplingTask = nil
-        mode = .background
+        isActive = false
         menuBarMode = nil
         foregroundConsumers.removeAll()
-    }
-
-    private func startSamplingIfNeeded() {
-        guard samplingTask == nil else {
-            return
-        }
-
-        samplingTask = Task { @MainActor [weak self] in
-            await self?.loadHistory()
-            await self?.runSamplingLoop()
-        }
-    }
-
-    private func restartSamplingLoop() {
-        samplingTask?.cancel()
-        samplingTask = nil
-        startSamplingIfNeeded()
+        mode = .background
+        reconcileSampling(force: true)
     }
 
     private func loadHistory() async {
@@ -553,102 +543,102 @@ final class SystemStatusViewModel: ObservableObject {
         }
 
         let referenceDate = Date()
-        displayHistory = Self.prunedDisplayHistory(
-            await historyStore.load(referenceDate: referenceDate),
-            referenceDate: referenceDate
-        )
+        let revision = generation
+        let history = await historyStore.load(referenceDate: referenceDate)
+        guard !Task.isCancelled, revision == generation else { return }
+        displayHistory = Self.prunedDisplayHistory(history, referenceDate: referenceDate)
         publishDisplayHistory(referenceDate: referenceDate, force: true)
         didLoadHistory = true
     }
 
-    private func runSamplingLoop() async {
-        while !Task.isCancelled {
-            let currentMode = mode
+    private func runSamplingLoop(plan: SystemStatusSamplingPlan, revision: Int) async {
+        while !Task.isCancelled, revision == generation {
             let now = Date()
-            await collectFast(referenceDate: now, mode: currentMode)
-            guard !Task.isCancelled else { return }
-            await collectSlowIfNeeded(referenceDate: now, mode: currentMode)
-            guard !Task.isCancelled else { return }
-            await collectProcessesIfNeeded(referenceDate: now, mode: currentMode)
-            guard !Task.isCancelled else { return }
-            await persistHistoryIfNeeded(referenceDate: now, mode: currentMode)
-            guard !Task.isCancelled else { return }
-
-            do {
-                try await Task.sleep(for: currentMode.fastInterval(schedule: schedule))
-            } catch {
-                return
+            let due = plan.due(at: uptime(), lastSamples: lastSamples)
+            if !due.isEmpty {
+                await collectSources(due, referenceDate: now, revision: revision)
+                guard !Task.isCancelled, revision == generation else { return }
+                let completedAt = Date()
+                recordHistory(referenceDate: completedAt, demand: plan.demand, sampled: due)
+                await persistHistoryIfNeeded(referenceDate: completedAt, mode: mode, demand: plan.demand)
             }
+            guard !Task.isCancelled, revision == generation else { return }
+            let delay = plan.delay(at: uptime(), lastSamples: lastSamples)
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
         }
     }
 
-    private func collectFast(
-        referenceDate: Date,
-        mode: SamplingMode,
-        forcePublishHistory: Bool = false
-    ) async {
-        let sample = await sampler.collectFast(referenceDate: referenceDate)
-        guard !Task.isCancelled else { return }
-
-        var updatedSnapshot = snapshot
-        updatedSnapshot.cpu = sample.cpu
-        updatedSnapshot.memory = sample.memory
-        updatedSnapshot.network = sample.network
-        updatedSnapshot.disk = updatedSnapshot.disk.replacingActivity(from: sample.disk)
-        appendDisplayHistoryPoint(
-            SystemStatusHistoryPoint(timestamp: referenceDate.timeIntervalSince1970, snapshot: updatedSnapshot),
-            referenceDate: referenceDate
-        )
-
-        if shouldPublishDisplayHistory(referenceDate: referenceDate, mode: mode) || forcePublishHistory {
-            updatedSnapshot.history = displayHistory
-            lastDisplayHistoryPublishDate = referenceDate
-        } else {
-            updatedSnapshot.history = snapshot.history
+    private func collectSources(_ due: SystemStatusSamplingDemand, referenceDate: Date, revision: Int) async {
+        var collected = SystemStatusSnapshot.empty
+        if due.needsFast {
+            let sample = await sampler.collectFast(referenceDate: referenceDate, demand: due.intersection(.fast))
+            guard !Task.isCancelled, revision == generation else { return }
+            collected.cpu = sample.cpu
+            collected.memory = sample.memory
+            collected.network = sample.network
+            collected.disk = sample.disk
+            publishCollectedSnapshot(collected, demand: due.intersection(.fast))
         }
-        publishSnapshotIfChanged(updatedSnapshot)
+        if due.needsSlow {
+            let sample = await sampler.collectSlow(demand: due.intersection(.slow))
+            guard !Task.isCancelled, revision == generation else { return }
+            collected.disk = collected.disk.replacingCapacity(from: sample.disk)
+            collected.gpu = sample.gpu
+            collected.battery = sample.battery
+            publishCollectedSnapshot(collected, demand: due.intersection(.slow))
+        }
+        if due.contains(.processes) {
+            let processes = await sampler.collectTopProcesses(limit: processLimit.rawValue)
+            guard !Task.isCancelled, revision == generation else { return }
+            collected.topProcesses = await Self.resolveApplicationNames(for: processes)
+            guard !Task.isCancelled, revision == generation else { return }
+            publishCollectedSnapshot(collected, demand: .processes)
+        }
     }
 
-    private func collectSlowIfNeeded(referenceDate: Date, mode: SamplingMode) async {
-        guard shouldRun(lastDate: lastSlowDate, referenceDate: referenceDate, interval: mode.slowInterval(schedule: schedule)) else {
-            return
+    private func publishCollectedSnapshot(_ collected: SystemStatusSnapshot, demand: SystemStatusSamplingDemand) {
+        let sampledAt = uptime()
+        for source in SystemStatusSamplingDemand.sources where demand.contains(source) {
+            lastSamples[source] = sampledAt
         }
-
-        lastSlowDate = referenceDate
-        let sample = await sampler.collectSlow()
-        guard !Task.isCancelled else { return }
-        var updatedSnapshot = snapshot
-        updatedSnapshot.disk = updatedSnapshot.disk.replacingCapacity(from: sample.disk)
-        updatedSnapshot.battery = sample.battery
-        updatedSnapshot.gpu = sample.gpu
-        updatedSnapshot.hardware = sample.hardware
-        publishSnapshotIfChanged(updatedSnapshot)
+        var updated = snapshot
+        updated.merge(collected, demand: demand)
+        if demand.contains(.processes) { updated.topProcesses = collected.topProcesses }
+        publishSnapshotIfChanged(updated)
     }
 
-    private func collectProcessesIfNeeded(referenceDate: Date, mode: SamplingMode) async {
-        guard shouldRun(lastDate: lastProcessDate, referenceDate: referenceDate, interval: mode.processInterval(schedule: schedule)) else {
-            return
+    private func recordHistory(referenceDate: Date, demand: SystemStatusSamplingDemand, sampled sources: SystemStatusSamplingDemand) {
+        guard sources.hasHistory else { return }
+        // Presentation-only cached readings must not become new historical observations.
+        var sampled = snapshot
+        sampled.removeUnrequestedValues(demand)
+        var point = SystemStatusHistoryPoint(timestamp: referenceDate.timeIntervalSince1970, snapshot: sampled, collectionID: collectionID)
+        let rates = SystemStatusHistoryRates(snapshot: sampled, sampled: sources)
+        point.rates = rates.isEmpty ? nil : rates
+        appendDisplayHistoryPoint(point, referenceDate: referenceDate)
+        pendingHistory.append(point)
+        if pendingHistory.count > SystemStatusHistoryStore.maximumSampleCount {
+            pendingHistory.removeFirst(pendingHistory.count - SystemStatusHistoryStore.maximumSampleCount)
         }
-
-        lastProcessDate = referenceDate
-        let processes = await sampler.collectTopProcesses(limit: Self.processCandidateLimit)
-        guard !Task.isCancelled else { return }
-        var updatedSnapshot = snapshot
-        updatedSnapshot.topProcesses = await Self.resolveApplicationNames(for: processes)
-        publishSnapshotIfChanged(updatedSnapshot)
+        publishDisplayHistory(referenceDate: referenceDate)
     }
 
-    private func persistHistoryIfNeeded(referenceDate: Date, mode: SamplingMode) async {
+    private func persistHistoryIfNeeded(referenceDate: Date, mode: SamplingMode, demand: SystemStatusSamplingDemand) async {
+        guard demand.hasHistory else { return }
         guard shouldRun(lastDate: lastHistoryDate, referenceDate: referenceDate, interval: mode.historyInterval(schedule: schedule)) else {
             return
         }
 
         lastHistoryDate = referenceDate
-        let point = SystemStatusHistoryPoint(timestamp: referenceDate.timeIntervalSince1970, snapshot: snapshot)
-        appendDisplayHistoryPoint(point, referenceDate: referenceDate)
         publishDisplayHistory(referenceDate: referenceDate, force: true)
-        _ = await historyStore.append(point, referenceDate: referenceDate)
-        guard !Task.isCancelled else { return }
+        await flushHistory(referenceDate: referenceDate)
+    }
+
+    private func flushHistory(referenceDate: Date) async {
+        guard !pendingHistory.isEmpty else { return }
+        let batch = pendingHistory
+        pendingHistory.removeAll(keepingCapacity: true)
+        _ = await historyStore.appendBatch(batch, referenceDate: referenceDate)
     }
 
     private func shouldRun(lastDate: Date?, referenceDate: Date, interval: TimeInterval) -> Bool {
@@ -710,112 +700,28 @@ final class SystemStatusViewModel: ObservableObject {
     }
 
     static func prunedSortedDisplayHistory(
-        _ points: [SystemStatusHistoryPoint],
-        referenceDate: Date
+        _ points: [SystemStatusHistoryPoint], referenceDate: Date
     ) -> [SystemStatusHistoryPoint] {
-        guard !points.isEmpty else {
-            return []
-        }
-
-        let cutoff = referenceDate.timeIntervalSince1970 - displayHistoryRetention
-        let upperBound = referenceDate.timeIntervalSince1970 + 60
-        var startIndex = points.startIndex
-
-        while startIndex < points.endIndex, points[startIndex].timestamp < cutoff {
-            startIndex = points.index(after: startIndex)
-        }
-
-        var endIndex = points.endIndex
-        var currentIndex = startIndex
-        while currentIndex < points.endIndex {
-            if points[currentIndex].timestamp > upperBound {
-                endIndex = currentIndex
-                break
-            }
-
-            currentIndex = points.index(after: currentIndex)
-        }
-
-        guard startIndex < endIndex else {
-            return []
-        }
-
-        return compactedDisplayHistory(
-            points[startIndex..<endIndex],
-            referenceDate: referenceDate
-        )
+        SystemStatusHistoryProcessing.pruned(points, referenceDate: referenceDate, sorted: true)
     }
 
     static func prunedDisplayHistory(
-        _ points: [SystemStatusHistoryPoint],
-        referenceDate: Date
+        _ points: [SystemStatusHistoryPoint], referenceDate: Date
     ) -> [SystemStatusHistoryPoint] {
-        let cutoff = referenceDate.timeIntervalSince1970 - displayHistoryRetention
-        let recentPoints = points
-            .filter { $0.timestamp >= cutoff && $0.timestamp <= referenceDate.timeIntervalSince1970 + 60 }
-            .sorted { $0.timestamp < $1.timestamp }
-
-        return compactedDisplayHistory(recentPoints[...], referenceDate: referenceDate)
-    }
-
-    private static func compactedDisplayHistory(
-        _ points: ArraySlice<SystemStatusHistoryPoint>,
-        referenceDate: Date
-    ) -> [SystemStatusHistoryPoint] {
-        let highResolutionCutoff = referenceDate.timeIntervalSince1970 - highResolutionDisplayHistoryRetention
-        var compacted: [SystemStatusHistoryPoint] = []
-        compacted.reserveCapacity(min(points.count, maximumDisplayHistoryCount))
-        var pendingHistoricalPoint: SystemStatusHistoryPoint?
-        var pendingHistoricalBucket: Int?
-
-        for point in points {
-            guard point.timestamp < highResolutionCutoff else {
-                if let pendingHistoricalPoint {
-                    compacted.append(pendingHistoricalPoint)
-                    pendingHistoricalBucket = nil
-                }
-                compacted.append(point)
-                pendingHistoricalPoint = nil
-                continue
-            }
-
-            let bucket = Int(floor(point.timestamp / historicalDisplayHistoryBucket))
-            if bucket == pendingHistoricalBucket {
-                pendingHistoricalPoint = point
-            } else {
-                if let pendingHistoricalPoint {
-                    compacted.append(pendingHistoricalPoint)
-                }
-                pendingHistoricalBucket = bucket
-                pendingHistoricalPoint = point
-            }
-        }
-
-        if let pendingHistoricalPoint {
-            compacted.append(pendingHistoricalPoint)
-        }
-        enforceHistoryCapacity(&compacted)
-        return compacted
-    }
-
-    private static func enforceHistoryCapacity(_ points: inout [SystemStatusHistoryPoint]) {
-        guard points.count > maximumDisplayHistoryCount else {
-            return
-        }
-        points = Array(points.suffix(maximumDisplayHistoryCount))
+        SystemStatusHistoryProcessing.pruned(points, referenceDate: referenceDate)
     }
 
     private static func resolveApplicationNames(for processes: [SystemStatusTopProcess]) async -> [SystemStatusTopProcess] {
-        processes.map { process in
-            guard
-                let application = NSRunningApplication(processIdentifier: pid_t(process.pid)),
-                let localizedName = application.localizedName,
-                !localizedName.isEmpty
-            else {
-                return process
+        let applications = NSWorkspace.shared.runningApplications
+        return processes.map { process in
+            let application = applications.first { application in
+                if process.applicationID?.hasPrefix("app:") == true {
+                    return application.bundleURL?.path == process.command
+                }
+                return application.processIdentifier == pid_t(process.pid)
             }
-
-            return process.replacingDisplayName(localizedName)
+            guard let name = application?.localizedName, !name.isEmpty else { return process }
+            return process.replacingDisplayName(name)
         }
     }
 }
@@ -841,6 +747,8 @@ struct SystemStatusComponentView: View {
             snapshot: viewModel.snapshot,
             visibleKinds: settingsController.configuration.visiblePanelMetricKinds,
             processSort: settingsController.configuration.processSort,
+            processLimit: settingsController.configuration.processLimit,
+            configuration: settingsController.configuration,
             onProcessSortChange: settingsController.setProcessSort,
             localization: localization,
             onMetricDetail: onMetricDetail
@@ -862,7 +770,7 @@ struct SystemStatusComponentView: View {
                 localization.format(
                     "metric.powerFormat",
                     defaultValue: "功率 %@",
-                    SystemStatusFormatter.power(cpu.systemPowerWatts)
+                    SystemStatusFormatter.power(cpu.cpuPowerWatts)
                 )
             ],
             progress: cpu.usage
@@ -1279,7 +1187,7 @@ private struct SystemStatusProcessMetricHeader: View {
 
 private struct SystemStatusProcessRow: View {
     static let cpuColumnWidth: CGFloat = 28
-    static let memoryColumnWidth: CGFloat = 26
+    static let memoryColumnWidth: CGFloat = 52
     static let metricColumnSpacing: CGFloat = 1
 
     let process: SystemStatusTopProcess
@@ -1298,7 +1206,7 @@ private struct SystemStatusProcessRow: View {
             HStack(spacing: Self.metricColumnSpacing) {
                 metricText(SystemStatusFormatter.wholePercent(process.cpuPercent, fractionDigits: 0))
                     .frame(width: Self.cpuColumnWidth, alignment: .trailing)
-                metricText(SystemStatusFormatter.wholePercent(process.memoryPercent, fractionDigits: 0))
+                metricText(SystemStatusFormatter.bytes(process.memoryBytes))
                     .frame(width: Self.memoryColumnWidth, alignment: .trailing)
             }
             .layoutPriority(1)
