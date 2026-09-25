@@ -38,6 +38,16 @@ final class RunLinkExecutionCoordinatorTests: XCTestCase {
             ]
         )
         XCTAssertFalse(setup.feedback.values[0].message.contains("private"))
+        XCTAssertEqual(setup.feedback.values[0].backgroundStyle, .runLinkMaterial)
+    }
+
+    func testWindowLayoutFeedbackUsesFloatingPanelBackground() throws {
+        let feedback = try XCTUnwrap(WindowLayoutActionFeedback.feedback(
+            actionTitle: "Left Half",
+            outcome: .completed(.succeeded(message: "Moved Left"))
+        ))
+
+        XCTAssertEqual(feedback.backgroundStyle, .floatingPanel)
     }
 
     func testProgressReportingInvocationReturnsAfterDurableStart() async throws {

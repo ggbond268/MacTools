@@ -60,6 +60,9 @@ final class MacToolsSearchTests: XCTestCase {
             $0.id == "general-setting.appearance" && $0.kind == .setting
         })
         XCTAssertTrue(index.items.contains {
+            $0.id == "general-setting.floatingPanels" && $0.kind == .setting
+        })
+        XCTAssertTrue(index.items.contains {
             $0.id == "general-setting.preferencesBackup" && $0.kind == .setting
         })
     }

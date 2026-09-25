@@ -520,6 +520,36 @@
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开快捷指令" } },
       "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開捷徑" } }
     } },
+    "floatingPanelAppearance.title": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Floating Panel Appearance" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "浮动面板外观" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "浮動面板外觀" } }
+    } },
+    "floatingPanelAppearance.description": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Follow macOS transparency or use an opaque solid background. Reduce Transparency always uses Solid." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "跟随 macOS 的透明效果，或使用不透明的实色背景；减少透明度始终使用实色。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "跟隨 macOS 的透明效果，或使用不透明的實色背景；減少透明度一律使用實色。" } }
+    } },
+    "floatingPanelAppearance.system": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Follow macOS" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "跟随 macOS" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "跟隨 macOS" } }
+    } },
+    "floatingPanelAppearance.solid": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Solid" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "实色" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "實色" } }
+    } },
+    "floatingPanelAppearance.picker": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Floating Panel Appearance" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "浮动面板外观" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "浮動面板外觀" } }
+    } },
+    "floatingPanelAppearance.help": { "extractionState": "manual", "localizations": {
+      "en": { "stringUnit": { "state": "translated", "value": "Set the background appearance for floating panels and feedback" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置浮动面板和提示的背景外观" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "設定浮動面板和提示的背景外觀" } }
+    } },
     "panelTheme.title": { "extractionState": "manual", "localizations": {
       "en": { "stringUnit": { "state": "translated", "value": "Theme" } },
       "zh-Hans": { "stringUnit": { "state": "translated", "value": "主题" } },

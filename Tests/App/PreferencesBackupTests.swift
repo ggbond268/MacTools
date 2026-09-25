@@ -17,6 +17,10 @@ final class PreferencesBackupTests: XCTestCase {
     func testExportContainsOnlyPortableHostAndKnownPluginPreferences() throws {
         let defaults = makeDefaults()
         defaults.set(AppAppearancePreference.dark.rawValue, forKey: AppAppearancePreference.userDefaultsKey)
+        defaults.set(
+            PluginFloatingPanelAppearance.solid.rawValue,
+            forKey: PluginFloatingPanelAppearance.userDefaultsKey
+        )
         defaults.set(AppLanguagePreference.en.rawValue, forKey: AppLanguagePreference.userDefaultsKey)
         defaults.set("swapped", forKey: MenuBarPanelStore.legacyClickBehaviorStorageKey)
         SettingsSidebarPreferencesStore.applyImportedPreferences(
@@ -46,6 +50,10 @@ final class PreferencesBackupTests: XCTestCase {
         XCTAssertEqual(decodedBackup.pluginDisplay, backup.pluginDisplay)
         XCTAssertEqual(decodedBackup.shortcutCustomizations, backup.shortcutCustomizations)
         XCTAssertEqual(backup.application.appearancePreference, AppAppearancePreference.dark.rawValue)
+        XCTAssertEqual(
+            backup.application.floatingPanelAppearance,
+            PluginFloatingPanelAppearance.solid.rawValue
+        )
         XCTAssertEqual(backup.application.languagePreference, AppLanguagePreference.en.rawValue)
         XCTAssertNil(backup.application.menuBarClickBehavior)
         XCTAssertEqual(backup.pluginDisplay.panelConfiguration?.panels.map(\.id), ["features", "components"])
@@ -661,6 +669,51 @@ final class PreferencesBackupTests: XCTestCase {
         }
     }
 
+    func testOlderBackupWithoutFloatingPanelAppearanceUsesSystemDefault() throws {
+        let backup = PreferencesBackup(
+            application: PreferencesBackup.ApplicationPreferences(
+                appearancePreference: AppAppearancePreference.system.rawValue,
+                floatingPanelAppearance: PluginFloatingPanelAppearance.solid.rawValue,
+                languagePreference: AppLanguagePreference.system.rawValue
+            ),
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:]
+        )
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: backup.encodedJSON()) as? [String: Any])
+        var application = try XCTUnwrap(json["application"] as? [String: Any])
+        application.removeValue(forKey: "floatingPanelAppearance")
+        json["application"] = application
+
+        let decoded = try PreferencesBackup.decodeJSON(JSONSerialization.data(withJSONObject: json))
+        let defaults = makeDefaults()
+        PluginFloatingPanelAppearance.solid.store(in: defaults)
+        let store = PreferencesBackupStore(userDefaults: defaults)
+
+        XCTAssertNil(decoded.application.floatingPanelAppearance)
+        XCTAssertTrue(store.validates(decoded.application))
+        store.apply(decoded.application)
+        XCTAssertEqual(PluginFloatingPanelAppearance.stored(in: defaults), .system)
+    }
+
+    func testDecodeRejectsInvalidFloatingPanelAppearance() throws {
+        let backup = PreferencesBackup(
+            application: validApplicationPreferences,
+            pluginDisplay: PluginDisplayPreferencesBackup(orderedPluginIDs: [], hiddenPluginIDs: []),
+            shortcutCustomizations: [:]
+        )
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: backup.encodedJSON()) as? [String: Any])
+        var application = try XCTUnwrap(json["application"] as? [String: Any])
+        application["floatingPanelAppearance"] = "unsupported-surface"
+        json["application"] = application
+
+        let decoded = try PreferencesBackup.decodeJSON(JSONSerialization.data(withJSONObject: json))
+        let store = PreferencesBackupStore(userDefaults: makeDefaults())
+
+        XCTAssertThrowsError(try decoded.validateApplicationPreferences(using: store.validates)) { error in
+            XCTAssertEqual(error as? PreferencesBackupError, .invalidApplicationPreferences)
+        }
+    }
+
     func testDecodeFileRejectsContentAboveSizeLimit() async throws {
         let url = temporaryFileURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -680,6 +733,7 @@ final class PreferencesBackupTests: XCTestCase {
     private var validApplicationPreferences: PreferencesBackup.ApplicationPreferences {
         PreferencesBackup.ApplicationPreferences(
             appearancePreference: AppAppearancePreference.system.rawValue,
+            floatingPanelAppearance: PluginFloatingPanelAppearance.system.rawValue,
             languagePreference: AppLanguagePreference.system.rawValue,
             menuBarClickBehavior: "standard"
         )

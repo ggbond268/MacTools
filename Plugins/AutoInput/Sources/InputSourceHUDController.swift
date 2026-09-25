@@ -759,7 +759,9 @@ private struct InputSourceHUDView: View {
         .padding(.horizontal, metrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            InputSourceHUDMaterial(cornerRadius: metrics.cornerRadius)
+            PluginFloatingPanelSurface(
+                shape: .roundedRectangle(cornerRadius: metrics.cornerRadius)
+            )
         )
         .overlay {
             RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
@@ -797,32 +799,6 @@ struct InputSourceHUDPreview: View {
         .frame(width: panelSize.width, height: panelSize.height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-    }
-}
-
-private struct InputSourceHUDMaterial: NSViewRepresentable {
-    let cornerRadius: CGFloat
-
-    func makeNSView(context _: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .hudWindow
-        view.blendingMode = .behindWindow
-        view.state = .active
-        configureLayer(of: view)
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context _: Context) {
-        configureLayer(of: view)
-    }
-
-    private func configureLayer(of view: NSVisualEffectView) {
-        view.wantsLayer = true
-        view.layer?.cornerRadius = cornerRadius
-        view.layer?.cornerCurve = .continuous
-        view.layer?.borderWidth = 0
-        view.layer?.borderColor = NSColor.clear.cgColor
-        view.layer?.masksToBounds = true
     }
 }
 

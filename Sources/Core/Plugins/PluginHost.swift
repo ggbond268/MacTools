@@ -819,6 +819,11 @@ final class PluginHost: ObservableObject {
     }
 
     @discardableResult
+    func setApplicationFloatingPanelAppearance(rawValue: String) -> Bool {
+        preferencesBackupStore.setFloatingPanelAppearance(rawValue: rawValue)
+    }
+
+    @discardableResult
     func setApplicationLanguagePreference(rawValue: String) -> Bool {
         preferencesBackupStore.setLanguagePreference(rawValue: rawValue)
     }

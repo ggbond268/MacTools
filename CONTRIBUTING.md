@@ -99,6 +99,8 @@ Unsigned XCTest builds use `build/DerivedDataTests` by default, separate from th
 | Changelog fragments | `make validate-changelog` before committing or pushing. |
 | Documentation only | Check changed links, examples, formatting, and rendered layout; no app build is needed. |
 
+Plugins using `PluginFloatingPanelSurface`, `PluginFloatingPanelShape`, or `PluginFloatingPanelAppearance` require MacTools 2.0.0 or later. Keep menu-bar themes separate from this system-managed floating-panel preference.
+
 ## Submit a pull request
 
 Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md). Explain the problem, resulting behavior, verification, and relevant limitations. Link the issue and keep unrelated refactoring or formatting out of the diff. Contributors remain responsible for understanding and testing all submitted code, including assisted code.

@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import SwiftUI
 
 public enum PluginPaletteMetrics {
@@ -554,6 +555,122 @@ public enum PluginPaletteColors {
     }
 }
 
+public enum PluginFloatingPanelAppearance: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case system
+    case solid
+
+    public static let userDefaultsKey = "app.floatingPanelAppearance"
+
+    public var id: String { rawValue }
+
+    public static func stored(in userDefaults: UserDefaults = .standard) -> Self {
+        guard
+            let rawValue = userDefaults.string(forKey: userDefaultsKey),
+            let preference = Self(rawValue: rawValue)
+        else {
+            return .system
+        }
+        return preference
+    }
+
+    public func store(in userDefaults: UserDefaults = .standard) {
+        userDefaults.set(rawValue, forKey: Self.userDefaultsKey)
+    }
+}
+
+enum PluginFloatingPanelResolvedSurface: Equatable {
+    case solid
+    case nativeGlass
+    case regularMaterial
+
+    static func resolve(
+        appearance: PluginFloatingPanelAppearance,
+        reducesTransparency: Bool,
+        supportsNativeGlass: Bool
+    ) -> Self {
+        if reducesTransparency || appearance == .solid {
+            return .solid
+        }
+        return supportsNativeGlass ? .nativeGlass : .regularMaterial
+    }
+}
+
+public enum PluginFloatingPanelShape: Equatable, Sendable {
+    case roundedRectangle(cornerRadius: CGFloat)
+    case capsule
+}
+
+public struct PluginFloatingPanelSurface: View {
+    private let shape: PluginFloatingPanelShape
+    private let forceSolid: Bool
+    private let appearanceOverride: PluginFloatingPanelAppearance?
+    private let backgroundColor: Color
+    @AppStorage(PluginFloatingPanelAppearance.userDefaultsKey)
+    private var storedAppearanceRawValue = PluginFloatingPanelAppearance.system.rawValue
+    @Environment(\.accessibilityReduceTransparency) private var systemReducesTransparency
+
+    public init(
+        shape: PluginFloatingPanelShape,
+        forceSolid: Bool = false,
+        appearance: PluginFloatingPanelAppearance? = nil,
+        backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
+    ) {
+        self.shape = shape
+        self.forceSolid = forceSolid
+        self.appearanceOverride = appearance
+        self.backgroundColor = backgroundColor
+    }
+
+    public var body: some View {
+        Group {
+            if resolvedSurface == .solid {
+                fill(backgroundColor)
+            } else if resolvedSurface == .nativeGlass {
+                if #available(macOS 26.0, *) {
+                    PluginFloatingPanelNativeGlass(shape: shape)
+                } else {
+                    fill(.regularMaterial)
+                }
+            } else {
+                fill(.regularMaterial)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var appearance: PluginFloatingPanelAppearance {
+        appearanceOverride
+            ?? PluginFloatingPanelAppearance(rawValue: storedAppearanceRawValue)
+            ?? .system
+    }
+
+    private var resolvedSurface: PluginFloatingPanelResolvedSurface {
+        PluginFloatingPanelResolvedSurface.resolve(
+            appearance: appearance,
+            reducesTransparency: forceSolid || systemReducesTransparency,
+            supportsNativeGlass: supportsNativeGlass
+        )
+    }
+
+    private var supportsNativeGlass: Bool {
+        if #available(macOS 26.0, *) {
+            return true
+        }
+        return false
+    }
+
+    @ViewBuilder
+    private func fill(_ style: some ShapeStyle) -> some View {
+        switch shape {
+        case let .roundedRectangle(cornerRadius):
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(style)
+        case .capsule:
+            Capsule().fill(style)
+        }
+    }
+}
+
 public struct PluginPaletteSurface: View {
     private let reducesTransparency: Bool
     private let backgroundColor: Color
@@ -575,15 +692,11 @@ public struct PluginPaletteSurface: View {
             cornerRadius: PluginPaletteMetrics.surfaceCornerRadius,
             style: .continuous
         )
-        Group {
-            if reducesTransparency || systemReducesTransparency {
-                shape.fill(backgroundColor)
-            } else if #available(macOS 26.0, *) {
-                PluginPaletteNativeGlass()
-            } else {
-                shape.fill(.regularMaterial)
-            }
-        }
+        PluginFloatingPanelSurface(
+            shape: .roundedRectangle(cornerRadius: PluginPaletteMetrics.surfaceCornerRadius),
+            forceSolid: reducesTransparency || systemReducesTransparency,
+            backgroundColor: backgroundColor
+        )
         .overlay {
             shape.strokeBorder(
                 contrast == .increased ? Color.primary : Color(nsColor: .separatorColor),
@@ -595,18 +708,39 @@ public struct PluginPaletteSurface: View {
 }
 
 @available(macOS 26.0, *)
-private struct PluginPaletteNativeGlass: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSGlassEffectView {
+private struct PluginFloatingPanelNativeGlass: NSViewRepresentable {
+    let shape: PluginFloatingPanelShape
+
+    func makeNSView(context: Context) -> PluginFloatingPanelGlassView {
         // An AppKit backdrop preserves pointer dragging in transparent borderless
         // panels. Keep the hosted input/content views outside this background.
-        let view = NSGlassEffectView()
+        let view = PluginFloatingPanelGlassView()
         view.style = .regular
-        view.cornerRadius = PluginPaletteMetrics.surfaceCornerRadius
+        view.panelShape = shape
         view.contentView = NSView()
         return view
     }
 
-    func updateNSView(_ view: NSGlassEffectView, context: Context) {}
+    func updateNSView(_ view: PluginFloatingPanelGlassView, context: Context) {
+        view.panelShape = shape
+    }
+}
+
+@available(macOS 26.0, *)
+private final class PluginFloatingPanelGlassView: NSGlassEffectView {
+    var panelShape: PluginFloatingPanelShape = .roundedRectangle(cornerRadius: 0) {
+        didSet { needsLayout = true }
+    }
+
+    override func layout() {
+        super.layout()
+        switch panelShape {
+        case let .roundedRectangle(radius):
+            cornerRadius = radius
+        case .capsule:
+            cornerRadius = min(bounds.width, bounds.height) / 2
+        }
+    }
 }
 
 public struct PluginPaletteSelectableRowModifier: ViewModifier {

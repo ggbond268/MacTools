@@ -590,6 +590,7 @@ struct GeneralSettingsView: View {
     @ObservedObject var menuBarPanelThemeStore: MenuBarPanelThemeStore
     @ObservedObject private var cliService = CLIBrokerServiceController.shared
     @AppStorage(AppAppearancePreference.userDefaultsKey) private var appearancePreferenceRawValue = AppAppearancePreference.system.rawValue
+    @AppStorage(PluginFloatingPanelAppearance.userDefaultsKey) private var floatingPanelAppearanceRawValue = PluginFloatingPanelAppearance.system.rawValue
     @AppStorage(AppLanguagePreference.userDefaultsKey) private var languagePreferenceRawValue = AppLanguagePreference.system.rawValue
     @State private var activeSearchTarget: GeneralSettingsSearchTarget?
     @State private var clearSearchTargetTask: Task<Void, Never>?
@@ -612,6 +613,11 @@ struct GeneralSettingsView: View {
         _appearancePreferenceRawValue = AppStorage(
             wrappedValue: AppAppearancePreference.system.rawValue,
             AppAppearancePreference.userDefaultsKey,
+            store: appearanceUserDefaults
+        )
+        _floatingPanelAppearanceRawValue = AppStorage(
+            wrappedValue: PluginFloatingPanelAppearance.system.rawValue,
+            PluginFloatingPanelAppearance.userDefaultsKey,
             store: appearanceUserDefaults
         )
         _languagePreferenceRawValue = AppStorage(
@@ -646,6 +652,14 @@ struct GeneralSettingsView: View {
                             activeTarget: activeSearchTarget
                         )
                         .settingsGroupedFormRowWidth(widths.sectionLayout)
+                    FloatingPanelAppearanceSettingsRow(
+                        selectionRawValue: floatingPanelAppearanceBinding
+                    )
+                    .generalSettingsSearchAnchor(
+                        target: .floatingPanels,
+                        activeTarget: activeSearchTarget
+                    )
+                    .settingsGroupedFormRowWidth(widths.sectionLayout)
                     MenuBarPanelThemeSettingsRow(
                         themeStore: menuBarPanelThemeStore,
                         appearancePreference: AppAppearancePreference(
@@ -812,6 +826,18 @@ struct GeneralSettingsView: View {
                     return
                 }
                 languagePreferenceRawValue = rawValue
+            }
+        )
+    }
+
+    private var floatingPanelAppearanceBinding: Binding<String> {
+        Binding(
+            get: { floatingPanelAppearanceRawValue },
+            set: { rawValue in
+                guard pluginHost.setApplicationFloatingPanelAppearance(rawValue: rawValue) else {
+                    return
+                }
+                floatingPanelAppearanceRawValue = rawValue
             }
         )
     }
@@ -2587,6 +2613,115 @@ private struct AppearanceSettingsRow: View {
         .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
         .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
         .help(AppL10n.settings("appearance.help", defaultValue: "设置应用外观"))
+    }
+}
+
+private struct FloatingPanelAppearanceSettingsRow: View {
+    @Binding var selectionRawValue: String
+
+    private var selection: PluginFloatingPanelAppearance {
+        PluginFloatingPanelAppearance(rawValue: selectionRawValue) ?? .system
+    }
+
+    var body: some View {
+        HStack(spacing: GeneralSettingsCardLayout.headerSpacing) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: GeneralSettingsCardLayout.iconCornerRadius,
+                    style: .continuous
+                )
+                .fill(Color.accentColor.opacity(0.12))
+
+                Image(systemName: "rectangle.on.rectangle")
+                    .font(PluginSettingsTheme.Typography.pageDescription.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(
+                width: GeneralSettingsCardLayout.iconSize,
+                height: GeneralSettingsCardLayout.iconSize
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AppL10n.settings(
+                    "floatingPanelAppearance.title",
+                    defaultValue: "浮动面板外观"
+                ))
+                .font(PluginSettingsTheme.Typography.emphasizedRowTitle)
+
+                Text(AppL10n.settings(
+                    "floatingPanelAppearance.description",
+                    defaultValue: "跟随 macOS 的透明效果，或使用不透明的实色背景；减少透明度始终使用实色。"
+                ))
+                .font(PluginSettingsTheme.Typography.rowDescription)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            FloatingPanelAppearancePreview(appearance: selection)
+
+            Picker(
+                AppL10n.settings(
+                    "floatingPanelAppearance.picker",
+                    defaultValue: "浮动面板外观"
+                ),
+                selection: $selectionRawValue
+            ) {
+                ForEach(PluginFloatingPanelAppearance.allCases) { preference in
+                    Text(preference.title).tag(preference.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 190)
+        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: GeneralSettingsCardLayout.minRowHeight,
+            alignment: .leading
+        )
+        .padding(.horizontal, GeneralSettingsCardLayout.horizontalPadding)
+        .padding(.vertical, GeneralSettingsCardLayout.verticalPadding)
+        .help(AppL10n.settings(
+            "floatingPanelAppearance.help",
+            defaultValue: "设置浮动面板和提示的背景外观"
+        ))
+    }
+}
+
+private struct FloatingPanelAppearancePreview: View {
+    let appearance: PluginFloatingPanelAppearance
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.blue.opacity(0.55), Color.orange.opacity(0.42)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            HStack(spacing: 6) {
+                Image(systemName: "keyboard")
+                    .font(.system(size: 11, weight: .medium))
+                Text("ABC")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background {
+                PluginFloatingPanelSurface(
+                    shape: .roundedRectangle(cornerRadius: 9),
+                    appearance: appearance
+                )
+            }
+        }
+        .frame(width: 104, height: 42)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5)
+        }
+        .accessibilityHidden(true)
     }
 }
 

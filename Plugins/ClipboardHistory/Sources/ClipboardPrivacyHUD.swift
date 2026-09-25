@@ -324,7 +324,11 @@ private struct ClipboardPrivacyHUDView: View {
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background {
+            PluginFloatingPanelSurface(
+                shape: .roundedRectangle(cornerRadius: 13)
+            )
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)

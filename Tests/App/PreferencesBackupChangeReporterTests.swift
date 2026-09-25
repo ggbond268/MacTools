@@ -41,6 +41,13 @@ final class PreferencesBackupChangeReporterTests: XCTestCase {
         XCTAssertTrue(store.setAppearancePreference(rawValue: AppAppearancePreference.dark.rawValue))
         XCTAssertFalse(store.setAppearancePreference(rawValue: "invalid"))
         XCTAssertEqual(sources, [.application])
+
+        XCTAssertTrue(store.setFloatingPanelAppearance(rawValue: PluginFloatingPanelAppearance.solid.rawValue))
+        XCTAssertEqual(sources, [.application, .application])
+
+        XCTAssertTrue(store.setFloatingPanelAppearance(rawValue: PluginFloatingPanelAppearance.solid.rawValue))
+        XCTAssertFalse(store.setFloatingPanelAppearance(rawValue: "invalid"))
+        XCTAssertEqual(sources, [.application, .application])
     }
 
     func testSidebarStoreReportsOnlyEffectiveChanges() {
