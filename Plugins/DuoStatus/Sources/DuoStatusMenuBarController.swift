@@ -4,7 +4,7 @@ import MacToolsPluginKit
 @MainActor
 protocol DuoStatusMenuBarPresenting: AnyObject {
     var openSettings: (() -> Void)? { get set }
-    func update(snapshot: DuoSystemStatusSnapshot, tooltip: String)
+    func update(snapshot: DuoSystemStatusSnapshot, options: DuoStatusIconOptions, tooltip: String)
     func remove()
 }
 
@@ -14,6 +14,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
     private var item: NSStatusItem?
     private var appearanceObserver: DuoStatusAppearanceObserverView?
     private var snapshot: DuoSystemStatusSnapshot?
+    private var options = DuoStatusIconOptions.default
     private var tooltip: String?
     private let iconPresentation = DuoStatusIconPresentation()
     private var isRedrawScheduled = false
@@ -22,8 +23,9 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
         remove()
     }
 
-    func update(snapshot: DuoSystemStatusSnapshot, tooltip: String) {
+    func update(snapshot: DuoSystemStatusSnapshot, options: DuoStatusIconOptions, tooltip: String) {
         self.snapshot = snapshot
+        self.options = options
         if item == nil {
             PluginPresentationSafety.prepareForWindowOrdering()
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -64,6 +66,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
         }
         item = nil
         snapshot = nil
+        options = .default
         tooltip = nil
         iconPresentation.reset()
     }
@@ -81,7 +84,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
     private func redraw() {
         guard let snapshot, let button = item?.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        iconPresentation.update(on: button, snapshot: snapshot, context: .init(
+        iconPresentation.update(on: button, snapshot: snapshot, options: options, context: .init(
             pointSize: DuoStatusIcon.size,
             displayScale: button.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2,
             appearance: isDark ? .dark : .light
@@ -97,6 +100,7 @@ final class DuoStatusMenuBarController: NSObject, DuoStatusMenuBarPresenting {
 final class DuoStatusIconPresentation {
     private struct RenderState: Equatable {
         let snapshot: DuoSystemStatusSnapshot
+        let options: DuoStatusIconOptions
         let context: PluginMenuBarIconRenderContext
     }
 
@@ -104,13 +108,18 @@ final class DuoStatusIconPresentation {
 
     func reset() { lastRenderState = nil }
 
-    func update(on button: NSButton, snapshot: DuoSystemStatusSnapshot, context: PluginMenuBarIconRenderContext) {
-        let state = RenderState(snapshot: snapshot, context: context)
+    func update(
+        on button: NSButton,
+        snapshot: DuoSystemStatusSnapshot,
+        options: DuoStatusIconOptions,
+        context: PluginMenuBarIconRenderContext
+    ) {
+        let state = RenderState(snapshot: snapshot, options: options, context: context)
         guard state != lastRenderState else { return }
         // AppKit can notify appearance changes while replicating a status item.
         // Reassigning an unchanged image here can schedule another replication.
         lastRenderState = state
-        button.image = DuoStatusIcon.image(for: snapshot,
+        button.image = DuoStatusIcon.image(for: snapshot, options: options,
             appearance: context.appearance == .dark ? .dark : .light, pointSize: context.pointSize)
     }
 }
