@@ -112,7 +112,7 @@ struct FixDropZoneView: View {
                     .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTargeted)
 
                 Text(localization.string("dropZone.waiting", defaultValue: "将 .app 文件拖到此处以修复"))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -123,7 +123,7 @@ struct FixDropZoneView: View {
                     .scaleEffect(1.2)
 
                 Text(localization.string("dropZone.running", defaultValue: "修复中…"))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
                     .foregroundStyle(.secondary)
             }
 
@@ -134,7 +134,7 @@ struct FixDropZoneView: View {
                     .foregroundStyle(.green)
 
                 Text(localization.format("dropZone.successFormat", defaultValue: "已修复：%@", name))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(PluginSettingsTheme.Typography.rowTitle)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -147,7 +147,7 @@ struct FixDropZoneView: View {
                     .foregroundStyle(.red)
 
                 Text(message)
-                    .font(.system(size: 11))
+                    .font(PluginSettingsTheme.Typography.rowDescription)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)

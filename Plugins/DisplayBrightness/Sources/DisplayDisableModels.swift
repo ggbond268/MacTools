@@ -8,6 +8,7 @@ struct DisplayDisableDisplay: Equatable {
     let isActive: Bool
     let isInMirrorSet: Bool
     let isVisibleToAppKit: Bool
+    let isVirtual: Bool
     let vendorNumber: UInt32?
     let modelNumber: UInt32?
     let serialNumber: UInt32?
@@ -19,6 +20,7 @@ struct DisplayDisableDisplay: Equatable {
         isActive: Bool,
         isInMirrorSet: Bool,
         isVisibleToAppKit: Bool,
+        isVirtual: Bool = false,
         vendorNumber: UInt32? = nil,
         modelNumber: UInt32? = nil,
         serialNumber: UInt32? = nil
@@ -29,9 +31,17 @@ struct DisplayDisableDisplay: Equatable {
         self.isActive = isActive
         self.isInMirrorSet = isInMirrorSet
         self.isVisibleToAppKit = isVisibleToAppKit
+        self.isVirtual = isVirtual
         self.vendorNumber = vendorNumber
         self.modelNumber = modelNumber
         self.serialNumber = serialNumber
+    }
+
+    /// A physical display that currently shows a picture a person can use. Virtual devices
+    /// (software dummies, headless adapters exposed as virtual) never count, so they cannot be
+    /// the only thing left on after another display is switched off.
+    var isDrawable: Bool {
+        !isVirtual && (isActive || isVisibleToAppKit)
     }
 }
 
@@ -44,6 +54,7 @@ extension DisplayDisableDisplay {
             isActive: value,
             isInMirrorSet: isInMirrorSet,
             isVisibleToAppKit: isVisibleToAppKit,
+            isVirtual: isVirtual,
             vendorNumber: vendorNumber,
             modelNumber: modelNumber,
             serialNumber: serialNumber
@@ -58,6 +69,7 @@ extension DisplayDisableDisplay {
             isActive: isActive,
             isInMirrorSet: isInMirrorSet,
             isVisibleToAppKit: value,
+            isVirtual: isVirtual,
             vendorNumber: vendorNumber,
             modelNumber: modelNumber,
             serialNumber: serialNumber
@@ -65,32 +77,31 @@ extension DisplayDisableDisplay {
     }
 }
 
-enum DisplayDisableStatus: Equatable {
-    case available
-    case disabled
-    case unavailable
-    case unsupported
-    case busy
-    case failed
+/// One switchable display as presented to the panel and actions.
+struct DisplayDisableEntry: Equatable {
+    let id: CGDirectDisplayID
+    let name: String
+    let isBuiltin: Bool
+    /// True while this display is switched off by MacTools and can be restored.
+    let isDisabled: Bool
+    let isDisableAllowed: Bool
+    /// Why the display cannot be switched off right now, when `isDisableAllowed` is false.
+    let unavailableReason: String?
 }
 
 struct DisplayDisableSnapshot: Equatable {
-    let status: DisplayDisableStatus
-    let isDisableAllowed: Bool
-    let isRestoreAllowed: Bool
-    let externalDisplayCount: Int
+    let isSupported: Bool
+    let entries: [DisplayDisableEntry]
+    /// The failure or pending notice left by the most recent operation.
     let message: String?
 
-    static let unsupported = DisplayDisableSnapshot(
-        status: .unsupported,
-        isDisableAllowed: false,
-        isRestoreAllowed: false,
-        externalDisplayCount: 0,
-        message: DisplayBrightnessLocalization.string(
-            "displayDisable.unsupported",
-            defaultValue: "当前系统不支持关闭内建显示屏"
-        )
-    )
+    var builtIn: DisplayDisableEntry? {
+        entries.first(where: \.isBuiltin)
+    }
+
+    func entry(for displayID: CGDirectDisplayID) -> DisplayDisableEntry? {
+        entries.first { $0.id == displayID }
+    }
 }
 
 struct DisplaySurvivorIdentity: Codable, Equatable {
@@ -100,36 +111,58 @@ struct DisplaySurvivorIdentity: Codable, Equatable {
     let serialNumber: UInt32?
 }
 
-struct DisplayDisableRecoverySnapshot: Codable, Equatable {
+/// A display MacTools switched off, persisted so the next start can restore it if the process
+/// ended without doing so, and so a disconnect of the displays left on can bring it back.
+struct DisplayDisableRecord: Codable, Equatable {
     let createdAt: Date
-    let builtInDisplayID: CGDirectDisplayID
+    let displayID: CGDirectDisplayID
+    let name: String
+    let isBuiltin: Bool
     let vendorNumber: UInt32?
     let modelNumber: UInt32?
     let serialNumber: UInt32?
-    let survivorDisplayIDs: [CGDirectDisplayID]
-    // Stable EDID identity for each external survivor. CGDirectDisplayID can change after sleep/wake,
-    // so restore decisions prefer identity matching and fall back to IDs. Optional for snapshots
-    // persisted before this field existed.
-    let survivorIdentities: [DisplaySurvivorIdentity]?
-    let originalMainDisplayID: CGDirectDisplayID?
+    // Stable EDID identity for each display that stayed on. CGDirectDisplayID can change after
+    // sleep/wake, so restore decisions prefer identity matching and fall back to IDs.
+    let survivorIdentities: [DisplaySurvivorIdentity]
+    /// Set when a restore was asked for but could not run yet, such as the built-in display
+    /// while the lid is closed. The next reconcile restores it as soon as it can.
+    var restoreRequested: Bool
 
     init(
         createdAt: Date,
-        builtInDisplayID: CGDirectDisplayID,
+        displayID: CGDirectDisplayID,
+        name: String,
+        isBuiltin: Bool,
         vendorNumber: UInt32?,
         modelNumber: UInt32?,
         serialNumber: UInt32?,
-        survivorDisplayIDs: [CGDirectDisplayID],
-        survivorIdentities: [DisplaySurvivorIdentity]? = nil,
-        originalMainDisplayID: CGDirectDisplayID?
+        survivorIdentities: [DisplaySurvivorIdentity],
+        restoreRequested: Bool = false
     ) {
         self.createdAt = createdAt
-        self.builtInDisplayID = builtInDisplayID
+        self.displayID = displayID
+        self.name = name
+        self.isBuiltin = isBuiltin
         self.vendorNumber = vendorNumber
         self.modelNumber = modelNumber
         self.serialNumber = serialNumber
-        self.survivorDisplayIDs = survivorDisplayIDs
         self.survivorIdentities = survivorIdentities
-        self.originalMainDisplayID = originalMainDisplayID
+        self.restoreRequested = restoreRequested
+    }
+
+    /// Whether `display` is the monitor this record switched off. The built-in panel is unique;
+    /// an external monitor matches by ID, or by full EDID identity only when it carries a serial
+    /// number, so two identical monitors without serials are never confused with each other.
+    func matchesTarget(_ display: DisplayDisableDisplay) -> Bool {
+        if display.id == displayID {
+            return true
+        }
+        if isBuiltin {
+            return display.isBuiltin
+        }
+        guard !display.isBuiltin, let serialNumber, display.serialNumber == serialNumber else {
+            return false
+        }
+        return display.vendorNumber == vendorNumber && display.modelNumber == modelNumber
     }
 }

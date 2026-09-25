@@ -168,12 +168,12 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
             defaultValue: "文件名"
         ))
         promptLabel.translatesAutoresizingMaskIntoConstraints = false
-        promptLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        promptLabel.font = PluginTypography.control.nsFont
         promptLabel.textColor = .secondaryLabelColor
 
         let nameField = NSTextField(string: fileName)
         nameField.translatesAutoresizingMaskIntoConstraints = false
-        nameField.font = .systemFont(ofSize: 13)
+        nameField.font = PluginTypography.body.nsFont
         nameField.lineBreakMode = .byTruncatingMiddle
         nameField.placeholderString = localization.string(
             "upload.naming.placeholder",
@@ -203,7 +203,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
 
         let validationLabel = NSTextField(labelWithString: "")
         validationLabel.translatesAutoresizingMaskIntoConstraints = false
-        validationLabel.font = .systemFont(ofSize: 11)
+        validationLabel.font = PluginTypography.detail.nsFont
         validationLabel.textColor = .systemRed
 
         let cancelButton = NSButton(
@@ -262,7 +262,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
 
         let fileLabel = NSTextField(labelWithString: fileName)
         fileLabel.translatesAutoresizingMaskIntoConstraints = false
-        fileLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        fileLabel.font = PluginTypography.body.nsFont
         fileLabel.lineBreakMode = .byTruncatingMiddle
         fileLabel.maximumNumberOfLines = 1
 
@@ -275,7 +275,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
 
         let percentageLabel = NSTextField(labelWithString: "0%")
         percentageLabel.translatesAutoresizingMaskIntoConstraints = false
-        percentageLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        percentageLabel.font = PluginTypography.value.nsFont
         percentageLabel.alignment = .right
 
         let cancelButton = NSButton(
@@ -324,7 +324,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
             fileName
         ))
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = PluginTypography.sectionTitle.nsFont
         titleLabel.lineBreakMode = .byTruncatingMiddle
         titleLabel.maximumNumberOfLines = 1
 
@@ -333,7 +333,7 @@ final class R2UploadProgressPresenter: NSObject, R2UploadProgressPresenting {
             defaultValue: "覆盖上传会替换 R2 中的现有对象。"
         ))
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
-        detailLabel.font = .systemFont(ofSize: 12)
+        detailLabel.font = PluginTypography.detail.nsFont
         detailLabel.textColor = .secondaryLabelColor
 
         let renameButton = NSButton(

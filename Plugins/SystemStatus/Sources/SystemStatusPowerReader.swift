@@ -2,8 +2,16 @@ import Darwin
 import Foundation
 
 struct SystemStatusPowerEnergySample: Equatable, Sendable {
-    let joules: Double
-    let date: Date
+    struct Channel: Equatable, Sendable {
+        let joules: Double
+        let sourceUptime: TimeInterval?
+    }
+
+    let uptime: TimeInterval
+    let channels: [String: Channel]
+
+    var joules: Double { channels.values.reduce(0) { $0 + $1.joules } }
+    var channelNames: Set<String> { Set(channels.keys) }
 }
 
 final class SystemStatusCPUPowerReader {
@@ -30,10 +38,19 @@ final class SystemStatusCPUPowerReader {
         subscriptionChannels?.release()
     }
 
-    func readCPUEnergySample(referenceDate: Date) -> SystemStatusPowerEnergySample? {
+    deinit {
+        // IOReport subscriptions are retained CF objects and own a Mach port.
+        // Release the subscription while its dynamically loaded code is alive.
+        if let subscription {
+            Unmanaged<CFTypeRef>.fromOpaque(UnsafeRawPointer(subscription)).release()
+        }
+    }
+
+    func readCPUEnergySample() -> SystemStatusPowerEnergySample? {
         guard
             let functions,
             let channels,
+            let subscription,
             let sample = functions.createSamples(subscription, channels, nil)?.takeRetainedValue(),
             let sampleDictionary = sample as? [String: Any],
             let rawItems = sampleDictionary["IOReportChannels"]
@@ -46,7 +63,8 @@ final class SystemStatusCPUPowerReader {
             return nil
         }
         let items = unsafeDowncast(rawItemsReference, to: CFArray.self)
-        var cpuEnergyJoules: Double?
+        var energyByChannel: [String: Double] = [:]
+        var sourceUptimes: [String: TimeInterval] = [:]
         for index in 0..<CFArrayGetCount(items) {
             let rawItem = CFArrayGetValueAtIndex(items, index)
             let itemReference = unsafeBitCast(rawItem, to: CFTypeRef.self)
@@ -68,18 +86,54 @@ final class SystemStatusCPUPowerReader {
                 continue
             }
 
-            cpuEnergyJoules = joules
+            energyByChannel[channelName] = joules
+            sourceUptimes[channelName] = Self.channelUptime(rawElements: (item as NSDictionary)["RawElements"] as? Data)
         }
 
-        guard let cpuEnergyJoules else {
-            return nil
-        }
-
-        return SystemStatusPowerEnergySample(joules: cpuEnergyJoules, date: referenceDate)
+        return Self.cpuEnergySample(
+            channels: energyByChannel, uptime: ProcessInfo.processInfo.systemUptime, sourceUptimes: sourceUptimes
+        )
     }
+
+    static func cpuEnergySample(
+        channels: [String: Double], uptime: TimeInterval, sourceUptimes: [String: TimeInterval] = [:]
+    ) -> SystemStatusPowerEnergySample? {
+        // Ultra chips expose one CPU Energy channel per die. Prefer a package
+        // total if present; otherwise sum the die channels without double counting.
+        let selected = channels["CPU Energy"].map { ["CPU Energy": $0] }
+            ?? channels.filter { $0.key.hasSuffix("CPU Energy") }
+        guard !selected.isEmpty, selected.values.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
+        return SystemStatusPowerEnergySample(
+            uptime: uptime,
+            channels: Dictionary(uniqueKeysWithValues: selected.map { name, joules in
+                (name, .init(joules: joules, sourceUptime: sourceUptimes[name]))
+            })
+        )
+    }
+
+    static func channelUptime(rawElements: Data?) -> TimeInterval? {
+        // Apple's packed IOReportElement is 64 bytes: the simple format is at
+        // offset 16 and its mach_absolute_time timestamp is at offset 24.
+        // Unknown layouts keep the collection-time fallback; zero energy alone
+        // is not evidence of a stalled driver.
+        guard let rawElements, rawElements.count == 64, let secondsPerTick else { return nil }
+        return rawElements.withUnsafeBytes { bytes in
+            guard bytes[16] == 1,
+                  bytes.loadUnaligned(fromByteOffset: 20, as: UInt16.self) == 1,
+                  bytes.loadUnaligned(fromByteOffset: 22, as: Int16.self) == 0 else { return nil }
+            let timestamp = bytes.loadUnaligned(fromByteOffset: 24, as: UInt64.self)
+            return timestamp > 0 ? Double(timestamp) * secondsPerTick : nil
+        }
+    }
+
+    private static let secondsPerTick: Double? = {
+        var info = mach_timebase_info_data_t()
+        guard mach_timebase_info(&info) == KERN_SUCCESS, info.denom > 0 else { return nil }
+        return Double(info.numer) / Double(info.denom) / 1_000_000_000
+    }()
 }
 
-private struct IOReportFunctions {
+private final class IOReportFunctions {
     typealias CopyChannelsInGroup = @convention(c) (CFString?, CFString?, UInt64, UInt64, UInt64) -> Unmanaged<CFDictionary>?
     typealias CreateSubscription = @convention(c) (
         UnsafeMutableRawPointer?,
@@ -102,8 +156,8 @@ private struct IOReportFunctions {
     let simpleGetIntegerValue: SimpleGetIntegerValue
 
     init?() {
+        guard let handle = dlopen("/usr/lib/libIOReport.dylib", RTLD_LAZY) else { return nil }
         guard
-            let handle = dlopen("/usr/lib/libIOReport.dylib", RTLD_LAZY),
             let copyChannelsInGroup = Self.loadFunction(
                 named: "IOReportCopyChannelsInGroup",
                 from: handle,
@@ -140,6 +194,7 @@ private struct IOReportFunctions {
                 as: SimpleGetIntegerValue.self
             )
         else {
+            dlclose(handle)
             return nil
         }
 
@@ -151,6 +206,10 @@ private struct IOReportFunctions {
         self.channelGetChannelName = channelGetChannelName
         self.channelGetUnitLabel = channelGetUnitLabel
         self.simpleGetIntegerValue = simpleGetIntegerValue
+    }
+
+    deinit {
+        dlclose(handle)
     }
 
     private static func loadFunction<T>(named name: String, from handle: UnsafeMutableRawPointer, as type: T.Type) -> T? {

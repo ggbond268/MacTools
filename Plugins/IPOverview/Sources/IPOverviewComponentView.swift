@@ -888,7 +888,7 @@ private struct PublicIPRowView: View {
             HStack(alignment: .center, spacing: 4) {
                 if let result {
                     Text(displayIP ?? result.ip)
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .font(PluginTypography.code.font.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -1238,7 +1238,6 @@ private struct NetworkQualityGaugeView: View {
     private enum Layout {
         static let backgroundSize: CGFloat = 104
         static let lineWidth: CGFloat = 9
-        static let valueFontSize: CGFloat = 18
     }
 
     let value: Double?
@@ -1264,7 +1263,7 @@ private struct NetworkQualityGaugeView: View {
                 )
             VStack(spacing: 0) {
                 Text(subtitle)
-                    .font(.system(size: Layout.valueFontSize, weight: .semibold, design: .rounded))
+                    .font(PluginTypography.metric.font)
                     .foregroundStyle(.primary)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -1509,17 +1508,8 @@ private struct NetworkQualityResultStrip: View {
                 .font(PluginSettingsTheme.Typography.statusBadge)
                 .foregroundStyle(tint)
                 .lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Text(unit)
-                    .font(PluginSettingsTheme.Typography.statusBadge)
-                    .foregroundStyle(.secondary)
-            }
+            PluginMetricValue(value, unit: unit)
+                .foregroundStyle(.primary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)

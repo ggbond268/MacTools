@@ -84,7 +84,7 @@ struct ZshConfigEditorView: View {
                     .fill(fileStatusColor(status))
                     .frame(width: 7, height: 7)
                 Text(type.filename)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .monospaced))
+                    .font(PluginTypography.code.font.weight(isSelected ? .semibold : .regular))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -125,7 +125,7 @@ struct ZshConfigEditorView: View {
             }
         } label: {
             Label(tab.title(localization: localization), systemImage: tab.icon)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .font(PluginTypography.control.font.weight(isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)

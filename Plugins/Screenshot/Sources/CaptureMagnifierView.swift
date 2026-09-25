@@ -22,7 +22,7 @@ final class CaptureMagnifierView: NSView {
     private var hexFormat = ""
     private var hints: [NSAttributedString] = []
     private let valueAttributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+        .font: PluginTypography.value.nsFont,
         .foregroundColor: NSColor.white,
     ]
 
@@ -48,7 +48,7 @@ final class CaptureMagnifierView: NSView {
         hexFormat = environment.string("overlay.magnifier.hex", "HEX: %@")
         hints = [environment.string("overlay.magnifier.copyHint", "Command + C 复制色值"),
                  environment.string("overlay.magnifier.formatHint", "Tab 切换 RGB、HEX")].map {
-            NSAttributedString(string: $0, attributes: [.font: NSFont.systemFont(ofSize: 10),
+            NSAttributedString(string: $0, attributes: [.font: PluginTypography.caption.nsFont,
                                                        .foregroundColor: NSColor.white.withAlphaComponent(0.72)])
         }
     }

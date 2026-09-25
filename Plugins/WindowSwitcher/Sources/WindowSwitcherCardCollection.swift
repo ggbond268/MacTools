@@ -1,4 +1,5 @@
 import AppKit
+import MacToolsPluginKit
 
 @MainActor
 final class WindowSwitcherCardCollection: NSCollectionView {
@@ -82,7 +83,7 @@ final class WindowSwitcherCardItem: NSCollectionViewItem {
         icon.identifier = NSUserInterfaceItemIdentifier("window-card-icon")
         titleLabel.identifier = NSUserInterfaceItemIdentifier("window-card-title")
         icon.imageScaling = .scaleProportionallyUpOrDown
-        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.font = PluginTypography.body.nsFont
         titleLabel.alignment = .center; titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.maximumNumberOfLines = 2
@@ -95,7 +96,7 @@ final class WindowSwitcherCardItem: NSCollectionViewItem {
         badge.identifier = NSUserInterfaceItemIdentifier("window-assigned-key")
         badge.bezelStyle = .texturedRounded
         badge.controlSize = .small
-        badge.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        badge.font = PluginTypography.code.nsFont
         badge.isBordered = false
         badge.contentTintColor = .labelColor
         badge.target = self
@@ -141,7 +142,7 @@ final class WindowSwitcherCardItem: NSCollectionViewItem {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineBreakMode = .byTruncatingTail
-        alignedTitle.addAttributes([.paragraphStyle: paragraph, .font: NSFont.systemFont(ofSize: 12, weight: .medium)],
+        alignedTitle.addAttributes([.paragraphStyle: paragraph, .font: PluginTypography.body.nsFont],
                                    range: NSRange(location: 0, length: alignedTitle.length))
         self.titleLabel.attributedStringValue = alignedTitle
         view.toolTip = "\(title.string) — \(appName)"

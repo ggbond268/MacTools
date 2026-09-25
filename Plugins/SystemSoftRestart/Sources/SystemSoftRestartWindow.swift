@@ -448,10 +448,10 @@ private struct SystemSoftRestartWindowView: View {
                     ForEach(Array(diagnostics.enumerated()), id: \.offset) { _, diagnostic in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(diagnostic.subject)
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
                             Text(diagnostic.message)
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

@@ -2237,214 +2237,49 @@
     "displayDisable.message.disableFailed": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذر إيقاف تشغيل الشاشة المدمجة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das integrierte Display konnte nicht ausgeschaltet werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not turn off the built-in display"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo apagar la pantalla incorporada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d'éteindre l'écran intégré"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵ディスプレイをオフにできませんでした"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "내장 디스플레이를 끌 수 없습니다"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível desligar a tela integrada"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось отключить встроенный дисплей"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭内建显示屏失败"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "關閉內建顯示螢幕失敗"
-          }
-        }
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر إيقاف تشغيل الشاشة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das Display konnte nicht ausgeschaltet werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Could not turn off the display" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo apagar la pantalla" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’éteindre l’écran" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ディスプレイをオフにできませんでした" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "디스플레이를 끌 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível desligar a tela" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось отключить дисплей" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "关闭显示器失败" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "關閉顯示器失敗" } }
       }
     },
     "displayDisable.message.disableFailedRestored": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذر إيقاف تشغيل الشاشة المضمنة؛ حاولت استعادته"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das integrierte Display konnte nicht ausgeschaltet werden; habe versucht, es wiederherzustellen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not turn off the built-in display; tried to restore it"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo apagar la pantalla incorporada; intenté restaurarlo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d'éteindre l'écran intégré ; j'ai essayé de le restaurer"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵ディスプレイをオフにできませんでした。復元しようとしました"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "내장 디스플레이를 끌 수 없습니다. 복원을 시도했습니다"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível desligar a tela integrada; tentei restaurá-lo"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось отключить встроенный дисплей; пытался восстановить"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭内建显示屏失败，已尝试恢复"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "關閉內建顯示螢幕失敗，已嘗試恢復"
-          }
-        }
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذر إيقاف تشغيل الشاشة؛ تمت محاولة استعادتها" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das Display konnte nicht ausgeschaltet werden; Wiederherstellung wurde versucht" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Could not turn off the display; tried to restore it" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo apagar la pantalla; se intentó restaurarla" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’éteindre l’écran ; restauration tentée" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ディスプレイをオフにできませんでした。復元を試みました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "디스플레이를 끌 수 없습니다. 복원을 시도했습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível desligar a tela; tentou-se restaurá-la" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось отключить дисплей; выполнена попытка восстановления" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "关闭显示器失败，已尝试恢复" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "關閉顯示器失敗，已嘗試恢復" } }
       }
     },
     "displayDisable.message.mirrorUnsupported": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يتم دعم إيقاف تشغيل الشاشة المدمجة أثناء عكس شاشات العرض"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Ausschalten des integrierten Displays wird bei gespiegelten Displays nicht unterstützt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turning off the built-in display is not supported while displays are mirrored"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se permite apagar la pantalla integrada mientras las pantallas están reflejadas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La désactivation de l'écran intégré n'est pas prise en charge lorsque les écrans sont en miroir"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ディスプレイがミラーリングされている間、内蔵ディスプレイをオフにすることはサポートされていません"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "디스플레이가 미러링되는 동안에는 내장 디스플레이 끄기가 지원되지 않습니다."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não é possível desativar a tela integrada enquanto as telas são espelhadas"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отключение встроенного дисплея не поддерживается, пока дисплеи зеркально отображены"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "镜像显示时暂不支持关闭内建显示屏"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "鏡像顯示時暫不支持關閉內建顯示螢幕"
-          }
-        }
+        "ar": { "stringUnit": { "state": "translated", "value": "لا يمكن إيقاف تشغيل شاشة أثناء عكس الشاشات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Displays können bei gespiegelten Displays nicht ausgeschaltet werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "A display cannot be turned off while displays are mirrored" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se puede apagar una pantalla mientras las pantallas están duplicadas" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’éteindre un écran lorsque les écrans sont en miroir" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ミラーリング中はディスプレイをオフにできません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "미러링 중에는 디스플레이를 끌 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não é possível desligar uma tela enquanto as telas estão espelhadas" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Нельзя отключить дисплей, пока включён видеоповтор" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "镜像显示时暂不支持关闭显示器" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "鏡像輸出時暫不支援關閉顯示器" } }
       }
     },
     "displayDisable.message.needsExternalDisplay": {
@@ -2592,143 +2427,33 @@
     "displayDisable.message.restoreFailed": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذرت استعادة شاشة العرض المضمنة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das integrierte Display konnte nicht wiederhergestellt werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Could not restore the built-in display"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo restaurar la pantalla integrada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible de restaurer l'écran intégré"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵ディスプレイを復元できませんでした"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "내장 디스플레이를 복원할 수 없습니다."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível restaurar a tela integrada"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось восстановить встроенный дисплей"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复内建显示屏失败"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢復內建顯示螢幕失敗"
-          }
-        }
+        "ar": { "stringUnit": { "state": "translated", "value": "تعذرت استعادة الشاشة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das Display konnte nicht wiederhergestellt werden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Could not restore the display" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo restaurar la pantalla" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de restaurer l’écran" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ディスプレイを復元できませんでした" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "디스플레이를 복원할 수 없습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Não foi possível restaurar a tela" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Не удалось восстановить дисплей" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复显示器失败" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "恢復顯示器失敗" } }
       }
     },
     "displayDisable.unsupported": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يدعم هذا النظام إيقاف تشغيل الشاشة المدمجة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses System unterstützt nicht das Ausschalten des integrierten Displays"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This system does not support turning off the built-in display"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este sistema no admite el apagado de la pantalla integrada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce système ne prend pas en charge la désactivation de l'écran intégré"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このシステムは内蔵ディスプレイのオフをサポートしていません"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 시스템은 내장 디스플레이 끄기를 지원하지 않습니다."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este sistema não suporta desligar a tela integrada"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Эта система не поддерживает отключение встроенного дисплея"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前系统不支持关闭内建显示屏"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "當前系統不支持關閉內建顯示螢幕"
-          }
-        }
+        "ar": { "stringUnit": { "state": "translated", "value": "لا يدعم هذا النظام إيقاف تشغيل الشاشات" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Dieses System unterstützt das Ausschalten von Displays nicht" } },
+        "en": { "stringUnit": { "state": "translated", "value": "This system does not support turning off displays" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Este sistema no admite apagar pantallas" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ce système ne permet pas d’éteindre les écrans" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "このシステムはディスプレイのオフをサポートしていません" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 시스템은 디스플레이 끄기를 지원하지 않습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Este sistema não permite desligar telas" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Эта система не поддерживает отключение дисплеев" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前系统不支持关闭显示器" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前系統不支援關閉顯示器" } }
       }
     },
     "settings.shortcutTarget.searchDescription": {
@@ -2761,6 +2486,118 @@
         "ru": { "stringUnit": { "state": "translated", "value": "экран" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "屏幕" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "螢幕" } }
+      }
+    },
+    "displayDisable.builtInName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "شاشة العرض المدمجة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Integriertes Display" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Built-in Display" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Pantalla integrada" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Écran intégré" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "内蔵ディスプレイ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "내장 디스플레이" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Tela integrada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Встроенный дисплей" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "内建显示屏" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "內建顯示螢幕" } }
+      }
+    },
+    "displayDisable.action.disableFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "إيقاف تشغيل \"%@\"" } },
+        "de": { "stringUnit": { "state": "translated", "value": "„%@“ ausschalten" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Turn Off “%@”" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Apagar «%@»" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Éteindre « %@ »" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "“%@”をオフにする" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "“%@” 끄기" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Desligar “%@”" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Отключить «%@»" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "关闭“%@”" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "關閉「%@」" } }
+      }
+    },
+    "displayDisable.action.restoreFormat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "استعادة \"%@\"" } },
+        "de": { "stringUnit": { "state": "translated", "value": "„%@“ wiederherstellen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Restore “%@”" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Restaurar «%@»" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Restaurer « %@ »" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "“%@”を復元" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "“%@” 복원" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Restaurar “%@”" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Восстановить «%@»" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "恢复“%@”" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "恢復「%@」" } }
+      }
+    },
+    "displayDisable.message.lastDisplay": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "يجب أن تبقى شاشة واحدة على الأقل قيد التشغيل" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Mindestens ein Display muss eingeschaltet bleiben" } },
+        "en": { "stringUnit": { "state": "translated", "value": "At least one display must stay on" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Al menos una pantalla debe permanecer encendida" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Au moins un écran doit rester allumé" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "少なくとも1台のディスプレイをオンのままにする必要があります" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "디스플레이를 하나 이상 켜 두어야 합니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Pelo menos uma tela precisa permanecer ligada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Хотя бы один дисплей должен оставаться включённым" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "至少需要保留一个显示器" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "至少需要保留一個顯示器" } }
+      }
+    },
+    "displayDisable.message.lidClosed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "ستتم استعادة الشاشة المدمجة بعد فتح الغطاء" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das integrierte Display wird nach dem Öffnen des Deckels wiederhergestellt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "The built-in display will be restored when the lid opens" } },
+        "es": { "stringUnit": { "state": "translated", "value": "La pantalla integrada se restaurará al abrir la tapa" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’écran intégré sera restauré à l’ouverture du capot" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "蓋を開けると内蔵ディスプレイが復元されます" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "덮개를 열면 내장 디스플레이가 복원됩니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A tela integrada será restaurada quando a tampa for aberta" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Встроенный дисплей будет восстановлен после открытия крышки" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "打开盖子后将恢复内建显示屏" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "打開上蓋後將恢復內建顯示螢幕" } }
+      }
+    },
+    "displayDisable.message.displayDisconnected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "تم فصل الشاشة" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Das Display wurde getrennt" } },
+        "en": { "stringUnit": { "state": "translated", "value": "The display was disconnected" } },
+        "es": { "stringUnit": { "state": "translated", "value": "La pantalla se desconectó" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’écran a été déconnecté" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ディスプレイの接続が解除されました" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "디스플레이 연결이 해제되었습니다" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "A tela foi desconectada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Дисплей отключён" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示器已断开连接" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "顯示器已中斷連線" } }
+      }
+    },
+    "displayDisable.status.off": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "متوقف" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Aus" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Off" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Apagada" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Éteint" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "オフ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "꺼짐" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "Desligada" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "Выключен" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已关闭" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已關閉" } }
       }
     }
   },

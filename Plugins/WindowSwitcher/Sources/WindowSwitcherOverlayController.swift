@@ -477,7 +477,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         dragHandle.translatesAutoresizingMaskIntoConstraints = false
         dragBar.addSubview(dragHandle)
         let title = NSTextField(labelWithString: localization.string("chooser.title", defaultValue: "窗口切换"))
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        title.font = PluginTypography.pageTitle.nsFont
         search.placeholderString = localization.string("chooser.search", defaultValue: "搜索窗口标题或应用")
         search.onFocus = { [weak self] in
             guard let self, self.acceptsSearchFocus, !self.updating else { return }
@@ -491,7 +491,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         search.identifier = NSUserInterfaceItemIdentifier("window-switcher-search")
         search.setAccessibilitySubrole(.searchField)
         search.setAccessibilityLabel(localization.string("chooser.search", defaultValue: "搜索窗口标题或应用"))
-        search.font = .systemFont(ofSize: NSFont.systemFontSize)
+        search.font = PluginTypography.body.nsFont
         search.controlSize = .regular
         search.cell?.usesSingleLineMode = true
         search.cell?.isScrollable = true
@@ -529,7 +529,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         scope.selectedSegment = 0
         display.target = self; display.action = #selector(displayChanged)
         display.setAccessibilityLabel(localization.string("chooser.displayFilter", defaultValue: "显示器筛选"))
-        count.font = .systemFont(ofSize: 12); count.textColor = .secondaryLabelColor
+        count.font = PluginTypography.detail.nsFont; count.textColor = .secondaryLabelColor
         previewButton.target = self; previewButton.action = #selector(previewChanged)
         more.identifier = NSUserInterfaceItemIdentifier("window-switcher-options")
         more.controlSize = .small
@@ -580,12 +580,12 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         cards.keyHandler = { [weak self] event in self?.handleKey(event) ?? false }
         cardScroll.documentView = cards
         previewLabel.identifier = NSUserInterfaceItemIdentifier("window-preview-status")
-        previewLabel.font = .systemFont(ofSize: 12); previewLabel.textColor = .labelColor
+        previewLabel.font = PluginTypography.detail.nsFont; previewLabel.textColor = .labelColor
         previewPane.orientation = .vertical; previewPane.alignment = .leading
         previewPane.distribution = .fill
         previewPane.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .vertical)
         previewPane.spacing = 8; previewPane.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        previewTitle.font = .systemFont(ofSize: 12, weight: .medium)
+        previewTitle.font = PluginTypography.body.nsFont
         previewTitle.lineBreakMode = .byTruncatingMiddle
         previewTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         previewLabel.alignment = .center
@@ -604,23 +604,23 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         listHeight = scroll.heightAnchor.constraint(equalToConstant: 224)
         listHeight.priority = NSLayoutConstraint.Priority(49)
         previewImage.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .vertical)
-        empty.font = .systemFont(ofSize: 12); empty.textColor = .labelColor
+        empty.font = PluginTypography.detail.nsFont; empty.textColor = .labelColor
         openButton.target = self; openButton.action = #selector(openSelected); openButton.bezelStyle = .rounded
         closeButton.target = self; closeButton.action = #selector(closeSelected); closeButton.bezelStyle = .rounded
         quitButton.target = self; quitButton.action = #selector(quitSelected); quitButton.bezelStyle = .rounded
-        footer.font = .systemFont(ofSize: 12); footer.textColor = .labelColor
+        footer.font = PluginTypography.detail.nsFont; footer.textColor = .labelColor
         footer.lineBreakMode = .byWordWrapping
         footer.maximumNumberOfLines = 0
         let actions = NSStackView(views: [openButton, closeButton, quitButton, NSView()])
         actions.orientation = .horizontal
-        modeButton.font = .systemFont(ofSize: 12, weight: .semibold)
+        modeButton.font = PluginTypography.sectionTitle.nsFont
         modeButton.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode")
         modeButton.bezelStyle = .inline
         modeButton.isBordered = true
         modeButton.showsBorderOnlyWhileMouseInside = true
         modeButton.imagePosition = .imageLeading
         modeButton.target = self; modeButton.action = #selector(cycleMode)
-        modeHint.font = .systemFont(ofSize: 12)
+        modeHint.font = PluginTypography.detail.nsFont
         modeHint.textColor = .labelColor
         modeHint.identifier = NSUserInterfaceItemIdentifier("window-switcher-mode-hint")
         modeHint.lineBreakMode = .byTruncatingTail
@@ -729,7 +729,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         inlineSearch.isHidden = !inline
         enterSearchButton.isHidden = !inline
         searchIcon.isHidden = inline
-        search.font = .systemFont(ofSize: NSFont.systemFontSize)
+        search.font = PluginTypography.body.nsFont
         searchLeading.constant = inline ? 10 : PluginPaletteMetrics.searchHorizontalPadding + 26
         searchSurfaceHeight.constant = inline ? 32 : PluginPaletteMetrics.toolbarControlSize.height
         searchSurface.isHidden = inline
@@ -1087,7 +1087,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
         let displayName = entry.localizedDisplayName(using: localization)
         let title = NSTextField(labelWithString: displayName)
-        title.font = .systemFont(ofSize: 13, weight: .medium); title.lineBreakMode = .byTruncatingMiddle
+        title.font = PluginTypography.body.nsFont; title.lineBreakMode = .byTruncatingMiddle
         title.attributedStringValue = highlighted(displayName, query: session?.query ?? "")
         let parts = [displayName.caseInsensitiveCompare(entry.appName) == .orderedSame ? nil : entry.appName, entry.displayNameContext,
                      entry.isMinimized ? localization.string("window.minimized", defaultValue: "已最小化") : nil,
@@ -1096,7 +1096,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
                      entry.isHidden ? localization.string("window.hidden", defaultValue: "已隐藏") : nil,
                      entry.metadataUnavailable ? localization.string("window.unavailable", defaultValue: "暂时无法更新") : nil, entry.isWindowEntry ? nil : localization.string("window.none", defaultValue: "无可用窗口")]
         let subtitle = NSTextField(labelWithString: parts.compactMap { $0 }.joined(separator: " · "))
-        subtitle.font = .systemFont(ofSize: 11); subtitle.textColor = .secondaryLabelColor; subtitle.lineBreakMode = .byTruncatingTail
+        subtitle.font = PluginTypography.detail.nsFont; subtitle.textColor = .secondaryLabelColor; subtitle.lineBreakMode = .byTruncatingTail
         subtitle.attributedStringValue = highlighted(subtitle.stringValue, query: session?.query ?? "")
         let labels = NSStackView(views: [title, subtitle])
         labels.orientation = .vertical; labels.alignment = .leading; labels.spacing = 3
@@ -1107,7 +1107,7 @@ final class WindowSwitcherOverlayController: NSObject, NSWindowDelegate, NSTable
         badge.title = session?.usesDirectKeys == true ? (entry.shortcutDisplay ?? "") : ""
         badge.tag = row
         badge.identifier = NSUserInterfaceItemIdentifier("window-shortcut-badge")
-        badge.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        badge.font = PluginTypography.code.nsFont
         badge.contentTintColor = .labelColor
         badge.isRecording = entry.id == recordingEntryID
         badge.toolTip = badge.isRecording ? shortcutRecordingHelp

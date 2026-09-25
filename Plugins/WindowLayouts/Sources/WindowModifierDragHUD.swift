@@ -36,18 +36,18 @@ struct WindowModifierDragHUDView: View {
                 Image(systemName: "cursorarrow")
                     .font(.system(size: 12, weight: .semibold))
                 Text(modifiers.symbolString)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(PluginTypography.body.font.weight(.semibold))
                 Text(movePointerTitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(PluginTypography.control.font)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             case let .active(modifiers, _):
                 Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                     .font(.system(size: 12, weight: .semibold))
                 Text(modifiers.symbolString)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(PluginTypography.body.font.weight(.semibold))
                 Text(movingWindowTitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(PluginTypography.control.font)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             case let .failure(message, _):
@@ -55,7 +55,7 @@ struct WindowModifierDragHUDView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.yellow)
                 Text(message)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(PluginTypography.control.font)
                     .lineLimit(1)
             }
         }

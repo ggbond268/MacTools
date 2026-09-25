@@ -24,7 +24,7 @@ struct AIUsageComponentView: View {
             if model.preferences.enabledProviders.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "slider.horizontal.3").font(.title2)
-                    Text(strings.text("providers.empty", "尚未启用服务")).font(.subheadline)
+                    Text(strings.text("providers.empty", "尚未启用服务")).font(PluginTypography.detail.font)
                     Button(strings.text("open.settings", "打开设置"), action: openSettings)
                         .buttonStyle(.bordered).controlSize(.small)
                 }
@@ -54,9 +54,9 @@ struct AIUsageComponentView: View {
                     .foregroundStyle(theme.text.primary)
                     .background(theme.surfaces.chip, in: RoundedRectangle(cornerRadius: 7))
                     .accessibilityHidden(true)
-                Text(provider.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(provider.title).font(PluginTypography.sectionTitle.font).lineLimit(1)
                 if let plan = state.snapshot?.plan, !plan.isEmpty {
-                    Text(plan.capitalized).font(.caption2).foregroundStyle(theme.text.secondary)
+                    Text(plan.capitalized).font(PluginTypography.caption.font).foregroundStyle(theme.text.secondary)
                         .lineLimit(1).padding(.horizontal, 5).padding(.vertical, 2)
                         .background(theme.surfaces.chip, in: Capsule())
                 }
@@ -87,24 +87,23 @@ struct AIUsageComponentView: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .help(resetHelp(window))
                         }
-                        .font(.caption2)
+                        .font(PluginTypography.caption.font)
                         .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                         if index < snapshot.windows.count - 1 {
                             Color.clear.frame(height: 0).gridCellUnsizedAxes(.horizontal)
                         }
                     }
                 }
                 if let failure = state.failure {
-                    Text(strings.failure(failure, provider: provider)).font(.caption2)
+                    Text(strings.failure(failure, provider: provider)).font(PluginTypography.caption.font)
                         .foregroundStyle(theme.status.warning).fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 Text(model.preferences.canReadCredentials(for: provider)
                      ? state.failure.map { strings.failure($0, provider: provider) } ?? strings.text("status.waiting", "正在等待额度数据…")
                      : strings.text("status.accessOff", "请在设置中开启登录文件或钥匙串访问"))
-                    .font(.caption).foregroundStyle(theme.text.secondary)
+                    .font(PluginTypography.detail.font).foregroundStyle(theme.text.secondary)
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -118,7 +117,7 @@ struct AIUsageComponentView: View {
         case .exhausted: theme.status.critical
         }
         return Text(strings.paceTitle(pace))
-            .font(PluginSettingsTheme.Typography.statusBadge)
+            .font(PluginTypography.caption.font.weight(.medium))
             .foregroundStyle(color)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -131,14 +130,12 @@ struct AIUsageComponentView: View {
     }
 
     private func percentage(_ window: AIUsageWindow, provider: AIUsageProvider, stale: Bool, primary: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 1) {
-            Text(window.remainingPercent.formatted(.number.precision(.fractionLength(0))))
-                .font(.system(size: primary ? 32 : 16, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-            Text("%")
-                .font(primary ? .subheadline : .caption2)
-                .foregroundStyle(theme.text.secondary)
-        }
+        PluginMetricValue(
+            window.remainingPercent.formatted(.number.precision(.fractionLength(0))),
+            unit: "%",
+            isProminent: primary,
+            unitColor: theme.text.secondary
+        )
         .foregroundStyle(tint(window, provider: provider, stale: stale))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(strings.windowTitle(window))

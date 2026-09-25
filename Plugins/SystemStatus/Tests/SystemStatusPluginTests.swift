@@ -16,7 +16,7 @@ final class SystemStatusPluginTests: XCTestCase {
     func testForegroundSamplingIsOwnedByEachVisibleSurface() {
         let viewModel = SystemStatusViewModel(sampler: StubSystemStatusSampler(), historyStore: StubSystemStatusHistoryStore())
         defer { viewModel.stop() }
-        viewModel.startMenuBar(requiresSlowSampling: false)
+        viewModel.startMenuBar()
         XCTAssertFalse(viewModel.isSamplingForeground)
         viewModel.startForeground(for: .menuBarPopover)
         viewModel.startForeground(for: .menuBarPopover)
@@ -36,6 +36,25 @@ final class SystemStatusPluginTests: XCTestCase {
         viewModel.stop()
         XCTAssertTrue(viewModel.foregroundConsumers.isEmpty)
         XCTAssertFalse(viewModel.isSamplingForeground)
+    }
+
+    func testOpeningPanelRefreshesProcessesBeforeTheBackgroundIntervalExpires() async {
+        let sampler = StubSystemStatusSampler()
+        let viewModel = SystemStatusViewModel(
+            sampler: sampler, historyStore: StubSystemStatusHistoryStore(), schedule: .foregroundRestart
+        )
+        defer { viewModel.stop() }
+        let backgroundSample = expectation(description: "Initial background sample")
+        await sampler.observeNextFastCollection { backgroundSample.fulfill() }
+        viewModel.startBackground()
+        await fulfillment(of: [backgroundSample], timeout: 2)
+        let backgroundCounts = await sampler.callCounts
+        XCTAssertEqual(backgroundCounts.processes, 0)
+
+        let visibleSample = expectation(description: "Fresh sample when the panel becomes visible")
+        await sampler.observeNextProcessCollection { visibleSample.fulfill() }
+        viewModel.startForeground()
+        await fulfillment(of: [visibleSample], timeout: 2)
     }
 
     func testSystemStatusActionUsesMenuBarOverviewWhenAvailableAndDashboardOtherwise() {
@@ -64,6 +83,8 @@ final class SystemStatusPluginTests: XCTestCase {
         controller.setMenuBarStyle(.memory, style: .minimal)
         controller.setMenuBarValueArrangement(.memory, arrangement: .inline)
         controller.setProcessSort(.memory)
+        controller.setProcessLimit(.twenty)
+        controller.setChartMetric(.memory, metric: .pressure)
 
         let restoredController = SystemStatusSettingsController(
             store: SystemStatusPluginStorageConfigurationStore(storage: storage)
@@ -79,6 +100,120 @@ final class SystemStatusPluginTests: XCTestCase {
         )
         XCTAssertEqual(restoredController.configuration.menuBarItems.first?.style, .minimal)
         XCTAssertEqual(restoredController.configuration.processSort, .memory)
+        XCTAssertEqual(restoredController.configuration.processLimit, .twenty)
+        XCTAssertEqual(restoredController.configuration.chartMetric(for: .memory), .pressure)
+    }
+
+    func testMetricInsertionDropsReorderBothDirectionsAndRejectOtherLists() throws {
+        let controller = SystemStatusSettingsController(
+            store: SystemStatusPluginStorageConfigurationStore(storage: SystemStatusMemoryPluginStorage())
+        )
+        let originalOrder = controller.configuration.panelItems.map(\.kind)
+        let payload = SystemStatusMetricDrop.payload(for: .cpu, listID: "panel")
+        let downward = try XCTUnwrap(SystemStatusMetricDrop.destination(
+            for: payload, over: .topProcesses, afterTarget: true, in: originalOrder, listID: "panel"
+        ))
+        controller.movePanelMetric(downward.kind, toOffset: downward.offset)
+        XCTAssertEqual(controller.configuration.panelItems.map(\.kind), Array(originalOrder.dropFirst()) + [.cpu])
+
+        let upward = try XCTUnwrap(SystemStatusMetricDrop.destination(
+            for: payload, over: .gpu, afterTarget: false, in: controller.configuration.panelItems.map(\.kind), listID: "panel"
+        ))
+        controller.movePanelMetric(upward.kind, toOffset: upward.offset)
+        XCTAssertEqual(controller.configuration.panelItems.map(\.kind), originalOrder)
+        let beforeMemory = try XCTUnwrap(SystemStatusMetricDrop.destination(
+            for: payload, over: .memory, afterTarget: false, in: originalOrder, listID: "panel"
+        ))
+        controller.movePanelMetric(beforeMemory.kind, toOffset: beforeMemory.offset)
+        let order = controller.configuration.panelItems.map(\.kind)
+        XCTAssertEqual(order.firstIndex(of: .cpu)! + 1, order.firstIndex(of: .memory))
+        XCTAssertNil(SystemStatusMetricDrop.destination(
+            for: payload, over: .memory, afterTarget: false, in: order, listID: "panel"
+        ))
+        XCTAssertNil(SystemStatusMetricDrop.destination(
+            for: payload, over: .memory, afterTarget: false, in: controller.configuration.menuBarItems.map(\.kind), listID: "menu-bar"
+        ))
+    }
+
+    func testMenuBarValuePickersAreIndependentAndPreserveRepeatedValues() throws {
+        let storage = SystemStatusMemoryPluginStorage()
+        let controller = SystemStatusSettingsController(
+            store: SystemStatusPluginStorageConfigurationStore(storage: storage)
+        )
+        controller.setMenuBarMetric(.cpu, visible: true)
+        controller.setMenuBarValues(.cpu, values: [.usage, .temperature])
+        controller.setMenuBarPrimaryValue(.cpu, value: .temperature)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.temperature, .temperature])
+
+        controller.setMenuBarSecondaryValue(.cpu, value: .power)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.temperature, .power])
+        controller.setMenuBarSecondaryValue(.cpu, value: .temperature)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.temperature, .temperature])
+
+        let restored = SystemStatusSettingsController(store: SystemStatusPluginStorageConfigurationStore(storage: storage))
+        XCTAssertEqual(restored.configuration, controller.configuration)
+        let block = try XCTUnwrap(SystemStatusMenuBarMetricsFormatter.blocks(
+            snapshot: .empty, items: restored.configuration.menuBarItems, localization: nil
+        ).first)
+        XCTAssertEqual(block.valueKinds, [.temperature, .temperature])
+        XCTAssertEqual(block.values.count, 2)
+        XCTAssertEqual(block.values.first, block.values.last)
+
+        controller.setMenuBarSecondaryValue(.cpu, value: nil)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.temperature])
+        controller.setMenuBarPrimaryValue(.cpu, value: .usage)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.usage])
+
+        controller.setMenuBarSecondaryValue(.cpu, value: .usage)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.usage, .usage])
+        controller.setMenuBarPrimaryValue(.cpu, value: .power)
+        XCTAssertEqual(controller.configuration.menuBarItems.first?.values, [.power, .usage])
+    }
+
+    func testProcessLimitDecodesOlderAndUnsupportedPreferencesWithoutLosingOtherSettings() throws {
+        var configuration = SystemStatusConfiguration.default
+        configuration.processSort = .memory
+        let data = try JSONEncoder().encode(configuration)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for storedLimit: Int? in [nil, 7] {
+            object["processLimit"] = storedLimit
+            let decoded = try JSONDecoder().decode(
+                SystemStatusConfiguration.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
+            XCTAssertEqual(decoded.processLimit, .three)
+            XCTAssertEqual(decoded.processSort, .memory)
+            XCTAssertEqual(decoded.panelItems, configuration.panelItems)
+        }
+    }
+
+    func testProcessLimitChangesSamplingAndWidgetHeight() async {
+        let sampler = StubSystemStatusSampler()
+        let viewModel = SystemStatusViewModel(sampler: sampler, historyStore: StubSystemStatusHistoryStore())
+        let controller = SystemStatusSettingsController(
+            store: SystemStatusPluginStorageConfigurationStore(storage: SystemStatusMemoryPluginStorage())
+        )
+        controller.setProcessLimit(.five)
+        let plugin = SystemStatusPlugin(viewModel: viewModel, settingsController: controller)
+        let fiveRowHeight = plugin.descriptor.span.height
+        await viewModel.refreshSnapshotNow()
+        let initialLimit = await sampler.lastProcessLimit
+        XCTAssertEqual(initialLimit, 5)
+
+        controller.setProcessLimit(.twenty)
+        await viewModel.refreshSnapshotNow()
+        let increasedLimit = await sampler.lastProcessLimit
+        XCTAssertEqual(increasedLimit, 20)
+        XCTAssertGreaterThan(plugin.descriptor.span.height, fiveRowHeight)
+
+        controller.setPanelMetric(.topProcesses, visible: false)
+        let hiddenHeight = plugin.descriptor.span.height
+        controller.setProcessLimit(.three)
+        XCTAssertEqual(plugin.descriptor.span.height, hiddenHeight)
+        await viewModel.refreshSnapshotNow()
+        let reducedLimit = await sampler.lastProcessLimit
+        XCTAssertEqual(reducedLimit, 20)
+        XCTAssertTrue(viewModel.snapshot.topProcesses.isEmpty)
     }
 
     func testPortablePreferencesRoundTripRestoresEveryConfigurationField() throws {
@@ -97,11 +232,13 @@ final class SystemStatusPluginTests: XCTestCase {
         sourceController.setMenuBarMetric(.cpu, visible: true)
         sourceController.setMenuBarMetric(.memory, visible: true)
         sourceController.moveMenuBarMetric(.memory, toOffset: 0)
-        sourceController.setMenuBarValues(.memory, values: [.swap, .usage])
+        sourceController.setMenuBarValues(.memory, values: [.swap, .swap])
         sourceController.setMenuBarStyle(.memory, style: .vertical)
         sourceController.setMenuBarValueArrangement(.memory, arrangement: .stacked)
         sourceController.setMenuBarStyle(.cpu, style: .minimal)
         sourceController.setProcessSort(.memory)
+        sourceController.setProcessLimit(.fifteen)
+        sourceController.setChartMetric(.memory, metric: .pressure)
 
         XCTAssertGreaterThan(sourceChangeCount, 0)
         let backup = try XCTUnwrap(sourcePlugin.makePortablePreferencesBackup())
@@ -211,23 +348,36 @@ final class SystemStatusPluginTests: XCTestCase {
 }
 
 private actor StubSystemStatusSampler: SystemStatusSampling {
+    func setDemand(_ demand: SystemStatusSamplingDemand) {}
+    private var onNextProcessCollection: (@Sendable () -> Void)?
+    private var onNextFastCollection: (@Sendable () -> Void)?
+    func observeNextFastCollection(_ callback: @escaping @Sendable () -> Void) {
+        onNextFastCollection = callback
+    }
+
+    func observeNextProcessCollection(_ callback: @escaping @Sendable () -> Void) {
+        onNextProcessCollection = callback
+    }
     private(set) var fastCallCount = 0
     private(set) var slowCallCount = 0
     private(set) var processCallCount = 0
+    private(set) var lastProcessLimit: Int?
     private(set) var publicIPCallCount = 0
 
     var callCounts: (fast: Int, slow: Int, processes: Int, publicIP: Int) {
         (fastCallCount, slowCallCount, processCallCount, publicIPCallCount)
     }
 
-    func collectFast(referenceDate: Date) async -> SystemStatusFastSample {
+    func collectFast(referenceDate: Date, demand: SystemStatusSamplingDemand) async -> SystemStatusFastSample {
         fastCallCount += 1
+        onNextFastCollection?()
+        onNextFastCollection = nil
         return SystemStatusFastSample(
             cpu: SystemStatusCPUSnapshot(
                 usage: min(0.95, 0.20 + Double(fastCallCount) * 0.01),
                 loadAverage1Minute: 1.42,
                 temperatureCelsius: 42,
-                systemPowerWatts: 8.5,
+                cpuPowerWatts: 8.5,
                 isCollecting: false
             ),
             memory: SystemStatusMemorySnapshot(
@@ -254,7 +404,7 @@ private actor StubSystemStatusSampler: SystemStatusSampling {
         )
     }
 
-    func collectSlow() async -> SystemStatusSlowSample {
+    func collectSlow(demand: SystemStatusSamplingDemand) async -> SystemStatusSlowSample {
         slowCallCount += 1
         return SystemStatusSlowSample(
             disk: SystemStatusDiskSnapshot(
@@ -293,13 +443,15 @@ private actor StubSystemStatusSampler: SystemStatusSampling {
 
     func collectTopProcesses(limit: Int) async -> [SystemStatusTopProcess] {
         processCallCount += 1
+        lastProcessLimit = limit
+        onNextProcessCollection?()
+        onNextProcessCollection = nil
         return [
             SystemStatusTopProcess(
                 pid: 1,
                 displayName: "launchd",
                 command: "/sbin/launchd",
                 cpuPercent: 1,
-                memoryPercent: 0.1,
                 memoryBytes: 12_582_912
             )
         ]
@@ -393,7 +545,6 @@ private extension SystemStatusSamplingSchedule {
         backgroundSlowInterval: 0,
         menuBarSlowInterval: 0,
         foregroundSlowInterval: 0,
-        backgroundProcessInterval: 0,
         foregroundProcessInterval: 0,
         backgroundHistoryInterval: 0,
         foregroundHistoryInterval: 0
@@ -406,7 +557,6 @@ private extension SystemStatusSamplingSchedule {
         backgroundSlowInterval: 30,
         menuBarSlowInterval: 30,
         foregroundSlowInterval: 30,
-        backgroundProcessInterval: 30,
         foregroundProcessInterval: 30,
         backgroundHistoryInterval: 30,
         foregroundHistoryInterval: 30
