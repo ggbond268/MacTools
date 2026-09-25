@@ -13,6 +13,16 @@ final class WindowSwitcherCardCollection: NSCollectionView {
             NSMenu.popUpContextMenu(menu, with: event, for: self)
         } else { super.mouseDown(with: event) }
     }
+    override func scrollWheel(with event: NSEvent) {
+        // NSCollectionView can consume trackpad phases before its enclosing
+        // scroll view sees them, especially in a nonactivating panel. Route the
+        // complete gesture to the viewport so card grids always remain scrollable.
+        if let scrollView = enclosingScrollView {
+            scrollView.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
+    }
     var keyHandler: ((NSEvent) -> Bool)?
     override func keyDown(with event: NSEvent) {
         if keyHandler?(event) != true { super.keyDown(with: event) }

@@ -205,7 +205,19 @@ final class WindowSwitcherProcessWorker: @unchecked Sendable {
         guard point.x.isFinite, point.y.isFinite, size.width.isFinite, size.height.isFinite,
               size.width >= 0, size.height >= 0 else { return .unavailable }
         guard minimized || (size.width >= 80 && size.height >= 60) else { return .excluded }
-        let snapshot = WindowSwitcherWindowSnapshot(id: id, element: window, title: values[2] as? String ?? "",
+        let title = values[2] as? String ?? ""
+        if !minimized,
+           values[1] as? String == kAXDialogSubrole as String,
+           title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           access.childCount(window) == 0,
+           access.boolValue(window, attribute: kAXMainAttribute as String) == false,
+           access.boolValue(window, attribute: kAXFocusedAttribute as String) == false {
+            // Some apps expose empty, unfocused compositor surfaces as AX
+            // dialogs even while WindowServer marks them visible. A dialog
+            // with content or foreground status remains a selectable window.
+            return .excluded
+        }
+        let snapshot = WindowSwitcherWindowSnapshot(id: id, element: window, title: title,
                                                        minimized: minimized, bounds: CGRect(origin: point, size: size),
                                                        windowNumber: access.windowNumber(window),
                                                        isFullscreen: access.isFullscreen(window) == true)

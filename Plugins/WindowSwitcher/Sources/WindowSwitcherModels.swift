@@ -20,6 +20,14 @@ enum WindowSwitcherMode: String, Codable, CaseIterable, Identifiable {
     case directCycle
 
     var id: String { rawValue }
+
+    var next: WindowSwitcherMode {
+        switch self {
+        case .searchSelect: .directCycle
+        case .directCycle: .keyWindow
+        case .keyWindow: .searchSelect
+        }
+    }
 }
 
 enum WindowSwitcherSortMode: String, Codable, CaseIterable, Identifiable {
@@ -443,6 +451,10 @@ struct WindowSwitcherAppEntry: Identifiable {
     var displayID: UInt32? = nil
     var axWorkerPID: pid_t? = nil
     var windowOwnerPID: pid_t? = nil
+    /// Capture candidates may be owned by a compositor helper that differs
+    /// from both the host and the AX worker. Only catalog-verified related
+    /// processes are allowed to participate in cross-process preview matching.
+    var previewProcessIdentifiers: Set<pid_t> = []
     var isOnOtherDesktop: Bool = false
     var isOnFullscreenSpace: Bool = false
 
@@ -605,6 +617,7 @@ extension WindowSwitcherAppEntry: Equatable {
             && lhs.displayID == rhs.displayID
             && lhs.axWorkerPID == rhs.axWorkerPID
             && lhs.windowOwnerPID == rhs.windowOwnerPID
+            && lhs.previewProcessIdentifiers == rhs.previewProcessIdentifiers
             && lhs.isOnOtherDesktop == rhs.isOnOtherDesktop
             && lhs.isOnFullscreenSpace == rhs.isOnFullscreenSpace
     }

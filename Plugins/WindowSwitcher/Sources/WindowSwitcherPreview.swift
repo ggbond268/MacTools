@@ -20,9 +20,17 @@ final class WindowSwitcherPreview {
         var pid: pid_t
         var launchDate: Date?
         var windowNumber: CGWindowID?
+        var ownerPID: pid_t
+        var previewProcessIdentifiers: Set<pid_t>
         init(_ entry: WindowSwitcherAppEntry) {
             id = entry.id; pid = entry.processIdentifier
             launchDate = entry.applicationLaunchDate; windowNumber = entry.windowNumber
+            ownerPID = entry.owningProcessIdentifier
+            previewProcessIdentifiers = entry.previewProcessIdentifiers
+        }
+        func hasSameWindowIdentity(as other: CacheKey) -> Bool {
+            id == other.id && pid == other.pid && launchDate == other.launchDate
+                && windowNumber == other.windowNumber
         }
     }
     private struct CachedPreview {
@@ -103,6 +111,9 @@ final class WindowSwitcherPreview {
         selectedEntry = entry
         // Catalog metadata changes do not restart an unchanged selection.
         guard selectedKey != key else { return }
+        // Helper authorization changes are part of capture identity. Do not
+        // reuse pixels obtained under an older relationship for the same row.
+        cache = cache.filter { !$0.key.hasSameWindowIdentity(as: key) || $0.key == key }
         selectedKey = key
         generation += 1
         detailRequested = false
@@ -113,11 +124,13 @@ final class WindowSwitcherPreview {
         let now = Date()
         cache = cache.filter { now.timeIntervalSince($0.value.capturedAt) < cacheLifetime }
         if var cached = cache[key] {
+            WindowSwitcherPinchDiagnostics.record("preview cache hit generation=\(generation)")
             cached.usedAt = now
             cache[key] = cached
             onChange?(cached.image, nil)
             if now.timeIntervalSince(cached.capturedAt) < 2 { pending = nil; return }
         } else {
+            WindowSwitcherPinchDiagnostics.record("preview cache miss generation=\(generation)")
             onChange?(nil, captureTimedOut ? unavailableMessage : nil)
         }
         debouncePendingCapture()
@@ -221,6 +234,7 @@ final class WindowSwitcherPreview {
         }
         guard !captureTimedOut else { return true }
         if let image {
+            WindowSwitcherPinchDiagnostics.record("preview capture ready generation=\(generation) detail=\(detail)")
             let now = Date()
             if !detail { cache[CacheKey(entry)] = CachedPreview(image: image, capturedAt: now, usedAt: now) }
             while cache.count > 8, let oldest = cache.min(by: { $0.value.usedAt < $1.value.usedAt })?.key {
@@ -255,26 +269,34 @@ final class WindowSwitcherPreview {
     }
 
     static func matchingIndex(for entry: WindowSwitcherAppEntry, candidates: [WindowSwitcherPreviewCandidate]) -> Int? {
+        let relatedProcesses = entry.previewProcessIdentifiers
+            .union([entry.processIdentifier, entry.owningProcessIdentifier])
         if let number = entry.windowNumber {
             let exact = candidates.indices.filter {
                 candidates[$0].windowID == number && candidates[$0].layer == 0
+                    && relatedProcesses.contains(candidates[$0].processID)
             }
             // Window IDs are unique. Helper-owned Chrome windows keep this ID
             // even when the switcher row is attributed to the host app.
-            return exact.count == 1 ? exact[0] : nil
+            if exact.count == 1 { return exact[0] }
         }
-        // Chrome can expose different AX and capture titles. A unique process
-        // and geometry match is sufficient; titles disambiguate overlapping
-        // windows only when exactly one matches. Never pick by array position.
+        // Chrome and Steam can expose a compositor surface whose capture ID
+        // differs from the AX/WindowServer row. A unique process and geometry
+        // match is sufficient; titles can safely disambiguate a helper-owned
+        // surface. Never pick by array position or geometry alone.
         let geometry = candidates.indices.filter { index in
             let candidate = candidates[index]
-            let sameProcess = candidate.processID == entry.processIdentifier || candidate.processID == entry.owningProcessIdentifier
-            return sameProcess && candidate.layer == 0 &&
+            return candidate.layer == 0 &&
                 abs(candidate.frame.minX - entry.bounds.minX) < 2 && abs(candidate.frame.minY - entry.bounds.minY) < 2 &&
                 abs(candidate.frame.width - entry.bounds.width) < 2 && abs(candidate.frame.height - entry.bounds.height) < 2
         }
-        if geometry.count == 1 { return geometry.first }
-        let titled = geometry.filter { (candidates[$0].title ?? "") == (entry.windowTitle ?? "") }
+        let sameProcess = geometry.filter { relatedProcesses.contains(candidates[$0].processID) }
+        if sameProcess.count == 1 { return sameProcess[0] }
+        let titled = geometry.filter {
+            guard let expected = entry.windowTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !expected.isEmpty else { return false }
+            return relatedProcesses.contains(candidates[$0].processID)
+                && candidates[$0].title?.trimmingCharacters(in: .whitespacesAndNewlines) == expected
+        }
         return titled.count == 1 ? titled.first : nil
     }
 

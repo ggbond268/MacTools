@@ -14,6 +14,11 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
         var windowNumbersByPID: [pid_t: CGWindowID] = [:]
         var onScreenReads = 0
         var metadataAvailable = true
+        var windowSubrole = kAXStandardWindowSubrole as String
+        var windowTitle = "Same title"
+        var childCount: Int? = nil
+        var isMain: Bool? = nil
+        var isFocused: Bool? = nil
         var minimized = false
         var minimizedReadFailures = 0
         var restoreSucceeds = true
@@ -51,8 +56,18 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
         guard read({ $0.metadataAvailable }) else { return nil }
         var point = CGPoint(x: 20, y: 20)
         var size = CGSize(width: 800, height: 600)
-        return [kAXWindowRole, kAXStandardWindowSubrole, "Same title", read { $0.minimized },
+        return [kAXWindowRole, read { $0.windowSubrole }, read { $0.windowTitle }, read { $0.minimized },
                 AXValueCreate(.cgPoint, &point)!, AXValueCreate(.cgSize, &size)!]
+    }
+    func childCount(_ window: AXUIElement) -> Int? { read { $0.childCount } }
+    func boolValue(_ element: AXUIElement, attribute: String) -> Bool? {
+        read { state in
+            switch attribute {
+            case kAXMainAttribute: state.isMain
+            case kAXFocusedAttribute: state.isFocused
+            default: nil
+            }
+        }
     }
     func windowNumber(_ window: AXUIElement) -> CGWindowID? {
         var pid: pid_t = 0
@@ -89,6 +104,29 @@ private final class ControlledWindowAXAccess: WindowSwitcherAXAccess, @unchecked
 }
 
 final class WindowSwitcherProcessWorkerTests: XCTestCase, @unchecked Sendable {
+    func testEmptyUnfocusedDialogIsNotListedAsAWindow() async {
+        let access = ControlledWindowAXAccess()
+        access.update {
+            $0.windows = [AXUIElementCreateApplication(201)]
+            $0.windowSubrole = kAXDialogSubrole as String
+            $0.windowTitle = ""
+            $0.childCount = 0
+            $0.isMain = false
+            $0.isFocused = false
+        }
+        let worker = WindowSwitcherProcessWorker(pid: 200, launchDate: nil, access: access, invalidated: { _ in })
+        defer { worker.stop() }
+        let empty = await worker.scan()
+        XCTAssertTrue(empty.windows.isEmpty)
+
+        access.update { $0.childCount = 1 }
+        let withContent = await worker.scan()
+        XCTAssertEqual(withContent.windows.count, 1)
+        access.update { $0.childCount = 0; $0.isMain = true }
+        let main = await worker.scan()
+        XCTAssertEqual(main.windows.count, 1)
+    }
+
     func testOffSpaceFocusWaitsUntilTheExactWindowIsOnScreen() async {
         let access = ControlledWindowAXAccess()
         let element = AXUIElementCreateApplication(42)

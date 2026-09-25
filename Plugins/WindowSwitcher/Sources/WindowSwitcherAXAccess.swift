@@ -9,6 +9,7 @@ protocol WindowSwitcherAXAccess: Sendable {
     func windows(of application: AXUIElement) -> [AXUIElement]?
     func element(_ owner: AXUIElement, attribute: String) -> AXUIElement?
     func windowAttributes(_ window: AXUIElement) -> [Any]?
+    func childCount(_ window: AXUIElement) -> Int?
     func windowNumber(_ window: AXUIElement) -> CGWindowID?
     func minimized(_ window: AXUIElement) -> Bool?
     func isFullscreen(_ window: AXUIElement) -> Bool?
@@ -19,6 +20,7 @@ protocol WindowSwitcherAXAccess: Sendable {
 }
 
 extension WindowSwitcherAXAccess {
+    func childCount(_ window: AXUIElement) -> Int? { nil }
     func windowNumber(_ window: AXUIElement) -> CGWindowID? { nil }
     func isFullscreen(_ window: AXUIElement) -> Bool? { nil }
     func boolValue(_ element: AXUIElement, attribute: String) -> Bool? { nil }
@@ -47,6 +49,14 @@ struct SystemWindowSwitcherAXAccess: WindowSwitcherAXAccess {
         var values: CFArray?
         guard AXUIElementCopyMultipleAttributeValues(window, attributes, [], &values) == .success else { return nil }
         return values as? [Any]
+    }
+
+    func childCount(_ window: AXUIElement) -> Int? {
+        var count: CFIndex = 0
+        guard AXUIElementGetAttributeValueCount(window, kAXChildrenAttribute as CFString, &count) == .success else {
+            return nil
+        }
+        return count
     }
 
     // macOS has no public AX-to-CG identity bridge. This optional read-only

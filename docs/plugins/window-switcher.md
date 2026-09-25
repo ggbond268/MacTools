@@ -18,6 +18,8 @@ Window Switcher uses native Liquid Glass on macOS 26 and later, following system
 
 Grid cards show the app icon and window title, with app identity in the selected preview heading. A subtle divider separates previews from both layouts. A fixed mode indicator explains release-to-switch versus persistent Search & Select; cycling remains active until the user types or focuses Search. No timer or presentation control changes the release behavior. Search stays open until Return or dismissal.
 
+The chooser reveals the complete selected row or card after its final layout and after viewport changes, while metadata-only refreshes preserve manual scrolling. Grid wheel gestures reach the card viewport, preview pinch gestures acquire focus on their first event, and minimized windows restore before switching to their assigned Space. Preview matching prefers exact window IDs, then accepts only an unambiguous geometry match from the owning app or a catalog-verified helper process.
+
 Search matches use a contrasting text/background pair in both themes. Selection, shortcut hints, preview frames, and action errors remain readable with accessibility contrast settings. App-name-only search matches reveal their app context in the grid.
 
 Window Switcher preserves Direct Keys and its editable assignments when upgrading stable profiles. New installations default to Search and Select; switching the default mode is explicit. Legacy keys open their assigned window immediately, and focusing Search enters search for that invocation. Migrated profiles keep Command-W/Command-Q free of close/quit actions; those actions remain available in the options and context menus. Experimental local search profiles retain their chosen search behavior.

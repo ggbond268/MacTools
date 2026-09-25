@@ -210,6 +210,79 @@ final class WindowSwitcherLifecycleTests: XCTestCase {
         XCTAssertTrue(catalog.activated.isEmpty)
     }
 
+    func testCycleKeepsCompactSearchUntilFindOpensIt() async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["MACTOOLS_RUN_DESKTOP_TESTS"] == "1",
+            "Requires an active desktop; run with TEST_RUNNER_MACTOOLS_RUN_DESKTOP_TESTS=1."
+        )
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        let overlay = WindowSwitcherOverlayController()
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+
+        tap.onShortcutPressed(false, false, false)
+        await eventually { overlay.isVisible }
+        XCTAssertFalse(overlay.isEditingSearch)
+        XCTAssertEqual(plugin.session?.isPersistent, false)
+        XCTAssertEqual(plugin.session?.query, "")
+        XCTAssertFalse(tap.isEditing)
+
+        tap.onShortcutReleased()
+        await eventually { catalog.activated == ["b"] }
+        await eventually { plugin.session == nil }
+
+        tap.onShortcutPressed(false, false, false)
+        await eventually { overlay.isVisible }
+        let find = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+            timestamp: 0, windowNumber: 0, context: nil, characters: "f", charactersIgnoringModifiers: "f",
+            isARepeat: false, keyCode: 3))
+        XCTAssertTrue(overlay.handleChooserShortcut(find))
+        XCTAssertTrue(overlay.isEditingSearch)
+        XCTAssertEqual(plugin.session?.query, "")
+        XCTAssertEqual(plugin.session?.isPersistent, true)
+        XCTAssertTrue(tap.isEditing)
+        tap.onShortcutReleased()
+        XCTAssertTrue(overlay.isVisible)
+    }
+
+    func testModeIndicatorCyclesSavedBehaviorWhileChooserStaysOpen() async throws {
+        let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
+        catalog.windows = [entry("a"), entry("b")]
+        let overlay = WindowSwitcherOverlayController()
+        let plugin = plugin(catalog: catalog, tap: tap, overlay: overlay)
+        defer { plugin.deactivate(reason: .hostShutdown) }
+        plugin.store.setMode(.searchSelect)
+        tap.onShortcutPressed(false, false, false)
+        await eventually { overlay.isVisible }
+
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            $0.identifier?.rawValue == "WindowSwitcherChooser" && $0.isVisible
+        })
+        func modeButton(in view: NSView) -> NSButton? {
+            if let button = view as? NSButton, button.identifier?.rawValue == "window-switcher-mode" { return button }
+            return view.subviews.lazy.compactMap(modeButton).first
+        }
+        let button = try XCTUnwrap(panel.contentView.flatMap(modeButton))
+
+        button.performClick(nil)
+        XCTAssertEqual(plugin.store.configuration.mode, .directCycle)
+        XCTAssertTrue(overlay.isVisible)
+        XCTAssertEqual(overlay.session?.isPersistent, true)
+        tap.onShortcutReleased()
+        XCTAssertTrue(catalog.activated.isEmpty)
+
+        button.performClick(nil)
+        XCTAssertEqual(plugin.store.configuration.mode, .keyWindow)
+        XCTAssertEqual(overlay.session?.usesDirectKeys, true)
+        XCTAssertTrue(tap.isEditing)
+
+        button.performClick(nil)
+        XCTAssertEqual(plugin.store.configuration.mode, .searchSelect)
+        XCTAssertEqual(overlay.session?.usesDirectKeys, false)
+        XCTAssertTrue(overlay.isVisible)
+    }
+
     func testColdInvocationWaitsForInitialProcessesInsteadOfFirstFastApp() async {
         let catalog = ControlledSwitcherCatalog(), tap = ControlledSwitcherTap()
         catalog.isInitialDiscoveryComplete = false

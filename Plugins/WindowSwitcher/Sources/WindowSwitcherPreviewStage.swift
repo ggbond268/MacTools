@@ -12,21 +12,38 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     var hasOutgoingImage: Bool { outgoingImageView.image != nil }
     var onRequestDetail: (() -> Void)?
     var onRequestFocus: (() -> Void)?
+    var prefersGestureFocus = false
     var contextMenu: (() -> NSMenu?)?
     var keyHandler: ((NSEvent) -> Bool)?
     private(set) var zoomScale: CGFloat = 1
     private(set) var panOffset = CGPoint.zero
     private var dragPoint: CGPoint?
+    private var selectionGeneration: UInt = 0
+    private var gestureGeneration: UInt?
+    private var pendingMagnification: CGFloat = 1
+    private var pendingMagnificationAnchor: CGPoint?
+    private var isAwaitingSelectedImage = false
     private lazy var magnificationGesture = NSMagnificationGestureRecognizer(
         target: self, action: #selector(handleMagnification(_:)))
 
     var image: NSImage? {
         didSet {
-            if image != nil { clearTransition() }
+            WindowSwitcherPinchDiagnostics.record("image ready=\(image != nil) outgoing=\(hasOutgoingImage) zoom=\(zoomScale)")
+            if image != nil {
+                clearTransition()
+                isAwaitingSelectedImage = false
+            }
             if image == nil { fit() }
             imageView.image = image
             floatingWindow.isHidden = image == nil
             needsLayout = true
+            if image != nil {
+                let magnification = pendingMagnification
+                let anchor = pendingMagnificationAnchor
+                clearPendingMagnification()
+                zoom(by: magnification, at: anchor)
+                focusIfPointerInside()
+            }
         }
     }
 
@@ -58,6 +75,9 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
         // empty margins. Keep it enabled while images load: missing a gesture's
         // beginning makes AppKit ignore its remaining magnification updates.
         addGestureRecognizer(magnificationGesture)
+        addTrackingArea(NSTrackingArea(rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self, userInfo: nil))
         addSubview(floatingWindow)
         floatingWindow.addSubview(imageView)
         outgoingImageView.wantsLayer = true
@@ -77,9 +97,17 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     /// Retain only pixels during the transition. All interaction reads `image`,
     /// which is cleared immediately when the selected target changes.
     func retireImage() {
+        let continuesActiveGesture = gestureGeneration != nil
+        selectionGeneration &+= 1
+        // Tab can change the selected app while the same physical pinch is
+        // still in progress. Rebind only that live gesture to the new target.
+        gestureGeneration = continuesActiveGesture ? selectionGeneration : nil
+        clearPendingMagnification()
+        isAwaitingSelectedImage = true
         // Rapid navigation keeps the last real preview, rather than clearing
         // it again for intermediate selections that have not captured an image.
         let outgoing = image ?? outgoingImageView.image
+        WindowSwitcherPinchDiagnostics.record("retire image ready=\(image != nil) outgoing=\(outgoing != nil)")
         let frame = image != nil ? displayedFrame : outgoingImageView.frame
         clearTransition()
         image = nil
@@ -97,6 +125,17 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
         outgoingImageView.contentFilters = []
         outgoingImageView.image = nil
         outgoingImageView.isHidden = true
+    }
+
+    func cancelPendingMagnification() {
+        isAwaitingSelectedImage = false
+        gestureGeneration = nil
+        clearPendingMagnification()
+    }
+
+    private func clearPendingMagnification() {
+        pendingMagnification = 1
+        pendingMagnificationAnchor = nil
     }
 
     override func refreshAppearance() {
@@ -126,7 +165,9 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
                                                   cornerWidth: 8, cornerHeight: 8, transform: nil)
     }
 
-    override var acceptsFirstResponder: Bool { image != nil }
+    // Keep the viewport eligible while a new screenshot loads. Otherwise a
+    // selection change can evict the responder between two pinch events.
+    override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var needsPanelToBecomeKey: Bool { true }
 
@@ -136,6 +177,32 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
 
     override func menu(for event: NSEvent) -> NSMenu? { contextMenu?() }
 
+    override func mouseEntered(with event: NSEvent) {
+        requestGestureFocusIfNeeded()
+        super.mouseEntered(with: event)
+    }
+
+    /// A nonactivating chooser can appear beneath an already stationary pointer,
+    /// without producing a mouse-enter event. Prepare focus before any pinch.
+    func focusIfPointerInside() {
+        guard let window, window.isVisible, !isHiddenOrHasHiddenAncestor else { return }
+        let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        WindowSwitcherPinchDiagnostics.record("pointer inside=\(bounds.contains(point)) key=\(window.isKeyWindow) active=\(NSApp.isActive) previewResponder=\(window.firstResponder === self)")
+        if bounds.contains(point) { requestGestureFocusIfNeeded() }
+    }
+
+    private func requestGestureFocusIfNeeded() {
+        // A nonactivating panel may be key while its host app is inactive.
+        // Magnification is delivered to the key window's view, so the host
+        // needs foreground ownership before the gesture begins.
+        guard let window, window.isVisible, !isHiddenOrHasHiddenAncestor,
+              (!NSApp.isActive || !window.isKeyWindow ||
+               (prefersGestureFocus && window.firstResponder !== self)),
+              magnificationGesture.state != .began, magnificationGesture.state != .changed else { return }
+        WindowSwitcherPinchDiagnostics.record("focus request key=\(window.isKeyWindow) active=\(NSApp.isActive) previewResponder=\(window.firstResponder === self)")
+        onRequestFocus?()
+    }
+
     var displayedFrame: CGRect {
         let fitted = Self.fittedFrame(imageSize: image?.size ?? .zero, in: bounds)
         let size = CGSize(width: fitted.width * zoomScale, height: fitted.height * zoomScale)
@@ -144,6 +211,7 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     }
 
     func fit() {
+        WindowSwitcherPinchDiagnostics.record("fit zoom=\(zoomScale) image=\(image != nil)")
         zoomScale = 1; panOffset = .zero; dragPoint = nil
         needsLayout = true
         setAccessibilityValue("100%")
@@ -157,6 +225,7 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
         let anchor = anchor ?? CGPoint(x: bounds.midX, y: bounds.midY)
         guard anchor.x.isFinite, anchor.y.isFinite else { return }
         let next = min(4, max(1, zoomScale * factor))
+        WindowSwitcherPinchDiagnostics.record("zoom factor=\(factor) before=\(zoomScale) after=\(next) image=\(image != nil)")
         guard next != zoomScale else { return }
         let ratio = next / zoomScale
         zoomScale = next
@@ -184,13 +253,35 @@ final class WindowSwitcherPreviewStage: WindowSwitcherAppearanceView {
     }
 
     @objc private func handleMagnification(_ gesture: NSMagnificationGestureRecognizer) {
+        // Changing foreground ownership after recognition begins can cancel
+        // the same pinch. Hover and initial pointer checks prepare focus first.
         let change = gesture.magnification
-        // Consume increments even while a screenshot is unavailable. Retiring
-        // pixels must neither cancel the gesture nor accumulate hidden zoom.
+        WindowSwitcherPinchDiagnostics.record("recognizer state=\(gesture.state.rawValue) change=\(change) image=\(image != nil) outgoing=\(hasOutgoingImage) key=\(window?.isKeyWindow == true) active=\(NSApp.isActive) zoom=\(zoomScale)")
+        // Consume increments even while a screenshot is unavailable. A pinch
+        // that begins during capture belongs only to the selected generation.
         gesture.magnification = 0
-        guard image != nil, gesture.state != .cancelled, change.isFinite, change != 0 else { return }
+        consumeMagnification(change: change, state: gesture.state, anchor: gesture.location(in: self))
+    }
+
+    func consumeMagnification(change: CGFloat, state: NSGestureRecognizer.State, anchor: CGPoint) {
+        if state == .began { gestureGeneration = selectionGeneration }
+        if state == .cancelled || state == .failed {
+            gestureGeneration = nil
+            clearPendingMagnification()
+            return
+        }
+        defer { if state == .ended { gestureGeneration = nil } }
+        guard gestureGeneration == selectionGeneration, change.isFinite, change != 0,
+              1 + change > 0, anchor.x.isFinite, anchor.y.isFinite else { return }
+        if image == nil {
+            guard isAwaitingSelectedImage else { return }
+            pendingMagnification = min(4, max(1, pendingMagnification * (1 + change)))
+            pendingMagnificationAnchor = anchor
+            WindowSwitcherPinchDiagnostics.record("pinch pending factor=\(pendingMagnification) generation=\(selectionGeneration)")
+            return
+        }
         window?.makeFirstResponder(self)
-        zoom(by: 1 + change, at: gesture.location(in: self))
+        zoom(by: 1 + change, at: anchor)
     }
 
     override func mouseDown(with event: NSEvent) {
