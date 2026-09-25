@@ -111,7 +111,7 @@ Before requesting review:
 
 - [ ] Relevant checks pass; the PR lists commands, results, and any checks that could not run.
 - [ ] UI evidence is attached when applicable, and the design follows native macOS conventions and shared components and themes.
-- [ ] User-visible changes update the README or feature guide and include an English fragment in `changes/unreleased/`.
+- [ ] Root READMEs stay concise and cover installation, requirements, and major capabilities; feature guides change only for durable instructions, important limitations, or recovery steps. Minor changes need no guide; user-visible app and plugin changes include the required English fragment in `changes/unreleased/`.
 - [ ] Manifest metadata, API compatibility, permissions, and action policies match the implementation.
 - [ ] Third-party sources and licenses are recorded; no secrets, local configuration, or unrelated generated files are included.
 

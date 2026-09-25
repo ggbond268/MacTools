@@ -106,7 +106,7 @@
 - If tests cannot be run, explicitly state the reason and suggest the local verification command in the final response.
 
 ## Documentation And Resources
-- User-visible feature changes should update `README.md`.
+- Keep the root `README.md` and `README.zh-CN.md` as concise product overviews. Update them for changes to installation, requirements, or major capabilities, and keep shared overview content aligned across languages. Update a feature guide only for durable user instructions, important limitations, or recovery steps; do not create a guide or add a README paragraph for every minor change. Record user-visible changes in concise `changes/unreleased/` fragments as required below.
 - User-visible app or plugin changes should add or update one concise English changelog fragment under `changes/unreleased/*.md`. Use `release: app` for app releases and `release: plugin` for plugin batch releases, plus `type: added`, `changed`, `fixed`, `security`, `removed`, `deprecated`, `maintenance`, or `summary`. If one change needs both release channels, write one app fragment for the host/app impact and one plugin fragment for the plugin-package impact; do not duplicate the same sentence. Keep entries user-facing, avoid duplicate wording, and do not describe implementation details. Pure refactors, tests, and local-only release mechanics do not need a fragment unless users or maintainers need to know about them.
 - Plugin directories, manifests, catalogs, or release-flow changes should update `docs/plugins/` and `CONTRIBUTING.md`.
 - Large product/interaction changes may add date-prefixed documents under `docs/superpowers/specs/` or `docs/superpowers/plans/`.

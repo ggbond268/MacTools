@@ -1593,7 +1593,7 @@ private struct SystemStatusHUDChartArea: View {
 }
 
 struct SystemStatusChartStatistics: Equatable, Sendable {
-    var usesSampleIntervals = false
+    let usesSampleIntervals: Bool
     private(set) var minimum: Double?
     private(set) var maximum: Double?
     private(set) var count = 0
@@ -1601,6 +1601,10 @@ struct SystemStatusChartStatistics: Equatable, Sendable {
     private var weight: Double = 0
     private var previousValue: Double?
     private var previousTimestamp: TimeInterval?
+
+    init(usesSampleIntervals: Bool = false) {
+        self.usesSampleIntervals = usesSampleIntervals
+    }
 
     // Gauges interpolate between valid observations. Counter rates instead use
     // their measured intervals; legacy history cannot supply missing durations.

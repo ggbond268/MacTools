@@ -32,19 +32,7 @@ Plugin shortcut settings use the same separate section headings and native cards
 
 Custom settings workspaces use adaptive system backgrounds that coordinate with native settings cards. Search fields, inset previews, and selected controls retain distinct visual roles in light and dark appearance.
 
-Settings, menu panels, widgets, and utility windows share native text roles for titles, descriptions, and numeric readouts. Compact icon widgets use short 9pt labels, and Quit Apps and Xcode cleanup use native confirmation buttons. Content fonts and user-selected Launchpad labels retain their own styles.
-
-Device Battery widgets use compact 11pt device names and percentages in list and ring layouts, with medium-weight names and monospaced digits.
-
-Storage Explorer hover details use a distinct native surface and readable item names. System Soft Restart diagnostics use clear text hierarchy.
-
-System Status settings support full-row expansion and dragging, with category icons, plain row backgrounds, visibility buttons that distinguish shown and hidden items, and insertion lines that mark the drop position. Styles and layouts use segmented controls; the first and optional second values use independent dropdowns, including duplicate choices. Common settings and the live menu bar preview remain visible above the list. Only Memory offers chart selection in Widget Panel settings, using a native segmented control for Usage and Pressure. CPU and GPU keep usage charts, disk keeps read/write rates, network keeps download/upload rates, and battery keeps charge level; these items have no extra settings disclosure. The memory choice applies to both the card and detail chart, with usage as the default. Pressure displays a percentage estimated from wired memory plus the physical memory occupied by the compressor, divided by physical memory; the detail view explains this formula. Its chart uses a fixed 0–100% scale; colors independently reflect the native Normal, Warning, and Critical levels. Older level-only history is not converted into percentages. Missing readings leave gaps in charts.
-
-Expand Processes to choose a maximum of 3 (default), 5, 10, 15, or 20 entries. Processes are grouped by application before ranking, with CPU summed at 100% per core and memory reported as physical footprint; incomplete memory totals show a dash. Visible lists refresh about every 3 seconds and stop scanning when hidden. Reopening a panel immediately shows its latest in-memory snapshot while refreshing newly requested or overdue sources; closing the panel does not expire displayed readings. Completed metric groups appear without waiting for process scans. Disabled sources and plugin shutdown clear their displayed values, and presentation-only readings are excluded from new history records. Collection follows selected menu bar values, enabled chart histories, and visible card/detail values; unused sensors stop, and no sampling loop runs when nothing needs data. Each source keeps its required cadence, so showing one menu bar metric does not accelerate unrelated background charts. History retains observed pressure peaks and collection boundaries across restarts; scalar averages weight valid elapsed time and exclude gaps. The menu bar overview uses a continuous native popover background and stable anchoring. Network readings total active physical interfaces without virtual duplicates. CPU power remains visible between slow sensor updates and expires after one minute without a new reading. See the [metric collection review](docs/reviews/2026-09-23-system-status-metrics.md) and [chart choices and sampling review](docs/reviews/2026-09-23-system-status-chart-metrics.md) for definitions, references, and performance observations.
-
-System Status card badges consistently use secondary text, including memory pressure status; chart colors retain their metric and status meanings.
-
-CPU usage and transfer-rate averages use the actual counter sampling intervals, with weighted totals preserved through history compaction. Cached display values do not add new rate samples. Older history remains visible, but readings without recorded intervals do not contribute to these averages.
+System Status settings use subtle metric row separators, aligned controls, and a two-line metric header in narrow windows to keep names and value assignments readable.
 
 <details>
 <summary>Updates and Nightly builds</summary>
@@ -110,13 +98,11 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Capture & clipboard | Annotate screenshots, use OCR and QR recognition, pin images, capture scrolling content, and record a region. Keep encrypted local clipboard history, snippets, and paste queues, with a default clipboard content limit of 30 MB per item. |
 | Windows & workspace | Switch and arrange windows, launch apps, manage Stage Manager, and customize Finder's right-click menu. |
 | Keyboard, mouse & trackpad | Remap inputs, assign gestures and app shortcuts, tune scrolling, add middle-click, and type text with Auto Input. |
-| Displays & appearance | Adjust brightness and resolution, turn individual displays off, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
+| Displays & appearance | Adjust brightness and resolution, connect Sidecar, toggle True Tone and Night Shift, hide the notch, and organize menu bar icons and the Dock. |
 | Audio & power | Control system, microphone, app, and display volume; keep the Mac awake; manage fans and charging limits; lock, sleep, or shut down. |
 | Monitoring & calendar | Follow system performance, device batteries, activity statistics, AI usage, and network status. Check your calendar and upcoming events. |
 | Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
 | Utilities & configuration | Translate selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
-
-Clipboard History can paste URL-only links copied from another device into text fields while retaining their URL format for compatible apps. Plain-text clipboard actions can also read these links.
 
 Clipboard History moves reused items to the front when you copy or paste them from the plugin, including item shortcuts and snippets. Browsing leaves the order unchanged, and sequential paste queues keep their established order. History expires after the configured period of inactivity, measured from its latest use or capture. Count and storage limits apply separately; Saved items and snippets remain available.
 
@@ -132,7 +118,7 @@ Clipboard selection and scrolling respond immediately. Rapid navigation skips tr
 
 Screenshots work on macOS 14+; region recording and per-app volume require macOS 15+. Hardware controls depend on device support. See the [feature guides](docs/README.md) for details.
 
-Screenshot selection remains available on each display after switching desktops or entering and leaving full-screen apps. Closing a selection releases its capture cursor.
+Screenshot selection remains available on each display after switching desktops or entering and leaving full-screen apps.
 
 **Take your setup with you:** export and import preferences, keep local backups, or sync supported settings through a cloud or shared folder. The app supports **11 languages** and follows your system language by default.
 
