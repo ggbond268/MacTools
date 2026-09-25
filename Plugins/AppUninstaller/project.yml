@@ -1,0 +1,16 @@
+bundle:
+  postBuildScripts:
+    - name: Copy embedded Mole engine
+      script: |
+        set -euo pipefail
+        resource_dir="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/MoleEngine"
+        rm -rf "$resource_dir"
+        ditto "$SRCROOT/Plugins/AppUninstaller/MoleEngineResources" "$resource_dir"
+        chmod 755 "$resource_dir/mactools-engine.sh"
+      basedOnDependencyAnalysis: false
+      inputFiles:
+        - "$(SRCROOT)/Plugins/AppUninstaller/MoleEngineResources/mactools-engine.sh"
+        - "$(SRCROOT)/Plugins/AppUninstaller/MoleEngineResources/REVISION"
+      outputFiles:
+        - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MoleEngine/mactools-engine.sh"
+        - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/MoleEngine/REVISION"

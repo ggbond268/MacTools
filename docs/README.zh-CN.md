@@ -14,6 +14,7 @@
 | 本地 AI Agent 集成 | [CLI 使用指南](cli/agent-usage.md) |
 | 截图、文字识别、滚动截图与录屏 | [截图](plugins/screenshot.md) |
 | 剪贴板备份与恢复 | [加密备份](plugins/clipboard-backup.md) |
+| 审阅后移除应用 | [应用卸载](plugins/app-uninstaller.md) |
 | 窗口导航与排列 | [窗口切换](plugins/window-switcher.md) · [窗口布局](plugins/window-layouts.md) |
 | 键盘、鼠标与手势映射 | [输入映射](plugins/input-remapping.md) |
 | 系统设置与配置方案 | [Mac 设置](plugins/mac-settings.md) |

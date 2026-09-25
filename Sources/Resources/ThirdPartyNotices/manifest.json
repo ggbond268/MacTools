@@ -229,6 +229,24 @@
         "Plugins/AIUsage/Resources/ClaudeLogo.svg"
       ],
       "licenseFile": "Sources/Resources/ThirdPartyNotices/cc-bar-LICENSE.txt"
+    },
+    {
+      "id": "mole",
+      "name": "Mole",
+      "repository": "https://github.com/tw93/mole",
+      "revision": "d7b8179e6036f986d022c90eb14eba3da414912e",
+      "license": "GPL-3.0-only",
+      "gpl3Compatibility": "compatible",
+      "relationship": "adapted",
+      "products": [
+        "plugin:app-uninstaller"
+      ],
+      "paths": [
+        "Plugins/AppUninstaller/MoleEngineResources",
+        "Plugins/AppUninstaller/Sources/AppUninstallerMoleEngine.swift",
+        "Plugins/AppUninstaller/Sources/AppUninstallerMoleReviewService.swift"
+      ],
+      "licenseFile": "Plugins/AppUninstaller/MoleEngineResources/LICENSE"
     }
   ]
 }

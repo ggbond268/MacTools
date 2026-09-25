@@ -1776,6 +1776,7 @@ verify_code_session() {
         -only-testing:MacToolsTests/DockLockPluginTests \
         -only-testing:MacToolsTests/EjectDiskPluginTests \
         -only-testing:MacToolsTests/EmptyTrashPluginTests \
+        -only-testing:MacToolsTests/AppUninstallerPluginTests \
         -only-testing:MacToolsTests/FanControlPluginTests \
         -only-testing:MacToolsTests/FixDamagedAppPluginTests \
         -only-testing:MacToolsTests/HideNotchPluginTests \

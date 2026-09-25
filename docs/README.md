@@ -14,6 +14,7 @@ Start with the [English README](../README.md) or [Chinese README](../README.zh-C
 | Local AI-agent integration | [CLI agent usage](cli/agent-usage.md) |
 | Screenshots, OCR, scrolling capture, and recording | [Screenshot](plugins/screenshot.md) |
 | Clipboard backup and restore | [Encrypted clipboard backup](plugins/clipboard-backup.md) |
+| Reviewed application removal | [App Uninstaller](plugins/app-uninstaller.md) |
 | Window navigation and arrangement | [Window Switcher](plugins/window-switcher.md) · [Window Layouts](plugins/window-layouts.md) |
 | Keyboard, mouse, and gesture mappings | [Input remapping](plugins/input-remapping.md) |
 | macOS settings and reusable profiles | [Mac Settings](plugins/mac-settings.md) |

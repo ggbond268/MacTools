@@ -73,6 +73,10 @@ Follow the [plugin development standards](docs/plugins/development-guidelines.md
 
 Shared filesystem metadata code lives in `Sources/MacToolsFileSystem`. Disk Clean and Storage Explorer link this static module into their bundles; their core targets use it as a build dependency. Keep cleanup policy in the owning plugin and run both plugins' filesystem tests after changing the shared parser.
 
+## App Uninstaller safety
+
+App Uninstaller association rules and Trash execution require adjacent fixture tests and independent safety review. Keep ownership confidence separate from data sensitivity, preserve incomplete coverage, and never add a permanent-delete fallback. See [the implementation and provenance notes](docs/plugins/app-uninstaller.md).
+
 ## Validation
 
 Keep a compact suite covering the main user flow and consequential boundaries such as data loss, permission checks, cancellation, or compatibility. Reuse existing coverage across layers. A past bug alone does not require a permanent test; omit unlikely combinations in settled code unless their recurrence would have a significant impact. See the [core test scope](docs/testing/core-tests.md).
