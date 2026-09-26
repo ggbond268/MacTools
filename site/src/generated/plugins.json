@@ -630,6 +630,424 @@
     {
       "capabilities": {
         "panelItems": [
+          "row"
+        ],
+        "settings": "form"
+      },
+      "category": "productivity",
+      "displayName": "AI 助手",
+      "id": "ai-assistant",
+      "localizedMetadata": {
+        "ar": {
+          "displayName": "مساعد الذكاء الاصطناعي",
+          "summary": "عالج النص المحدد بالذكاء الاصطناعي: ترجمة وتلخيص وتحسين وغير ذلك."
+        },
+        "de": {
+          "displayName": "KI-Assistent",
+          "summary": "Verarbeite ausgewählten Text mit KI: Übersetzen, Zusammenfassen, Überarbeiten und mehr."
+        },
+        "en": {
+          "displayName": "AI Assistant",
+          "summary": "Process selected text with AI: translate, summarize, polish, and more."
+        },
+        "es": {
+          "displayName": "Asistente de IA",
+          "summary": "Procesa el texto seleccionado con IA: traducir, resumir, pulir y más."
+        },
+        "fr": {
+          "displayName": "Assistant IA",
+          "summary": "Traite le texte sélectionné avec l’IA : traduire, résumer, affiner, etc."
+        },
+        "ja": {
+          "displayName": "AIアシスタント",
+          "summary": "選択したテキストをAIで処理：翻訳、要約、推敲など。"
+        },
+        "ko": {
+          "displayName": "AI 어시스턴트",
+          "summary": "선택한 텍스트를 AI로 처리: 번역, 요약, 다듬기 등."
+        },
+        "pt": {
+          "displayName": "Assistente de IA",
+          "summary": "Processa o texto selecionado com IA: traduzir, resumir, refinar e mais."
+        },
+        "ru": {
+          "displayName": "ИИ-ассистент",
+          "summary": "Обрабатывайте выделенный текст с помощью ИИ: перевод, резюме, стилистика и другое."
+        },
+        "zh-Hans": {
+          "displayName": "AI 助手",
+          "summary": "划词调用 AI 翻译、总结、润色等"
+        },
+        "zh-Hant": {
+          "displayName": "AI 助手",
+          "summary": "透過快速鍵呼叫 AI 翻譯、摘要、潤飾等"
+        }
+      },
+      "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/ai-assistant",
+      "product": {
+        "actions": {
+          "providers": [
+            {
+              "dynamicTemplates": [],
+              "id": "ai-assistant",
+              "kind": "static",
+              "staticActions": [
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "يعالج النص المحدد الحالي باستخدام «ترجمة».",
+                    "de": "Verarbeitet die aktuelle Auswahl mit „Übersetzen“.",
+                    "en": "Process the current selection with \"Translate\".",
+                    "es": "Procesa la selección actual con «Traducir».",
+                    "fr": "Traite la sélection actuelle avec « Traduire ».",
+                    "ja": "「翻訳」で選択中のテキストを処理します。",
+                    "ko": "「번역」으로 선택한 텍스트를 처리합니다.",
+                    "pt": "Processa a seleção atual com «Traduzir».",
+                    "ru": "Обрабатывает выделенный текст с помощью «Перевести».",
+                    "zh-Hans": "用「翻译」处理当前选中文本。",
+                    "zh-Hant": "用「翻譯」處理目前選取的文字。"
+                  },
+                  "externalInvocation": "allowed",
+                  "id": "translate",
+                  "keywords": [
+                    "AI 助手",
+                    "翻译",
+                    "划词翻译",
+                    "translate",
+                    "translation"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "accessibility",
+                    "automation"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "run-link",
+                    "workflow",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "sparkles",
+                  "title": {
+                    "ar": "ترجمة",
+                    "de": "Übersetzen",
+                    "en": "Translate",
+                    "es": "Traducir",
+                    "fr": "Traduire",
+                    "ja": "翻訳",
+                    "ko": "번역",
+                    "pt": "Traduzir",
+                    "ru": "Перевести",
+                    "zh-Hans": "翻译",
+                    "zh-Hant": "翻譯"
+                  }
+                },
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "يعالج النص المحدد الحالي باستخدام «تلخيص».",
+                    "de": "Verarbeitet die aktuelle Auswahl mit „Zusammenfassen“.",
+                    "en": "Process the current selection with \"Summarize\".",
+                    "es": "Procesa la selección actual con «Resumir».",
+                    "fr": "Traite la sélection actuelle avec « Résumer ».",
+                    "ja": "「要約」で選択中のテキストを処理します。",
+                    "ko": "「요약」으로 선택한 텍스트를 처리합니다.",
+                    "pt": "Processa a seleção atual com «Resumir».",
+                    "ru": "Обрабатывает выделенный текст с помощью «Резюме».",
+                    "zh-Hans": "用「总结」处理当前选中文本。",
+                    "zh-Hant": "用「摘要」處理目前選取的文字。"
+                  },
+                  "externalInvocation": "allowed",
+                  "id": "summarize",
+                  "keywords": [
+                    "AI 助手",
+                    "总结",
+                    "摘要",
+                    "summarize",
+                    "summary"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "accessibility",
+                    "automation"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "run-link",
+                    "workflow",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "sparkles",
+                  "title": {
+                    "ar": "تلخيص",
+                    "de": "Zusammenfassen",
+                    "en": "Summarize",
+                    "es": "Resumir",
+                    "fr": "Résumer",
+                    "ja": "要約",
+                    "ko": "요약",
+                    "pt": "Resumir",
+                    "ru": "Резюме",
+                    "zh-Hans": "总结",
+                    "zh-Hant": "摘要"
+                  }
+                },
+                {
+                  "automaticEligible": false,
+                  "description": {
+                    "ar": "يعالج النص المحدد الحالي باستخدام «تحسين الصياغة».",
+                    "de": "Verarbeitet die aktuelle Auswahl mit „Überarbeiten“.",
+                    "en": "Process the current selection with \"Polish\".",
+                    "es": "Procesa la selección actual con «Pulir».",
+                    "fr": "Traite la sélection actuelle avec « Affiner ».",
+                    "ja": "「推敲」で選択中のテキストを処理します。",
+                    "ko": "「다듬기」로 선택한 텍스트를 처리합니다.",
+                    "pt": "Processa a seleção atual com «Refinar».",
+                    "ru": "Обрабатывает выделенный текст с помощью «Отполировать».",
+                    "zh-Hans": "用「润色」处理当前选中文本。",
+                    "zh-Hant": "用「潤飾」處理目前選取的文字。"
+                  },
+                  "externalInvocation": "allowed",
+                  "id": "polish",
+                  "keywords": [
+                    "AI 助手",
+                    "润色",
+                    "改写",
+                    "polish",
+                    "refine"
+                  ],
+                  "parameters": [],
+                  "permissionIDs": [
+                    "accessibility",
+                    "automation"
+                  ],
+                  "risk": "safe",
+                  "surfaces": [
+                    "unified-search",
+                    "global-shortcut",
+                    "run-link",
+                    "workflow",
+                    "action-grid",
+                    "trackpad-gesture",
+                    "manual"
+                  ],
+                  "systemImage": "sparkles",
+                  "title": {
+                    "ar": "تحسين الصياغة",
+                    "de": "Überarbeiten",
+                    "en": "Polish",
+                    "es": "Pulir",
+                    "fr": "Affiner",
+                    "ja": "推敲",
+                    "ko": "다듬기",
+                    "pt": "Refinar",
+                    "ru": "Отполировать",
+                    "zh-Hans": "润色",
+                    "zh-Hant": "潤飾"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "discovery": {
+          "alternativePluginIDs": [],
+          "goalCategories": [
+            "productivity"
+          ],
+          "keywords": [
+            "ai",
+            "assistant",
+            "productivity",
+            "translate",
+            "summarize",
+            "polish"
+          ],
+          "localizedSynonyms": {
+            "ar": [
+              "مساعد الذكاء الاصطناعي"
+            ],
+            "de": [
+              "KI-Assistent"
+            ],
+            "en": [
+              "AI Assistant"
+            ],
+            "es": [
+              "Asistente de IA"
+            ],
+            "fr": [
+              "Assistant IA"
+            ],
+            "ja": [
+              "AIアシスタント"
+            ],
+            "ko": [
+              "AI 어시스턴트"
+            ],
+            "pt": [
+              "Assistente de IA"
+            ],
+            "ru": [
+              "ИИ-ассистент"
+            ],
+            "zh-Hans": [
+              "AI 助手"
+            ],
+            "zh-Hant": [
+              "AI 助手"
+            ]
+          },
+          "relatedPluginIDs": [],
+          "useCases": [
+            {
+              "id": "primary-use",
+              "title": {
+                "ar": "مساعد الذكاء الاصطناعي",
+                "de": "KI-Assistent",
+                "en": "AI Assistant",
+                "es": "Asistente de IA",
+                "fr": "Assistant IA",
+                "ja": "AIアシスタント",
+                "ko": "AI 어시스턴트",
+                "pt": "Assistente de IA",
+                "ru": "ИИ-ассистент",
+                "zh-Hans": "AI 助手",
+                "zh-Hant": "AI 助手"
+              }
+            }
+          ]
+        },
+        "presentation": {
+          "documentationURL": "https://github.com/ggbond268/MacTools#plugins-and-settings",
+          "examples": [
+            {
+              "id": "primary-use",
+              "text": {
+                "ar": "عالج النص المحدد بالذكاء الاصطناعي: ترجمة وتلخيص وتحسين وغير ذلك.",
+                "de": "Verarbeite ausgewählten Text mit KI: Übersetzen, Zusammenfassen, Überarbeiten und mehr.",
+                "en": "Process selected text with AI: translate, summarize, polish, and more.",
+                "es": "Procesa el texto seleccionado con IA: traducir, resumir, pulir y más.",
+                "fr": "Traite le texte sélectionné avec l’IA : traduire, résumer, affiner, etc.",
+                "ja": "選択したテキストをAIで処理：翻訳、要約、推敲など。",
+                "ko": "선택한 텍스트를 AI로 처리: 번역, 요약, 다듬기 등.",
+                "pt": "Processa o texto selecionado com IA: traduzir, resumir, refinar e mais.",
+                "ru": "Обрабатывайте выделенный текст с помощью ИИ: перевод, резюме, стилистика и другое.",
+                "zh-Hans": "划词调用 AI 翻译、总结、润色等",
+                "zh-Hant": "透過快速鍵呼叫 AI 翻譯、摘要、潤飾等"
+              }
+            }
+          ],
+          "license": "GPL-3.0-only",
+          "longDescription": {
+            "ar": "عالج النص المحدد بالذكاء الاصطناعي: ترجمة وتلخيص وتحسين وغير ذلك.",
+            "de": "Verarbeite ausgewählten Text mit KI: Übersetzen, Zusammenfassen, Überarbeiten und mehr.",
+            "en": "Process selected text with AI: translate, summarize, polish, and more.",
+            "es": "Procesa el texto seleccionado con IA: traducir, resumir, pulir y más.",
+            "fr": "Traite le texte sélectionné avec l’IA : traduire, résumer, affiner, etc.",
+            "ja": "選択したテキストをAIで処理：翻訳、要約、推敲など。",
+            "ko": "선택한 텍스트를 AI로 처리: 번역, 요약, 다듬기 등.",
+            "pt": "Processa o texto selecionado com IA: traduzir, resumir, refinar e mais.",
+            "ru": "Обрабатывайте выделенный текст с помощью ИИ: перевод, резюме, стилистика и другое.",
+            "zh-Hans": "划词调用 AI 翻译、总结、润色等",
+            "zh-Hant": "透過快速鍵呼叫 AI 翻譯、摘要、潤飾等"
+          },
+          "publisher": "MacTools",
+          "screenshots": [],
+          "supportURL": "https://github.com/ggbond268/MacTools/issues"
+        },
+        "privacy": {
+          "allowsUserConfiguredDomains": true,
+          "dataObserved": [
+            "selected-text",
+            "ai-requests"
+          ],
+          "dataPersisted": [
+            "plugin-configuration"
+          ],
+          "diagnosticExportsContainUserData": false,
+          "networkDomains": [],
+          "networkUse": "required",
+          "processesSensitiveUserContent": true,
+          "retention": {
+            "policy": "user-controlled"
+          },
+          "telemetry": "none"
+        },
+        "relationships": {
+          "includedPackIDs": [],
+          "relatedPluginIDs": [],
+          "suggestedRecipeIDs": [],
+          "supersedesPluginIDs": []
+        },
+        "requirements": {
+          "applications": [],
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "executables": [],
+          "hardware": [],
+          "minimumMacOSVersion": "14.0",
+          "permissionIDs": [
+            "accessibility",
+            "automation"
+          ],
+          "requiresRelaunch": false,
+          "setupComplexity": "guided"
+        },
+        "setup": {
+          "optionalSurfaces": [],
+          "steps": [
+            {
+              "description": {
+                "ar": "قبل استخدام هذه الإضافة، راجع المتطلبات التالية واستوفها: إذن تسهيلات الاستخدام، إذن الأتمتة.",
+                "de": "Prüfe und erfülle vor der Verwendung dieses Plugins folgende Anforderungen: Bedienungshilfen-Berechtigung, Automation-Berechtigung.",
+                "en": "Before using this plugin, review and satisfy these requirements: Accessibility permission, Automation permission.",
+                "es": "Antes de usar este plugin, revisa y cumple estos requisitos: permiso de Accesibilidad, permiso de Automatización.",
+                "fr": "Avant d’utiliser ce module, vérifiez et remplissez les conditions suivantes : autorisation Accessibilité, autorisation Automatisation.",
+                "ja": "このプラグインを使用する前に、次の要件を確認して満たしてください：アクセシビリティ権限、オートメーション権限。",
+                "ko": "이 플러그인을 사용하기 전에 다음 요구 사항을 확인하고 충족하세요: 손쉬운 사용 권한, 자동화 권한.",
+                "pt": "Antes de usar este plugin, revise e cumpra estes requisitos: permissão de Acessibilidade, permissão de Automação.",
+                "ru": "Перед использованием плагина проверьте и выполните следующие требования: доступ к Универсальному доступу, доступ к Автоматизации.",
+                "zh-Hans": "使用此插件前，请检查并满足以下要求：辅助功能权限、自动化权限。",
+                "zh-Hant": "使用此外掛程式前，請檢查並滿足以下要求：輔助使用權限、自動化權限。"
+              },
+              "id": "review-requirements",
+              "title": {
+                "ar": "إعداد مساعد الذكاء الاصطناعي",
+                "de": "KI-Assistent einrichten",
+                "en": "Set Up AI Assistant",
+                "es": "Configurar Asistente de IA",
+                "fr": "Configurer Assistant IA",
+                "ja": "AIアシスタントを設定",
+                "ko": "AI 어시스턴트 설정",
+                "pt": "Configurar Assistente de IA",
+                "ru": "Настройка «ИИ-ассистент»",
+                "zh-Hans": "设置AI 助手",
+                "zh-Hant": "設定AI 助手"
+              }
+            }
+          ]
+        }
+      },
+      "releaseChannel": null,
+      "releaseNotesURL": null,
+      "route": "/plugins/ai-assistant/",
+      "summary": "划词调用 AI 翻译、总结、润色等",
+      "version": "0.1.0"
+    },
+    {
+      "capabilities": {
+        "panelItems": [
           "widget"
         ],
         "settings": "form"

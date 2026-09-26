@@ -1,0 +1,230 @@
+import Foundation
+import MacToolsPluginKit
+
+struct OpenAICompatibleConfiguration: Equatable, Sendable {
+    static let defaultBaseURL = "https://api.deepseek.com/v1"
+    static let defaultModel = "deepseek-flash"
+    static let defaultTemperature = 0.7
+
+    var baseURL: String
+    var model: String
+    var temperature: Double
+    /// Optional request-side flag for reasoning models (DeepSeek / Qwen style).
+    /// When nil, the field is omitted from the request body.
+    var reasoningRequested: Bool?
+
+    var normalizedBaseURL: String {
+        baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedModel: String {
+        model.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    init(
+        baseURL: String = Self.defaultBaseURL,
+        model: String = Self.defaultModel,
+        temperature: Double = Self.defaultTemperature,
+        reasoningRequested: Bool? = nil
+    ) {
+        self.baseURL = baseURL
+        self.model = model
+        self.temperature = temperature
+        self.reasoningRequested = reasoningRequested
+    }
+
+    var validationError: OpenAICompatibleConfigurationError? {
+        if normalizedBaseURL.isEmpty {
+            return .blankBaseURL
+        }
+
+        guard let components = URLComponents(string: normalizedBaseURL),
+              let host = components.host,
+              !host.isEmpty,
+              Self.isAllowedScheme(components.scheme, host: host)
+        else {
+            return .invalidBaseURL
+        }
+
+        if normalizedModel.isEmpty {
+            return .blankModel
+        }
+
+        return nil
+    }
+
+    func endpointURL() throws -> URL {
+        if let validationError {
+            throw validationError
+        }
+
+        guard var components = URLComponents(string: normalizedBaseURL),
+              let host = components.host,
+              !host.isEmpty,
+              Self.isAllowedScheme(components.scheme, host: host)
+        else {
+            throw OpenAICompatibleConfigurationError.invalidBaseURL
+        }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let pathComponents = basePath.isEmpty ? [] : basePath.split(separator: "/").map(String.init)
+        let lowercasedPathComponents = pathComponents.map { $0.lowercased() }
+        let completionPathComponents: [String]
+
+        if Array(lowercasedPathComponents.suffix(2)) == ["chat", "completions"] {
+            completionPathComponents = pathComponents
+        } else if pathComponents.isEmpty {
+            // Use the standard /v1/chat/completions path for an origin without a path.
+            completionPathComponents = ["v1", "chat", "completions"]
+        } else {
+            // Append /chat/completions to a user-supplied base path.
+            completionPathComponents = pathComponents + ["chat", "completions"]
+        }
+
+        components.path = "/" + completionPathComponents.joined(separator: "/")
+
+        guard let url = components.url else {
+            throw OpenAICompatibleConfigurationError.invalidBaseURL
+        }
+
+        return url
+    }
+
+    /// Builds the `GET /models` endpoint from the same base URL.
+    /// Appends `/models` to the base URL, replacing a trailing `chat/completions` if present.
+    func modelsEndpointURL() throws -> URL {
+        if let validationError {
+            throw validationError
+        }
+
+        guard var components = URLComponents(string: normalizedBaseURL),
+              let host = components.host,
+              !host.isEmpty,
+              Self.isAllowedScheme(components.scheme, host: host)
+        else {
+            throw OpenAICompatibleConfigurationError.invalidBaseURL
+        }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let pathComponents = basePath.isEmpty ? [] : basePath.split(separator: "/").map(String.init)
+        let lowercasedPathComponents = pathComponents.map { $0.lowercased() }
+        let modelsPathComponents: [String]
+
+        if Array(lowercasedPathComponents.suffix(2)) == ["chat", "completions"] {
+            modelsPathComponents = Array(pathComponents.dropLast(2)) + ["models"]
+        } else if lowercasedPathComponents.last == "models" {
+            modelsPathComponents = pathComponents
+        } else if pathComponents.isEmpty {
+            // Use the standard /v1/models path for an origin without a path.
+            modelsPathComponents = ["v1", "models"]
+        } else {
+            // Append /models to a user-supplied base path.
+            modelsPathComponents = pathComponents + ["models"]
+        }
+
+        components.path = "/" + modelsPathComponents.joined(separator: "/")
+
+        guard let url = components.url else {
+            throw OpenAICompatibleConfigurationError.invalidBaseURL
+        }
+
+        return url
+    }
+
+    private static func isAllowedScheme(_ scheme: String?, host: String) -> Bool {
+        guard let scheme = scheme?.lowercased() else {
+            return false
+        }
+
+        if scheme == "https" {
+            return true
+        }
+
+        return scheme == "http" && isTrustedHTTPHost(host)
+    }
+
+    /// HTTP is only allowed for loopback and private (RFC 1918) hosts so that
+    /// local gateways and intranet endpoints can be used without forcing TLS,
+    /// while public plaintext HTTP remains blocked.
+    private static func isTrustedHTTPHost(_ host: String) -> Bool {
+        let normalizedHost = host
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+            .lowercased()
+
+        if normalizedHost == "localhost"
+            || normalizedHost == "127.0.0.1"
+            || normalizedHost == "::1" {
+            return true
+        }
+
+        return isPrivateIPv4Host(normalizedHost)
+    }
+
+    private static func isPrivateIPv4Host(_ host: String) -> Bool {
+        // Strict dotted-quad parsing: every dot-separated part must be a
+        // complete decimal octet. Nothing is discarded, so mixed hosts such
+        // as "10.0.0.1.example.com" or "10.0.0.1.evil" fail outright instead
+        // of passing with their numeric prefix.
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else {
+            return false
+        }
+
+        var octets: [UInt8] = []
+        octets.reserveCapacity(4)
+        for part in parts {
+            guard let octet = Self.decimalOctet(part) else {
+                return false
+            }
+            octets.append(octet)
+        }
+
+        // 10.0.0.0/8
+        if octets[0] == 10 {
+            return true
+        }
+        // 172.16.0.0/12
+        if octets[0] == 172, octets[1] >= 16, octets[1] <= 31 {
+            return true
+        }
+        // 192.168.0.0/16
+        if octets[0] == 192, octets[1] == 168 {
+            return true
+        }
+        return false
+    }
+
+    /// Parses one canonical decimal octet: one to three ASCII digits with no
+    /// leading zeros and a value that fits in a byte.
+    private static func decimalOctet(_ part: Substring) -> UInt8? {
+        guard (1...3).contains(part.count),
+              part.utf8.allSatisfy({ (0x30...0x39).contains($0) }),
+              !(part.count > 1 && part.hasPrefix("0")) else {
+            return nil
+        }
+        return UInt8(part)
+    }
+}
+
+enum OpenAICompatibleConfigurationError: Error, Equatable, Sendable {
+    case blankBaseURL
+    case invalidBaseURL
+    case blankModel
+}
+
+extension OpenAICompatibleConfigurationError: LocalizedError {
+    var errorDescription: String? {
+        errorDescription()
+    }
+
+    func errorDescription(localization: PluginLocalization = PluginLocalization(bundle: .main)) -> String {
+        switch self {
+        case .blankBaseURL:
+            return localization.string("openAIConfiguration.error.blankBaseURL", defaultValue: "Base URL 不能为空。")
+        case .invalidBaseURL:
+            return localization.string("openAIConfiguration.error.invalidBaseURL", defaultValue: "Base URL 无效。")
+        case .blankModel:
+            return localization.string("openAIConfiguration.error.blankModel", defaultValue: "模型不能为空。")
+        }
+    }
+}

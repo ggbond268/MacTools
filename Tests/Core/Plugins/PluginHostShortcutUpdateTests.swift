@@ -1,10 +1,57 @@
 import Combine
 import MacToolsPluginKit
 import XCTest
+@testable import AIAssistantPlugin
 @testable import MacTools
 
 @MainActor
 final class PluginHostShortcutUpdateTests: XCTestCase {
+    func testAIAssistantSwitchesReleaseAndRestoreGlobalRegistrations() async {
+        let storage = AIAssistantInMemoryPluginStorage()
+        let plugin = AIAssistantPlugin(context: PluginRuntimeContext(
+            pluginID: "ai-assistant", storage: storage
+        ))
+        let registrar = FakeCarbonHotKeyRegistrar()
+        let manager = GlobalShortcutManager(registrar: registrar)
+        let host = makePluginHostForTests(plugins: [plugin], globalShortcutManager: manager)
+        let shortcutIDs = Set(plugin.shortcutDefinitions.map { "ai-assistant.shortcut.\($0.id)" })
+        func registeredIDs() -> Set<String> {
+            Set(manager.registrationStatuses.keys).intersection(shortcutIDs)
+        }
+        XCTAssertEqual(registeredIDs(), shortcutIDs)
+
+        var prompts = AIAssistantPromptStore(storage: storage).loadPrompts()
+        prompts[1].isEnabled = false
+        XCTAssertNil(plugin.savePromptsConfiguration(prompts))
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertEqual(registeredIDs().count, 2)
+        XCTAssertFalse(registeredIDs().contains("ai-assistant.shortcut.ai-assistant.prompt.summarize"))
+
+        plugin.handleAction(.setSwitch(false))
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertTrue(registeredIDs().isEmpty)
+        XCTAssertEqual(plugin.shortcutDefinitions.count, 3)
+        let custom = ShortcutBinding(keyCode: 18, modifiers: [.control, .option, .command])
+        let summaryID = "ai-assistant.shortcut.ai-assistant.prompt.summarize"
+        XCTAssertNil(host.setShortcutBindingAndReturnError(custom, for: summaryID))
+        XCTAssertEqual(plugin.shortcutBindingResolver?("ai-assistant.prompt.summarize"), custom)
+        XCTAssertFalse(registrar.registeredBindings.contains(custom))
+
+        plugin.handleAction(.setSwitch(true))
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertEqual(registeredIDs().count, 2)
+        XCTAssertFalse(registrar.registeredBindings.contains(custom))
+        host.clearShortcut(for: summaryID)
+        XCTAssertNil(plugin.shortcutBindingResolver?("ai-assistant.prompt.summarize"))
+        XCTAssertNil(host.setShortcutBindingAndReturnError(custom, for: summaryID))
+
+        prompts[1].isEnabled = true
+        XCTAssertNil(plugin.savePromptsConfiguration(prompts))
+        await host.waitForScheduledPluginStateRebuildForTests()
+        XCTAssertEqual(registeredIDs(), shortcutIDs)
+        XCTAssertTrue(registrar.registeredBindings.contains(custom))
+    }
+
     func testCombinedUpdateProjectsAvailabilityOnceAndReusesShortcutDefinitions() async {
         let plugin = AvailabilityShortcutPlugin()
         let host = makePluginHostForTests(plugins: [plugin])

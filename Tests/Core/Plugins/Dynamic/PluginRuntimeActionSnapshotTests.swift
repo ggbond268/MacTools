@@ -4,6 +4,7 @@ import XCTest
 import MacToolsPluginKit
 import ActionGridPlugin
 import ActivityBarPlugin
+import AIAssistantPlugin
 import AppHotkeyPlugin
 import AppVolumePlugin
 import AppearancePlugin
@@ -294,6 +295,7 @@ final class PluginRuntimeActionSnapshotTests: XCTestCase {
     private static let registrations: [Registration] = [
         .init(pluginID: "action-grid", makeProvider: ActionGridPluginFactory.makeProvider),
         .init(pluginID: "activity-bar", makeProvider: ActivityBarPluginFactory.makeProvider),
+        .init(pluginID: "ai-assistant", makeProvider: AIAssistantPluginFactory.makeProvider),
         .init(pluginID: "app-hotkey", makeProvider: AppHotkeyPluginFactory.makeProvider),
         .init(pluginID: "app-volume", makeProvider: AppVolumePluginFactory.makeProvider),
         .init(pluginID: "appearance", makeProvider: AppearancePluginFactory.makeProvider),
