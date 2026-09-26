@@ -371,6 +371,23 @@ final class GeneralClipboardPasteboard: ClipboardPasteboardAccess {
                 }
                 wroteRepresentation = wroteRepresentation || succeeded
             }
+            if !storedItem.representations.contains(where: {
+                $0.typeIdentifier == ClipboardRepresentationType.plainText
+            }),
+               !storedItem.representations.contains(where: {
+                   $0.typeIdentifier == ClipboardRepresentationType.fileURL
+               }),
+               let urlRepresentation = storedItem.representations.first(where: {
+                   $0.typeIdentifier == ClipboardRepresentationType.url
+               }),
+               let urlText = String(data: urlRepresentation.data, encoding: .utf8),
+               !urlText.isEmpty,
+               let url = URL(string: urlText),
+               !url.isFileURL {
+                // Some text editors require a string flavor for URL-only clips.
+                wroteRepresentation = destinationItem.setString(urlText, forType: .string)
+                    || wroteRepresentation
+            }
             return wroteRepresentation ? destinationItem : nil
         }
         guard !destinationObjects.isEmpty else { return false }

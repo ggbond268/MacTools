@@ -10,16 +10,12 @@ private enum SystemStatusHUDLayout {
     static let metricTileHeight: CGFloat = SystemStatusComponentLayout.dashboardMetricTileHeight
     static let metricInternalSpacing: CGFloat = 2
     static let metricTitleHeight: CGFloat = 18
-    static let metricValueHeight: CGFloat = 16
+    static let metricValueHeight: CGFloat = 22
     static let metricVisualHeight: CGFloat = 18
-    static let metricFootnoteHeight: CGFloat = 10
+    static let metricFootnoteHeight: CGFloat = 14
     static let metricCardPadding: CGFloat = 6
-    static let lowerTileHeight: CGFloat = SystemStatusComponentLayout.dashboardLowerTileHeight
-    static let processRowHeight: CGFloat = 17
-    static let processListSpacing: CGFloat = metricInternalSpacing
-    static let processLimit = 3
-    static let processListHeight = CGFloat(processLimit) * processRowHeight
-        + CGFloat(max(processLimit - 1, 0)) * processListSpacing
+    static let processRowHeight = SystemStatusComponentLayout.processRowHeight
+    static let processListSpacing = SystemStatusComponentLayout.processRowSpacing
     static let chartDisplayInterval: TimeInterval = 30 * 60
     static let chartSampleLimit = 120
 }
@@ -27,12 +23,17 @@ private enum SystemStatusHUDLayout {
 struct SystemStatusHUDChartSample: Equatable, Sendable {
     let timestamp: TimeInterval
     let value: Double
+    var isAvailable = true
+    var startsNewSegment = false
+    var pressure: SystemStatusMemoryPressure? = nil
 }
 
 struct SystemStatusHUDRateChartSample: Equatable, Sendable {
     let timestamp: TimeInterval
     let firstValue: Double
     let secondValue: Double
+    var isAvailable = true
+    var startsNewSegment = false
 }
 
 enum SystemStatusHUDSingleLineChart {
@@ -52,7 +53,12 @@ enum SystemStatusHUDSingleLineChart {
 
         let stride = Double(samples.count - 1) / Double(limit - 1)
         return (0..<limit).map { index in
-            samples[Int((Double(index) * stride).rounded())]
+            if index == 0 { return samples[0] }
+            if index == limit - 1 { return samples[samples.count - 1] }
+            let start = 1 + (index - 1) * (samples.count - 2) / (limit - 2)
+            let end = 1 + index * (samples.count - 2) / (limit - 2)
+            if let gap = samples[start..<end].first(where: { !$0.isAvailable || $0.startsNewSegment }) { return gap }
+            return samples[Int((Double(index) * stride).rounded())]
         }
     }
 }
@@ -88,6 +94,8 @@ struct SystemStatusDashboardView: View {
     let snapshot: SystemStatusSnapshot
     let visibleKinds: [SystemStatusMetricKind]
     let processSort: SystemStatusProcessSort
+    let processLimit: SystemStatusProcessLimit
+    var configuration = SystemStatusConfiguration.default
     let onProcessSortChange: (SystemStatusProcessSort) -> Void
     let localization: PluginLocalization
     let onMetricDetail: (SystemStatusMetricKind) -> Void
@@ -118,7 +126,7 @@ struct SystemStatusDashboardView: View {
         }
         .padding(SystemStatusHUDLayout.outerPadding)
         .frame(
-            height: SystemStatusComponentLayout.contentHeight(for: visibleKinds),
+            height: SystemStatusComponentLayout.contentHeight(for: visibleKinds, processLimit: processLimit),
             alignment: .topLeading
         )
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -193,7 +201,7 @@ struct SystemStatusDashboardView: View {
                 .foregroundStyle(theme.text.secondary)
 
             Text(localization.string("component.empty.title", defaultValue: "未选择显示内容"))
-                .font(SystemStatusHUDFont.sans(11, .semibold))
+                .font(PluginTypography.detail.font.weight(.semibold))
                 .foregroundStyle(theme.text.secondary)
         }
         .frame(maxWidth: .infinity, minHeight: SystemStatusComponentLayout.emptyContentHeight)
@@ -201,62 +209,51 @@ struct SystemStatusDashboardView: View {
     }
 
     private func cpuTile(history: [SystemStatusHistoryPoint]) -> some View {
-        let value = percentParts(snapshot.cpu.usage)
-        let samples = percentHistory(\.cpuUsage, fallback: snapshot.cpu.usage, history: history)
-        return SystemStatusHUDValueTile(
-            eyebrow: "CPU",
-            glyph: "cpu",
-            accent: theme.dataSeries.tertiary,
-            chartColor: theme.dataSeries.tertiary,
-            value: value.value,
-            unit: value.unit,
-            chip: temperatureChip(snapshot.cpu.temperatureCelsius),
-            samples: samples,
-            valueFormatter: { "\(Int($0.rounded()))%" },
-            rangeLabel: chartRangeLabel,
-            chartStyle: .bars,
-            footnote: cpuFootnote
-        )
+        scalarTile(.cpu, history: history, accent: theme.dataSeries.tertiary,
+            chip: temperatureChip(snapshot.cpu.temperatureCelsius), footnote: cpuFootnote)
     }
 
     private func gpuTile(history: [SystemStatusHistoryPoint]) -> some View {
-        let value = snapshot.gpu.isAvailable
-            ? percentParts(snapshot.gpu.usage)
-            : (value: "—", unit: "")
-        let samples = percentHistory(\.gpuUsage, fallback: snapshot.gpu.usage, history: history)
-        return SystemStatusHUDValueTile(
-            eyebrow: "GPU",
-            glyph: "cpu.fill",
-            accent: theme.dataSeries.secondary,
-            chartColor: theme.dataSeries.secondary,
-            value: value.value,
-            unit: value.unit,
-            chip: temperatureChip(snapshot.gpu.temperatureCelsius),
-            samples: samples,
-            valueFormatter: { "\(Int($0.rounded()))%" },
-            rangeLabel: chartRangeLabel,
-            chartStyle: .bars,
-            footnote: gpuFootnote
-        )
+        scalarTile(.gpu, history: history, accent: theme.dataSeries.secondary,
+            chip: temperatureChip(snapshot.gpu.temperatureCelsius), footnote: gpuFootnote)
     }
 
     private func memoryTile(history: [SystemStatusHistoryPoint]) -> some View {
-        let value = percentParts(snapshot.memory.usage)
-        let samples = percentHistory(\.memoryUsage, fallback: snapshot.memory.usage, history: history)
-        return SystemStatusHUDValueTile(
-            eyebrow: SystemStatusMetricKind.memory.title(localization: localization),
-            glyph: "memorychip",
-            accent: theme.dataSeries.senary,
-            chartColor: theme.dataSeries.senary,
-            value: value.value,
-            unit: value.unit,
-            chip: memoryChip,
-            samples: samples,
-            valueFormatter: { "\(Int($0.rounded()))%" },
-            rangeLabel: chartRangeLabel,
-            chartStyle: .area,
-            footnote: memoryFootnote
-        )
+        scalarTile(.memory, history: history, accent: theme.dataSeries.senary, chip: memoryChip, footnote: memoryFootnote)
+    }
+
+    @ViewBuilder
+    private func scalarTile(
+        _ kind: SystemStatusMetricKind, history: [SystemStatusHistoryPoint], accent: Color,
+        chip: String?, footnote: String
+    ) -> some View {
+        let metric = configuration.chartMetric(for: kind)
+        let value = metric.parts(metric.value(in: snapshot, kind: kind), localization: localization)
+        let title = metric == .defaultMetric(for: kind)
+            ? kind.title(localization: localization)
+            : kind.title(localization: localization) + " · " + metric.title(localization: localization)
+        if metric == .pressure {
+            SystemStatusHUDMetricTile(
+                title: title, glyph: kind.symbolName,
+                accent: snapshot.memory.pressure?.color(theme: theme) ?? theme.text.secondary,
+                value: value.value, unit: value.unit,
+                chip: snapshot.memory.pressure?.title(localization: localization),
+                footnote: footnote
+            ) {
+                SystemStatusHUDPressureChart(samples: SystemStatusMemoryPressureHistory.samples(history), localization: localization)
+            }
+        } else {
+            let samples = SystemStatusMetricDetailChartData(
+                history: history, kind: kind, range: .thirtyMinutes, chartMetric: metric
+            ).singleSamples
+            SystemStatusHUDValueTile(
+                eyebrow: title, glyph: kind.symbolName, accent: accent, chartColor: accent,
+                value: value.value, unit: value.unit, chip: chip, samples: samples,
+                valueFormatter: { metric.format($0, localization: localization) }, rangeLabel: chartRangeLabel,
+                chartStyle: metric == .usage && (kind == .cpu || kind == .gpu) ? .bars : .area,
+                footnote: footnote
+            )
+        }
     }
 
     private func diskTile(history: [SystemStatusHistoryPoint]) -> some View {
@@ -317,7 +314,7 @@ struct SystemStatusDashboardView: View {
                 secondColor: theme.dataSeries.secondary,
                 firstLabel: "↓",
                 secondLabel: "↑",
-                valueFormatter: { SystemStatusFormatter.speed(UInt64(max($0, 0))) },
+                valueFormatter: { SystemStatusChartMetric.activity.format($0, localization: localization) },
                 rangeLabel: chartRangeLabel
             )
         }
@@ -334,35 +331,8 @@ struct SystemStatusDashboardView: View {
     }
 
     private func batteryTile(history: [SystemStatusHistoryPoint]) -> some View {
-        let color = batteryColor
-        let value = snapshot.battery.isAvailable
-            ? percentParts(snapshot.battery.level)
-            : (value: "—", unit: "")
-        let samples = percentHistory(\.batteryLevel, fallback: snapshot.battery.level, history: history)
-
-        return SystemStatusHUDValueTile(
-            eyebrow: SystemStatusMetricKind.battery.title(localization: localization),
-            glyph: "battery.100",
-            accent: color,
-            chartColor: color,
-            value: value.value,
-            unit: value.unit,
-            chip: temperatureChip(snapshot.battery.temperatureCelsius),
-            samples: samples,
-            valueFormatter: { "\(Int($0.rounded()))%" },
-            rangeLabel: chartRangeLabel,
-            chartStyle: .area,
-            footnote: batteryFootnote
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            localization.format(
-                "accessibility.batteryFormat",
-                defaultValue: "电量 %@，%@",
-                SystemStatusFormatter.percent(snapshot.battery.level),
-                batteryFootnote
-            )
-        )
+        scalarTile(.battery, history: history, accent: batteryColor,
+            chip: temperatureChip(snapshot.battery.temperatureCelsius), footnote: batteryFootnote)
     }
 
     private var topProcessesSection: some View {
@@ -388,11 +358,11 @@ struct SystemStatusDashboardView: View {
 
             if snapshot.topProcesses.isEmpty {
                 Text(localization.string("topProcesses.collecting", defaultValue: "采集中…"))
-                    .font(SystemStatusHUDFont.mono(10))
+                    .font(PluginTypography.caption.font.monospacedDigit())
                     .foregroundStyle(theme.text.secondary)
                     .frame(
                         maxWidth: .infinity,
-                        minHeight: SystemStatusHUDLayout.processListHeight,
+                        minHeight: SystemStatusComponentLayout.processListHeight(limit: processLimit),
                         alignment: .center
                     )
             } else {
@@ -402,38 +372,22 @@ struct SystemStatusDashboardView: View {
                     }
                 }
                 .frame(
-                    height: SystemStatusHUDLayout.processListHeight,
+                    height: SystemStatusComponentLayout.processListHeight(limit: processLimit),
                     alignment: .topLeading
                 )
             }
         }
         .padding(SystemStatusComponentLayout.cardContentPadding)
-        .frame(height: SystemStatusHUDLayout.lowerTileHeight, alignment: .topLeading)
+        .frame(height: SystemStatusComponentLayout.processTileHeight(limit: processLimit), alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(PluginComponentCardBackground(cornerRadius: 10))
     }
 
     private var sortedTopProcesses: [SystemStatusTopProcess] {
-        let sorted = snapshot.topProcesses.sorted { lhs, rhs in
-            switch processSort {
-            case .cpu:
-                if lhs.cpuPercent != rhs.cpuPercent {
-                    return lhs.cpuPercent > rhs.cpuPercent
-                }
-                if lhs.memoryBytes != rhs.memoryBytes {
-                    return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
-                }
-            case .memory:
-                if lhs.memoryBytes != rhs.memoryBytes {
-                    return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
-                }
-                if lhs.cpuPercent != rhs.cpuPercent {
-                    return lhs.cpuPercent > rhs.cpuPercent
-                }
-            }
-            return lhs.pid < rhs.pid
+        let sorted = snapshot.topProcesses.sorted {
+            SystemStatusProcessAccounting.ordered($0, before: $1, by: processSort)
         }
-        return Array(sorted.prefix(SystemStatusHUDLayout.processLimit))
+        return Array(sorted.prefix(processLimit.rawValue))
     }
 
     private func processSortButton(
@@ -451,7 +405,7 @@ struct SystemStatusDashboardView: View {
                         .font(.system(size: 6, weight: .bold))
                 }
             }
-            .font(SystemStatusHUDFont.mono(8.5, processSort == sort ? .semibold : .regular))
+            .font(PluginTypography.caption.font.weight(processSort == sort ? .semibold : .regular))
             .foregroundStyle(processSort == sort ? theme.text.primary : theme.text.secondary)
             .frame(width: width, alignment: .trailing)
         }
@@ -487,23 +441,23 @@ struct SystemStatusDashboardView: View {
         return (snapshot.disk.readBytesPerSecond ?? 0) + (snapshot.disk.writeBytesPerSecond ?? 0)
     }
 
-    private var memoryChip: (text: String, color: Color)? {
-        (SystemStatusFormatter.bytes(snapshot.memory.totalBytes), theme.text.secondary)
+    private var memoryChip: String {
+        SystemStatusFormatter.bytes(snapshot.memory.totalBytes)
     }
 
-    private var networkChip: (text: String, color: Color)? {
+    private var networkChip: String? {
         guard let name = snapshot.network.interfaceName, !name.isEmpty else {
             return nil
         }
 
-        return (name, theme.text.secondary)
+        return name
     }
 
     private var cpuFootnote: String {
         let powerText = localization.format(
             "metric.powerFormat",
             defaultValue: "功率 %@",
-            SystemStatusFormatter.power(snapshot.cpu.systemPowerWatts)
+            SystemStatusFormatter.power(snapshot.cpu.cpuPowerWatts)
         )
         guard let load = snapshot.cpu.loadAverage1Minute else {
             return localization.format(
@@ -567,7 +521,7 @@ struct SystemStatusDashboardView: View {
 
         var parts: [String] = []
 
-        if let batteryPowerText = batteryPowerText {
+        if let batteryPowerText {
             parts.append(batteryPowerText)
         }
 
@@ -650,20 +604,12 @@ struct SystemStatusDashboardView: View {
         return theme.status.success
     }
 
-    private func temperatureChip(_ temperature: Double?) -> (text: String, color: Color)? {
+    private func temperatureChip(_ temperature: Double?) -> String? {
         guard let temperature, temperature > 0 else {
             return nil
         }
 
-        return (SystemStatusFormatter.temperature(temperature), theme.text.secondary)
-    }
-
-    private func percentParts(_ value: Double?) -> (value: String, unit: String) {
-        guard let value else {
-            return ("—", "")
-        }
-
-        return (format(value * 100, fractionDigits: 0), "%")
+        return SystemStatusFormatter.temperature(temperature)
     }
 
     private func rateParts(_ bytesPerSecond: UInt64?) -> (value: String, unit: String) {
@@ -702,56 +648,12 @@ struct SystemStatusDashboardView: View {
         return (format(value, fractionDigits: fractionDigits), units[unitIndex])
     }
 
-    private func percentHistory(
-        _ keyPath: KeyPath<SystemStatusHistoryPoint, Double?>,
-        fallback: Double?,
-        history: [SystemStatusHistoryPoint]
-    ) -> [SystemStatusHUDChartSample] {
-        let samples = SystemStatusHUDSingleLineChart.downsample(history.compactMap { point in
-            point[keyPath: keyPath].map {
-                SystemStatusHUDChartSample(
-                    timestamp: point.timestamp,
-                    value: min(max($0 * 100, 0), 100)
-                )
-            }
-        }, limit: SystemStatusHUDLayout.chartSampleLimit)
-
-        guard samples.isEmpty, let fallback else {
-            return samples
-        }
-
-        return [
-            SystemStatusHUDChartSample(
-                timestamp: history.last?.timestamp ?? Date().timeIntervalSince1970,
-                value: min(max(fallback * 100, 0), 100)
-            )
-        ]
-    }
-
     private func networkRateHistory(_ history: [SystemStatusHistoryPoint]) -> [SystemStatusHUDRateChartSample] {
-        SystemStatusHUDDualLineChart.downsamplePeakSamples(
-            history.map {
-                SystemStatusHUDRateChartSample(
-                    timestamp: $0.timestamp,
-                    firstValue: Double($0.networkDownloadBytesPerSecond ?? 0),
-                    secondValue: Double($0.networkUploadBytesPerSecond ?? 0)
-                )
-            },
-            limit: SystemStatusHUDLayout.chartSampleLimit
-        )
+        SystemStatusMetricDetailChartData(history: history, kind: .network, range: .thirtyMinutes).rateSamples
     }
 
     private func diskRateHistory(_ history: [SystemStatusHistoryPoint]) -> [SystemStatusHUDRateChartSample] {
-        SystemStatusHUDDualLineChart.downsamplePeakSamples(
-            history.map {
-                SystemStatusHUDRateChartSample(
-                    timestamp: $0.timestamp,
-                    firstValue: Double($0.diskReadBytesPerSecond ?? 0),
-                    secondValue: Double($0.diskWriteBytesPerSecond ?? 0)
-                )
-            },
-            limit: SystemStatusHUDLayout.chartSampleLimit
-        )
+        SystemStatusMetricDetailChartData(history: history, kind: .disk, range: .thirtyMinutes).rateSamples
     }
 
     private var chartHistory: [SystemStatusHistoryPoint] {
@@ -789,10 +691,9 @@ private struct SystemStatusHUDEyebrow: View {
                 .frame(width: 11, height: 11)
 
             Text(text)
-                .font(SystemStatusHUDFont.sans(10, .semibold))
+                .font(PluginTypography.caption.font.weight(.semibold))
                 .foregroundStyle(theme.text.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
                 .layoutPriority(0)
         }
     }
@@ -800,24 +701,22 @@ private struct SystemStatusHUDEyebrow: View {
 
 private struct SystemStatusHUDChip: View {
     let text: String
-    let color: Color
 
     @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
         Text(text)
-            .font(SystemStatusHUDFont.mono(9, .medium))
-            .foregroundStyle(color)
+            .font(PluginTypography.caption.font.weight(.medium).monospacedDigit())
+            .foregroundStyle(theme.text.secondary)
             .lineLimit(1)
             .truncationMode(.tail)
-            .minimumScaleFactor(0.8)
             .padding(.horizontal, 7)
             .frame(height: 18, alignment: .center)
             .background(
                 Capsule(style: .continuous)
                     .fill(theme.surfaces.chip)
             )
-            .fixedSize(horizontal: true, vertical: true)
+            .help(text)
     }
 }
 
@@ -828,7 +727,7 @@ private struct SystemStatusHUDValueTile: View {
     let chartColor: Color
     let value: String
     var unit: String = ""
-    var chip: (text: String, color: Color)? = nil
+    var chip: String? = nil
     let samples: [SystemStatusHUDChartSample]
     let valueFormatter: (Double) -> String
     let rangeLabel: String
@@ -864,7 +763,7 @@ private struct SystemStatusHUDMetricTile<Visual: View, Footer: View>: View {
     let accent: Color
     let value: String
     let unit: String
-    let chip: (text: String, color: Color)?
+    let chip: String?
     let footnote: String?
     @ViewBuilder let footer: Footer
     @ViewBuilder let visual: Visual
@@ -877,7 +776,7 @@ private struct SystemStatusHUDMetricTile<Visual: View, Footer: View>: View {
         accent: Color,
         value: String,
         unit: String,
-        chip: (text: String, color: Color)?,
+        chip: String?,
         footnote: String?,
         @ViewBuilder footer: () -> Footer,
         @ViewBuilder visual: () -> Visual
@@ -901,7 +800,7 @@ private extension SystemStatusHUDMetricTile where Footer == EmptyView {
         accent: Color,
         value: String,
         unit: String,
-        chip: (text: String, color: Color)?,
+        chip: String?,
         footnote: String?,
         @ViewBuilder visual: () -> Visual
     ) {
@@ -924,30 +823,18 @@ private extension SystemStatusHUDMetricTile {
         VStack(alignment: .leading, spacing: SystemStatusHUDLayout.metricInternalSpacing) {
             HStack(spacing: 4) {
                 SystemStatusHUDEyebrow(text: title, glyph: glyph, color: accent)
+                    .layoutPriority(1)
                 Spacer(minLength: 2)
                 if let chip {
-                    SystemStatusHUDChip(text: chip.text, color: chip.color)
-                        .layoutPriority(1)
+                    SystemStatusHUDChip(text: chip)
                 }
             }
                 .frame(height: SystemStatusHUDLayout.metricTitleHeight, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(SystemStatusHUDFont.mono(14, .semibold))
+                PluginMetricValue(value, unit: unit, unitColor: theme.text.secondary)
                     .foregroundStyle(theme.text.primary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.58)
-
-                if !unit.isEmpty {
-                    Text(unit)
-                        .font(SystemStatusHUDFont.mono(9))
-                        .foregroundStyle(theme.text.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
 
                 Spacer(minLength: 0)
             }
@@ -962,11 +849,11 @@ private extension SystemStatusHUDMetricTile {
                     .frame(height: SystemStatusHUDLayout.metricFootnoteHeight, alignment: .leading)
             } else {
                 Text(footnote ?? "")
-                    .font(SystemStatusHUDFont.mono(8.5))
+                    .font(PluginTypography.caption.font.monospacedDigit())
                     .foregroundStyle(theme.text.secondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
-                    .minimumScaleFactor(0.6)
+                    .truncationMode(.tail)
+                    .help(footnote ?? "")
                     .frame(height: SystemStatusHUDLayout.metricFootnoteHeight, alignment: .leading)
             }
         }
@@ -1000,7 +887,7 @@ private struct SystemStatusHUDDiskTile: View {
             accent: readColor,
             value: freeValue,
             unit: freeUnit,
-            chip: (totalText, theme.text.secondary),
+            chip: totalText,
             footnote: nil,
             footer: {
                 SystemStatusHUDRateFooter(
@@ -1034,7 +921,7 @@ private struct SystemStatusHUDProcessRow: View {
     @Environment(\.pluginComponentTheme) private var theme
 
     private var iconKey: String {
-        "\(process.pid)|\(process.displayName)|\(process.command)"
+        "\(process.id)|\(process.command)"
     }
 
     var body: some View {
@@ -1058,7 +945,7 @@ private struct SystemStatusHUDProcessRow: View {
             }
 
             Text(process.displayName)
-                .font(SystemStatusHUDFont.sans(11))
+                .font(PluginTypography.detail.font)
                 .foregroundStyle(theme.text.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1097,11 +984,10 @@ private struct SystemStatusHUDProcessRow: View {
 
     private func processMetricText(_ text: String) -> some View {
         Text(text)
-            .font(SystemStatusHUDFont.mono(10))
+            .font(PluginTypography.caption.font.monospacedDigit())
             .foregroundStyle(theme.text.secondary)
             .monospacedDigit()
             .lineLimit(1)
-            .minimumScaleFactor(0.75)
     }
 
     private func resolveIconIfNeeded() {
@@ -1114,96 +1000,23 @@ private struct SystemStatusHUDProcessRow: View {
     }
 
     private static func processIcon(for process: SystemStatusTopProcess) -> NSImage? {
-        if let icon = NSRunningApplication(processIdentifier: pid_t(process.pid))?.icon {
-            return icon
-        }
-
-        if let appPath = appBundlePath(in: process.command) {
+        if let appPath = SystemStatusProcessAccounting.applicationPath(for: process.command) {
             return NSWorkspace.shared.icon(forFile: appPath)
         }
-
-        let commandPath = executablePath(from: process.command)
-        if let icon = runningApplicationIcon(matching: commandPath, process: process) {
-            return icon
-        }
-
-        guard
-            commandPath.hasPrefix("/"),
-            FileManager.default.fileExists(atPath: commandPath)
-        else {
-            return nil
-        }
-
-        return NSWorkspace.shared.icon(forFile: commandPath)
-    }
-
-    private static func runningApplicationIcon(matching commandPath: String, process: SystemStatusTopProcess) -> NSImage? {
-        let candidates = [
-            process.displayName.trimmingCharacters(in: .whitespacesAndNewlines),
-            URL(fileURLWithPath: commandPath).lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
-        ].filter { !$0.isEmpty }
-
-        for application in NSWorkspace.shared.runningApplications {
-            guard let icon = application.icon else {
-                continue
-            }
-
-            let applicationNames = [
-                application.localizedName,
-                application.executableURL?.lastPathComponent
-            ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-            if applicationNames.contains(where: { applicationName in
-                candidates.contains(where: { candidate in
-                    candidate == applicationName || candidate.hasPrefix("\(applicationName) ")
-                })
-            }) {
-                return icon
-            }
-        }
-
-        return nil
-    }
-
-    private static func executablePath(from command: String) -> String {
-        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedCommand.hasPrefix("/") else {
-            return trimmedCommand
-        }
-
-        if let appRange = trimmedCommand.range(of: ".app/") {
-            return String(trimmedCommand[..<trimmedCommand.index(before: appRange.upperBound)])
-        }
-
-        if let whitespaceIndex = trimmedCommand.firstIndex(where: { $0 == " " || $0 == "\t" }) {
-            return String(trimmedCommand[..<whitespaceIndex])
-        }
-
-        return trimmedCommand
-    }
-
-    private static func appBundlePath(in command: String) -> String? {
-        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            trimmedCommand.hasPrefix("/"),
-            let appRange = trimmedCommand.range(of: ".app", options: [.caseInsensitive])
-        else {
-            return nil
-        }
-
-        return String(trimmedCommand[..<appRange.upperBound])
+        return NSRunningApplication(processIdentifier: pid_t(process.pid))?.icon
     }
 
     private var processMemoryText: String {
-        if let memoryBytes = process.memoryBytes, memoryBytes > 0 {
-            return SystemStatusFormatter.bytes(memoryBytes)
-        }
-
-        return SystemStatusFormatter.wholePercent(process.memoryPercent, fractionDigits: 1)
+        SystemStatusFormatter.bytes(process.memoryBytes)
     }
 
     private var processHelpText: String {
-        "\(process.displayName)\nPID \(process.pid)\n\(process.command)\n\(localization.string("topProcesses.openActivityMonitor", defaultValue: "打开‘活动监视器’"))"
+        let count = localization.format("topProcesses.memberCount", defaultValue: "%d 个进程", process.processCount)
+        let accounting = localization.string(
+            "topProcesses.accounting",
+            defaultValue: "按应用汇总；CPU 以单核 100% 计，内存为应用内存占用。无法完整读取时显示 —。"
+        )
+        return "\(process.displayName) · \(count)\n\(process.command)\n\(accounting)\n\(localization.string("topProcesses.openActivityMonitor", defaultValue: "打开‘活动监视器’"))"
     }
 }
 
@@ -1226,9 +1039,8 @@ enum SystemStatusProcessActions {
 private struct SystemStatusHUDRateFooter: View {
     private enum Layout {
         static let itemSpacing: CGFloat = 6
-        static let itemWidth: CGFloat = 61
-        static let labelWidth: CGFloat = 9
-        static let valueWidth: CGFloat = 50
+        static let labelWidth: CGFloat = 11
+        static let labelSpacing: CGFloat = 2
     }
 
     let firstLabel: String
@@ -1241,31 +1053,86 @@ private struct SystemStatusHUDRateFooter: View {
     @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
-        HStack(spacing: Layout.itemSpacing) {
-            rateItem(label: firstLabel, text: firstText, color: firstColor)
-            rateItem(label: secondLabel, text: secondText, color: secondColor)
-            Spacer(minLength: 0)
+        GeometryReader { geometry in
+            let itemWidth = max((geometry.size.width - Layout.itemSpacing) / 2, 0)
+            HStack(spacing: Layout.itemSpacing) {
+                rateItem(label: firstLabel, text: firstText, color: firstColor, width: itemWidth)
+                rateItem(label: secondLabel, text: secondText, color: secondColor, width: itemWidth)
+            }
+            .frame(width: geometry.size.width, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func rateItem(label: String, text: String, color: Color) -> some View {
-        HStack(spacing: 2) {
+    private func rateItem(label: String, text: String, color: Color, width: CGFloat) -> some View {
+        HStack(spacing: Layout.labelSpacing) {
             Text(label)
-                .font(SystemStatusHUDFont.mono(8.5, .semibold))
+                .font(PluginTypography.caption.font.weight(.semibold).monospacedDigit())
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .frame(width: Layout.labelWidth, alignment: .leading)
 
             Text(text)
-                .font(SystemStatusHUDFont.mono(8.5))
+                .font(PluginTypography.caption.font.monospacedDigit())
                 .foregroundStyle(theme.text.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .frame(width: Layout.valueWidth, alignment: .leading)
+                .truncationMode(.tail)
+                .frame(
+                    width: max(width - Layout.labelWidth - Layout.labelSpacing, 0),
+                    alignment: .leading
+                )
+                .help(text)
         }
-        .frame(width: Layout.itemWidth, alignment: .leading)
+        .frame(width: width, alignment: .leading)
+    }
+}
+
+private struct SystemStatusHUDPressureChart: View {
+    let samples: [SystemStatusHUDChartSample]
+    let localization: PluginLocalization
+    var isInteractive = false
+    var pinRetentionRange: ClosedRange<TimeInterval>?
+    @Environment(\.pluginComponentTheme) private var theme
+
+    var body: some View {
+        Canvas { context, size in
+            let range = pinRetentionRange ?? SystemStatusHUDChartGeometry.timeRange(timestamps: samples.map(\.timestamp))
+            func point(_ sample: SystemStatusHUDChartSample) -> CGPoint {
+                CGPoint(x: SystemStatusHUDChartGeometry.x(for: sample.timestamp, in: range, width: size.width),
+                    y: (1 - min(max(sample.value, 0), 100) / 100) * max(size.height - 2, 0) + 1)
+            }
+            for index in samples.indices {
+                let sample = samples[index]
+                guard sample.isAvailable else { continue }
+                let start = point(sample)
+                let color = sample.pressure?.color(theme: theme) ?? theme.text.secondary
+                if index + 1 < samples.count, samples[index + 1].isAvailable, !samples[index + 1].startsNewSegment {
+                    let end = point(samples[index + 1])
+                    var area = Path()
+                    area.move(to: CGPoint(x: start.x, y: size.height))
+                    area.addLine(to: start); area.addLine(to: end)
+                    area.addLine(to: CGPoint(x: end.x, y: size.height)); area.closeSubpath()
+                    context.fill(area, with: .color(color.opacity(0.18)))
+                    var line = Path()
+                    line.move(to: start); line.addLine(to: end)
+                    context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                }
+                // Keep isolated observations visible without filling an unknown interval.
+                context.fill(Path(ellipseIn: CGRect(x: start.x - 0.75, y: start.y - 0.75, width: 1.5, height: 1.5)),
+                    with: .color(color))
+            }
+        }
+        .overlay {
+            if isInteractive {
+                SystemStatusHUDChartContextOverlay(
+                    timestamps: samples.map(\.timestamp), series: [samples.map(\.value)], labels: [""],
+                    valueFormatter: { SystemStatusChartMetric.pressure.format($0, localization: localization) },
+                    rangeLabel: "", pinRetentionRange: pinRetentionRange, availability: samples.map(\.isAvailable),
+                    breaksBefore: samples.map(\.startsNewSegment)
+                )
+            }
+        }
+        .help(SystemStatusMemoryPressure.estimateDescription(localization: localization))
     }
 }
 
@@ -1313,7 +1180,7 @@ private struct SystemStatusHUDMiniChart: View {
                     labels: [""],
                     valueFormatter: valueFormatter,
                     rangeLabel: rangeLabel,
-                    pinRetentionRange: pinRetentionRange
+                    pinRetentionRange: pinRetentionRange, availability: visibleSamples.map(\.isAvailable), breaksBefore: visibleSamples.map(\.startsNewSegment)
                 )
             }
         }
@@ -1332,53 +1199,20 @@ private struct SystemStatusHUDMiniChart: View {
     }
 
     private func area(width: CGFloat, height: CGFloat, low: Double, denominator: Double) -> some View {
-        let timeRange = SystemStatusHUDChartGeometry.timeRange(
-            timestamps: visibleSamples.map(\.timestamp)
+        SystemStatusHUDChartArea(
+            segments: SystemStatusHUDChartGeometry.segments(samples: visibleSamples, width: width, domain: pinRetentionRange) {
+                y($0, height: height, low: low, denominator: denominator)
+            }, height: height, color: color
         )
-        let points = visibleSamples.map { sample in
-            CGPoint(
-                x: SystemStatusHUDChartGeometry.x(
-                    for: sample.timestamp,
-                    in: timeRange,
-                    width: width
-                ),
-                y: y(sample.value, height: height, low: low, denominator: denominator)
-            )
-        }
-
-        return ZStack {
-            Path { path in
-                guard let first = points.first, let last = points.last else {
-                    return
+        .overlay {
+            if low < 0 {
+                Path { path in
+                    let zero = y(0, height: height, low: low, denominator: denominator)
+                    path.move(to: CGPoint(x: 0, y: zero))
+                    path.addLine(to: CGPoint(x: width, y: zero))
                 }
-
-                path.move(to: CGPoint(x: first.x, y: height))
-                path.addLine(to: first)
-                for point in points.dropFirst() {
-                    path.addLine(to: point)
-                }
-                path.addLine(to: CGPoint(x: last.x, y: height))
-                path.closeSubpath()
+                .stroke(color.opacity(0.35), style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
             }
-            .fill(
-                LinearGradient(
-                    colors: [color.opacity(0.30), color.opacity(0.02)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-
-            Path { path in
-                guard let first = points.first else {
-                    return
-                }
-
-                path.move(to: first)
-                for point in points.dropFirst() {
-                    path.addLine(to: point)
-                }
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
         }
     }
 
@@ -1386,12 +1220,12 @@ private struct SystemStatusHUDMiniChart: View {
         let count = max(visibleSamples.count, 1)
         let slot = width / CGFloat(count)
         let barWidth = max(1.5, slot * 0.62)
-        let timeRange = SystemStatusHUDChartGeometry.timeRange(
+        let timeRange = pinRetentionRange ?? SystemStatusHUDChartGeometry.timeRange(
             timestamps: visibleSamples.map(\.timestamp)
         )
 
         return Path { path in
-            for sample in visibleSamples {
+            for sample in visibleSamples where sample.isAvailable {
                 let barHeight = max(1.5, CGFloat((sample.value - low) / denominator) * height)
                 let centerX = SystemStatusHUDChartGeometry.x(
                     for: sample.timestamp,
@@ -1412,9 +1246,9 @@ private struct SystemStatusHUDMiniChart: View {
     }
 
     private func bounds() -> (low: Double, high: Double) {
-        let values = visibleSamples.map(\.value)
+        let values = visibleSamples.filter(\.isAvailable).map(\.value)
         let low = min(values.min() ?? 0, 0)
-        let high = values.max() ?? 1
+        let high = max(values.max() ?? 1, 0)
         if high - low < 0.001 {
             return (low, high + 1)
         }
@@ -1475,6 +1309,10 @@ enum SystemStatusHUDDualLineChart {
             let start = Int((Double(index) * bucketSize).rounded(.down))
             let proposedEnd = Int((Double(index + 1) * bucketSize).rounded(.down))
             let end = min(samples.count, max(start + 1, proposedEnd))
+            if let gap = samples[start..<end].first(where: { !$0.isAvailable || $0.startsNewSegment }) {
+                result.append(gap)
+                continue
+            }
             var firstPeak = start
             var secondPeak = start
             for sampleIndex in (start + 1)..<end {
@@ -1551,6 +1389,29 @@ enum SystemStatusHUDDualLineChart {
 }
 
 enum SystemStatusHUDChartGeometry {
+    static func segments(
+        samples: [SystemStatusHUDChartSample], width: CGFloat,
+        domain: ClosedRange<TimeInterval>? = nil, y: (Double) -> CGFloat
+    ) -> [[CGPoint]] {
+        let range = domain ?? timeRange(timestamps: samples.map(\.timestamp))
+        var segments: [[CGPoint]] = []
+        var current: [CGPoint] = []
+        for sample in samples {
+            if sample.startsNewSegment, !current.isEmpty {
+                segments.append(current)
+                current = []
+            }
+            if sample.isAvailable, sample.value.isFinite {
+                current.append(CGPoint(x: x(for: sample.timestamp, in: range, width: width), y: y(sample.value)))
+            } else if !current.isEmpty {
+                segments.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { segments.append(current) }
+        return segments
+    }
+
     static func timeRange(timestamps: [TimeInterval]) -> ClosedRange<TimeInterval>? {
         guard let start = timestamps.first, let end = timestamps.last else {
             return nil
@@ -1576,9 +1437,12 @@ enum SystemStatusHUDChartGeometry {
 
     static func nearestIndex(
         to fraction: CGFloat,
-        timestamps: [TimeInterval]
+        timestamps: [TimeInterval],
+        selectsPrecedingSample: Bool = false,
+        domain: ClosedRange<TimeInterval>? = nil,
+        breaksBefore: [Bool] = []
     ) -> Int? {
-        guard let timeRange = timeRange(timestamps: timestamps) else {
+        guard !timestamps.isEmpty, let timeRange = domain ?? timeRange(timestamps: timestamps) else {
             return nil
         }
         let clampedFraction = min(max(fraction, 0), 1)
@@ -1596,6 +1460,10 @@ enum SystemStatusHUDChartGeometry {
             }
         }
 
+        if lowerBound > timestamps.startIndex, lowerBound < timestamps.endIndex,
+           breaksBefore.indices.contains(lowerBound), breaksBefore[lowerBound],
+           target > timestamps[lowerBound - 1], target < timestamps[lowerBound] { return nil }
+
         guard lowerBound < timestamps.endIndex else {
             return timestamps.index(before: timestamps.endIndex)
         }
@@ -1604,6 +1472,9 @@ enum SystemStatusHUDChartGeometry {
         }
 
         let previous = timestamps.index(before: lowerBound)
+        if selectsPrecedingSample {
+            return timestamps[lowerBound] == target ? lowerBound : previous
+        }
         return abs(timestamps[previous] - target) <= abs(timestamps[lowerBound] - target)
             ? previous
             : lowerBound
@@ -1647,7 +1518,7 @@ private struct SystemStatusHUDRateChart: View {
                 ZStack {
                     series(
                         samples: zip(samples, firstSeries).map {
-                            SystemStatusHUDChartSample(timestamp: $0.0.timestamp, value: $0.1)
+                            SystemStatusHUDChartSample(timestamp: $0.0.timestamp, value: $0.1, isAvailable: $0.0.isAvailable, startsNewSegment: $0.0.startsNewSegment)
                         },
                         width: width,
                         height: height,
@@ -1656,7 +1527,7 @@ private struct SystemStatusHUDRateChart: View {
                     )
                     series(
                         samples: zip(samples, secondSeries).map {
-                            SystemStatusHUDChartSample(timestamp: $0.0.timestamp, value: $0.1)
+                            SystemStatusHUDChartSample(timestamp: $0.0.timestamp, value: $0.1, isAvailable: $0.0.isAvailable, startsNewSegment: $0.0.startsNewSegment)
                         },
                         width: width,
                         height: height,
@@ -1674,80 +1545,99 @@ private struct SystemStatusHUDRateChart: View {
                     labels: [firstLabel, secondLabel],
                     valueFormatter: valueFormatter,
                     rangeLabel: rangeLabel,
-                    pinRetentionRange: pinRetentionRange
+                    pinRetentionRange: pinRetentionRange, availability: samples.map(\.isAvailable), breaksBefore: samples.map(\.startsNewSegment)
                 )
             }
         }
     }
 
-    @ViewBuilder
     private func series(
-        samples: [SystemStatusHUDChartSample],
-        width: CGFloat,
-        height: CGFloat,
-        maximumValue: Double,
-        color: Color
+        samples: [SystemStatusHUDChartSample], width: CGFloat, height: CGFloat,
+        maximumValue: Double, color: Color
     ) -> some View {
-        if samples.count >= 2 {
-            let points = SystemStatusHUDDualLineChart.points(
-                samples: samples,
-                width: width,
-                height: height,
-                maximumValue: maximumValue
-            )
+        SystemStatusHUDChartArea(
+            segments: SystemStatusHUDChartGeometry.segments(samples: samples, width: width, domain: pinRetentionRange) {
+                (1 - SystemStatusHUDDualLineChart.scaledRatio(value: $0, maximumValue: maximumValue)) * height
+            }, height: height, color: color
+        )
+    }
+}
 
-            ZStack {
-                Path { path in
-                    guard let first = points.first, let last = points.last else {
-                        return
-                    }
+private struct SystemStatusHUDChartArea: View {
+    let segments: [[CGPoint]]
+    let height: CGFloat
+    let color: Color
 
+    var body: some View {
+        ZStack {
+            Path { path in
+                for segment in segments {
+                    guard let first = segment.first, let last = segment.last else { continue }
                     path.move(to: CGPoint(x: first.x, y: height))
-                    path.addLine(to: first)
-                    for point in points.dropFirst() {
-                        path.addLine(to: point)
-                    }
+                    for point in segment { path.addLine(to: point) }
                     path.addLine(to: CGPoint(x: last.x, y: height))
                     path.closeSubpath()
                 }
-                .fill(
-                    LinearGradient(
-                        colors: [color.opacity(0.30), color.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-                Path { path in
-                    guard let first = points.first else {
-                        return
-                    }
-
-                    path.move(to: first)
-                    for point in points.dropFirst() {
-                        path.addLine(to: point)
-                    }
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
             }
+            .fill(LinearGradient(colors: [color.opacity(0.30), color.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+            Path { path in
+                for segment in segments {
+                    guard let first = segment.first else { continue }
+                    path.move(to: first)
+                    for point in segment.dropFirst() { path.addLine(to: point) }
+                }
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
         }
     }
 }
 
 struct SystemStatusChartStatistics: Equatable, Sendable {
+    let usesSampleIntervals: Bool
     private(set) var minimum: Double?
     private(set) var maximum: Double?
     private(set) var count = 0
-    private var sum: Double = 0
+    private var integral: Double = 0
+    private var weight: Double = 0
+    private var previousValue: Double?
+    private var previousTimestamp: TimeInterval?
 
-    var average: Double? { count > 0 ? sum / Double(count) : nil }
+    init(usesSampleIntervals: Bool = false) {
+        self.usesSampleIntervals = usesSampleIntervals
+    }
 
-    mutating func record(_ value: Double) {
-        guard value.isFinite else { return }
+    // Gauges interpolate between valid observations. Counter rates instead use
+    // their measured intervals; legacy history cannot supply missing durations.
+    var average: Double? { weight > 0 ? integral / weight : !usesSampleIntervals && count == 1 ? minimum : nil }
+
+    mutating func record(_ value: Double?, at timestamp: TimeInterval, startsNewSegment: Bool) {
+        guard let value, value.isFinite, timestamp.isFinite else {
+            previousValue = nil; previousTimestamp = nil
+            return
+        }
+        if !usesSampleIntervals, !startsNewSegment, let previousValue, let previousTimestamp, timestamp > previousTimestamp {
+            let interval = timestamp - previousTimestamp
+            integral += (previousValue / 2 + value / 2) * interval
+            weight += interval
+        }
         minimum = min(minimum ?? value, value)
         maximum = max(maximum ?? value, value)
-        sum += value
         count += 1
+        previousValue = value
+        previousTimestamp = timestamp
+    }
+
+    mutating func record(_ sample: SystemStatusRateAggregate?, within range: ClosedRange<TimeInterval>) {
+        guard let sample, sample.isValid else { return }
+        let overlap = min(sample.endTimestamp, range.upperBound) - max(sample.startTimestamp, range.lowerBound)
+        guard overlap > 0 else { return }
+        // An interval is represented by its measured mean. Boundary clipping
+        // applies the same mean only to the portion inside the selected range.
+        let fraction = min(overlap / (sample.endTimestamp - sample.startTimestamp), 1)
+        integral += sample.integral * fraction
+        weight += sample.weight * fraction
+        minimum = min(minimum ?? sample.minimum, sample.minimum)
+        maximum = max(maximum ?? sample.maximum, sample.maximum)
     }
 }
 
@@ -1765,97 +1655,50 @@ struct SystemStatusMetricDetailChartData: Equatable, Sendable {
     }
 
     init(
-        history: [SystemStatusHistoryPoint],
-        kind: SystemStatusMetricKind,
-        range: SystemStatusMetricDetailRange,
-        sampleLimit: Int = SystemStatusHUDLayout.chartSampleLimit
+        history: [SystemStatusHistoryPoint], kind: SystemStatusMetricKind, range: SystemStatusMetricDetailRange,
+        chartMetric: SystemStatusChartMetric? = nil, sampleLimit: Int = SystemStatusHUDLayout.chartSampleLimit
     ) {
         self.range = range
-        guard let latestTimestamp = history.last?.timestamp else {
-            startTimestamp = nil
-            endTimestamp = nil
-            singleSamples = []
-            rateSamples = []
-            statistics = SystemStatusChartStatistics()
+        let metric = chartMetric ?? .defaultMetric(for: kind)
+        guard let latest = history.last?.timestamp else {
+            startTimestamp = nil; endTimestamp = nil
+            singleSamples = []; rateSamples = []; statistics = SystemStatusChartStatistics()
             return
         }
-
-        let cutoff = latestTimestamp - range.interval
-        // Avoid copying full history records for each cached range. Only materialize
-        // the small chart samples while accumulating statistics in that same pass.
-        let visibleHistory = history.lazy.filter {
-            $0.timestamp >= cutoff && $0.timestamp <= latestTimestamp
+        let visible = history.filter { $0.timestamp >= latest - range.interval && $0.timestamp <= latest }
+        startTimestamp = visible.first?.timestamp
+        endTimestamp = visible.last?.timestamp
+        let usesSampleIntervals = kind == .cpu || metric == .activity
+        var aggregate = SystemStatusChartStatistics(usesSampleIntervals: usesSampleIntervals)
+        let breaks = visible.indices.map { index in
+            index > 0 && visible[index].collectionID != visible[index - 1].collectionID
         }
-        startTimestamp = visibleHistory.first?.timestamp
-        endTimestamp = visibleHistory.last?.timestamp
-        var aggregate = SystemStatusChartStatistics()
-
-        switch kind {
-        case .cpu, .gpu, .memory, .battery:
-            let rawSamples: [SystemStatusHUDChartSample] = visibleHistory.compactMap { point in
-                let value: Double?
-                switch kind {
-                case .cpu:
-                    value = point.cpuUsage
-                case .gpu:
-                    value = point.gpuUsage
-                case .memory:
-                    value = point.memoryUsage
-                case .battery:
-                    value = point.batteryLevel
-                case .disk, .network, .topProcesses:
-                    value = nil
-                }
-                return value.map {
-                    let percent = min(max($0 * 100, 0), 100)
-                    aggregate.record(percent)
-                    return SystemStatusHUDChartSample(
-                        timestamp: point.timestamp,
-                        value: percent
-                    )
-                }
+        for (index, point) in visible.enumerated() {
+            aggregate.record(metric.value(in: point, kind: kind), at: point.timestamp, startsNewSegment: breaks[index])
+            if usesSampleIntervals {
+                aggregate.record(point.rates?.value(for: kind), within: (latest - range.interval)...latest)
             }
-            let resolvedSamples = SystemStatusHUDSingleLineChart.downsample(
-                rawSamples,
-                limit: sampleLimit
-            )
-            singleSamples = resolvedSamples
+        }
+        if kind == .memory, metric == .pressure {
+            singleSamples = SystemStatusMemoryPressureHistory.samples(visible, limit: sampleLimit)
             rateSamples = []
-
-        case .network, .disk:
-            let rawSamples: [SystemStatusHUDRateChartSample] = visibleHistory.map { point in
-                let sample: SystemStatusHUDRateChartSample = switch kind {
-                case .network:
-                    SystemStatusHUDRateChartSample(
-                        timestamp: point.timestamp,
-                        firstValue: Double(point.networkDownloadBytesPerSecond ?? 0),
-                        secondValue: Double(point.networkUploadBytesPerSecond ?? 0)
-                    )
-                case .disk:
-                    SystemStatusHUDRateChartSample(
-                        timestamp: point.timestamp,
-                        firstValue: Double(point.diskReadBytesPerSecond ?? 0),
-                        secondValue: Double(point.diskWriteBytesPerSecond ?? 0)
-                    )
-                case .cpu, .gpu, .memory, .battery, .topProcesses:
-                    SystemStatusHUDRateChartSample(
-                        timestamp: point.timestamp,
-                        firstValue: 0,
-                        secondValue: 0
-                    )
-                }
-                aggregate.record(max(sample.firstValue, 0) + max(sample.secondValue, 0))
-                return sample
+        } else if metric == .activity, kind == .network || kind == .disk {
+            let raw = visible.enumerated().map { index, point in
+                let first = kind == .network ? point.networkDownloadBytesPerSecond : point.diskReadBytesPerSecond
+                let second = kind == .network ? point.networkUploadBytesPerSecond : point.diskWriteBytesPerSecond
+                return SystemStatusHUDRateChartSample(timestamp: point.timestamp,
+                    firstValue: Double(first ?? 0), secondValue: Double(second ?? 0),
+                    isAvailable: first != nil || second != nil, startsNewSegment: breaks[index])
             }
-            let resolvedSamples = SystemStatusHUDDualLineChart.downsamplePeakSamples(
-                rawSamples,
-                limit: sampleLimit
-            )
+            rateSamples = SystemStatusHUDDualLineChart.downsamplePeakSamples(raw, limit: sampleLimit)
             singleSamples = []
-            rateSamples = resolvedSamples
-
-        case .topProcesses:
-            singleSamples = []
+        } else {
+            let raw = visible.enumerated().map { index, point in
+                let value = metric.value(in: point, kind: kind)
+                return SystemStatusHUDChartSample(timestamp: point.timestamp, value: value ?? 0,
+                    isAvailable: value != nil, startsNewSegment: breaks[index])
+            }
+            singleSamples = SystemStatusHUDSingleLineChart.downsample(raw, limit: sampleLimit)
             rateSamples = []
         }
         statistics = aggregate
@@ -1870,24 +1713,28 @@ struct SystemStatusMetricDetailChartCache: Equatable, Sendable {
     init(
         history: [SystemStatusHistoryPoint],
         kind: SystemStatusMetricKind,
+        chartMetric: SystemStatusChartMetric? = nil,
         sampleLimit: Int = SystemStatusHUDLayout.chartSampleLimit
     ) {
         thirtyMinutes = SystemStatusMetricDetailChartData(
             history: history,
             kind: kind,
             range: .thirtyMinutes,
+            chartMetric: chartMetric,
             sampleLimit: sampleLimit
         )
         twoHours = SystemStatusMetricDetailChartData(
             history: history,
             kind: kind,
             range: .twoHours,
+            chartMetric: chartMetric,
             sampleLimit: sampleLimit
         )
         twentyFourHours = SystemStatusMetricDetailChartData(
             history: history,
             kind: kind,
             range: .twentyFourHours,
+            chartMetric: chartMetric,
             sampleLimit: sampleLimit
         )
     }
@@ -1933,6 +1780,7 @@ enum SystemStatusMetricDetailAxis {
 
 private struct SystemStatusMetricDetailChartTaskID: Hashable {
     let kind: SystemStatusMetricKind
+    let chartMetric: SystemStatusChartMetric
     let historyCount: Int
     let firstTimestamp: TimeInterval?
     let lastTimestamp: TimeInterval?
@@ -1950,7 +1798,9 @@ private final class SystemStatusMetricDetailChartStore: ObservableObject {
         kind: SystemStatusMetricKind,
         sourceID: SystemStatusMetricDetailChartTaskID
     ) {
-        let chartCache = SystemStatusMetricDetailChartCache(history: history, kind: kind)
+        let chartCache = SystemStatusMetricDetailChartCache(
+            history: history, kind: kind, chartMetric: sourceID.chartMetric
+        )
         self.chartCache = chartCache
         axisLabelsByRange = SystemStatusMetricDetailAxisLabelFormatter.labelsByRange(chartCache)
         self.sourceID = sourceID
@@ -2014,10 +1864,12 @@ private enum SystemStatusMetricDetailAxisLabelFormatter {
 
 struct SystemStatusMetricDetailView: View {
     @ObservedObject var viewModel: SystemStatusViewModel
+    @ObservedObject var settingsController: SystemStatusSettingsController
     let kind: SystemStatusMetricKind
     let localization: PluginLocalization
 
     @Environment(\.pluginComponentTheme) private var theme
+    @State private var samplingConsumerID = UUID()
     @State private var selectedRange = SystemStatusMetricDetailRange.thirtyMinutes
     @StateObject private var chartStore: SystemStatusMetricDetailChartStore
 
@@ -2025,15 +1877,18 @@ struct SystemStatusMetricDetailView: View {
 
     init(
         viewModel: SystemStatusViewModel,
+        settingsController: SystemStatusSettingsController,
         kind: SystemStatusMetricKind,
         localization: PluginLocalization
     ) {
+        self.settingsController = settingsController
         self.viewModel = viewModel
         self.kind = kind
         self.localization = localization
         let history = viewModel.snapshot.history
         let sourceID = SystemStatusMetricDetailChartTaskID(
             kind: kind,
+            chartMetric: settingsController.configuration.chartMetric(for: kind),
             historyCount: history.count,
             firstTimestamp: history.first?.timestamp,
             lastTimestamp: history.last?.timestamp,
@@ -2049,17 +1904,25 @@ struct SystemStatusMetricDetailView: View {
     }
 
     var body: some View {
-        let chartData = chartStore.chartCache.data(for: selectedRange)
-        let axisLabels = chartStore.axisLabelsByRange[selectedRange] ?? ["—"]
+        // Never format the previous metric's cached values as the newly selected metric.
+        let hasMatchingMetric = chartStore.sourceID.chartMetric == chartTaskID.chartMetric
+        let chartData = hasMatchingMetric
+            ? chartStore.chartCache.data(for: selectedRange)
+            : SystemStatusMetricDetailChartData(history: [], kind: kind, range: selectedRange)
+        let axisLabels = hasMatchingMetric ? chartStore.axisLabelsByRange[selectedRange] ?? ["—"] : ["—"]
 
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(currentValue)
-                    .font(SystemStatusHUDFont.mono(20, .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chartMetric.title(localization: localization))
+                        .font(PluginTypography.caption.font)
+                        .foregroundStyle(theme.text.secondary)
+                    Text(currentValue)
+                    .font(PluginTypography.prominentMetric.font)
                     .foregroundStyle(theme.text.primary)
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                }
 
                 Spacer(minLength: 8)
 
@@ -2080,7 +1943,7 @@ struct SystemStatusMetricDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 detailChart(chartData)
                     .frame(height: 112)
-                    .id("\(kind.rawValue):\(chartData.range.rawValue)")
+                    .id("\(kind.rawValue):\(chartData.range.rawValue):\(chartTaskID.chartMetric.rawValue)")
                     .transaction { transaction in
                         transaction.animation = nil
                     }
@@ -2108,8 +1971,18 @@ struct SystemStatusMetricDetailView: View {
                     .fill(theme.surfaces.chip.opacity(0.55))
             )
 
-            if kind == .network || kind == .disk {
+            if chartMetric == .activity {
                 rateLegend
+            } else if showsMemoryPressure {
+                HStack(spacing: 12) {
+                    ForEach(SystemStatusMemoryPressure.allCases, id: \.rawValue) { pressure in
+                        legendItem(color: pressure.color(theme: theme), label: pressure.title(localization: localization))
+                    }
+                    Spacer(minLength: 0)
+                    Text("0–100%")
+                        .font(PluginTypography.caption.font)
+                        .foregroundStyle(theme.text.secondary)
+                }
             }
 
             HStack(spacing: 6) {
@@ -2127,6 +2000,12 @@ struct SystemStatusMetricDetailView: View {
                 )
             }
 
+            if showsMemoryPressure {
+                Text(SystemStatusMemoryPressure.estimateDescription(localization: localization))
+                    .font(PluginTypography.caption.font)
+                    .foregroundStyle(theme.text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !supportingDetails.isEmpty {
                 Text(supportingDetails.joined(separator: " · "))
                     .font(.subheadline)
@@ -2138,6 +2017,8 @@ struct SystemStatusMetricDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
+        .onAppear { viewModel.startForeground(for: .detail(samplingConsumerID, kind)) }
+        .onDisappear { viewModel.returnToBackground(from: .detail(samplingConsumerID, kind)) }
         .task(id: chartTaskID) {
             let sourceID = chartTaskID
             guard chartStore.sourceID != sourceID else {
@@ -2145,10 +2026,12 @@ struct SystemStatusMetricDetailView: View {
             }
             let history = snapshot.history
             let kind = kind
+            let chartMetric = sourceID.chartMetric
             let preparedCache = await Task.detached(priority: .userInitiated) {
                 SystemStatusMetricDetailChartCache(
                     history: history,
-                    kind: kind
+                    kind: kind,
+                    chartMetric: chartMetric
                 )
             }.value
             guard !Task.isCancelled else {
@@ -2161,6 +2044,11 @@ struct SystemStatusMetricDetailView: View {
     @ViewBuilder
     private func detailChart(_ chartData: SystemStatusMetricDetailChartData) -> some View {
         switch kind {
+        case .memory where showsMemoryPressure:
+            SystemStatusHUDPressureChart(
+                samples: chartData.singleSamples, localization: localization,
+                isInteractive: true, pinRetentionRange: chartData.timeRange
+            )
         case .network:
             SystemStatusHUDRateChart(
                 samples: chartData.rateSamples,
@@ -2189,8 +2077,8 @@ struct SystemStatusMetricDetailView: View {
             SystemStatusHUDMiniChart(
                 samples: chartData.singleSamples,
                 color: accentColor,
-                style: kind == .cpu || kind == .gpu ? .bars : .area,
-                valueFormatter: percentFormatter,
+                style: chartMetric == .usage && (kind == .cpu || kind == .gpu) ? .bars : .area,
+                valueFormatter: statisticFormatter,
                 rangeLabel: "",
                 isInteractive: true,
                 pinRetentionRange: chartData.timeRange
@@ -2206,7 +2094,7 @@ struct SystemStatusMetricDetailView: View {
                 .font(.caption)
                 .foregroundStyle(theme.text.secondary)
             Text(value.map(statisticFormatter) ?? "—")
-                .font(SystemStatusHUDFont.mono(10, .medium))
+                .font(PluginTypography.caption.font.monospacedDigit())
                 .foregroundStyle(theme.text.primary)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -2223,6 +2111,7 @@ struct SystemStatusMetricDetailView: View {
     private var chartTaskID: SystemStatusMetricDetailChartTaskID {
         SystemStatusMetricDetailChartTaskID(
             kind: kind,
+            chartMetric: settingsController.configuration.chartMetric(for: kind),
             historyCount: snapshot.history.count,
             firstTimestamp: snapshot.history.first?.timestamp,
             lastTimestamp: snapshot.history.last?.timestamp,
@@ -2257,27 +2146,10 @@ struct SystemStatusMetricDetailView: View {
         }
     }
 
+    private var chartMetric: SystemStatusChartMetric { settingsController.configuration.chartMetric(for: kind) }
+
     private var currentValue: String {
-        switch kind {
-        case .cpu:
-            return SystemStatusFormatter.percent(snapshot.cpu.usage)
-        case .gpu:
-            return SystemStatusFormatter.percent(snapshot.gpu.usage)
-        case .memory:
-            return SystemStatusFormatter.percent(snapshot.memory.usage)
-        case .disk:
-            return localization.format(
-                "disk.availableUnitFormat",
-                defaultValue: "%@ 可用",
-                SystemStatusFormatter.bytes(freeDiskBytes)
-            )
-        case .battery:
-            return SystemStatusFormatter.percent(snapshot.battery.level)
-        case .network:
-            return SystemStatusFormatter.speed(totalNetworkBytesPerSecond)
-        case .topProcesses:
-            return "—"
-        }
+        chartMetric.format(chartMetric.value(in: snapshot, kind: kind), localization: localization)
     }
 
     private var supportingDetails: [String] {
@@ -2292,7 +2164,7 @@ struct SystemStatusMetricDetailView: View {
                 localization.format(
                     "metric.powerFormat",
                     defaultValue: "功率 %@",
-                    SystemStatusFormatter.power(snapshot.cpu.systemPowerWatts)
+                    SystemStatusFormatter.power(snapshot.cpu.cpuPowerWatts)
                 ),
                 "\(SystemStatusMenuBarValueKind.load.title(localization: localization)) \(formatDecimal(snapshot.cpu.loadAverage1Minute))"
             ]
@@ -2306,7 +2178,9 @@ struct SystemStatusMetricDetailView: View {
                 )
             ]
         case .memory:
-            return [
+            let status = showsMemoryPressure ? [localization.format("memory.pressure.systemLevel", defaultValue: "系统压力 %@",
+                snapshot.memory.pressure?.title(localization: localization) ?? "—")] : []
+            return status + [
                 localization.format(
                     "metric.usedFormat",
                     defaultValue: "已用 %@",
@@ -2364,30 +2238,16 @@ struct SystemStatusMetricDetailView: View {
         }
     }
 
-    private var freeDiskBytes: UInt64? {
-        guard let used = snapshot.disk.usedBytes, let total = snapshot.disk.totalBytes else { return nil }
-        return total >= used ? total - used : 0
-    }
-
-    private var totalNetworkBytesPerSecond: UInt64? {
-        guard
-            snapshot.network.downloadBytesPerSecond != nil
-                || snapshot.network.uploadBytesPerSecond != nil
-        else { return nil }
-        return (snapshot.network.downloadBytesPerSecond ?? 0)
-            + (snapshot.network.uploadBytesPerSecond ?? 0)
+    private var showsMemoryPressure: Bool {
+        kind == .memory && chartMetric == .pressure
     }
 
     private var statisticFormatter: (Double) -> String {
-        kind == .network || kind == .disk ? rateFormatter : percentFormatter
-    }
-
-    private var percentFormatter: (Double) -> String {
-        { "\(Int($0.rounded()))%" }
+        { chartMetric.format($0, localization: localization) }
     }
 
     private var rateFormatter: (Double) -> String {
-        { SystemStatusFormatter.speed(UInt64(max($0, 0))) }
+        { SystemStatusChartMetric.activity.format($0, localization: localization) }
     }
 
     private func formatDecimal(_ value: Double?) -> String {
@@ -2428,6 +2288,9 @@ private struct SystemStatusHUDChartContextOverlay: View {
     let valueFormatter: (Double) -> String
     let rangeLabel: String
     let pinRetentionRange: ClosedRange<TimeInterval>?
+    var selectsPrecedingSample = false
+    var availability: [Bool]?
+    var breaksBefore: [Bool] = []
 
     @State private var hoverIndex: Int?
     @State private var selection = SystemStatusChartSelection()
@@ -2442,7 +2305,8 @@ private struct SystemStatusHUDChartContextOverlay: View {
     }
 
     private func reading(at index: Int) -> SystemStatusChartSelection.Reading? {
-        guard timestamps.indices.contains(index), series.allSatisfy({ $0.indices.contains(index) }) else {
+        guard timestamps.indices.contains(index), series.allSatisfy({ $0.indices.contains(index) }),
+              availability.map({ $0.indices.contains(index) && $0[index] }) ?? true else {
             return nil
         }
         return .init(timestamp: timestamps[index], values: series.map { $0[index] })
@@ -2453,7 +2317,7 @@ private struct SystemStatusHUDChartContextOverlay: View {
             ZStack(alignment: .topLeading) {
                 if
                     let activeReading,
-                    let timeRange = SystemStatusHUDChartGeometry.timeRange(timestamps: timestamps)
+                    let timeRange = retainedTimeRange
                 {
                     let x = SystemStatusHUDChartGeometry.x(
                         for: activeReading.timestamp,
@@ -2472,7 +2336,7 @@ private struct SystemStatusHUDChartContextOverlay: View {
                         }
 
                         Text(contextText(for: activeReading))
-                            .font(SystemStatusHUDFont.mono(9.5, .medium))
+                            .font(PluginTypography.caption.font.monospacedDigit())
                             .foregroundStyle(theme.text.primary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -2501,7 +2365,8 @@ private struct SystemStatusHUDChartContextOverlay: View {
                         let nextIndex = fraction.flatMap {
                             SystemStatusHUDChartGeometry.nearestIndex(
                                 to: $0,
-                                timestamps: timestamps
+                                timestamps: timestamps,
+                                selectsPrecedingSample: selectsPrecedingSample, domain: retainedTimeRange, breaksBefore: breaksBefore
                             )
                         }
                         if hoverIndex != nextIndex {
@@ -2511,7 +2376,8 @@ private struct SystemStatusHUDChartContextOverlay: View {
                     onSelectFraction: { fraction in
                         guard let selectedIndex = SystemStatusHUDChartGeometry.nearestIndex(
                             to: fraction,
-                            timestamps: timestamps
+                            timestamps: timestamps,
+                            selectsPrecedingSample: selectsPrecedingSample, domain: retainedTimeRange, breaksBefore: breaksBefore
                         ) else {
                             return
                         }
@@ -2623,15 +2489,5 @@ private struct SystemStatusChartTrackingView: NSViewRepresentable {
             let location = convert(event.locationInWindow, from: nil)
             return min(max(location.x / bounds.width, 0), 1)
         }
-    }
-}
-
-private enum SystemStatusHUDFont {
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
-    }
-
-    static func sans(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
     }
 }

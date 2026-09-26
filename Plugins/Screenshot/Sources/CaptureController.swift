@@ -16,6 +16,7 @@ final class CaptureController {
     private var overlays: [OverlayWindow] = []
     private var pointerTracker: CapturePointerTracker?
     private var startTask: Task<Void, Never>?
+    private var cursorPushed = false
     private var finished = false
 
     private nonisolated static let standardPanelLevels: Set<Int> = [
@@ -63,6 +64,9 @@ final class CaptureController {
                     overlays.append(overlay)
                 }
 
+                // The overlay owns this cursor until every capture exit path dismisses it.
+                NSCursor.crosshair.push()
+                cursorPushed = true
                 let pointerTracker = CapturePointerTracker(overlays: overlays)
                 self.pointerTracker = pointerTracker
                 pointerTracker.update()
@@ -74,7 +78,6 @@ final class CaptureController {
                 PluginPresentationSafety.prepareForWindowOrdering()
                 for overlay in overlays { overlay.orderFrontRegardless() }
                 pointerTracker.update()
-                NSCursor.crosshair.set()
             } catch {
                 guard !finished, !Task.isCancelled else { return }
                 onError?(environment.format("capture.failed", "截图失败：%@", environment.captureErrorDescription(error)))
@@ -120,6 +123,10 @@ final class CaptureController {
         pointerTracker = nil
         for overlay in overlays { overlay.dismiss() }
         overlays.removeAll()
+        if cursorPushed {
+            NSCursor.pop()
+            cursorPushed = false
+        }
         onFinish?()
     }
 

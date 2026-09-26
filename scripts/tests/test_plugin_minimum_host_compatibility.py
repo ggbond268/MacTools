@@ -20,6 +20,8 @@ PLUGIN_INTERFACES = REPO_ROOT / "Sources/MacToolsPluginKit/PluginInterfaces.swif
 PLUGIN_SETTINGS_MODELS = REPO_ROOT / "Sources/MacToolsPluginKit/PluginSettingsModels.swift"
 APP_VERSION_CONFIG = REPO_ROOT / "Configs/AppVersion.xcconfig"
 NEW_API_MINIMUM_HOSTS = {
+    "PluginTypography": "2.0.0",
+    "PluginMetricValue": "2.0.0",
     "PluginPanelWidgetGrid": "1.3.1",
     "PluginPanelIconControl": "1.3.1",
     "iconWidget": "1.3.1",
@@ -437,6 +439,8 @@ class PluginMinimumHostCompatibilityTests(unittest.TestCase):
     def test_component_theme_inventory_covers_every_public_type_used_by_plugins(self) -> None:
         component_theme_symbols = public_top_level_type_names(
             COMPONENT_THEME_MODELS.read_text(encoding="utf-8")
+            + "\n" + COMPONENT_THEME_MODELS.with_name("PluginTypography.swift").read_text(encoding="utf-8")
+            + "\n" + COMPONENT_THEME_MODELS.with_name("PluginMetricValue.swift").read_text(encoding="utf-8")
         )
         plugin_source = "\n".join(
             path.read_text(encoding="utf-8")

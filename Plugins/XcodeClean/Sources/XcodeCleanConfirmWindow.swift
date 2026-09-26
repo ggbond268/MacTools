@@ -211,7 +211,7 @@ private struct XcodeCleanConfirmView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(localization.string("confirm.title", defaultValue: "确认清理 Xcode 缓存"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(PluginTypography.pageTitle.font)
                 Text(headerSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -224,7 +224,7 @@ private struct XcodeCleanConfirmView: View {
                     ? localization.string("confirm.action.deselectAll", defaultValue: "全不选")
                     : localization.string("confirm.action.selectAll", defaultValue: "全选")
                 )
-                    .font(.system(size: 12))
+                    .font(PluginTypography.control.font)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)
@@ -296,7 +296,7 @@ private struct XcodeCleanConfirmView: View {
             .buttonStyle(.plain)
 
             Text(section.title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(PluginTypography.sectionTitle.font)
                 .foregroundStyle(.secondary)
 
             Spacer()
@@ -326,13 +326,13 @@ private struct XcodeCleanConfirmView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text((candidate.path as NSString).lastPathComponent)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(PluginTypography.body.font)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
 
                     Text(candidate.path)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(PluginTypography.detail.font)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.head)
@@ -341,7 +341,7 @@ private struct XcodeCleanConfirmView: View {
                 Spacer(minLength: 8)
 
                 Text(byteText(candidate.sizeBytes))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(PluginTypography.value.font)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 64, alignment: .trailing)
             }
@@ -357,35 +357,17 @@ private struct XcodeCleanConfirmView: View {
                 onConfirm(viewModel.selectedIDs)
             }) {
                 Text(confirmTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(nsColor: .systemBlue).opacity(0.85), Color(nsColor: .systemBlue)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-                    )
-                    .opacity(viewModel.selectedCount == 0 ? 0.4 : 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
             .disabled(viewModel.selectedCount == 0)
 
             Button(action: onCancel) {
                 Text(localization.string("confirm.action.cancel", defaultValue: "取消"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)

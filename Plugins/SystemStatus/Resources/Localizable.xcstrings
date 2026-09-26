@@ -1,6 +1,21 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "memory.pressure.title": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "压力"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "壓力"}}, "en": {"stringUnit": {"state": "translated", "value": "Pressure"}}, "ja": {"stringUnit": {"state": "translated", "value": "プレッシャー"}}, "ko": {"stringUnit": {"state": "translated", "value": "압력"}}, "de": {"stringUnit": {"state": "translated", "value": "Speicherdruck"}}, "es": {"stringUnit": {"state": "translated", "value": "Presión"}}, "fr": {"stringUnit": {"state": "translated", "value": "Pression"}}, "pt": {"stringUnit": {"state": "translated", "value": "Pressão"}}, "ru": {"stringUnit": {"state": "translated", "value": "Нагрузка"}}, "ar": {"stringUnit": {"state": "translated", "value": "الضغط"}}}},
+    "memory.pressure.estimateHelp": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "按（联动内存 + 压缩内存实际占用）÷ 物理内存估算；颜色表示系统压力等级。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "依（聯動記憶體 + 壓縮記憶體實際用量）÷ 實體記憶體估算；顏色表示系統壓力等級。"}}, "en": {"stringUnit": {"state": "translated", "value": "Estimate: (wired memory + physical compressor storage) ÷ physical memory. Colors show the system pressure level."}}, "ja": {"stringUnit": {"state": "translated", "value": "（固定メモリ + 圧縮メモリの実使用量）÷ 物理メモリで推定。色はシステムのプレッシャーレベルを示します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "(고정 메모리 + 압축 메모리의 실제 사용량) ÷ 물리 메모리로 추정합니다. 색상은 시스템 압력 수준을 나타냅니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Schätzung: (fest zugewiesener Speicher + physischer Komprimierungsspeicher) ÷ physischer Speicher. Farben zeigen die Systemdruckstufe."}}, "es": {"stringUnit": {"state": "translated", "value": "Estimación: (memoria cableada + espacio físico del compresor) ÷ memoria física. Los colores indican el nivel de presión del sistema."}}, "fr": {"stringUnit": {"state": "translated", "value": "Estimation : (mémoire résidente + espace physique du compresseur) ÷ mémoire physique. Les couleurs indiquent le niveau de pression du système."}}, "pt": {"stringUnit": {"state": "translated", "value": "Estimativa: (memória residente + espaço físico do compressor) ÷ memória física. As cores indicam o nível de pressão do sistema."}}, "ru": {"stringUnit": {"state": "translated", "value": "Оценка: (закреплённая память + физическая память компрессора) ÷ физическая память. Цвет обозначает системный уровень нагрузки."}}, "ar": {"stringUnit": {"state": "translated", "value": "التقدير: (الذاكرة المثبتة + التخزين الفعلي للذاكرة المضغوطة) ÷ الذاكرة الفعلية. تشير الألوان إلى مستوى ضغط النظام."}}}},
+    "memory.pressure.systemLevel": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "系统压力 %@"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "系統壓力 %@"}}, "en": {"stringUnit": {"state": "translated", "value": "System pressure %@"}}, "ja": {"stringUnit": {"state": "translated", "value": "システムプレッシャー %@"}}, "ko": {"stringUnit": {"state": "translated", "value": "시스템 압력 %@"}}, "de": {"stringUnit": {"state": "translated", "value": "Systemdruck %@"}}, "es": {"stringUnit": {"state": "translated", "value": "Presión del sistema %@"}}, "fr": {"stringUnit": {"state": "translated", "value": "Pression du système %@"}}, "pt": {"stringUnit": {"state": "translated", "value": "Pressão do sistema %@"}}, "ru": {"stringUnit": {"state": "translated", "value": "Системная нагрузка %@"}}, "ar": {"stringUnit": {"state": "translated", "value": "ضغط النظام %@"}}}},
+    "settings.chartMetric.transfer": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "传输速率"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "傳輸速率"}}, "en": {"stringUnit": {"state": "translated", "value": "Transfer rate"}}, "ja": {"stringUnit": {"state": "translated", "value": "転送速度"}}, "ko": {"stringUnit": {"state": "translated", "value": "전송 속도"}}, "de": {"stringUnit": {"state": "translated", "value": "Übertragungsrate"}}, "es": {"stringUnit": {"state": "translated", "value": "Velocidad de transferencia"}}, "fr": {"stringUnit": {"state": "translated", "value": "Débit de transfert"}}, "pt": {"stringUnit": {"state": "translated", "value": "Taxa de transferência"}}, "ru": {"stringUnit": {"state": "translated", "value": "Скорость передачи"}}, "ar": {"stringUnit": {"state": "translated", "value": "معدل النقل"}}}},
+    "memory.pressure.normal": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "正常"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "正常"}}, "en": {"stringUnit": {"state": "translated", "value": "Normal"}}, "ja": {"stringUnit": {"state": "translated", "value": "正常"}}, "ko": {"stringUnit": {"state": "translated", "value": "정상"}}, "de": {"stringUnit": {"state": "translated", "value": "Normal"}}, "es": {"stringUnit": {"state": "translated", "value": "Normal"}}, "fr": {"stringUnit": {"state": "translated", "value": "Normale"}}, "pt": {"stringUnit": {"state": "translated", "value": "Normal"}}, "ru": {"stringUnit": {"state": "translated", "value": "Нормальная"}}, "ar": {"stringUnit": {"state": "translated", "value": "طبيعي"}}}},
+    "memory.pressure.warning": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "偏高"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "偏高"}}, "en": {"stringUnit": {"state": "translated", "value": "Warning"}}, "ja": {"stringUnit": {"state": "translated", "value": "高い"}}, "ko": {"stringUnit": {"state": "translated", "value": "높음"}}, "de": {"stringUnit": {"state": "translated", "value": "Erhöht"}}, "es": {"stringUnit": {"state": "translated", "value": "Elevada"}}, "fr": {"stringUnit": {"state": "translated", "value": "Élevée"}}, "pt": {"stringUnit": {"state": "translated", "value": "Elevada"}}, "ru": {"stringUnit": {"state": "translated", "value": "Повышенная"}}, "ar": {"stringUnit": {"state": "translated", "value": "مرتفع"}}}},
+    "memory.pressure.critical": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "严重"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "嚴重"}}, "en": {"stringUnit": {"state": "translated", "value": "Critical"}}, "ja": {"stringUnit": {"state": "translated", "value": "深刻"}}, "ko": {"stringUnit": {"state": "translated", "value": "심각"}}, "de": {"stringUnit": {"state": "translated", "value": "Kritisch"}}, "es": {"stringUnit": {"state": "translated", "value": "Crítica"}}, "fr": {"stringUnit": {"state": "translated", "value": "Critique"}}, "pt": {"stringUnit": {"state": "translated", "value": "Crítica"}}, "ru": {"stringUnit": {"state": "translated", "value": "Критическая"}}, "ar": {"stringUnit": {"state": "translated", "value": "حرج"}}}},
+    "settings.chartMetric": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "图表指标"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "圖表指標"}}, "en": {"stringUnit": {"state": "translated", "value": "Chart metric"}}, "ja": {"stringUnit": {"state": "translated", "value": "グラフの指標"}}, "ko": {"stringUnit": {"state": "translated", "value": "차트 지표"}}, "de": {"stringUnit": {"state": "translated", "value": "Diagrammmetrik"}}, "es": {"stringUnit": {"state": "translated", "value": "Métrica del gráfico"}}, "fr": {"stringUnit": {"state": "translated", "value": "Mesure du graphique"}}, "pt": {"stringUnit": {"state": "translated", "value": "Métrica do gráfico"}}, "ru": {"stringUnit": {"state": "translated", "value": "Показатель графика"}}, "ar": {"stringUnit": {"state": "translated", "value": "مؤشر الرسم البياني"}}}},
+    "topProcesses.memberCount": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "%d 个进程"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "%d 個程序"}}, "en": {"stringUnit": {"state": "translated", "value": "%d processes"}}, "ja": {"stringUnit": {"state": "translated", "value": "%d プロセス"}}, "ko": {"stringUnit": {"state": "translated", "value": "프로세스 %d개"}}, "de": {"stringUnit": {"state": "translated", "value": "%d Prozesse"}}, "es": {"stringUnit": {"state": "translated", "value": "%d procesos"}}, "fr": {"stringUnit": {"state": "translated", "value": "%d processus"}}, "pt": {"stringUnit": {"state": "translated", "value": "%d processos"}}, "ru": {"stringUnit": {"state": "translated", "value": "%d процессов"}}, "ar": {"stringUnit": {"state": "translated", "value": "%d عمليات"}}}},
+    "topProcesses.accounting": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "按应用汇总；CPU 以单核 100% 计，内存为应用内存占用。无法完整读取时显示 —。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "依 App 彙總；CPU 以單核心 100% 計，記憶體為 App 記憶體用量。無法完整讀取時顯示 —。"}}, "en": {"stringUnit": {"state": "translated", "value": "Grouped by app. CPU: 100% per core. Memory: physical footprint; — when a complete reading is unavailable."}}, "ja": {"stringUnit": {"state": "translated", "value": "アプリごとに集計。CPU はコアあたり 100%。メモリは物理フットプリントで、完全に取得できない場合は — を表示します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "앱별로 합산합니다. CPU는 코어당 100%입니다. 메모리는 실제 메모리 점유량이며 전체 값을 읽을 수 없으면 —로 표시합니다."}}, "de": {"stringUnit": {"state": "translated", "value": "Nach App gruppiert. CPU: 100% pro Kern. Speicher: physischer Footprint; — bei unvollständiger Messung."}}, "es": {"stringUnit": {"state": "translated", "value": "Agrupado por aplicación. CPU: 100% por núcleo. Memoria: huella física; — si la lectura está incompleta."}}, "fr": {"stringUnit": {"state": "translated", "value": "Regroupé par application. CPU : 100% par cœur. Mémoire : empreinte physique ; — si la mesure est incomplète."}}, "pt": {"stringUnit": {"state": "translated", "value": "Agrupado por aplicativo. CPU: 100% por núcleo. Memória: ocupação física; — quando a leitura está incompleta."}}, "ru": {"stringUnit": {"state": "translated", "value": "По приложениям. CPU: 100% на ядро. Память: физический объём; — если полные данные недоступны."}}, "ar": {"stringUnit": {"state": "translated", "value": "مجمّعة حسب التطبيق. المعالج: 100% لكل نواة. الذاكرة: البصمة الفعلية؛ تظهر — عند تعذّر القراءة الكاملة."}}}},
+    "settings.metric.reorderAccessibility": {"extractionState": "manual", "localizations": {"ar": {"stringUnit": {"state": "translated", "value": "اسحب لإعادة الترتيب"}}, "de": {"stringUnit": {"state": "translated", "value": "Zum Neuanordnen ziehen"}}, "en": {"stringUnit": {"state": "translated", "value": "Drag to reorder"}}, "es": {"stringUnit": {"state": "translated", "value": "Arrastrar para reordenar"}}, "fr": {"stringUnit": {"state": "translated", "value": "Faire glisser pour réorganiser"}}, "ja": {"stringUnit": {"state": "translated", "value": "ドラッグして並べ替える"}}, "ko": {"stringUnit": {"state": "translated", "value": "드래그하여 순서 변경"}}, "pt": {"stringUnit": {"state": "translated", "value": "Arrastar para reordenar"}}, "ru": {"stringUnit": {"state": "translated", "value": "Перетащите для изменения порядка"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "拖拽调整顺序"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "拖移調整順序"}}}},
+    "settings.metric.visibility.show": {"extractionState": "manual", "localizations": {"ar": {"stringUnit": {"state": "translated", "value": "إظهار %@"}}, "de": {"stringUnit": {"state": "translated", "value": "%@ anzeigen"}}, "en": {"stringUnit": {"state": "translated", "value": "Show %@"}}, "es": {"stringUnit": {"state": "translated", "value": "Mostrar %@"}}, "fr": {"stringUnit": {"state": "translated", "value": "Afficher %@"}}, "ja": {"stringUnit": {"state": "translated", "value": "%@を表示"}}, "ko": {"stringUnit": {"state": "translated", "value": "%@ 표시"}}, "pt": {"stringUnit": {"state": "translated", "value": "Mostrar %@"}}, "ru": {"stringUnit": {"state": "translated", "value": "Показать %@"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "显示%@"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "顯示%@"}}}},
+    "settings.metric.visibility.hide": {"extractionState": "manual", "localizations": {"ar": {"stringUnit": {"state": "translated", "value": "إخفاء %@"}}, "de": {"stringUnit": {"state": "translated", "value": "%@ ausblenden"}}, "en": {"stringUnit": {"state": "translated", "value": "Hide %@"}}, "es": {"stringUnit": {"state": "translated", "value": "Ocultar %@"}}, "fr": {"stringUnit": {"state": "translated", "value": "Masquer %@"}}, "ja": {"stringUnit": {"state": "translated", "value": "%@を非表示"}}, "ko": {"stringUnit": {"state": "translated", "value": "%@ 가리기"}}, "pt": {"stringUnit": {"state": "translated", "value": "Ocultar %@"}}, "ru": {"stringUnit": {"state": "translated", "value": "Скрыть %@"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "隐藏%@"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "隱藏%@"}}}},
+    "settings.process.limit" : {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "最多显示数量"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "最多顯示數量"}}, "en": {"stringUnit": {"state": "translated", "value": "Maximum items"}}, "ja": {"stringUnit": {"state": "translated", "value": "表示件数の上限"}}, "ko": {"stringUnit": {"state": "translated", "value": "최대 표시 항목 수"}}, "de": {"stringUnit": {"state": "translated", "value": "Maximale Anzahl"}}, "es": {"stringUnit": {"state": "translated", "value": "Máximo de elementos"}}, "fr": {"stringUnit": {"state": "translated", "value": "Nombre maximal d’éléments"}}, "pt": {"stringUnit": {"state": "translated", "value": "Máximo de itens"}}, "ru": {"stringUnit": {"state": "translated", "value": "Максимум элементов"}}, "ar": {"stringUnit": {"state": "translated", "value": "الحد الأقصى للعناصر"}}}},
+    "settings.process.limitSummary" : {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "最多 %d 项"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "最多 %d 項"}}, "en": {"stringUnit": {"state": "translated", "value": "Up to %d items"}}, "ja": {"stringUnit": {"state": "translated", "value": "最大 %d 件"}}, "ko": {"stringUnit": {"state": "translated", "value": "최대 %d개 항목"}}, "de": {"stringUnit": {"state": "translated", "value": "Bis zu %d Einträge"}}, "es": {"stringUnit": {"state": "translated", "value": "Hasta %d elementos"}}, "fr": {"stringUnit": {"state": "translated", "value": "Jusqu’à %d éléments"}}, "pt": {"stringUnit": {"state": "translated", "value": "Até %d itens"}}, "ru": {"stringUnit": {"state": "translated", "value": "До %d элементов"}}, "ar": {"stringUnit": {"state": "translated", "value": "حتى %d عناصر"}}}},
     "action.showSystemStatus.title": {
       "extractionState": "manual",
       "localizations": {
@@ -356,22 +371,6 @@
         }
       }
     },
-    "settings.metric.visibility.hide": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إخفاء %@" } },
-        "de": { "stringUnit": { "state": "translated", "value": "%@ ausblenden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Hide %@" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ocultar %@" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Masquer %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "%@を非表示" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "%@ 가리기" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Ocultar %@" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Скрыть %@" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "隐藏%@" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "隱藏%@" } }
-      }
-    },
     "settings.metric.visibility.hidden": {
       "extractionState": "manual",
       "localizations": {
@@ -386,22 +385,6 @@
         "ru": { "stringUnit": { "state": "translated", "value": "Скрыто" } },
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "已隐藏" } },
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "已隱藏" } }
-      }
-    },
-    "settings.metric.visibility.show": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "إظهار %@" } },
-        "de": { "stringUnit": { "state": "translated", "value": "%@ anzeigen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Show %@" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Mostrar %@" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Afficher %@" } },
-        "ja": { "stringUnit": { "state": "translated", "value": "%@を表示" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "%@ 표시" } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Mostrar %@" } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Показать %@" } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示%@" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "顯示%@" } }
       }
     },
     "settings.metric.visibility.visible": {
@@ -3473,77 +3456,7 @@
         }
       }
     },
-    "settings.panel.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اختر ما يظهر في لوحة المكونات واسحب لإعادة ترتيبه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wählen Sie aus, was im Komponentenbereich angezeigt wird, und ziehen Sie, um es neu anzuordnen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elija lo que aparece en el panel de componentes y arrástrelo para reordenarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez ce qui apparaît dans le panneau des composants et faites-le glisser pour le réorganiser."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "구성 요소 패널에 표시되는 항목을 선택하고 드래그하여 순서를 바꾸세요."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Escolha o que aparece no painel de componentes e arraste para reordená-lo."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выберите то, что появится на панели компонентов, и перетащите его, чтобы изменить порядок."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose what appears in the component panel and drag to reorder it."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コンポーネントパネルに表示する内容を選び、ドラッグして並べ替えます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选择组件面板显示的内容，并拖拽调整顺序。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "選擇要在元件面板中顯示的內容，並拖移調整順序。"
-          }
-        }
-      }
-    },
+    "settings.panel.description": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "选择显示内容，拖拽排序，展开配置详情。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "選擇顯示內容，拖移排序，展開設定詳細選項。"}}, "en": {"stringUnit": {"state": "translated", "value": "Choose what to show, drag to reorder, and expand to configure."}}, "ja": {"stringUnit": {"state": "translated", "value": "表示内容を選び、ドラッグして並べ替え、展開して設定します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "표시할 항목을 선택하고 드래그하여 정렬한 뒤 펼쳐서 설정하세요."}}, "de": {"stringUnit": {"state": "translated", "value": "Sichtbare Inhalte wählen, zum Sortieren ziehen und zum Konfigurieren aufklappen."}}, "es": {"stringUnit": {"state": "translated", "value": "Elige qué mostrar, arrastra para reordenar y expande para configurar."}}, "fr": {"stringUnit": {"state": "translated", "value": "Choisissez les éléments à afficher, faites-les glisser pour les réorganiser et développez-les pour les configurer."}}, "pt": {"stringUnit": {"state": "translated", "value": "Escolha o que mostrar, arraste para reordenar e expanda para configurar."}}, "ru": {"stringUnit": {"state": "translated", "value": "Выберите содержимое, перетащите для изменения порядка и разверните для настройки."}}, "ar": {"stringUnit": {"state": "translated", "value": "اختر ما تريد إظهاره، واسحب لإعادة الترتيب، ووسّع لضبط الإعدادات."}}}},
     "settings.menuBar.title": {
       "extractionState": "manual",
       "localizations": {
@@ -4112,574 +4025,7 @@
         }
       }
     },
-    "settings.metric.topProcesses.panelDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العمليات التي تستخدم معظم وحدة المعالجة المركزية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prozesse, die die meiste CPU verbrauchen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Procesos que utilizan la mayor cantidad de CPU"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Processus utilisant le plus de CPU"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU를 가장 많이 사용하는 프로세스"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Processos que usam mais CPU"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Процессы, использующие больше всего процессора"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Processes using the most CPU"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 使用率が最も高いプロセス"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 占用最高的进程"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 使用率最高的程序"
-          }
-        }
-      }
-    },
-    "settings.metric.cpu.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار استخدام وحدة المعالجة المركزية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU-Auslastung anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso de CPU"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher l'utilisation du processeur"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 사용량 표시"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso da CPU"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показать использование ЦП"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show CPU usage"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 使用率を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示 CPU 使用率"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示 CPU 使用率"
-          }
-        }
-      }
-    },
-    "settings.metric.gpu.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار استخدام GPU"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU-Nutzung anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso de GPU"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher l'utilisation du GPU"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU 사용량 표시"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso de GPU"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показать использование графического процессора"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show GPU usage"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU 使用率を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示 GPU 使用率"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示 GPU 使用率"
-          }
-        }
-      }
-    },
-    "settings.metric.network.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار سرعة التحميل والتنزيل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Upload- und Download-Geschwindigkeit anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar velocidad de carga y descarga"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher la vitesse de téléchargement et de téléchargement"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "업로드 및 다운로드 속도 표시"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar velocidade de upload e download"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показать скорость загрузки и скачивания"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show upload and download speed"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アップロードとダウンロードの速度を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示上下行速率"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示上傳和下載速率"
-          }
-        }
-      }
-    },
-    "settings.metric.disk.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تخصيص سعة القرص ونشاطه"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kapazität und Aktivität anpassen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personalizar capacidad y actividad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personnaliser la capacité et l’activité"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "디스크 용량 및 활동 사용자화"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Personalizar capacidade e atividade"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Настроить ёмкость и активность"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Customize capacity and activity"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "容量と動作をカスタマイズ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自定义容量和读写活动"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自訂容量和讀寫活動"
-          }
-        }
-      }
-    },
-    "settings.metric.memory.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار استخدام الذاكرة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Speichernutzung anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso de memoria"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher l'utilisation de la mémoire"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "메모리 사용량 표시"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar uso de memória"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показать использование памяти"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show memory usage"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メモリ使用率を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示内存使用率"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示記憶體使用率"
-          }
-        }
-      }
-    },
-    "settings.metric.battery.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إظهار شحن البطارية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Akkuladung anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar carga de batería"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher la charge de la batterie"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "배터리 충전량 표시"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar carga da bateria"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Показать заряд батареи"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show battery charge"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バッテリー残量を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示电量"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示電量"
-          }
-        }
-      }
-    },
-    "settings.metric.topProcesses.menuBarDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "غير متوفر في شريط القائمة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In der Menüleiste nicht verfügbar"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No disponible en la barra de menú."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non disponible dans la barre de menu"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "메뉴 표시줄에서는 사용할 수 없습니다."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não disponível na barra de menu"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Недоступно в строке меню"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not available in the menu bar"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メニューバーでは利用できません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不支持菜单栏显示"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不支援選單列顯示"
-          }
-        }
-      }
-    },
+    "settings.metric.topProcesses.panelDescription": {"extractionState": "manual", "localizations": {"ar": {"stringUnit": {"state": "translated", "value": "المعالج والذاكرة حسب التطبيق"}}, "de": {"stringUnit": {"state": "translated", "value": "CPU und Arbeitsspeicher nach App"}}, "es": {"stringUnit": {"state": "translated", "value": "CPU y memoria por aplicación"}}, "fr": {"stringUnit": {"state": "translated", "value": "CPU et mémoire par application"}}, "ko": {"stringUnit": {"state": "translated", "value": "앱별 CPU 및 메모리"}}, "pt": {"stringUnit": {"state": "translated", "value": "CPU e memória por aplicativo"}}, "ru": {"stringUnit": {"state": "translated", "value": "CPU и память по приложениям"}}, "en": {"stringUnit": {"state": "translated", "value": "CPU and memory grouped by app"}}, "ja": {"stringUnit": {"state": "translated", "value": "アプリごとの CPU とメモリ"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "按应用汇总 CPU 和内存"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "依 App 彙總 CPU 與記憶體"}}}},
     "settings.menuBarLayout.title": {
       "extractionState": "manual",
       "localizations": {
@@ -4776,22 +4122,9 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "即時預覽" } }
       }
     },
-    "settings.menuBar.builderDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": { "stringUnit": { "state": "translated", "value": "اختر ما يصل إلى قيمتين لكل مقياس. تظهر الأولى قبل الثانية أو فوقها. انقر على القيم أو اسحبها لتعيينها، واسحب المقاييس لإعادة ترتيبها." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Wähle pro Metrik bis zu zwei Werte. Der erste erscheint vor oder über dem zweiten. Klicke oder ziehe Werte zum Zuweisen; ziehe Metriken zum Neuordnen." } },
-        "en": { "stringUnit": { "state": "translated", "value": "Choose up to two values per metric. The first appears before or above the second. Click or drag values to assign them; drag metrics to reorder." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Elige hasta dos valores por métrica. El primero aparece antes o encima del segundo. Haz clic o arrastra valores para asignarlos; arrastra las métricas para reordenarlas." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Choisissez jusqu’à deux valeurs par mesure. La première apparaît avant ou au-dessus de la seconde. Cliquez sur les valeurs ou faites-les glisser pour les attribuer ; faites glisser les mesures pour les réordonner." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "指標ごとに最大2つの値を選択します。1つ目は2つ目の前または上に表示されます。値をクリックまたはドラッグして割り当て、指標をドラッグして並べ替えます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "지표마다 값을 최대 두 개 선택할 수 있습니다. 첫 번째 값은 두 번째 값보다 앞이나 위에 표시됩니다. 값을 클릭하거나 드래그해 지정하고, 지표를 드래그해 순서를 변경하십시오." } },
-        "pt": { "stringUnit": { "state": "translated", "value": "Escolha até dois valores por métrica. O primeiro aparece antes ou acima do segundo. Clique ou arraste valores para atribuí-los; arraste as métricas para reordená-las." } },
-        "ru": { "stringUnit": { "state": "translated", "value": "Выберите до двух значений для каждого показателя. Первое отображается перед вторым или над ним. Нажимайте или перетаскивайте значения для назначения; перетаскивайте показатели для изменения порядка." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "每个指标最多选择两个数值。第一个显示在第二个之前或上方。点击或拖拽数值进行分配，拖拽指标可调整顺序。" } },
-        "zh-Hant": { "stringUnit": { "state": "translated", "value": "每個指標最多選擇兩個數值。第一個會顯示在第二個之前或上方。點按或拖移數值以指派，拖移指標可調整順序。" } }
-      }
-    },
+    "settings.metric.expanded": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "已展开"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "已展開"}}, "en": {"stringUnit": {"state": "translated", "value": "Expanded"}}, "ja": {"stringUnit": {"state": "translated", "value": "展開済み"}}, "ko": {"stringUnit": {"state": "translated", "value": "펼쳐짐"}}, "de": {"stringUnit": {"state": "translated", "value": "Erweitert"}}, "es": {"stringUnit": {"state": "translated", "value": "Expandido"}}, "fr": {"stringUnit": {"state": "translated", "value": "Développé"}}, "pt": {"stringUnit": {"state": "translated", "value": "Expandido"}}, "ru": {"stringUnit": {"state": "translated", "value": "Развёрнуто"}}, "ar": {"stringUnit": {"state": "translated", "value": "موسّع"}}}},
+    "settings.metric.collapsed": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "已折叠"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "已摺疊"}}, "en": {"stringUnit": {"state": "translated", "value": "Collapsed"}}, "ja": {"stringUnit": {"state": "translated", "value": "折りたたみ"}}, "ko": {"stringUnit": {"state": "translated", "value": "접힘"}}, "de": {"stringUnit": {"state": "translated", "value": "Reduziert"}}, "es": {"stringUnit": {"state": "translated", "value": "Contraído"}}, "fr": {"stringUnit": {"state": "translated", "value": "Réduit"}}, "pt": {"stringUnit": {"state": "translated", "value": "Recolhido"}}, "ru": {"stringUnit": {"state": "translated", "value": "Свёрнуто"}}, "ar": {"stringUnit": {"state": "translated", "value": "مطوي"}}}},
+    "settings.menuBar.builderDescription": {"extractionState": "manual", "localizations": {"zh-Hans": {"stringUnit": {"state": "translated", "value": "拖拽调整顺序，展开设置样式和数值。"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "拖移調整順序，展開設定樣式和數值。"}}, "en": {"stringUnit": {"state": "translated", "value": "Drag to reorder; expand a metric to set its style and values."}}, "ja": {"stringUnit": {"state": "translated", "value": "ドラッグして並べ替え、展開してスタイルと値を設定します。"}}, "ko": {"stringUnit": {"state": "translated", "value": "드래그하여 순서를 바꾸고 펼쳐서 스타일과 값을 설정하세요."}}, "de": {"stringUnit": {"state": "translated", "value": "Zum Sortieren ziehen; aufklappen, um Stil und Werte einzustellen."}}, "es": {"stringUnit": {"state": "translated", "value": "Arrastra para reordenar; expande para ajustar el estilo y los valores."}}, "fr": {"stringUnit": {"state": "translated", "value": "Faites glisser pour réorganiser ; développez pour régler le style et les valeurs."}}, "pt": {"stringUnit": {"state": "translated", "value": "Arraste para reordenar; expanda para definir o estilo e os valores."}}, "ru": {"stringUnit": {"state": "translated", "value": "Перетащите для изменения порядка; разверните для настройки стиля и значений."}}, "ar": {"stringUnit": {"state": "translated", "value": "اسحب لإعادة الترتيب ووسّع المؤشر لضبط النمط والقيم."}}}},
     "settings.menuBar.previewEmpty": {
       "extractionState": "manual",
       "localizations": {
@@ -4857,9 +4190,8 @@
     "settings.menuBarValue.level": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "مستوى البطارية" } }, "de": { "stringUnit": { "state": "translated", "value": "Batteriestand" } }, "en": { "stringUnit": { "state": "translated", "value": "Battery Level" } }, "es": { "stringUnit": { "state": "translated", "value": "Nivel de batería" } }, "fr": { "stringUnit": { "state": "translated", "value": "Niveau de batterie" } }, "ja": { "stringUnit": { "state": "translated", "value": "バッテリー残量" } }, "ko": { "stringUnit": { "state": "translated", "value": "배터리 잔량" } }, "pt": { "stringUnit": { "state": "translated", "value": "Nível da bateria" } }, "ru": { "stringUnit": { "state": "translated", "value": "Заряд" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "电量" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "電量" } } } },
     "settings.menuBarValue.timeRemaining": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "الوقت المتبقي" } }, "de": { "stringUnit": { "state": "translated", "value": "Verbleibende Zeit" } }, "en": { "stringUnit": { "state": "translated", "value": "Time Remaining" } }, "es": { "stringUnit": { "state": "translated", "value": "Tiempo restante" } }, "fr": { "stringUnit": { "state": "translated", "value": "Temps restant" } }, "ja": { "stringUnit": { "state": "translated", "value": "残り時間" } }, "ko": { "stringUnit": { "state": "translated", "value": "남은 시간" } }, "pt": { "stringUnit": { "state": "translated", "value": "Tempo restante" } }, "ru": { "stringUnit": { "state": "translated", "value": "Осталось времени" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "剩余时间" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "剩餘時間" } } } },
     "settings.menuBarValue.state": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "حالة الطاقة" } }, "de": { "stringUnit": { "state": "translated", "value": "Stromstatus" } }, "en": { "stringUnit": { "state": "translated", "value": "Power State" } }, "es": { "stringUnit": { "state": "translated", "value": "Estado de energía" } }, "fr": { "stringUnit": { "state": "translated", "value": "État d’alimentation" } }, "ja": { "stringUnit": { "state": "translated", "value": "電源状態" } }, "ko": { "stringUnit": { "state": "translated", "value": "전원 상태" } }, "pt": { "stringUnit": { "state": "translated", "value": "Estado de energia" } }, "ru": { "stringUnit": { "state": "translated", "value": "Состояние питания" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "电源状态" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "電源狀態" } } } },
-    "settings.menuBarValue.none": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "لا توجد قيمة ثانية" } }, "de": { "stringUnit": { "state": "translated", "value": "Kein zweiter Wert" } }, "en": { "stringUnit": { "state": "translated", "value": "No Second Value" } }, "es": { "stringUnit": { "state": "translated", "value": "Sin segundo valor" } }, "fr": { "stringUnit": { "state": "translated", "value": "Aucune deuxième valeur" } }, "ja": { "stringUnit": { "state": "translated", "value": "2つ目の値なし" } }, "ko": { "stringUnit": { "state": "translated", "value": "두 번째 값 없음" } }, "pt": { "stringUnit": { "state": "translated", "value": "Sem segundo valor" } }, "ru": { "stringUnit": { "state": "translated", "value": "Без второго значения" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "无第二数值" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "無第二數值" } } } },
+    "settings.menuBarValue.none": {"extractionState": "manual", "localizations": {"ar": {"stringUnit": {"state": "translated", "value": "عدم العرض"}}, "de": {"stringUnit": {"state": "translated", "value": "Nicht anzeigen"}}, "en": {"stringUnit": {"state": "translated", "value": "Don’t Show"}}, "es": {"stringUnit": {"state": "translated", "value": "No mostrar"}}, "fr": {"stringUnit": {"state": "translated", "value": "Ne pas afficher"}}, "ja": {"stringUnit": {"state": "translated", "value": "表示しない"}}, "ko": {"stringUnit": {"state": "translated", "value": "표시 안 함"}}, "pt": {"stringUnit": {"state": "translated", "value": "Não mostrar"}}, "ru": {"stringUnit": {"state": "translated", "value": "Не показывать"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "不展示"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "不顯示"}}}},
     "settings.menuBarValue.swapOrder": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "تبديل ترتيب القيم" } }, "de": { "stringUnit": { "state": "translated", "value": "Werte tauschen" } }, "en": { "stringUnit": { "state": "translated", "value": "Swap Value Order" } }, "es": { "stringUnit": { "state": "translated", "value": "Intercambiar valores" } }, "fr": { "stringUnit": { "state": "translated", "value": "Inverser les valeurs" } }, "ja": { "stringUnit": { "state": "translated", "value": "値の順序を入れ替える" } }, "ko": { "stringUnit": { "state": "translated", "value": "값 순서 바꾸기" } }, "pt": { "stringUnit": { "state": "translated", "value": "Trocar ordem dos valores" } }, "ru": { "stringUnit": { "state": "translated", "value": "Поменять значения местами" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "交换数值顺序" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "交換數值順序" } } } },
-    "settings.metric.reorderAccessibility": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "اسحب لإعادة الترتيب" } }, "de": { "stringUnit": { "state": "translated", "value": "Zum Neuanordnen ziehen" } }, "en": { "stringUnit": { "state": "translated", "value": "Drag to reorder" } }, "es": { "stringUnit": { "state": "translated", "value": "Arrastrar para reordenar" } }, "fr": { "stringUnit": { "state": "translated", "value": "Faire glisser pour réorganiser" } }, "ja": { "stringUnit": { "state": "translated", "value": "ドラッグして並べ替える" } }, "ko": { "stringUnit": { "state": "translated", "value": "드래그하여 순서 변경" } }, "pt": { "stringUnit": { "state": "translated", "value": "Arrastar para reordenar" } }, "ru": { "stringUnit": { "state": "translated", "value": "Перетащите для изменения порядка" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "拖拽调整顺序" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "拖移調整順序" } } } },
     "menuBar.compact.metric.cpu": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "CPU" } }, "de": { "stringUnit": { "state": "translated", "value": "CPU" } }, "en": { "stringUnit": { "state": "translated", "value": "CPU" } }, "es": { "stringUnit": { "state": "translated", "value": "CPU" } }, "fr": { "stringUnit": { "state": "translated", "value": "CPU" } }, "ja": { "stringUnit": { "state": "translated", "value": "CPU" } }, "ko": { "stringUnit": { "state": "translated", "value": "CPU" } }, "pt": { "stringUnit": { "state": "translated", "value": "CPU" } }, "ru": { "stringUnit": { "state": "translated", "value": "CPU" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "CPU" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "CPU" } } } },
     "menuBar.compact.metric.gpu": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "GPU" } }, "de": { "stringUnit": { "state": "translated", "value": "GPU" } }, "en": { "stringUnit": { "state": "translated", "value": "GPU" } }, "es": { "stringUnit": { "state": "translated", "value": "GPU" } }, "fr": { "stringUnit": { "state": "translated", "value": "GPU" } }, "ja": { "stringUnit": { "state": "translated", "value": "GPU" } }, "ko": { "stringUnit": { "state": "translated", "value": "GPU" } }, "pt": { "stringUnit": { "state": "translated", "value": "GPU" } }, "ru": { "stringUnit": { "state": "translated", "value": "GPU" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "GPU" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "GPU" } } } },
     "menuBar.compact.metric.memory": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "RAM" } }, "de": { "stringUnit": { "state": "translated", "value": "RAM" } }, "en": { "stringUnit": { "state": "translated", "value": "RAM" } }, "es": { "stringUnit": { "state": "translated", "value": "RAM" } }, "fr": { "stringUnit": { "state": "translated", "value": "RAM" } }, "ja": { "stringUnit": { "state": "translated", "value": "RAM" } }, "ko": { "stringUnit": { "state": "translated", "value": "RAM" } }, "pt": { "stringUnit": { "state": "translated", "value": "RAM" } }, "ru": { "stringUnit": { "state": "translated", "value": "RAM" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "内存" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "記憶體" } } } },
@@ -4880,7 +4212,6 @@
     "settings.menuBarValue.custom": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "تخصيص…" } }, "de": { "stringUnit": { "state": "translated", "value": "Eigene…" } }, "en": { "stringUnit": { "state": "translated", "value": "Custom…" } }, "es": { "stringUnit": { "state": "translated", "value": "Personalizado…" } }, "fr": { "stringUnit": { "state": "translated", "value": "Personnalisé…" } }, "ja": { "stringUnit": { "state": "translated", "value": "カスタム…" } }, "ko": { "stringUnit": { "state": "translated", "value": "사용자화…" } }, "pt": { "stringUnit": { "state": "translated", "value": "Personalizado…" } }, "ru": { "stringUnit": { "state": "translated", "value": "Настроить…" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "自定义…" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "自訂…" } } } },
     "settings.menuBarValue.first": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "القيمة الأولى" } }, "de": { "stringUnit": { "state": "translated", "value": "Erster Wert" } }, "en": { "stringUnit": { "state": "translated", "value": "First Value" } }, "es": { "stringUnit": { "state": "translated", "value": "Primer valor" } }, "fr": { "stringUnit": { "state": "translated", "value": "Première valeur" } }, "ja": { "stringUnit": { "state": "translated", "value": "1つ目の値" } }, "ko": { "stringUnit": { "state": "translated", "value": "첫 번째 값" } }, "pt": { "stringUnit": { "state": "translated", "value": "Primeiro valor" } }, "ru": { "stringUnit": { "state": "translated", "value": "Первое значение" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "第一个数值" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "第一個數值" } } } },
     "settings.menuBarValue.secondOptional": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "القيمة الثانية (اختيارية)" } }, "de": { "stringUnit": { "state": "translated", "value": "Zweiter Wert (optional)" } }, "en": { "stringUnit": { "state": "translated", "value": "Second Value (Optional)" } }, "es": { "stringUnit": { "state": "translated", "value": "Segundo valor (opcional)" } }, "fr": { "stringUnit": { "state": "translated", "value": "Deuxième valeur (facultative)" } }, "ja": { "stringUnit": { "state": "translated", "value": "2つ目の値（任意）" } }, "ko": { "stringUnit": { "state": "translated", "value": "두 번째 값(선택 사항)" } }, "pt": { "stringUnit": { "state": "translated", "value": "Segundo valor (opcional)" } }, "ru": { "stringUnit": { "state": "translated", "value": "Второе значение (необязательно)" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "第二个数值（可选）" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "第二個數值（可選）" } } } },
-    "settings.menuBarValue.available": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "القيم المتاحة" } }, "de": { "stringUnit": { "state": "translated", "value": "Verfügbare Werte" } }, "en": { "stringUnit": { "state": "translated", "value": "Available Values" } }, "es": { "stringUnit": { "state": "translated", "value": "Valores disponibles" } }, "fr": { "stringUnit": { "state": "translated", "value": "Valeurs disponibles" } }, "ja": { "stringUnit": { "state": "translated", "value": "使用可能な値" } }, "ko": { "stringUnit": { "state": "translated", "value": "사용 가능한 값" } }, "pt": { "stringUnit": { "state": "translated", "value": "Valores disponíveis" } }, "ru": { "stringUnit": { "state": "translated", "value": "Доступные значения" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "可用数值" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "可用數值" } } } },
     "detail.back": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "رجوع" } }, "de": { "stringUnit": { "state": "translated", "value": "Zurück" } }, "en": { "stringUnit": { "state": "translated", "value": "Back" } }, "es": { "stringUnit": { "state": "translated", "value": "Volver" } }, "fr": { "stringUnit": { "state": "translated", "value": "Retour" } }, "ja": { "stringUnit": { "state": "translated", "value": "戻る" } }, "ko": { "stringUnit": { "state": "translated", "value": "뒤로" } }, "pt": { "stringUnit": { "state": "translated", "value": "Voltar" } }, "ru": { "stringUnit": { "state": "translated", "value": "Назад" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "返回" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "返回" } } } },
     "detail.close": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "إغلاق" } }, "de": { "stringUnit": { "state": "translated", "value": "Schließen" } }, "en": { "stringUnit": { "state": "translated", "value": "Close" } }, "es": { "stringUnit": { "state": "translated", "value": "Cerrar" } }, "fr": { "stringUnit": { "state": "translated", "value": "Fermer" } }, "ja": { "stringUnit": { "state": "translated", "value": "閉じる" } }, "ko": { "stringUnit": { "state": "translated", "value": "닫기" } }, "pt": { "stringUnit": { "state": "translated", "value": "Fechar" } }, "ru": { "stringUnit": { "state": "translated", "value": "Закрыть" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "关闭" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "關閉" } } } },
     "chart.timeline": { "extractionState": "manual", "localizations": { "ar": { "stringUnit": { "state": "translated", "value": "النطاق الزمني" } }, "de": { "stringUnit": { "state": "translated", "value": "Zeitraum" } }, "en": { "stringUnit": { "state": "translated", "value": "Time Range" } }, "es": { "stringUnit": { "state": "translated", "value": "Intervalo de tiempo" } }, "fr": { "stringUnit": { "state": "translated", "value": "Période" } }, "ja": { "stringUnit": { "state": "translated", "value": "時間範囲" } }, "ko": { "stringUnit": { "state": "translated", "value": "시간 범위" } }, "pt": { "stringUnit": { "state": "translated", "value": "Intervalo de tempo" } }, "ru": { "stringUnit": { "state": "translated", "value": "Диапазон времени" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "时间范围" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "時間範圍" } } } },

@@ -1,4 +1,5 @@
 import AppKit
+import MacToolsPluginKit
 
 /// Shared native presentation for capture confirmation and active-session controls.
 @MainActor
@@ -8,7 +9,7 @@ enum CaptureActionBar {
     static func configure(_ button: NSButton, isPrimary: Bool = false) {
         button.bezelStyle = .rounded
         button.controlSize = .regular
-        button.font = .systemFont(ofSize: 13, weight: isPrimary ? .medium : .regular)
+        button.font = (isPrimary ? PluginTypography.sectionTitle : .body).nsFont
         if #available(macOS 26.0, *) {
             button.borderShape = .capsule
         }

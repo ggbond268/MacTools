@@ -166,9 +166,8 @@ enum SystemStatusMenuBarMetricsFormatter {
         }
 
         let availableValues = SystemStatusMenuBarValueKind.availableValues(for: item.kind)
-        var seen: Set<SystemStatusMenuBarValueKind> = []
         let valueKinds = item.values
-            .filter { availableValues.contains($0) && seen.insert($0).inserted }
+            .filter { availableValues.contains($0) }
             .prefix(2)
         let normalizedValueKinds = Array(valueKinds).isEmpty
             ? SystemStatusMenuBarValueKind.defaultValues(for: item.kind)
@@ -228,7 +227,7 @@ enum SystemStatusMenuBarMetricsFormatter {
         case (.cpu, .temperature):
             return compactTemperature(snapshot.cpu.temperatureCelsius) ?? "—"
         case (.cpu, .power):
-            return compactPower(snapshot.cpu.systemPowerWatts)
+            return compactPower(snapshot.cpu.cpuPowerWatts)
         case (.cpu, .load):
             return compactLoad(snapshot.cpu.loadAverage1Minute, localization: localization)
         case (.gpu, .usage):
@@ -1200,7 +1199,7 @@ final class SystemStatusMenuBarMetricsController: NSObject {
             return
         }
 
-        viewModel.startMenuBar(requiresSlowSampling: items.map(\.kind).requiresMenuBarSlowSampling)
+        viewModel.startMenuBar()
         let blocks = SystemStatusMenuBarMetricsFormatter.blocks(
             snapshot: snapshot,
             items: items,
@@ -1376,6 +1375,77 @@ enum SystemStatusMenuBarPopoverLifecyclePolicy {
     }
 }
 
+enum SystemStatusMenuBarPopoverLayout {
+    static let width: CGFloat = 430
+    static let padding: CGFloat = 12
+    static let headerHeight: CGFloat = 30
+    static let spacing: CGFloat = 10
+
+    // AppKit replaces this first-frame fallback with the live safe-area insets.
+    static let fallbackInsets = NSEdgeInsets(top: 13, left: 13, bottom: 13, right: 13)
+
+    static func contentSize(for configuration: SystemStatusConfiguration) -> NSSize {
+        NSSize(
+            width: width,
+            height: padding * 2 + headerHeight + spacing + SystemStatusComponentLayout.contentHeight(
+                for: configuration.visiblePanelMetricKinds,
+                processLimit: configuration.processLimit
+            )
+        )
+    }
+}
+
+@MainActor
+final class SystemStatusMenuBarPopoverContentController<Content: View>: NSViewController {
+    private let hostingController: NSHostingController<Content>
+
+    init(rootView: Content) {
+        hostingController = NSHostingController(rootView: rootView)
+        // The popover owns its size before positioning; SwiftUI must not resize it afterward.
+        hostingController.sizingOptions = []
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        view = SystemStatusMenuBarPopoverBackgroundView()
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addChild(hostingController)
+        let content = hostingController.view
+        content.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(content)
+        let safeArea = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor),
+            content.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            content.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor)
+        ])
+    }
+}
+
+private final class SystemStatusMenuBarPopoverBackgroundView: NSView {
+    override var isOpaque: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        // This is the system component theme's panel surface, including the native arrow.
+        NSColor.windowBackgroundColor.setFill()
+        NSBezierPath.fill(dirtyRect)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
 @MainActor
 private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDelegate {
     private enum DetailLayout {
@@ -1394,8 +1464,13 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var appActivationObserver: NSObjectProtocol?
+    private var anchorFrameObserver: NSObjectProtocol?
+    private var contentSizeObservation: AnyCancellable?
+    private var contentSize = NSSize.zero
+    private var safeAreaInsets = SystemStatusMenuBarPopoverLayout.fallbackInsets
     private lazy var detailPanelController = SystemStatusMenuBarDetailPanelController(
         viewModel: viewModel,
+        settingsController: settingsController,
         localization: localization,
         width: DetailLayout.width,
         minimumHeight: DetailLayout.minimumHeight,
@@ -1432,7 +1507,8 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
         popover.behavior = SystemStatusMenuBarPopoverPresentationPolicy.behavior
         popover.animates = true
         popover.delegate = self
-        popover.contentViewController = NSHostingController(
+        popover.hasFullSizeContent = true
+        popover.contentViewController = SystemStatusMenuBarPopoverContentController(
             rootView: SystemStatusMenuBarPopoverView(
                 viewModel: viewModel,
                 settingsController: settingsController,
@@ -1452,6 +1528,16 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
         )
         self.popover = popover
         statusItemButton = button
+        safeAreaInsets = SystemStatusMenuBarPopoverLayout.fallbackInsets
+        contentSizeObservation = settingsController.$configuration
+            .map { SystemStatusMenuBarPopoverLayout.contentSize(for: $0) }
+            .removeDuplicates()
+            .sink { [weak self] size in
+                self?.contentSize = size
+                self?.applyContentSize()
+            }
+        // Seed both frames before show() so AppKit centers using the final width.
+        popover.contentViewController?.view.setFrameSize(popover.contentSize)
         viewModel.startForeground(for: .menuBarPopover)
         PluginPresentationSafety.prepareForWindowOrdering()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -1464,6 +1550,27 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
         detailPanelController.hide()
         popover?.performClose(nil)
         removeDismissMonitors()
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        guard let shownPopover = notification.object as? NSPopover, shownPopover === popover,
+              let view = shownPopover.contentViewController?.view else { return }
+        view.layoutSubtreeIfNeeded()
+        let insets = view.safeAreaInsets
+        if insets.top > 0 || insets.left > 0 || insets.bottom > 0 || insets.right > 0 {
+            safeAreaInsets = insets
+            applyContentSize()
+        }
+    }
+
+    private func applyContentSize() {
+        guard let popover else { return }
+        let size = NSSize(
+            width: contentSize.width + safeAreaInsets.left + safeAreaInsets.right,
+            height: contentSize.height + safeAreaInsets.top + safeAreaInsets.bottom
+        )
+        guard popover.contentSize != size else { return }
+        popover.contentSize = size
     }
 
     nonisolated func popoverDidClose(_ notification: Notification) {
@@ -1488,6 +1595,18 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
     }
 
     private func installDismissMonitors() {
+        if anchorFrameObserver == nil, let button = statusItemButton {
+            button.postsFrameChangedNotifications = true
+            anchorFrameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification, object: button, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let button = self.statusItemButton,
+                          let popover = self.popover, popover.isShown else { return }
+                    popover.positioningRect = button.bounds
+                }
+            }
+        }
         let mouseEvents: NSEvent.EventTypeMask = [
             .leftMouseDown,
             .rightMouseDown,
@@ -1532,6 +1651,11 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
     }
 
     private func removeDismissMonitors() {
+        contentSizeObservation = nil
+        if let anchorFrameObserver {
+            NotificationCenter.default.removeObserver(anchorFrameObserver)
+            self.anchorFrameObserver = nil
+        }
         if let localEventMonitor {
             NSEvent.removeMonitor(localEventMonitor)
             self.localEventMonitor = nil
@@ -1602,11 +1726,7 @@ private final class SystemStatusMenuBarPopoverController: NSObject, NSPopoverDel
 }
 
 private struct SystemStatusMenuBarPopoverView: View {
-    private enum Layout {
-        static let width: CGFloat = 430
-        static let padding: CGFloat = 12
-        static let headerHeight: CGFloat = 30
-    }
+    private typealias Layout = SystemStatusMenuBarPopoverLayout
 
     @ObservedObject var viewModel: SystemStatusViewModel
     @ObservedObject var settingsController: SystemStatusSettingsController
@@ -1617,7 +1737,7 @@ private struct SystemStatusMenuBarPopoverView: View {
     @Environment(\.pluginComponentTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Layout.spacing) {
             header
 
             SystemStatusComponentView(
@@ -1629,20 +1749,19 @@ private struct SystemStatusMenuBarPopoverView: View {
         }
         .padding(Layout.padding)
         .frame(width: Layout.width, alignment: .topLeading)
-        .background(theme.surfaces.panel)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
             Text(localization.string("metadata.title", defaultValue: "系统状态"))
-            .font(.system(size: 13, weight: .semibold))
+            .font(PluginTypography.sectionTitle.font)
             .foregroundStyle(theme.text.primary)
 
             Spacer(minLength: 8)
 
             Button(action: onConfigure) {
                 Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(PluginTypography.detail.font.weight(.semibold))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -1664,6 +1783,7 @@ private final class SystemStatusMenuBarDetailPanel: NSPanel {
 @MainActor
 private final class SystemStatusMenuBarDetailPanelController {
     private let viewModel: SystemStatusViewModel
+    private let settingsController: SystemStatusSettingsController
     private let localization: PluginLocalization
     private let width: CGFloat
     private let minimumHeight: CGFloat
@@ -1680,6 +1800,7 @@ private final class SystemStatusMenuBarDetailPanelController {
 
     init(
         viewModel: SystemStatusViewModel,
+        settingsController: SystemStatusSettingsController,
         localization: PluginLocalization,
         width: CGFloat,
         minimumHeight: CGFloat,
@@ -1687,6 +1808,7 @@ private final class SystemStatusMenuBarDetailPanelController {
         screenMargin: CGFloat
     ) {
         self.viewModel = viewModel
+        self.settingsController = settingsController
         self.localization = localization
         self.width = width
         self.minimumHeight = minimumHeight
@@ -1723,6 +1845,7 @@ private final class SystemStatusMenuBarDetailPanelController {
         let rootView = AnyView(
             SystemStatusMenuBarDetailPanelView(
                 viewModel: viewModel,
+                settingsController: settingsController,
                 kind: kind,
                 localization: localization,
                 onDismiss: { [weak self] in self?.hide() }
@@ -1809,6 +1932,7 @@ private final class SystemStatusMenuBarDetailPanelController {
 
 private struct SystemStatusMenuBarDetailPanelView: View {
     @ObservedObject var viewModel: SystemStatusViewModel
+    @ObservedObject var settingsController: SystemStatusSettingsController
     let kind: SystemStatusMetricKind
     let localization: PluginLocalization
     let onDismiss: () -> Void
@@ -1820,7 +1944,7 @@ private struct SystemStatusMenuBarDetailPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(kind.title(localization: localization))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PluginTypography.control.font.weight(.semibold))
                     .foregroundStyle(theme.text.primary)
                     .lineLimit(1)
 
@@ -1828,7 +1952,7 @@ private struct SystemStatusMenuBarDetailPanelView: View {
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(PluginTypography.detail.font.weight(.semibold))
                         .foregroundStyle(isCloseHovered ? theme.text.primary : theme.text.secondary)
                         .frame(width: 28, height: 28)
                         .background(
@@ -1847,6 +1971,7 @@ private struct SystemStatusMenuBarDetailPanelView: View {
 
             SystemStatusMetricDetailView(
                 viewModel: viewModel,
+                settingsController: settingsController,
                 kind: kind,
                 localization: localization
             )
@@ -1854,18 +1979,5 @@ private struct SystemStatusMenuBarDetailPanelView: View {
         .padding(10)
         .background(theme.surfaces.panel)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-}
-
-private extension Array where Element == SystemStatusMetricKind {
-    var requiresMenuBarSlowSampling: Bool {
-        contains { kind in
-            switch kind {
-            case .gpu, .disk, .battery:
-                return true
-            case .cpu, .network, .memory, .topProcesses:
-                return false
-            }
-        }
     }
 }

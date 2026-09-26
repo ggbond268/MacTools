@@ -28,7 +28,7 @@ final class CaptureStatusPanel: NSPanel {
             indicator.heightAnchor.constraint(equalToConstant: 10).isActive = true
             views.append(indicator)
         }
-        label.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        label.font = PluginTypography.value.nsFont
         label.textColor = .labelColor
         views.append(label)
         if let cancelTitle {

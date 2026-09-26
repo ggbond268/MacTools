@@ -319,7 +319,7 @@ private struct ClipboardPrivacyHUDView: View {
                 .foregroundStyle(iconColor)
                 .frame(width: 24, height: 24)
             Text(content.title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(PluginTypography.sectionTitle.font)
                 .lineLimit(1)
         }
         .padding(.horizontal, 16)

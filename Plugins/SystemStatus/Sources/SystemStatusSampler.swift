@@ -7,36 +7,42 @@ import OSLog
 import SystemConfiguration
 
 protocol SystemStatusSampling: Sendable {
-    func collectFast(referenceDate: Date) async -> SystemStatusFastSample
-    func collectSlow() async -> SystemStatusSlowSample
+    func setDemand(_ demand: SystemStatusSamplingDemand) async
+    func collectFast(referenceDate: Date, demand: SystemStatusSamplingDemand) async -> SystemStatusFastSample
+    func collectSlow(demand: SystemStatusSamplingDemand) async -> SystemStatusSlowSample
     func collectTopProcesses(limit: Int) async -> [SystemStatusTopProcess]
     func collectPublicIPAddress() async -> String?
 }
 
 actor SystemStatusSampler: SystemStatusSampling {
     private let localization: PluginLocalization
+    private let processReader = SystemStatusProcessReader()
     private var previousCPUTicks: SystemStatusCPUTicks?
-    private var previousCPUPowerEnergy: SystemStatusPowerEnergySample?
+    private var previousCPUUptime: TimeInterval?
+    private var cpuPowerTracker = SystemStatusPowerTracker()
     private var cachedCPUTemperature: Double?
     private var cachedGPUTemperature: Double?
     private var lastCPUTemperatureDate: Date?
     private var lastGPUTemperatureDate: Date?
-    private var cachedHardware: SystemStatusHardwareSnapshot?
-    private lazy var smcReader = SystemStatusSMCReader()
-    private lazy var cpuPowerReader = SystemStatusCPUPowerReader()
-    private var previousNetworkCounter: SystemStatusNetworkCounter?
-    private var previousNetworkDate: Date?
+    private var demand: SystemStatusSamplingDemand = []
+    private var smcReader: SystemStatusSMCReader?
+    private var didAttemptSMC = false
+    private var cpuPowerReader: SystemStatusCPUPowerReader?
+    private var previousNetworkCounters: [String: SystemStatusNetworkCounter]?
+    private var previousNetworkUptime: TimeInterval?
     private var previousDiskIOCounter: SystemStatusDiskIOCounter?
-    private var previousDiskIODate: Date?
+    private var previousDiskIOUptime: TimeInterval?
     private var cachedSystemPowerHealthPercent: Int?
     private var lastSystemPowerHealthDate: Date?
     private var didCacheSystemPowerHealth = false
+    private var healthTask: Task<Int?, Never>?
     private var cachedNetworkMetadata: [String: NetworkInterfaceMetadata]?
     private var lastNetworkMetadataDate: Date?
     private var cachedPrimaryInterfaceName: String?
     private var lastPrimaryInterfaceDate: Date?
     private var didCachePrimaryInterfaceName = false
 
+    private static let hostPort = mach_host_self()
     private static let systemPowerHealthCacheInterval: TimeInterval = 60 * 60
     private static let networkMetadataCacheInterval: TimeInterval = 10
     private static let logger = Logger(
@@ -56,83 +62,112 @@ actor SystemStatusSampler: SystemStatusSampling {
         )
     }
 
-    func collectFast(referenceDate: Date) async -> SystemStatusFastSample {
-        let cpu = await collectCPU(referenceDate: referenceDate)
+    func setDemand(_ demand: SystemStatusSamplingDemand) async {
+        self.demand = demand
+        if !demand.contains(.cpuUsage) { previousCPUTicks = nil; previousCPUUptime = nil }
+        if !demand.contains(.cpuPower) {
+            cpuPowerReader = nil
+            cpuPowerTracker = SystemStatusPowerTracker()
+        }
+        if !demand.contains(.cpuTemperature) { cachedCPUTemperature = nil; lastCPUTemperatureDate = nil }
+        if !demand.contains(.gpuTemperature) { cachedGPUTemperature = nil; lastGPUTemperatureDate = nil }
+        if demand.intersection([.cpuTemperature, .gpuTemperature]).isEmpty {
+            smcReader = nil
+            didAttemptSMC = false
+        }
+        if !demand.contains(.network) { previousNetworkCounters = nil; previousNetworkUptime = nil }
+        if !demand.contains(.diskActivity) { previousDiskIOCounter = nil; previousDiskIOUptime = nil }
+        if !demand.contains(.batteryHealth) { healthTask?.cancel() }
+        if !demand.contains(.processes) { await processReader.cancel() }
+    }
+
+    func collectFast(referenceDate: Date, demand: SystemStatusSamplingDemand) async -> SystemStatusFastSample {
+        let demand = self.demand.intersection(demand)
+        let cpu = demand.intersection(.cpu).isEmpty ? .empty : await collectCPU(referenceDate: referenceDate, demand: demand)
+        guard !Task.isCancelled else { return .init(cpu: .empty, memory: .empty, network: .empty, disk: .empty) }
         return SystemStatusFastSample(
             cpu: cpu,
-            memory: Self.collectMemory(),
-            network: collectNetwork(referenceDate: referenceDate),
-            disk: collectDiskIO(referenceDate: referenceDate)
+            memory: demand.intersection(.memory).isEmpty ? .empty : Self.collectMemory(demand: demand),
+            network: demand.contains(.network) ? collectNetwork(referenceDate: referenceDate) : .empty,
+            disk: demand.contains(.diskActivity) ? collectDiskIO() : .empty
         )
     }
 
-    func collectSlow() async -> SystemStatusSlowSample {
-        let battery = await collectBattery()
+    func collectSlow(demand: SystemStatusSamplingDemand) async -> SystemStatusSlowSample {
+        let demand = self.demand.intersection(demand)
+        let battery = demand.intersection([.battery, .batteryDetails, .batteryHealth]).isEmpty ? .empty : await collectBattery(demand: demand)
+        guard !Task.isCancelled else { return .init(disk: .empty, battery: .empty, gpu: .empty, hardware: .empty) }
         return SystemStatusSlowSample(
-            disk: Self.collectDiskCapacity(),
+            disk: demand.contains(.diskCapacity) ? Self.collectDiskCapacity() : .empty,
             battery: battery,
-            gpu: collectGPU(),
-            hardware: collectHardware()
+            gpu: demand.intersection(.gpu).isEmpty ? .empty : collectGPU(demand: demand),
+            hardware: .empty
         )
     }
 
     func collectTopProcesses(limit: Int = 3) async -> [SystemStatusTopProcess] {
-        await Self.collectTopProcesses(limit: limit)
+        guard demand.contains(.processes), !Task.isCancelled else { return [] }
+        return await processReader.collect(limit: limit)
     }
 
     func collectPublicIPAddress() async -> String? {
-        await Self.collectPublicIPAddress()
+        guard demand.contains(.network) else { return nil }
+        return await Self.collectPublicIPAddress()
     }
 
-    private func collectCPU(referenceDate: Date) async -> SystemStatusCPUSnapshot {
-        let temperature = collectCPUTemperature(referenceDate: referenceDate)
-        var currentDate = referenceDate
-        var currentTicks = Self.readCPUTicks()
-        var currentPowerEnergy = cpuPowerReader.readCPUEnergySample(referenceDate: currentDate)
+    private func readCPUEnergy() -> SystemStatusPowerEnergySample? {
+        guard demand.contains(.cpuPower) else { return nil }
+        if cpuPowerReader == nil { cpuPowerReader = SystemStatusCPUPowerReader() }
+        return cpuPowerReader?.readCPUEnergySample()
+    }
 
+    private func temperatureReader() -> SystemStatusSMCReader? {
+        if !didAttemptSMC { smcReader = SystemStatusSMCReader(); didAttemptSMC = true }
+        return smcReader
+    }
+
+    private func collectCPU(referenceDate: Date, demand: SystemStatusSamplingDemand) async -> SystemStatusCPUSnapshot {
+        let temperature = demand.contains(.cpuTemperature) ? collectCPUTemperature(referenceDate: referenceDate) : nil
+        var currentTicks = demand.contains(.cpuUsage) ? Self.readCPUTicks() : nil
+        var tickUptime = ProcessInfo.processInfo.systemUptime
+        var tickTimestamp = Date().timeIntervalSince1970
+        var currentPowerEnergy = demand.contains(.cpuPower) ? readCPUEnergy() : nil
         if previousCPUTicks == nil, let initialTicks = currentTicks {
             let initialPowerEnergy = currentPowerEnergy
+            let initialUptime = tickUptime
             try? await Task.sleep(for: .milliseconds(200))
-            currentDate = Date()
+            guard !Task.isCancelled else { return .empty }
             currentTicks = Self.readCPUTicks()
-            currentPowerEnergy = cpuPowerReader.readCPUEnergySample(referenceDate: currentDate)
+            tickUptime = ProcessInfo.processInfo.systemUptime
+            tickTimestamp = Date().timeIntervalSince1970
+            currentPowerEnergy = demand.contains(.cpuPower) ? readCPUEnergy() : nil
             previousCPUTicks = initialTicks
-            previousCPUPowerEnergy = initialPowerEnergy
+            previousCPUUptime = initialUptime
+            if demand.contains(.cpuPower) { _ = cpuPowerTracker.watts(sample: initialPowerEnergy) }
         }
-
-        guard let currentTicks else {
-            return SystemStatusCPUSnapshot(
-                usage: nil,
-                loadAverage1Minute: Self.collectCPULoadAverage(),
-                temperatureCelsius: temperature,
-                systemPowerWatts: collectPowerWatts(currentPowerEnergy: currentPowerEnergy),
-                isCollecting: false
-            )
+        let cpuSample = currentTicks.flatMap { current in
+            previousCPUTicks.flatMap { SystemStatusCPUUsageCalculator.sample(current: current, previous: $0) }
         }
-
-        let usage = previousCPUTicks.flatMap { previousTicks in
-            SystemStatusCPUUsageCalculator.usage(current: currentTicks, previous: previousTicks)
+        let usageInterval = cpuSample.flatMap { sample in previousCPUUptime.map {
+            SystemStatusSampleInterval(endTimestamp: tickTimestamp, duration: tickUptime - $0,
+                counterWeight: sample.totalTicks)
+        } }
+        if demand.contains(.cpuUsage) {
+            previousCPUTicks = currentTicks
+            previousCPUUptime = currentTicks == nil ? nil : tickUptime
         }
-        previousCPUTicks = currentTicks
-
         return SystemStatusCPUSnapshot(
-            usage: usage,
-            loadAverage1Minute: Self.collectCPULoadAverage(),
+            usage: cpuSample?.usage,
+            loadAverage1Minute: demand.contains(.cpuLoad) ? Self.collectCPULoadAverage() : nil,
             temperatureCelsius: temperature,
-            systemPowerWatts: collectPowerWatts(currentPowerEnergy: currentPowerEnergy),
-            isCollecting: usage == nil
+            cpuPowerWatts: demand.contains(.cpuPower) ? collectPowerWatts(currentPowerEnergy: currentPowerEnergy) : nil,
+            isCollecting: demand.contains(.cpuUsage) && cpuSample == nil,
+            usageInterval: usageInterval
         )
     }
 
     private func collectPowerWatts(currentPowerEnergy: SystemStatusPowerEnergySample?) -> Double? {
-        let cpuPowerWatts = currentPowerEnergy.flatMap { currentPowerEnergy in
-            defer { previousCPUPowerEnergy = currentPowerEnergy }
-            return previousCPUPowerEnergy.flatMap { previousPowerEnergy in
-                SystemStatusPowerCalculator.watts(current: currentPowerEnergy, previous: previousPowerEnergy)
-            }
-        }
-
-        return cpuPowerWatts
+        cpuPowerTracker.watts(sample: currentPowerEnergy)
     }
 
     private func collectCPUTemperature(referenceDate: Date) -> Double? {
@@ -140,7 +175,7 @@ actor SystemStatusSampler: SystemStatusSampling {
             return cachedCPUTemperature
         }
 
-        let temperature = Self.collectCPUTemperature(smcReader: smcReader)
+        let temperature = Self.collectCPUTemperature(smcReader: temperatureReader())
         cachedCPUTemperature = temperature
         lastCPUTemperatureDate = referenceDate
         return temperature
@@ -151,32 +186,17 @@ actor SystemStatusSampler: SystemStatusSampling {
             return cachedGPUTemperature
         }
 
-        let temperature = Self.collectGPUTemperature(smcReader: smcReader)
+        let temperature = Self.collectGPUTemperature(smcReader: temperatureReader())
         cachedGPUTemperature = temperature
         lastGPUTemperatureDate = referenceDate
         return temperature
     }
 
-    private func collectHardware() -> SystemStatusHardwareSnapshot {
-        if let cachedHardware {
-            return cachedHardware.replacingUptime(Self.collectUptimeSeconds())
-        }
-
-        let hardware = SystemStatusHardwareSnapshot(
-            modelName: Self.collectHardwareString("hw.model"),
-            chipName: Self.collectHardwareString("machdep.cpu.brand_string"),
-            macOSVersion: Self.collectMacOSVersionString(),
-            uptimeSeconds: Self.collectUptimeSeconds(),
-            totalMemoryBytes: ProcessInfo.processInfo.physicalMemory
-        )
-        cachedHardware = hardware
-        return hardware
-    }
-
     private func collectNetwork(referenceDate: Date) -> SystemStatusNetworkSnapshot {
-        guard let currentCounter = currentNetworkCounter(referenceDate: referenceDate) else {
-            previousNetworkCounter = nil
-            previousNetworkDate = referenceDate
+        let currentCounters = currentNetworkCounters(referenceDate: referenceDate)
+        guard !currentCounters.isEmpty else {
+            previousNetworkCounters = nil
+            previousNetworkUptime = ProcessInfo.processInfo.systemUptime
             return SystemStatusNetworkSnapshot(
                 interfaceName: nil,
                 ipAddress: nil,
@@ -188,32 +208,38 @@ actor SystemStatusSampler: SystemStatusSampling {
             )
         }
 
+        let uptime = ProcessInfo.processInfo.systemUptime
         let rate: SystemStatusNetworkRate?
         if
-            let previousNetworkCounter,
-            let previousNetworkDate,
-            previousNetworkCounter.key == currentCounter.key
+            let previousNetworkCounters,
+            let previousNetworkUptime
         {
             rate = SystemStatusNetworkRateCalculator.rate(
-                current: currentCounter,
-                previous: previousNetworkCounter,
-                elapsedSeconds: referenceDate.timeIntervalSince(previousNetworkDate)
+                current: currentCounters,
+                previous: previousNetworkCounters,
+                elapsedSeconds: uptime - previousNetworkUptime
             )
         } else {
             rate = nil
         }
 
-        previousNetworkCounter = currentCounter
-        previousNetworkDate = referenceDate
+        let interval = rate.flatMap { _ in previousNetworkUptime.map {
+            SystemStatusSampleInterval(endTimestamp: Date().timeIntervalSince1970, duration: uptime - $0)
+        } }
+        previousNetworkCounters = currentCounters
+        previousNetworkUptime = uptime
 
+        let singleInterface = currentCounters.count == 1 ? currentCounters.values.first : nil
+        let primaryInterface = primaryInterfaceName(referenceDate: referenceDate).flatMap { currentCounters[$0] }
         return SystemStatusNetworkSnapshot(
-            interfaceName: currentCounter.displayName,
-            ipAddress: currentCounter.ipAddress,
+            interfaceName: singleInterface?.displayName ?? networkInterfaceDisplayNames.multiple,
+            ipAddress: primaryInterface?.ipAddress ?? singleInterface?.ipAddress,
             publicIPAddress: nil,
-            downloadBytesPerSecond: rate?.downloadBytesPerSecond ?? 0,
-            uploadBytesPerSecond: rate?.uploadBytesPerSecond ?? 0,
-            isConnected: currentCounter.isUp,
-            isCollecting: rate == nil
+            downloadBytesPerSecond: rate?.downloadBytesPerSecond,
+            uploadBytesPerSecond: rate?.uploadBytesPerSecond,
+            isConnected: true,
+            isCollecting: rate == nil,
+            activityInterval: interval
         )
     }
 
@@ -224,7 +250,7 @@ actor SystemStatusSampler: SystemStatusSampling {
 
         let result = withUnsafeMutablePointer(to: &info) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: count) { reboundPointer in
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, reboundPointer, &size)
+                host_statistics(hostPort, HOST_CPU_LOAD_INFO, reboundPointer, &size)
             }
         }
 
@@ -233,15 +259,11 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
 
         return SystemStatusCPUTicks(
-            user: tickValue(info.cpu_ticks.0),
-            system: tickValue(info.cpu_ticks.1),
-            idle: tickValue(info.cpu_ticks.2),
-            nice: tickValue(info.cpu_ticks.3)
+            user: info.cpu_ticks.0,
+            system: info.cpu_ticks.1,
+            idle: info.cpu_ticks.2,
+            nice: info.cpu_ticks.3
         )
-    }
-
-    private static func tickValue(_ value: natural_t) -> UInt64 {
-        UInt64(value)
     }
 
     private static func collectCPULoadAverage() -> Double? {
@@ -311,7 +333,7 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
 
         let values = collectHIDSensorTemperatures(
-            keyPrefixes: ["GPU MTR Temp", "SOC MTR Temp"]
+            keyPrefixes: ["GPU MTR Temp"]
         )
 
         guard !values.isEmpty else {
@@ -424,7 +446,12 @@ actor SystemStatusSampler: SystemStatusSampling {
         value > 0 && value < 110
     }
 
-    private static func collectMemory() -> SystemStatusMemorySnapshot {
+    private static func collectMemory(demand: SystemStatusSamplingDemand) -> SystemStatusMemorySnapshot {
+        let pressure = demand.contains(.memoryPressure) ? collectMemoryPressure() : nil
+        let swap = demand.contains(.swap) ? collectSwapUsage() : (used: nil, total: nil)
+        let unavailable = SystemStatusMemorySnapshot(usedBytes: nil, totalBytes: nil,
+            swapUsedBytes: swap.used, swapTotalBytes: swap.total, pressure: pressure)
+        guard !demand.intersection([.memoryUsage, .memoryPressure]).isEmpty else { return unavailable }
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride
@@ -432,146 +459,118 @@ actor SystemStatusSampler: SystemStatusSampling {
 
         let result = withUnsafeMutablePointer(to: &stats) { pointer in
             pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { reboundPointer in
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, reboundPointer, &count)
+                host_statistics64(hostPort, HOST_VM_INFO64, reboundPointer, &count)
             }
         }
 
         guard result == KERN_SUCCESS else {
-            return .empty
+            return unavailable
         }
 
-        let pageSize = Double(memoryPageSize())
-        let active = Double(stats.active_count) * pageSize
-        let speculative = Double(stats.speculative_count) * pageSize
-        let inactive = Double(stats.inactive_count) * pageSize
-        let wired = Double(stats.wire_count) * pageSize
-        let compressed = Double(stats.compressor_page_count) * pageSize
-        let purgeable = Double(stats.purgeable_count) * pageSize
-        let external = Double(stats.external_page_count) * pageSize
-        let rawUsed = active + inactive + speculative + wired + compressed - purgeable - external
-        let total = ProcessInfo.processInfo.physicalMemory
-        let used = UInt64(min(max(rawUsed, 0), Double(total)))
-        let swapUsage = collectSwapUsage()
-
-        return SystemStatusMemorySnapshot(
-            usedBytes: used,
-            totalBytes: total,
-            swapUsedBytes: swapUsage.used,
-            swapTotalBytes: swapUsage.total
-        )
+        return memorySnapshot(stats: stats, pageSize: memoryPageSize().map { UInt64($0) },
+            totalBytes: ProcessInfo.processInfo.physicalMemory, demand: demand, pressure: pressure, swap: swap)
     }
 
-    private func collectGPU() -> SystemStatusGPUSnapshot {
-        let temperature = collectGPUTemperature(referenceDate: Date())
-        let matching = IOServiceMatching("IOAccelerator")
+    nonisolated static func memorySnapshot(
+        stats: vm_statistics64, pageSize: UInt64?, totalBytes: UInt64,
+        demand: SystemStatusSamplingDemand, pressure: SystemStatusMemoryPressure?,
+        swap: (used: UInt64?, total: UInt64?) = (nil, nil)
+    ) -> SystemStatusMemorySnapshot {
+        var snapshot = SystemStatusMemorySnapshot(usedBytes: nil, totalBytes: nil,
+            swapUsedBytes: swap.used, swapTotalBytes: swap.total, pressure: pressure)
+        guard let pageSize, pageSize > 0, totalBytes > 0 else { return snapshot }
+        if demand.contains(.memoryPressure) {
+            snapshot.pressurePercent = SystemStatusMemoryPressure.estimatedPercentage(
+                wiredPages: stats.wire_count, compressorPages: stats.compressor_page_count,
+                pageSize: pageSize, totalBytes: totalBytes)
+        }
+        guard demand.contains(.memoryUsage) else { return snapshot }
+        let bytesPerPage = Double(pageSize)
+        let active = Double(stats.active_count) * bytesPerPage
+        let speculative = Double(stats.speculative_count) * bytesPerPage
+        let inactive = Double(stats.inactive_count) * bytesPerPage
+        let wired = Double(stats.wire_count) * bytesPerPage
+        let compressed = Double(stats.compressor_page_count) * bytesPerPage
+        let purgeable = Double(stats.purgeable_count) * bytesPerPage
+        let external = Double(stats.external_page_count) * bytesPerPage
+        let rawUsed = active + inactive + speculative + wired + compressed - purgeable - external
+        return SystemStatusMemorySnapshot(
+            usedBytes: UInt64(min(max(rawUsed, 0), Double(totalBytes))), totalBytes: totalBytes,
+            swapUsedBytes: swap.used, swapTotalBytes: swap.total,
+            pressure: pressure, pressurePercent: snapshot.pressurePercent)
+    }
+
+    static func collectMemoryPressure() -> SystemStatusMemoryPressure? {
+        var level: UInt32 = 0
+        var size = MemoryLayout<UInt32>.size
+        guard sysctlbyname("kern.memorystatus_vm_pressure_level", &level, &size, nil, 0) == 0,
+              size == MemoryLayout<UInt32>.size else { return nil }
+        return SystemStatusMemoryPressure(rawValue: Int(level))
+    }
+
+    private func collectGPU(demand: SystemStatusSamplingDemand) -> SystemStatusGPUSnapshot {
+        Self.gpuSample(demand: demand, registryReadings: Self.readGPURegistry) {
+            collectGPUTemperature(referenceDate: Date())
+        }
+    }
+
+    nonisolated static func gpuSample(
+        demand: SystemStatusSamplingDemand,
+        registryReadings: () -> [SystemStatusGPUSnapshot],
+        fallbackTemperature: () -> Double?
+    ) -> SystemStatusGPUSnapshot {
+        guard !demand.intersection(.gpu).isEmpty else { return .empty }
+        // Temperature(C) remains available without requesting utilization.
+        // Device selection is shared so opening a panel cannot change its source.
+        let readings = registryReadings()
+        let native = gpuSnapshot(readings: readings, fallbackTemperature: nil)
+        let fallback = demand.contains(.gpuTemperature) && native.temperatureCelsius == nil && readings.count <= 1
+            ? fallbackTemperature() : nil
+        let selected = gpuSnapshot(readings: readings, fallbackTemperature: fallback)
+        return .init(usage: demand.contains(.gpuUsage) ? selected.usage : nil,
+            name: selected.name,
+            temperatureCelsius: demand.contains(.gpuTemperature) ? selected.temperatureCelsius : nil,
+            isAvailable: selected.isAvailable, isCollecting: false)
+    }
+
+    private static func readGPURegistry() -> [SystemStatusGPUSnapshot] {
         var iterator: io_iterator_t = 0
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            let isAvailable = temperature != nil
-            return SystemStatusGPUSnapshot(
-                usage: isAvailable ? 0 : nil,
-                name: nil,
-                temperatureCelsius: temperature,
-                isAvailable: isAvailable,
-                isCollecting: false
-            )
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) == KERN_SUCCESS else {
+            return []
         }
         defer { IOObjectRelease(iterator) }
 
-        var usages: [Double] = []
-        var names: [String] = []
-        var performanceTemperatures: [Double] = []
-        var didFindAccelerator = false
+        var readings: [SystemStatusGPUSnapshot] = []
         var service = IOIteratorNext(iterator)
         while service != 0 {
             defer {
                 IOObjectRelease(service)
                 service = IOIteratorNext(iterator)
             }
-
-            didFindAccelerator = true
-
-            if let name = Self.gpuName(service: service) {
-                names.append(name)
-            }
-
-            let performance = Self.registryPerformanceStatistics(service: service)
-            if
-                let performance,
-                let usage = Self.gpuUtilization(from: performance)
-            {
-                usages.append(usage)
-            }
-
-            if
-                let performance,
-                let temperature = Self.gpuPerformanceTemperature(from: performance)
-            {
-                performanceTemperatures.append(temperature)
-            }
-        }
-
-        let usage = usages.isEmpty ? nil : min(max(usages.max() ?? 0, 0), 1)
-        let name = names.first
-        let resolvedTemperature = temperature ?? performanceTemperatures.max()
-        let isAvailable = didFindAccelerator || name != nil || resolvedTemperature != nil
-
-        guard !usages.isEmpty else {
-            return SystemStatusGPUSnapshot(
-                usage: isAvailable ? 0 : nil,
-                name: name,
-                temperatureCelsius: resolvedTemperature,
-                isAvailable: isAvailable,
+            let statistics = Self.registryPerformanceStatistics(service: service)
+            readings.append(SystemStatusGPUSnapshot(
+                usage: statistics.flatMap(Self.gpuUtilization),
+                name: Self.gpuName(service: service),
+                temperatureCelsius: statistics.flatMap(Self.gpuPerformanceTemperature),
+                isAvailable: true,
                 isCollecting: false
-            )
+            ))
         }
+        return readings
+    }
 
+    nonisolated static func gpuSnapshot(
+        readings: [SystemStatusGPUSnapshot], fallbackTemperature: Double?
+    ) -> SystemStatusGPUSnapshot {
+        // Keep the name, utilization and temperature attached to the same GPU.
+        let selected = readings.max { ($0.usage ?? -1) < ($1.usage ?? -1) }
         return SystemStatusGPUSnapshot(
-            usage: usage,
-            name: name,
-            temperatureCelsius: resolvedTemperature,
-            isAvailable: true,
+            usage: selected?.usage,
+            name: selected?.name,
+            temperatureCelsius: selected?.temperatureCelsius ?? (readings.count <= 1 ? fallbackTemperature : nil),
+            isAvailable: selected != nil || fallbackTemperature != nil,
             isCollecting: false
         )
-    }
-
-    private static func collectHardwareString(_ key: String) -> String? {
-        var size = 0
-        guard sysctlbyname(key, nil, &size, nil, 0) == 0, size > 1 else {
-            return nil
-        }
-
-        var buffer = [CChar](repeating: 0, count: size)
-        let result = buffer.withUnsafeMutableBufferPointer { pointer in
-            sysctlbyname(key, pointer.baseAddress, &size, nil, 0)
-        }
-        guard result == 0 else {
-            return nil
-        }
-
-        let nullIndex = buffer.firstIndex(of: 0) ?? buffer.endIndex
-        let value = String(decoding: buffer[..<nullIndex].map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
-    private static func collectMacOSVersionString() -> String {
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        if version.patchVersion > 0 {
-            return "macOS \(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-        }
-        return "macOS \(version.majorVersion).\(version.minorVersion)"
-    }
-
-    private static func collectUptimeSeconds() -> TimeInterval? {
-        var bootTime = timeval()
-        var mib: [Int32] = [CTL_KERN, KERN_BOOTTIME]
-        var size = MemoryLayout<timeval>.stride
-        guard sysctl(&mib, UInt32(mib.count), &bootTime, &size, nil, 0) == 0 else {
-            return nil
-        }
-
-        let bootDate = Date(timeIntervalSince1970: TimeInterval(bootTime.tv_sec))
-        return max(0, Date().timeIntervalSince(bootDate))
     }
 
     nonisolated static func gpuUtilization(from performanceStatistics: [String: Any]) -> Double? {
@@ -587,39 +586,8 @@ actor SystemStatusSampler: SystemStatusSampling {
     }
 
     private static func gpuUtilizationValue(_ rawValue: Any?) -> Double? {
-        let value: Double
-        let isPercentValue: Bool
-
-        switch rawValue {
-        case let intValue as Int:
-            value = Double(intValue)
-            isPercentValue = true
-        case let doubleValue as Double:
-            value = doubleValue
-            isPercentValue = doubleValue > 1
-        case let floatValue as Float:
-            value = Double(floatValue)
-            isPercentValue = value > 1
-        case let numberValue as NSNumber:
-            value = numberValue.doubleValue
-            isPercentValue = !CFNumberIsFloatType(numberValue) || value > 1
-        case let stringValue as String:
-            let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let parsedValue = Double(trimmed) else {
-                return nil
-            }
-            value = parsedValue
-            isPercentValue = parsedValue > 1
-        default:
-            return nil
-        }
-
-        guard value.isFinite else {
-            return nil
-        }
-
-        let fraction = isPercentValue ? value / 100 : value
-        return min(max(fraction, 0), 1)
+        guard let value = numberValue(rawValue), value.isFinite, (0 ... 100).contains(value) else { return nil }
+        return value / 100
     }
 
     nonisolated static func gpuPerformanceTemperature(from performanceStatistics: [String: Any]) -> Double? {
@@ -670,11 +638,11 @@ actor SystemStatusSampler: SystemStatusSampling {
             .replacingOccurrences(of: "Apple ", with: "")
     }
 
-    private static func memoryPageSize() -> vm_size_t {
+    private static func memoryPageSize() -> vm_size_t? {
         var pageSize: vm_size_t = 0
-        let result = host_page_size(mach_host_self(), &pageSize)
+        let result = host_page_size(hostPort, &pageSize)
         guard result == KERN_SUCCESS, pageSize > 0 else {
-            return 16_384
+            return nil
         }
 
         return pageSize
@@ -739,10 +707,10 @@ actor SystemStatusSampler: SystemStatusSampling {
         )
     }
 
-    private func collectDiskIO(referenceDate: Date) -> SystemStatusDiskSnapshot {
+    private func collectDiskIO() -> SystemStatusDiskSnapshot {
         guard let currentCounter = Self.readDiskIOCounter() else {
             previousDiskIOCounter = nil
-            previousDiskIODate = referenceDate
+            previousDiskIOUptime = ProcessInfo.processInfo.systemUptime
             return SystemStatusDiskSnapshot(
                 usedBytes: nil,
                 totalBytes: nil,
@@ -751,25 +719,30 @@ actor SystemStatusSampler: SystemStatusSampling {
             )
         }
 
+        let uptime = ProcessInfo.processInfo.systemUptime
         let rate: SystemStatusDiskIORate?
-        if let previousDiskIOCounter, let previousDiskIODate {
+        if let previousDiskIOCounter, let previousDiskIOUptime {
             rate = SystemStatusDiskIORateCalculator.rate(
                 current: currentCounter,
                 previous: previousDiskIOCounter,
-                elapsedSeconds: referenceDate.timeIntervalSince(previousDiskIODate)
+                elapsedSeconds: uptime - previousDiskIOUptime
             )
         } else {
             rate = nil
         }
 
+        let interval = rate.flatMap { _ in previousDiskIOUptime.map {
+            SystemStatusSampleInterval(endTimestamp: Date().timeIntervalSince1970, duration: uptime - $0)
+        } }
         previousDiskIOCounter = currentCounter
-        previousDiskIODate = referenceDate
+        previousDiskIOUptime = uptime
 
         return SystemStatusDiskSnapshot(
             usedBytes: nil,
             totalBytes: nil,
-            readBytesPerSecond: rate?.readBytesPerSecond ?? 0,
-            writeBytesPerSecond: rate?.writeBytesPerSecond ?? 0
+            readBytesPerSecond: rate?.readBytesPerSecond,
+            writeBytesPerSecond: rate?.writeBytesPerSecond,
+            activityInterval: interval
         )
     }
 
@@ -784,9 +757,7 @@ actor SystemStatusSampler: SystemStatusSampling {
         }
         defer { IOObjectRelease(iterator) }
 
-        var readBytes: UInt64 = 0
-        var writeBytes: UInt64 = 0
-        var foundCounter = false
+        var devices: [UInt64: SystemStatusDiskIOCounter.Device] = [:]
         var service = IOIteratorNext(iterator)
 
         while service != 0 {
@@ -801,28 +772,23 @@ actor SystemStatusSampler: SystemStatusSampling {
                 let properties = rawProperties?.takeRetainedValue() as? [String: Any],
                 let statistics = properties["Statistics"] as? [String: Any]
             else {
+                // Some matched drivers do not expose activity statistics.
+                // They must not hide the readable disks; identity changes
+                // still rebaseline the supported-device set for one interval.
                 continue
             }
 
-            if let bytes = statistics["Bytes (Read)"] as? NSNumber {
-                readBytes &+= bytes.uint64Value
-                foundCounter = true
-            }
-
-            if let bytes = statistics["Bytes (Write)"] as? NSNumber {
-                writeBytes &+= bytes.uint64Value
-                foundCounter = true
-            }
+            var registryID: UInt64 = 0
+            guard IORegistryEntryGetRegistryEntryID(service, &registryID) == KERN_SUCCESS,
+                  let read = statistics["Bytes (Read)"] as? NSNumber,
+                  let write = statistics["Bytes (Write)"] as? NSNumber else { continue }
+            devices[registryID] = .init(readBytes: read.uint64Value, writeBytes: write.uint64Value)
         }
 
-        guard foundCounter else {
-            return nil
-        }
-
-        return SystemStatusDiskIOCounter(readBytes: readBytes, writeBytes: writeBytes)
+        return devices.isEmpty ? nil : SystemStatusDiskIOCounter(devices: devices)
     }
 
-    private func collectBattery() async -> SystemStatusBatterySnapshot {
+    private func collectBattery(demand: SystemStatusSamplingDemand) async -> SystemStatusBatterySnapshot {
         guard
             let powerSourcesInfo = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
             let powerSources = IOPSCopyPowerSourcesList(powerSourcesInfo)?.takeRetainedValue() as? [CFTypeRef],
@@ -833,7 +799,7 @@ actor SystemStatusSampler: SystemStatusSampling {
                 level: nil,
                 state: .unavailable,
                 timeRemainingMinutes: nil,
-                adapterWatts: Self.adapterWatts(),
+                adapterWatts: demand.contains(.batteryDetails) ? Self.adapterWatts() : nil,
                 batteryPowerWatts: nil,
                 temperatureCelsius: nil,
                 healthPercent: nil,
@@ -841,28 +807,16 @@ actor SystemStatusSampler: SystemStatusSampling {
             )
         }
 
-        var fallbackDescription: [String: Any]?
-        var batteryDescription: [String: Any]?
-
-        for source in powerSources {
-            guard let description = IOPSGetPowerSourceDescription(powerSourcesInfo, source)?.takeUnretainedValue() as? [String: Any] else {
-                continue
-            }
-
-            fallbackDescription = fallbackDescription ?? description
-            if description[kIOPSTypeKey] as? String == kIOPSInternalBatteryType {
-                batteryDescription = description
-                break
-            }
+        let descriptions = powerSources.compactMap { source in
+            IOPSGetPowerSourceDescription(powerSourcesInfo, source)?.takeUnretainedValue() as? [String: Any]
         }
-
-        guard let description = batteryDescription ?? fallbackDescription else {
+        guard let description = Self.internalBatteryDescription(in: descriptions) else {
             return SystemStatusBatterySnapshot(
                 isAvailable: false,
                 level: nil,
                 state: .unavailable,
                 timeRemainingMinutes: nil,
-                adapterWatts: Self.adapterWatts(),
+                adapterWatts: demand.contains(.batteryDetails) ? Self.adapterWatts() : nil,
                 batteryPowerWatts: nil,
                 temperatureCelsius: nil,
                 healthPercent: nil,
@@ -870,9 +824,7 @@ actor SystemStatusSampler: SystemStatusSampling {
             )
         }
 
-        let maxCapacity = max(description[kIOPSMaxCapacityKey] as? Int ?? 100, 1)
-        let currentCapacity = min(max(description[kIOPSCurrentCapacityKey] as? Int ?? 0, 0), maxCapacity)
-        let level = min(max(Double(currentCapacity) / Double(maxCapacity), 0), 1)
+        let level = Self.batteryLevel(from: description)
         let isCharging = description[kIOPSIsChargingKey] as? Bool ?? false
         let isCharged = description[kIOPSIsChargedKey] as? Bool ?? false
         let powerSource = description[kIOPSPowerSourceStateKey] as? String ?? ""
@@ -882,10 +834,12 @@ actor SystemStatusSampler: SystemStatusSampling {
             isCharged: isCharged,
             powerSource: powerSource
         )
-        let timeKey = isCharging ? kIOPSTimeToFullChargeKey : kIOPSTimeToEmptyKey
-        let registryInfo = Self.collectBatteryRegistryInfo()
+        let registryInfo = !demand.intersection([.batteryDetails, .batteryHealth]).isEmpty ? Self.collectBatteryRegistryInfo()
+            : (temperatureCelsius: nil, healthPercent: nil, cycleCount: nil, batteryPowerWatts: nil)
         let healthPercent: Int?
-        if let registryHealthPercent = registryInfo.healthPercent {
+        if !demand.contains(.batteryHealth) {
+            healthPercent = nil
+        } else if let registryHealthPercent = registryInfo.healthPercent {
             healthPercent = registryHealthPercent
         } else {
             healthPercent = await systemPowerHealthPercent(referenceDate: Date())
@@ -895,8 +849,8 @@ actor SystemStatusSampler: SystemStatusSampling {
             isAvailable: true,
             level: level,
             state: state,
-            timeRemainingMinutes: Self.validBatteryMinutes(description[timeKey]),
-            adapterWatts: Self.adapterWatts(),
+            timeRemainingMinutes: Self.batteryRemainingMinutes(from: description),
+            adapterWatts: demand.contains(.batteryDetails) ? Self.adapterWatts() : nil,
             batteryPowerWatts: registryInfo.batteryPowerWatts,
             temperatureCelsius: registryInfo.temperatureCelsius,
             healthPercent: healthPercent,
@@ -911,16 +865,17 @@ actor SystemStatusSampler: SystemStatusSampling {
             return cachedSystemPowerHealthPercent
         }
 
-        let healthPercent: Int?
-        if let output = await Self.runCommand(
-            path: "/usr/sbin/system_profiler",
-            arguments: ["SPPowerDataType", "-json"],
-            timeout: 3
-        ) {
-            healthPercent = Self.systemPowerBatteryHealthPercent(fromSystemProfilerJSON: output)
-        } else {
-            healthPercent = nil
+        if let healthTask { return await healthTask.value }
+        let task = Task {
+            guard let output = await Self.runCommand(
+                path: "/usr/sbin/system_profiler", arguments: ["SPPowerDataType", "-json"], timeout: 3
+            ), !Task.isCancelled else { return nil as Int? }
+            return Self.systemPowerBatteryHealthPercent(fromSystemProfilerJSON: output)
         }
+        healthTask = task
+        let healthPercent = await task.value
+        healthTask = nil
+        guard !task.isCancelled else { return nil }
 
         cachedSystemPowerHealthPercent = healthPercent
         lastSystemPowerHealthDate = referenceDate
@@ -928,33 +883,41 @@ actor SystemStatusSampler: SystemStatusSampling {
         return healthPercent
     }
 
-    private static func batteryState(
-        level: Double,
-        isCharging: Bool,
-        isCharged: Bool,
-        powerSource: String
-    ) -> SystemStatusBatteryState {
-        if isCharged || level >= 0.999 {
-            return .charged
+    nonisolated static func internalBatteryDescription(in descriptions: [[String: Any]]) -> [String: Any]? {
+        descriptions.first {
+            $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType
+                && $0[kIOPSIsPresentKey] as? Bool != false
         }
-        if isCharging {
-            return .charging
-        }
-        if powerSource == "AC Power" {
-            return .acPower
-        }
-        if powerSource == "Battery Power" {
-            return .unplugged
-        }
-        return .unknown
     }
 
-    private static func validBatteryMinutes(_ value: Any?) -> Int? {
-        guard let minutes = value as? Int, minutes >= 0 else {
+    nonisolated static func batteryLevel(from description: [String: Any]) -> Double? {
+        guard let maximum = description[kIOPSMaxCapacityKey] as? Int, maximum > 0,
+              let current = description[kIOPSCurrentCapacityKey] as? Int, current >= 0 else { return nil }
+        return min(Double(current) / Double(maximum), 1)
+    }
+
+    nonisolated static func batteryRemainingMinutes(from description: [String: Any]) -> Int? {
+        let key: String
+        if description[kIOPSIsChargingKey] as? Bool == true {
+            key = kIOPSTimeToFullChargeKey
+        } else if description[kIOPSPowerSourceStateKey] as? String == kIOPSBatteryPowerValue {
+            key = kIOPSTimeToEmptyKey
+        } else {
             return nil
         }
-
+        guard let minutes = description[key] as? Int, minutes >= 0 else { return nil }
         return minutes
+    }
+
+    private static func batteryState(
+        level: Double?, isCharging: Bool, isCharged: Bool, powerSource: String
+    ) -> SystemStatusBatteryState {
+        if isCharging { return .charging }
+        if powerSource == kIOPSBatteryPowerValue { return .unplugged }
+        if powerSource == kIOPSACPowerValue {
+            return isCharged || (level ?? 0) >= 0.999 ? .charged : .acPower
+        }
+        return .unknown
     }
 
     private static func adapterWatts() -> Int? {
@@ -1039,8 +1002,11 @@ actor SystemStatusSampler: SystemStatusSampling {
 
         let voltageMillivolts = registryNumberValue(service: service, key: "AppleRawBatteryVoltage")
             ?? registryNumberValue(service: service, key: "Voltage")
-        let amperageMilliamps = nonzeroNumberValue(service: service, key: "InstantAmperage")
-            ?? nonzeroNumberValue(service: service, key: "Amperage")
+        let amperageMilliamps = SystemStatusBatteryPowerNormalizer.signedNumberValue(
+            registryRawValue(service: service, key: "InstantAmperage")
+        ) ?? SystemStatusBatteryPowerNormalizer.signedNumberValue(
+            registryRawValue(service: service, key: "Amperage")
+        )
 
         return SystemStatusBatteryPowerNormalizer.derivedWatts(
             voltageMillivolts: voltageMillivolts,
@@ -1174,14 +1140,6 @@ actor SystemStatusSampler: SystemStatusSampling {
         return numberValue(rawValue)
     }
 
-    private static func nonzeroNumberValue(service: io_registry_entry_t, key: String) -> Double? {
-        guard let value = registryNumberValue(service: service, key: key), value != 0 else {
-            return nil
-        }
-
-        return value
-    }
-
     private static func registryRawValue(service: io_registry_entry_t, key: String) -> Any? {
         IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue()
@@ -1242,40 +1200,20 @@ actor SystemStatusSampler: SystemStatusSampling {
         return nil
     }
 
-    private func currentNetworkCounter(referenceDate: Date) -> SystemStatusNetworkCounter? {
-        let interfaceMetadata = networkInterfaceMetadata(referenceDate: referenceDate)
-        let displayNames = networkInterfaceDisplayNames
-        let counters = Self.readNetworkCounters(interfaceMetadata: interfaceMetadata, displayNames: displayNames)
-        let aggregateCounter = Self.readAggregateNetworkCounter(
-            interfaceMetadata: interfaceMetadata,
-            displayNames: displayNames
+    private func currentNetworkCounters(referenceDate: Date) -> [String: SystemStatusNetworkCounter] {
+        let counters = Self.readNetworkCounters(
+            interfaceMetadata: networkInterfaceMetadata(referenceDate: referenceDate),
+            displayNames: networkInterfaceDisplayNames
         )
-        guard !counters.isEmpty else {
-            return aggregateCounter
-        }
+        return Self.activeNetworkCounters(counters)
+    }
 
-        if
-            let primaryInterface = primaryInterfaceName(referenceDate: referenceDate),
-            let primaryCounter = counters[primaryInterface]
-        {
-            return primaryCounter.replacingCounters(from: aggregateCounter)
-        }
-
-        let candidates = counters.values
-            .filter { $0.isUp && !Self.isNoiseInterface($0.key) }
-            .sorted { lhs, rhs in
-                if lhs.receivedBytes + lhs.sentBytes == rhs.receivedBytes + rhs.sentBytes {
-                    return lhs.key < rhs.key
-                }
-
-                return lhs.receivedBytes + lhs.sentBytes > rhs.receivedBytes + rhs.sentBytes
-            }
-
-        guard !candidates.isEmpty else {
-            return aggregateCounter
-        }
-
-        return aggregateNetworkCounters(candidates, displayNames: displayNames).replacingCounters(from: aggregateCounter)
+    nonisolated static func activeNetworkCounters(
+        _ counters: [String: SystemStatusNetworkCounter]
+    ) -> [String: SystemStatusNetworkCounter] {
+        // Preserve system-wide physical traffic, including simultaneous wired
+        // and Wi-Fi transfers, without counting virtual/VPN copies again.
+        counters.filter { $0.value.isUp && !isNoiseInterface($0.key) }
     }
 
     private func networkInterfaceMetadata(referenceDate: Date) -> [String: NetworkInterfaceMetadata] {
@@ -1308,15 +1246,13 @@ actor SystemStatusSampler: SystemStatusSampling {
     }
 
     private static func primaryInterfaceName() -> String? {
-        guard
-            let global = SCDynamicStoreCopyValue(nil, "State:/Network/Global/IPv4" as CFString) as? [String: Any],
-            let name = global["PrimaryInterface"] as? String,
-            !name.isEmpty
-        else {
-            return nil
+        for family in ["IPv4", "IPv6"] {
+            if let global = SCDynamicStoreCopyValue(nil, "State:/Network/Global/\(family)" as CFString) as? [String: Any],
+               let name = global["PrimaryInterface"] as? String, !name.isEmpty, !isNoiseInterface(name) {
+                return name
+            }
         }
-
-        return name
+        return nil
     }
 
     private static func readNetworkCounters(
@@ -1325,19 +1261,18 @@ actor SystemStatusSampler: SystemStatusSampling {
     ) -> [String: SystemStatusNetworkCounter] {
         var interfaceAddresses: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&interfaceAddresses) == 0, let firstAddress = interfaceAddresses else {
-            return [:]
+            return readInterfaceNetworkCounters(interfaceMetadata: interfaceMetadata, displayNames: displayNames)
         }
         defer { freeifaddrs(interfaceAddresses) }
 
-        var accumulators: [String: NetworkCounterAccumulator] = [:]
+        var accumulators: [String: NetworkAddressAccumulator] = [:]
         var pointer: UnsafeMutablePointer<ifaddrs>? = firstAddress
 
         while let currentPointer = pointer {
             defer { pointer = currentPointer.pointee.ifa_next }
 
             let name = String(cString: currentPointer.pointee.ifa_name)
-            var accumulator = accumulators[name] ?? NetworkCounterAccumulator(name: name)
-            accumulator.isUp = accumulator.isUp || (currentPointer.pointee.ifa_flags & UInt32(IFF_UP)) != 0
+            var accumulator = accumulators[name] ?? NetworkAddressAccumulator()
 
             guard let address = currentPointer.pointee.ifa_addr else {
                 accumulators[name] = accumulator
@@ -1345,12 +1280,6 @@ actor SystemStatusSampler: SystemStatusSampling {
             }
 
             switch Int32(address.pointee.sa_family) {
-            case AF_LINK:
-                if let rawData = currentPointer.pointee.ifa_data {
-                    let data = rawData.assumingMemoryBound(to: if_data.self).pointee
-                    accumulator.receivedBytes = UInt64(data.ifi_ibytes)
-                    accumulator.sentBytes = UInt64(data.ifi_obytes)
-                }
             case AF_INET:
                 if let address = numericAddress(from: address), !address.hasPrefix("127.") {
                     accumulator.ipv4Address = address
@@ -1366,107 +1295,66 @@ actor SystemStatusSampler: SystemStatusSampling {
             accumulators[name] = accumulator
         }
 
-        return Dictionary(uniqueKeysWithValues: accumulators.map { key, value in
-            (
-                key,
-                value.counter(
-                    displayName: friendlyNetworkInterfaceName(
-                        for: key,
-                        metadata: interfaceMetadata[key],
-                        displayNames: displayNames
-                    )
-                )
-            )
+        let counters = readInterfaceNetworkCounters(interfaceMetadata: interfaceMetadata, displayNames: displayNames)
+        return Dictionary(uniqueKeysWithValues: counters.map { name, counter in
+            (name, SystemStatusNetworkCounter(
+                key: counter.key, displayName: counter.displayName,
+                receivedBytes: counter.receivedBytes, sentBytes: counter.sentBytes,
+                ipAddress: accumulators[name]?.ipv4Address ?? accumulators[name]?.ipv6Address,
+                isUp: counter.isUp
+            ))
         })
     }
 
-    private static func readAggregateNetworkCounter(
+    private static func readInterfaceNetworkCounters(
         interfaceMetadata: [String: NetworkInterfaceMetadata],
         displayNames: NetworkInterfaceDisplayNames = .default
-    ) -> SystemStatusNetworkCounter? {
+    ) -> [String: SystemStatusNetworkCounter] {
         var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var length = 0
-        guard sysctl(&mib, UInt32(mib.count), nil, &length, nil, 0) == 0, length > 0 else {
-            return nil
-        }
-
+        guard sysctl(&mib, UInt32(mib.count), nil, &length, nil, 0) == 0, length > 0 else { return [:] }
         var buffer = [UInt8](repeating: 0, count: length)
-        guard sysctl(&mib, UInt32(mib.count), &buffer, &length, nil, 0) == 0 else {
-            return nil
-        }
+        guard sysctl(&mib, UInt32(mib.count), &buffer, &length, nil, 0) == 0 else { return [:] }
 
-        var receivedBytes: UInt64 = 0
-        var sentBytes: UInt64 = 0
-        var interfaceNames: [String] = []
-
+        var counters: [String: SystemStatusNetworkCounter] = [:]
         buffer.withUnsafeBytes { rawBuffer in
-            var offset = 0
-            while offset + MemoryLayout<if_msghdr>.size <= length {
-                let messageLength = Int(rawBuffer.loadUnaligned(fromByteOffset: offset, as: UInt16.self))
-                guard messageLength > 0 else {
-                    break
+            let messages = networkInterfaceMessages(in: UnsafeRawBufferPointer(rebasing: rawBuffer[..<length]))
+            for message in messages {
+                var nameBuffer = [CChar](repeating: 0, count: Int(IFNAMSIZ) + 1)
+                if let pointer = if_indextoname(UInt32(message.ifm_index), &nameBuffer) {
+                    let name = String(cString: pointer)
+                    counters[name] = SystemStatusNetworkCounter(
+                        key: "iflist2:\(message.ifm_index):\(name)",
+                        displayName: friendlyNetworkInterfaceName(
+                            for: name, metadata: interfaceMetadata[name], displayNames: displayNames
+                        ),
+                        receivedBytes: message.ifm_data.ifi_ibytes,
+                        sentBytes: message.ifm_data.ifi_obytes,
+                        ipAddress: nil,
+                        isUp: message.ifm_flags & (IFF_UP | IFF_RUNNING) == (IFF_UP | IFF_RUNNING)
+                    )
                 }
-
-                let messageType = rawBuffer.loadUnaligned(fromByteOffset: offset + 3, as: UInt8.self)
-                if Int32(messageType) == RTM_IFINFO2,
-                   offset + MemoryLayout<if_msghdr2>.size <= length {
-                    let message = rawBuffer.loadUnaligned(fromByteOffset: offset, as: if_msghdr2.self)
-                    var nameBuffer = [CChar](repeating: 0, count: Int(IFNAMSIZ) + 1)
-                    let name = if_indextoname(UInt32(message.ifm_index), &nameBuffer)
-                        .map { String(cString: $0) } ?? ""
-
-                    if !name.isEmpty && !isNoiseInterface(name) {
-                        receivedBytes &+= message.ifm_data.ifi_ibytes
-                        sentBytes &+= message.ifm_data.ifi_obytes
-                        interfaceNames.append(name)
-                    }
-                }
-
-                offset += messageLength
             }
         }
-
-        guard !interfaceNames.isEmpty else {
-            return nil
-        }
-
-        return SystemStatusNetworkCounter(
-            key: "iflist2:\(interfaceNames.sorted().joined(separator: ","))",
-            displayName: interfaceNames.count == 1
-                ? friendlyNetworkInterfaceName(
-                    for: interfaceNames[0],
-                    metadata: interfaceMetadata[interfaceNames[0]],
-                    displayNames: displayNames
-                )
-                : displayNames.multiple,
-            receivedBytes: receivedBytes,
-            sentBytes: sentBytes,
-            ipAddress: nil,
-            isUp: true
-        )
+        return counters
     }
 
-    private func aggregateNetworkCounters(
-        _ counters: [SystemStatusNetworkCounter],
-        displayNames: NetworkInterfaceDisplayNames
-    ) -> SystemStatusNetworkCounter {
-        guard counters.count > 1 else {
-            return counters[0]
+    nonisolated static func networkInterfaceMessages(in buffer: UnsafeRawBufferPointer) -> [if_msghdr2] {
+        var messages: [if_msghdr2] = []
+        var offset = 0
+        // All routing messages share only length, version and type. Address
+        // messages can be shorter than if_msghdr and must not end the scan.
+        let headerSize = 4
+        while offset + headerSize <= buffer.count {
+            let length = Int(buffer.loadUnaligned(fromByteOffset: offset, as: UInt16.self))
+            guard length >= headerSize, length <= buffer.count - offset else { break }
+            let type = buffer.loadUnaligned(fromByteOffset: offset + 3, as: UInt8.self)
+            if Int32(type) == RTM_IFINFO2, length >= MemoryLayout<if_msghdr2>.size {
+                messages.append(buffer.loadUnaligned(fromByteOffset: offset, as: if_msghdr2.self))
+            }
+            offset += length
         }
-
-        let sortedKeys = counters.map(\.key).sorted()
-        let receivedBytes = counters.reduce(UInt64(0)) { $0 + $1.receivedBytes }
-        let sentBytes = counters.reduce(UInt64(0)) { $0 + $1.sentBytes }
-        let ipAddress = counters.first(where: { $0.ipAddress != nil })?.ipAddress
-
-        return SystemStatusNetworkCounter(
-            key: "aggregate:\(sortedKeys.joined(separator: ","))",
-            displayName: displayNames.multiple,
-            receivedBytes: receivedBytes,
-            sentBytes: sentBytes,
-            ipAddress: ipAddress,
-            isUp: counters.contains(where: \.isUp)
-        )
+        return messages
     }
 
     private static func numericAddress(from pointer: UnsafePointer<sockaddr>) -> String? {
@@ -1493,7 +1381,7 @@ actor SystemStatusSampler: SystemStatusSampling {
 
     private static func isNoiseInterface(_ name: String) -> Bool {
         let lowercasedName = name.lowercased()
-        let noisePrefixes = ["lo", "awdl", "utun", "llw", "bridge", "gif", "stf", "xhc", "anpi", "ap"]
+        let noisePrefixes = ["lo", "awdl", "utun", "llw", "bridge", "gif", "stf", "xhc", "anpi", "ap", "ipsec", "ppp", "tun", "tap", "wg"]
         return noisePrefixes.contains { lowercasedName.hasPrefix($0) }
     }
 
@@ -1581,14 +1469,6 @@ actor SystemStatusSampler: SystemStatusSampling {
     private static func isVPNInterfaceName(_ lowercasedName: String) -> Bool {
         let vpnPrefixes = ["utun", "tun", "tap", "ppp", "ipsec"]
         return vpnPrefixes.contains { lowercasedName.hasPrefix($0) }
-    }
-
-    private static func collectTopProcesses(limit: Int) async -> [SystemStatusTopProcess] {
-        guard let output = await runCommand(path: "/bin/ps", arguments: ["-ww", "-Aceo", "pid=,pcpu=,pmem=,rss=,command=", "-r"]) else {
-            return []
-        }
-
-        return SystemStatusProcessParser.parsePSOutputCandidates(output, limitPerSort: limit)
     }
 
     private static func runCommand(path: String, arguments: [String], timeout: TimeInterval = 1) async -> String? {
@@ -1697,148 +1577,8 @@ actor SystemStatusSampler: SystemStatusSampling {
         )
     }
 
-    private struct NetworkCounterAccumulator {
-        let name: String
-        var receivedBytes: UInt64 = 0
-        var sentBytes: UInt64 = 0
+    private struct NetworkAddressAccumulator {
         var ipv4Address: String?
         var ipv6Address: String?
-        var isUp = false
-
-        func counter(displayName: String) -> SystemStatusNetworkCounter {
-            SystemStatusNetworkCounter(
-                key: name,
-                displayName: displayName,
-                receivedBytes: receivedBytes,
-                sentBytes: sentBytes,
-                ipAddress: ipv4Address ?? ipv6Address,
-                isUp: isUp
-            )
-        }
-    }
-}
-
-enum SystemStatusProcessParser {
-    static func parsePSOutputCandidates(
-        _ rawOutput: String,
-        limitPerSort: Int
-    ) -> [SystemStatusTopProcess] {
-        guard limitPerSort > 0 else {
-            return []
-        }
-
-        let processes = parsedProcesses(rawOutput)
-        let cpuLeaders = processes.sorted(by: cpuSort).prefix(limitPerSort)
-        let memoryLeaders = processes.sorted(by: memorySort).prefix(limitPerSort)
-        let candidatesByPID = (Array(cpuLeaders) + Array(memoryLeaders)).reduce(
-            into: [Int: SystemStatusTopProcess]()
-        ) { result, process in
-            result[process.pid] = process
-        }
-        return candidatesByPID.values.sorted(by: cpuSort)
-    }
-
-    static func parsePSOutput(_ rawOutput: String, limit: Int) -> [SystemStatusTopProcess] {
-        guard limit > 0 else {
-            return []
-        }
-
-        return Array(parsedProcesses(rawOutput).sorted(by: cpuSort).prefix(limit))
-    }
-
-    private static func parsedProcesses(_ rawOutput: String) -> [SystemStatusTopProcess] {
-        rawOutput
-            .split(whereSeparator: \.isNewline)
-            .compactMap { parseLine(String($0)) }
-    }
-
-    private static func cpuSort(_ lhs: SystemStatusTopProcess, _ rhs: SystemStatusTopProcess) -> Bool {
-        if lhs.cpuPercent != rhs.cpuPercent {
-            return lhs.cpuPercent > rhs.cpuPercent
-        }
-        if lhs.memoryBytes != rhs.memoryBytes {
-            return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
-        }
-        return lhs.pid < rhs.pid
-    }
-
-    private static func memorySort(_ lhs: SystemStatusTopProcess, _ rhs: SystemStatusTopProcess) -> Bool {
-        if lhs.memoryBytes != rhs.memoryBytes {
-            return (lhs.memoryBytes ?? 0) > (rhs.memoryBytes ?? 0)
-        }
-        if lhs.cpuPercent != rhs.cpuPercent {
-            return lhs.cpuPercent > rhs.cpuPercent
-        }
-        return lhs.pid < rhs.pid
-    }
-
-    private static func parseLine(_ line: String) -> SystemStatusTopProcess? {
-        let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
-        guard fields.count >= 5 else {
-            return nil
-        }
-
-        guard
-            let pid = Int(fields[0]),
-            pid > 0,
-            let cpuPercent = Double(fields[1].replacingOccurrences(of: ",", with: ".")),
-            let memoryPercent = Double(fields[2].replacingOccurrences(of: ",", with: ".")),
-            let residentKilobytes = UInt64(fields[3])
-        else {
-            return nil
-        }
-
-        let command = fields[4...].joined(separator: " ")
-        guard !command.isEmpty else {
-            return nil
-        }
-
-        return SystemStatusTopProcess(
-            pid: pid,
-            displayName: displayName(for: command),
-            command: command,
-            cpuPercent: cpuPercent,
-            memoryPercent: memoryPercent,
-            memoryBytes: residentKilobytes * 1_024
-        )
-    }
-
-    private static func displayName(for command: String) -> String {
-        let displayCommand = appBundlePath(in: command) ?? executablePath(from: command)
-        let lastPathComponent = URL(fileURLWithPath: displayCommand).lastPathComponent
-        guard !lastPathComponent.isEmpty else {
-            return command
-        }
-
-        return lastPathComponent.replacingOccurrences(of: ".app", with: "")
-    }
-
-    private static func executablePath(from command: String) -> String {
-        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedCommand.hasPrefix("/") else {
-            return trimmedCommand
-        }
-
-        if let appRange = trimmedCommand.range(of: ".app/") {
-            return String(trimmedCommand[..<trimmedCommand.index(before: appRange.upperBound)])
-        }
-
-        if let whitespaceIndex = trimmedCommand.firstIndex(where: { $0 == " " || $0 == "\t" }) {
-            return String(trimmedCommand[..<whitespaceIndex])
-        }
-
-        return trimmedCommand
-    }
-
-    private static func appBundlePath(in command: String) -> String? {
-        let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            trimmedCommand.hasPrefix("/"),
-            let appRange = trimmedCommand.range(of: ".app", options: [.caseInsensitive])
-        else {
-            return nil
-        }
-
-        return String(trimmedCommand[..<appRange.upperBound])
     }
 }

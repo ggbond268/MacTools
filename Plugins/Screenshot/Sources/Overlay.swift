@@ -579,7 +579,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
     }
 
     private func buildTip() {
-        tipLabel.font = .systemFont(ofSize: 12)
+        tipLabel.font = PluginTypography.control.nsFont
         tipLabel.textColor = .labelColor
         let box = NSStackView(views: [tipLabel])
         box.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
@@ -899,6 +899,8 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
                 updateHover(at: p)
             }
         }
+        // A double-click action can synchronously dismiss this overlay.
+        guard cgImage != nil else { return }
         cursor(at: p).set()
         invalidateAnnotations()
     }
@@ -1097,7 +1099,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
 
     private func buildScrollBar() {
         let hint = NSTextField(labelWithString: environment.string("overlay.scroll.hint", "框住要滚的内容，开始后自己往下滚"))
-        hint.font = .systemFont(ofSize: 12)
+        hint.font = PluginTypography.detail.nsFont
         hint.textColor = .secondaryLabelColor
         let start = sessionButton(
             title: environment.string("overlay.scroll.start", "开始滚动截图"),
@@ -1264,7 +1266,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         radiusSlider.action = #selector(radiusChanged(_:))
         radiusSlider.widthAnchor.constraint(equalToConstant: 110).isActive = true
         radiusSlider.setAccessibilityLabel(environment.string("overlay.style.radius", "圆角"))
-        radiusLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        radiusLabel.font = PluginTypography.value.nsFont
         radiusLabel.textColor = .secondaryLabelColor
         radiusLabel.alignment = .right
         radiusLabel.stringValue = "\(Int(cornerRadius))"
@@ -1277,7 +1279,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         shadowSlider.action = #selector(shadowChanged(_:))
         shadowSlider.widthAnchor.constraint(equalToConstant: 110).isActive = true
         shadowSlider.setAccessibilityLabel(environment.string("overlay.style.shadow", "阴影"))
-        shadowLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        shadowLabel.font = PluginTypography.value.nsFont
         shadowLabel.textColor = .secondaryLabelColor
         shadowLabel.alignment = .right
         shadowLabel.stringValue = "\(Int(shadowSize))"
@@ -1314,7 +1316,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
 
     private func caption(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 12)
+        label.font = PluginTypography.control.nsFont
         label.textColor = .secondaryLabelColor
         return label
     }
@@ -1633,12 +1635,12 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         let icon = NSImageView(image: NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: nil)!)
         icon.symbolConfiguration = .init(pointSize: 13, weight: .medium)
         icon.contentTintColor = .secondaryLabelColor
-        ocrTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        ocrTitle.font = PluginTypography.sectionTitle.nsFont
         ocrTitle.textColor = .labelColor
         ocrSpinner.style = .spinning
         ocrSpinner.controlSize = .small
         ocrSpinner.isDisplayedWhenStopped = false
-        ocrStatus.font = .systemFont(ofSize: 12)
+        ocrStatus.font = PluginTypography.detail.nsFont
         ocrStatus.textColor = .secondaryLabelColor
         ocrStatus.alignment = .right
         let header = NSStackView(views: [icon, ocrTitle, spacer(), ocrSpinner, ocrStatus])
@@ -1665,7 +1667,7 @@ final class OverlayView: NSView, NSTextFieldDelegate, NSTextViewDelegate {
         ocrTextView = textView
 
         let hint = NSTextField(labelWithString: environment.string("overlay.recognition.editHint", "可直接编辑 · 选中一段后 ⌘C 只复制那段 · Esc 关闭"))
-        hint.font = .systemFont(ofSize: 11)
+        hint.font = PluginTypography.detail.nsFont
         hint.textColor = .tertiaryLabelColor
         CaptureActionBar.configure(maskButton)
         maskButton.target = self

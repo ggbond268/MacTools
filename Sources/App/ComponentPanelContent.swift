@@ -527,7 +527,7 @@ private struct ComponentDetailPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(PluginTypography.sectionTitle.font)
                     .foregroundStyle(theme.text.primary)
                     .lineLimit(1)
 
@@ -535,7 +535,7 @@ private struct ComponentDetailPanelView: View {
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(PluginTypography.detail.font.weight(.semibold))
                         .foregroundStyle(
                             isCloseHovered ? theme.text.primary : theme.text.secondary
                         )

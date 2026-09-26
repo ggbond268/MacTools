@@ -65,7 +65,8 @@ Ordinary plugins do not need root `project.yml` edits. Put necessary build overr
 Follow the [plugin development standards](docs/plugins/development-guidelines.md) and the adjacent implementation. The common requirements are:
 
 - **Respect the host contract.** Implement `MacToolsPlugin`, publish stable `panelItems`, and keep manifest capabilities, action policies, permissions, and minimum-host requirements consistent with runtime behavior. Reuse host actions and shortcuts.
-- **Match the product.** Use declarative settings and host renderers, `PluginSettingsTheme`, and `PluginComponentTheme`. Follow the [shared palette appearance](docs/plugins/palette-appearance.md) for floating search headers and icon controls. Keep typography, spacing, controls, focus behavior, and error states consistent. Localize user-facing copy and verify long labels.
+- **Match native macOS.** Prefer system controls, semantic fonts and colors, and native keyboard, focus, and accessibility behavior. Keep equivalent controls consistent across settings, menu-bar panels, widgets, and floating windows, with density appropriate to each surface. Follow the [shared UI rules](docs/plugins/development-guidelines.md#visual-and-interaction-design), reuse host renderers and shared themes, and extend shared components when needed. Localize user-facing copy and verify long labels.
+- **Reuse typography roles.** Follow the [typography contract](docs/plugins/typography.md) for titles, supporting text, numbers, and AppKit text measurement. `PluginTypography` and `PluginMetricValue` require host 2.0.0; declare that minimum when consuming these new APIs.
 - **Build reusable widgets.** Support zero or multiple placements, isolated previews, view recycling, and independent per-placement presentation state. See [panel items](docs/plugins/panel-items.md).
 - **Keep background work economical.** Use cached snapshots, event-driven updates, bounded asynchronous work, and visibility-aware presentation. Preserve intentional monitoring while hidden; stop owned work on deactivation. See [performance requirements](docs/plugins/development-guidelines.md#performance-and-energy).
 - **Preserve user control.** Handle denied permissions, cancellation, unsupported hardware, and system changes. Keep existing confirmations, recovery paths, and destructive-operation safeguards.
@@ -109,8 +110,8 @@ Check the interactions, states, translations, and window sizes affected by the c
 Before requesting review:
 
 - [ ] Relevant checks pass; the PR lists commands, results, and any checks that could not run.
-- [ ] UI evidence is attached when applicable, and the design follows shared components and themes.
-- [ ] User-visible changes update the README or feature guide and include an English fragment in `changes/unreleased/`.
+- [ ] UI evidence is attached when applicable, and the design follows native macOS conventions and shared components and themes.
+- [ ] Root READMEs stay concise and cover installation, requirements, and major capabilities; feature guides change only for durable instructions, important limitations, or recovery steps. Minor changes need no guide; user-visible app and plugin changes include the required English fragment in `changes/unreleased/`.
 - [ ] Manifest metadata, API compatibility, permissions, and action policies match the implementation.
 - [ ] Third-party sources and licenses are recorded; no secrets, local configuration, or unrelated generated files are included.
 

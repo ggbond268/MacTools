@@ -55,15 +55,27 @@ struct StorageExplorerTreemapView: View {
             .overlay(alignment: .topTrailing) {
                 if let row = hoveredTile?.row {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(row.name).font(.caption.weight(.semibold)).lineLimit(1)
+                        Text(row.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                         Text("\(row.sizeLabel) · \(row.percentage)")
                             .font(.caption2).monospacedDigit()
-                        Text(row.item.path).font(.caption2).lineLimit(1).truncationMode(.middle)
+                        Text(row.item.path)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 7)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .background(
+                        Color(nsColor: .windowBackgroundColor),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
                     .padding(8)
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))

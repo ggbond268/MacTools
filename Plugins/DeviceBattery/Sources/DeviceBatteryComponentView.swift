@@ -53,12 +53,12 @@ struct DeviceBatteryComponentView: View {
                 )
 
             Text(emptyTitle)
-                .font(.system(size: 13, weight: .semibold))
+                .font(PluginTypography.sectionTitle.font)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
             Text(emptySubtitle)
-                .font(.system(size: 10, weight: .medium))
+                .font(PluginTypography.detail.font)
                 .foregroundStyle(theme.text.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -70,7 +70,7 @@ struct DeviceBatteryComponentView: View {
                         localization.string("empty.openSettings", defaultValue: "打开系统设置"),
                         systemImage: "gearshape"
                     )
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(PluginTypography.detail.font.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -315,11 +315,10 @@ private struct DeviceBatteryGaugeTile: View {
             }
 
             Text(DeviceBatteryFormatter.percent(item.clampedLevel))
-                .font(.system(size: max(10, tileSize * 0.18), weight: .regular, design: .rounded))
+                .font(PluginTypography.detail.font)
                 .foregroundStyle(theme.text.primary)
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
         }
         .frame(width: tileSize, height: tileSize + DeviceBatteryLayout.gaugePercentHeight)
         .compositingGroup()
@@ -517,15 +516,13 @@ private struct DeviceBatteryNativeRow: View {
                     .foregroundStyle(theme.text.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .minimumScaleFactor(0.72)
 
                 if showsDetail {
                     Text(deviceDetailText(for: item, localization: localization))
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(theme.text.tertiary)
+                        .font(PluginTypography.caption.font)
+                        .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .minimumScaleFactor(0.7)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -540,7 +537,6 @@ private struct DeviceBatteryNativeRow: View {
                 )
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
                 .frame(width: DeviceBatteryLayout.percentWidth, alignment: .trailing)
 
             DeviceBatterySystemBattery(item: item)
@@ -553,18 +549,13 @@ private struct DeviceBatteryNativeRow: View {
 
     private var titleFont: Font {
         if prominent {
-            return .body.weight(.semibold)
+            return PluginTypography.sectionTitle.font
         }
-        return compact ? .caption.weight(.medium) : .subheadline.weight(.medium)
+        return PluginTypography.detail.font.weight(.medium)
     }
 
     private var percentFont: Font {
-        if prominent {
-            return .subheadline
-        }
-        return compact
-            ? .caption2
-            : .caption
+        PluginTypography.detail.font.monospacedDigit()
     }
 
     private var iconSize: CGFloat {

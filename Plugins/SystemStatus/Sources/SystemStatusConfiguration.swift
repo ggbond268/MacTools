@@ -67,11 +67,21 @@ enum SystemStatusMenuBarLayout: String, Codable, Sendable {
     case minimal
 }
 
+enum SystemStatusProcessLimit: Int, Codable, CaseIterable, Sendable {
+    case three = 3
+    case five = 5
+    case ten = 10
+    case fifteen = 15
+    case twenty = 20
+}
+
 struct SystemStatusConfiguration: Codable, Equatable, Sendable {
     var panelItems: [SystemStatusMetricPreference]
     var menuBarItems: [SystemStatusMenuBarMetricPreference]
     var menuBarLayout: SystemStatusMenuBarLayout
     var processSort: SystemStatusProcessSort
+    var processLimit: SystemStatusProcessLimit = .three
+    var chartMetrics: [String: SystemStatusChartMetric] = [:]
 
     static let `default` = SystemStatusConfiguration(
         panelItems: SystemStatusComponentLayout.defaultPanelMetricKinds.map {
@@ -88,6 +98,14 @@ struct SystemStatusConfiguration: Codable, Equatable, Sendable {
         processSort: .cpu
     )
 
+    func chartMetric(for kind: SystemStatusMetricKind) -> SystemStatusChartMetric {
+        guard kind == .memory, let metric = chartMetrics[kind.rawValue],
+              SystemStatusChartMetric.available(for: kind).contains(metric) else {
+            return .defaultMetric(for: kind)
+        }
+        return metric
+    }
+
     var visiblePanelMetricKinds: [SystemStatusMetricKind] {
         panelItems.filter(\.isVisible).map(\.kind)
     }
@@ -103,6 +121,9 @@ extension SystemStatusConfiguration {
         case menuBarItems
         case menuBarLayout
         case processSort
+        case processLimit
+        case memoryChartMetric
+        case chartMetrics
     }
 
     private struct DecodedMenuBarMetricPreference: Decodable {
@@ -138,6 +159,18 @@ extension SystemStatusConfiguration {
             SystemStatusProcessSort.self,
             forKey: .processSort
         ) ?? .cpu
+        let storedLimit = try container.decodeIfPresent(Int.self, forKey: .processLimit)
+        processLimit = storedLimit.flatMap(SystemStatusProcessLimit.init(rawValue:)) ?? .three
+        let storedMetrics = try container.decodeIfPresent([String: String].self, forKey: .chartMetrics) ?? [:]
+        chartMetrics = storedMetrics.compactMapValues(SystemStatusChartMetric.init(rawValue:))
+        if storedMetrics[SystemStatusMetricKind.memory.rawValue] == nil,
+           let legacy = try container.decodeIfPresent(String.self, forKey: .memoryChartMetric),
+           let metric = SystemStatusChartMetric(rawValue: legacy), [.usage, .pressure].contains(metric) {
+            chartMetrics[SystemStatusMetricKind.memory.rawValue] = metric
+        }
+        chartMetrics = chartMetrics.filter { key, value in
+            key == SystemStatusMetricKind.memory.rawValue && SystemStatusChartMetric.available(for: .memory).contains(value)
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -146,6 +179,8 @@ extension SystemStatusConfiguration {
         try container.encode(menuBarItems, forKey: .menuBarItems)
         try container.encode(menuBarLayout, forKey: .menuBarLayout)
         try container.encode(processSort, forKey: .processSort)
+        try container.encode(processLimit, forKey: .processLimit)
+        try container.encode(chartMetrics, forKey: .chartMetrics)
     }
 }
 
@@ -285,7 +320,9 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
                 defaultVisibility: false
             ),
             menuBarLayout: configuration.menuBarLayout,
-            processSort: configuration.processSort
+            processSort: configuration.processSort,
+            processLimit: configuration.processLimit,
+            chartMetrics: configuration.chartMetrics
         )
     }
 
@@ -362,9 +399,8 @@ final class SystemStatusPluginStorageConfigurationStore: SystemStatusConfigurati
         for metric: SystemStatusMetricKind
     ) -> [SystemStatusMenuBarValueKind] {
         let available = SystemStatusMenuBarValueKind.availableValues(for: metric)
-        var seen: Set<SystemStatusMenuBarValueKind> = []
         let normalized = (values ?? [])
-            .filter { available.contains($0) && seen.insert($0).inserted }
+            .filter { available.contains($0) }
             .prefix(2)
         let result = Array(normalized)
         return result.isEmpty ? SystemStatusMenuBarValueKind.defaultValues(for: metric) : result
@@ -527,14 +563,35 @@ final class SystemStatusSettingsController: ObservableObject {
             }
 
             let available = SystemStatusMenuBarValueKind.availableValues(for: kind)
-            var seen: Set<SystemStatusMenuBarValueKind> = []
             let normalized = values
-                .filter { available.contains($0) && seen.insert($0).inserted }
+                .filter { available.contains($0) }
                 .prefix(2)
             guard !normalized.isEmpty else {
                 return
             }
             configuration.menuBarItems[index].values = Array(normalized)
+        }
+    }
+
+    func setMenuBarPrimaryValue(_ kind: SystemStatusMetricKind, value: SystemStatusMenuBarValueKind) {
+        guard let item = configuration.menuBarItems.first(where: { $0.kind == kind }),
+              SystemStatusMenuBarValueKind.availableValues(for: kind).contains(value) else { return }
+        var values = item.values
+        guard !values.isEmpty else {
+            setMenuBarValues(kind, values: [value])
+            return
+        }
+        values[0] = value
+        setMenuBarValues(kind, values: values)
+    }
+
+    func setMenuBarSecondaryValue(_ kind: SystemStatusMetricKind, value: SystemStatusMenuBarValueKind?) {
+        guard let first = configuration.menuBarItems.first(where: { $0.kind == kind })?.values.first else { return }
+        if let value {
+            guard SystemStatusMenuBarValueKind.availableValues(for: kind).contains(value) else { return }
+            setMenuBarValues(kind, values: [first, value])
+        } else {
+            setMenuBarValues(kind, values: [first])
         }
     }
 
@@ -548,6 +605,17 @@ final class SystemStatusSettingsController: ObservableObject {
             }
             configuration.menuBarItems[index].valueArrangement = arrangement
         }
+    }
+
+    func setProcessLimit(_ limit: SystemStatusProcessLimit) {
+        update { configuration in
+            configuration.processLimit = limit
+        }
+    }
+
+    func setChartMetric(_ kind: SystemStatusMetricKind, metric: SystemStatusChartMetric) {
+        guard kind == .memory, SystemStatusChartMetric.available(for: kind).contains(metric) else { return }
+        update { $0.chartMetrics[kind.rawValue] = metric }
     }
 
     func setProcessSort(_ sort: SystemStatusProcessSort) {
@@ -600,7 +668,6 @@ final class SystemStatusSettingsController: ObservableObject {
         return configuration.menuBarItems.allSatisfy { item in
             let availableValues = SystemStatusMenuBarValueKind.availableValues(for: item.kind)
             return (1 ... 2).contains(item.values.count)
-                && Set(item.values).count == item.values.count
                 && item.values.allSatisfy(availableValues.contains)
         }
     }

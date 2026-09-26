@@ -170,8 +170,18 @@ enum SystemStatusComponentLayout {
     static let metricRows = 3
 
     static let dashboardSectionSpacing: CGFloat = cardSpacing
-    static let dashboardMetricTileHeight: CGFloat = 82
+    static let dashboardMetricTileHeight: CGFloat = 92
     static let dashboardLowerTileHeight: CGFloat = 96
+    static let processRowHeight: CGFloat = 17
+    static let processRowSpacing: CGFloat = 2
+
+    static func processListHeight(limit: SystemStatusProcessLimit) -> CGFloat {
+        CGFloat(limit.rawValue) * processRowHeight + CGFloat(limit.rawValue - 1) * processRowSpacing
+    }
+
+    static func processTileHeight(limit: SystemStatusProcessLimit) -> CGFloat {
+        dashboardLowerTileHeight + processListHeight(limit: limit) - processListHeight(limit: .three)
+    }
     static let dashboardMetricGridHeight = CGFloat(metricRows) * dashboardMetricTileHeight
         + CGFloat(max(metricRows - 1, 0)) * cardSpacing
     static let emptyContentHeight = dashboardLowerTileHeight
@@ -238,7 +248,10 @@ enum SystemStatusComponentLayout {
         return rows
     }
 
-    static func contentHeight(for kinds: [SystemStatusMetricKind]) -> CGFloat {
+    static func contentHeight(
+        for kinds: [SystemStatusMetricKind],
+        processLimit: SystemStatusProcessLimit = .three
+    ) -> CGFloat {
         let rows = rows(for: kinds)
         guard !rows.isEmpty else {
             return emptyContentHeight
@@ -249,7 +262,7 @@ enum SystemStatusComponentLayout {
             case .metrics:
                 return partialResult + dashboardMetricTileHeight
             case .topProcesses:
-                return partialResult + dashboardLowerTileHeight
+                return partialResult + processTileHeight(limit: processLimit)
             }
         }
         let spacing = CGFloat(max(rows.count - 1, 0)) * dashboardSectionSpacing
@@ -299,14 +312,15 @@ struct SystemStatusCPUSnapshot: Equatable, Sendable {
     let usage: Double?
     let loadAverage1Minute: Double?
     let temperatureCelsius: Double?
-    let systemPowerWatts: Double?
+    let cpuPowerWatts: Double?
     let isCollecting: Bool
+    var usageInterval: SystemStatusSampleInterval? = nil
 
     static let empty = SystemStatusCPUSnapshot(
         usage: nil,
         loadAverage1Minute: nil,
         temperatureCelsius: nil,
-        systemPowerWatts: nil,
+        cpuPowerWatts: nil,
         isCollecting: true
     )
 }
@@ -332,6 +346,8 @@ struct SystemStatusMemorySnapshot: Equatable, Sendable {
     let totalBytes: UInt64?
     let swapUsedBytes: UInt64?
     let swapTotalBytes: UInt64?
+    var pressure: SystemStatusMemoryPressure? = nil
+    var pressurePercent: Double? = nil
 
     var usage: Double? {
         guard let usedBytes, let totalBytes, totalBytes > 0 else {
@@ -354,6 +370,7 @@ struct SystemStatusDiskSnapshot: Equatable, Sendable {
     let totalBytes: UInt64?
     let readBytesPerSecond: UInt64?
     let writeBytesPerSecond: UInt64?
+    var activityInterval: SystemStatusSampleInterval? = nil
 
     var usage: Double? {
         guard let usedBytes, let totalBytes, totalBytes > 0 else {
@@ -361,6 +378,11 @@ struct SystemStatusDiskSnapshot: Equatable, Sendable {
         }
 
         return min(max(Double(usedBytes) / Double(totalBytes), 0), 1)
+    }
+
+    var freeBytes: UInt64? {
+        guard let usedBytes, let totalBytes else { return nil }
+        return totalBytes >= usedBytes ? totalBytes - usedBytes : 0
     }
 
     static let empty = SystemStatusDiskSnapshot(
@@ -375,7 +397,8 @@ struct SystemStatusDiskSnapshot: Equatable, Sendable {
             usedBytes: usedBytes,
             totalBytes: totalBytes,
             readBytesPerSecond: disk.readBytesPerSecond,
-            writeBytesPerSecond: disk.writeBytesPerSecond
+            writeBytesPerSecond: disk.writeBytesPerSecond,
+            activityInterval: disk.activityInterval
         )
     }
 
@@ -384,7 +407,8 @@ struct SystemStatusDiskSnapshot: Equatable, Sendable {
             usedBytes: disk.usedBytes,
             totalBytes: disk.totalBytes,
             readBytesPerSecond: readBytesPerSecond,
-            writeBytesPerSecond: writeBytesPerSecond
+            writeBytesPerSecond: writeBytesPerSecond,
+            activityInterval: activityInterval
         )
     }
 }
@@ -447,6 +471,7 @@ struct SystemStatusNetworkSnapshot: Equatable, Sendable {
     let uploadBytesPerSecond: UInt64?
     let isConnected: Bool
     let isCollecting: Bool
+    var activityInterval: SystemStatusSampleInterval? = nil
 
     static let empty = SystemStatusNetworkSnapshot(
         interfaceName: nil,
@@ -466,7 +491,8 @@ struct SystemStatusNetworkSnapshot: Equatable, Sendable {
             downloadBytesPerSecond: downloadBytesPerSecond,
             uploadBytesPerSecond: uploadBytesPerSecond,
             isConnected: isConnected,
-            isCollecting: isCollecting
+            isCollecting: isCollecting,
+            activityInterval: activityInterval
         )
     }
 }
@@ -476,10 +502,25 @@ struct SystemStatusTopProcess: Identifiable, Equatable, Sendable {
     let displayName: String
     let command: String
     let cpuPercent: Double
-    let memoryPercent: Double
     let memoryBytes: UInt64?
 
-    var id: Int { pid }
+    let applicationID: String?
+    let processCount: Int
+
+    var id: String { applicationID ?? "pid:\(pid)" }
+
+    init(
+        pid: Int, displayName: String, command: String, cpuPercent: Double,
+        memoryBytes: UInt64?, applicationID: String? = nil, processCount: Int = 1
+    ) {
+        self.pid = pid
+        self.displayName = displayName
+        self.command = command
+        self.cpuPercent = cpuPercent
+        self.memoryBytes = memoryBytes
+        self.applicationID = applicationID
+        self.processCount = processCount
+    }
 
     func replacingDisplayName(_ displayName: String) -> SystemStatusTopProcess {
         SystemStatusTopProcess(
@@ -487,8 +528,9 @@ struct SystemStatusTopProcess: Identifiable, Equatable, Sendable {
             displayName: displayName,
             command: command,
             cpuPercent: cpuPercent,
-            memoryPercent: memoryPercent,
-            memoryBytes: memoryBytes
+            memoryBytes: memoryBytes,
+            applicationID: applicationID,
+            processCount: processCount
         )
     }
 }
@@ -521,9 +563,14 @@ struct SystemStatusHardwareSnapshot: Equatable, Sendable {
 
 struct SystemStatusHistoryPoint: Codable, Equatable, Sendable {
     let timestamp: TimeInterval
+    var rates: SystemStatusHistoryRates? = nil
+    // A new session never interpolates across a stopped collector or app restart.
+    var collectionID: UUID?
     let cpuUsage: Double?
     let gpuUsage: Double?
     let memoryUsage: Double?
+    let memoryPressure: SystemStatusMemoryPressure?
+    let memoryPressurePercent: Double?
     let diskUsage: Double?
     let diskReadBytesPerSecond: UInt64?
     let diskWriteBytesPerSecond: UInt64?
@@ -531,11 +578,33 @@ struct SystemStatusHistoryPoint: Codable, Equatable, Sendable {
     let networkUploadBytesPerSecond: UInt64?
     let batteryLevel: Double?
 
-    init(timestamp: TimeInterval, snapshot: SystemStatusSnapshot) {
+    let cpuTemperatureCelsius: Double?
+    let cpuPowerWatts: Double?
+    let cpuLoadAverage1Minute: Double?
+    let gpuTemperatureCelsius: Double?
+    let memoryUsedBytes: UInt64?
+    let memorySwapUsedBytes: UInt64?
+    let diskFreeBytes: UInt64?
+    let batteryPowerWatts: Double?
+    let batteryTemperatureCelsius: Double?
+
+    init(timestamp: TimeInterval, snapshot: SystemStatusSnapshot, collectionID: UUID? = nil) {
         self.timestamp = timestamp
+        self.collectionID = collectionID
+        self.cpuTemperatureCelsius = snapshot.cpu.temperatureCelsius
+        self.cpuPowerWatts = snapshot.cpu.cpuPowerWatts
+        self.cpuLoadAverage1Minute = snapshot.cpu.loadAverage1Minute
+        self.gpuTemperatureCelsius = snapshot.gpu.temperatureCelsius
+        self.memoryUsedBytes = snapshot.memory.usedBytes
+        self.memorySwapUsedBytes = snapshot.memory.swapUsedBytes
+        self.diskFreeBytes = snapshot.disk.freeBytes
+        self.batteryPowerWatts = snapshot.battery.batteryPowerWatts
+        self.batteryTemperatureCelsius = snapshot.battery.temperatureCelsius
         self.cpuUsage = snapshot.cpu.usage
         self.gpuUsage = snapshot.gpu.usage
         self.memoryUsage = snapshot.memory.usage
+        self.memoryPressure = snapshot.memory.pressure
+        self.memoryPressurePercent = snapshot.memory.pressurePercent
         self.diskUsage = snapshot.disk.usage
         self.diskReadBytesPerSecond = snapshot.disk.readBytesPerSecond
         self.diskWriteBytesPerSecond = snapshot.disk.writeBytesPerSecond
@@ -549,17 +618,39 @@ struct SystemStatusHistoryPoint: Codable, Equatable, Sendable {
         cpuUsage: Double? = nil,
         gpuUsage: Double? = nil,
         memoryUsage: Double? = nil,
+        memoryPressure: SystemStatusMemoryPressure? = nil,
+        memoryPressurePercent: Double? = nil,
         diskUsage: Double? = nil,
         diskReadBytesPerSecond: UInt64? = nil,
         diskWriteBytesPerSecond: UInt64? = nil,
         networkDownloadBytesPerSecond: UInt64? = nil,
         networkUploadBytesPerSecond: UInt64? = nil,
-        batteryLevel: Double? = nil
+        batteryLevel: Double? = nil,
+        cpuTemperatureCelsius: Double? = nil,
+        cpuPowerWatts: Double? = nil,
+        cpuLoadAverage1Minute: Double? = nil,
+        gpuTemperatureCelsius: Double? = nil,
+        memoryUsedBytes: UInt64? = nil,
+        memorySwapUsedBytes: UInt64? = nil,
+        diskFreeBytes: UInt64? = nil,
+        batteryPowerWatts: Double? = nil,
+        batteryTemperatureCelsius: Double? = nil
     ) {
         self.timestamp = timestamp
+        self.cpuTemperatureCelsius = cpuTemperatureCelsius
+        self.cpuPowerWatts = cpuPowerWatts
+        self.cpuLoadAverage1Minute = cpuLoadAverage1Minute
+        self.gpuTemperatureCelsius = gpuTemperatureCelsius
+        self.memoryUsedBytes = memoryUsedBytes
+        self.memorySwapUsedBytes = memorySwapUsedBytes
+        self.diskFreeBytes = diskFreeBytes
+        self.batteryPowerWatts = batteryPowerWatts
+        self.batteryTemperatureCelsius = batteryTemperatureCelsius
         self.cpuUsage = cpuUsage
         self.gpuUsage = gpuUsage
         self.memoryUsage = memoryUsage
+        self.memoryPressure = memoryPressure
+        self.memoryPressurePercent = memoryPressurePercent
         self.diskUsage = diskUsage
         self.diskReadBytesPerSecond = diskReadBytesPerSecond
         self.diskWriteBytesPerSecond = diskWriteBytesPerSecond
@@ -575,36 +666,34 @@ struct SystemStatusHistoryDocument: Codable, Equatable, Sendable {
 }
 
 struct SystemStatusCPUTicks: Equatable, Sendable {
-    let user: UInt64
-    let system: UInt64
-    let idle: UInt64
-    let nice: UInt64
+    let user: UInt32
+    let system: UInt32
+    let idle: UInt32
+    let nice: UInt32
 }
 
 enum SystemStatusCPUUsageCalculator {
     static func usage(current: SystemStatusCPUTicks, previous: SystemStatusCPUTicks) -> Double? {
-        let user = positiveDelta(current.user, previous.user)
-        let system = positiveDelta(current.system, previous.system)
-        let idle = positiveDelta(current.idle, previous.idle)
-        let nice = positiveDelta(current.nice, previous.nice)
-        let active = user + system + nice
-        let total = active + idle
-
-        guard total > 0 else {
-            return nil
-        }
-
-        return min(max(Double(active) / Double(total), 0), 1)
+        sample(current: current, previous: previous)?.usage
     }
 
-    private static func positiveDelta(_ current: UInt64, _ previous: UInt64) -> UInt64 {
-        current >= previous ? current - previous : 0
+    static func sample(current: SystemStatusCPUTicks, previous: SystemStatusCPUTicks) -> (usage: Double, totalTicks: Double)? {
+        // HOST_CPU_LOAD_INFO exposes wrapping 32-bit natural_t counters.
+        let active = UInt64(current.user &- previous.user)
+            + UInt64(current.system &- previous.system)
+            + UInt64(current.nice &- previous.nice)
+        let total = active + UInt64(current.idle &- previous.idle)
+        guard total > 0 else { return nil }
+        return (Double(active) / Double(total), Double(total))
     }
 }
 
 enum SystemStatusPowerNormalizer {
     static func energyJoules(from value: Double, unit: String) -> Double? {
+        guard value.isFinite, value >= 0 else { return nil }
         switch unit {
+        case "J":
+            return value
         case "mJ":
             return value / 1_000
         case "uJ":
@@ -636,7 +725,7 @@ enum SystemStatusBatteryPowerNormalizer {
             let voltageMillivolts,
             let amperageMilliamps,
             voltageMillivolts > 0,
-            amperageMilliamps != 0
+            amperageMilliamps.isFinite
         else {
             return nil
         }
@@ -644,7 +733,7 @@ enum SystemStatusBatteryPowerNormalizer {
         return validBatteryWatts(-(voltageMillivolts * amperageMilliamps) / 1_000_000)
     }
 
-    private static func signedNumberValue(_ rawValue: Any?) -> Double? {
+    static func signedNumberValue(_ rawValue: Any?) -> Double? {
         if let intValue = rawValue as? Int {
             return Double(intValue)
         }
@@ -706,17 +795,65 @@ struct SystemStatusPowerCalculator {
         current: SystemStatusPowerEnergySample,
         previous: SystemStatusPowerEnergySample
     ) -> Double? {
-        let elapsedSeconds = current.date.timeIntervalSince(previous.date)
-        guard elapsedSeconds > 0, current.joules >= previous.joules else {
-            return nil
+        guard !current.channels.isEmpty, current.channels.keys == previous.channels.keys else { return nil }
+        let collectionElapsed = current.uptime - previous.uptime
+        guard collectionElapsed.isFinite, collectionElapsed > 0 else { return nil }
+        var watts: Double = 0
+        for (name, channel) in current.channels {
+            guard let old = previous.channels[name], channel.joules >= old.joules else { return nil }
+            let elapsed: TimeInterval
+            if let currentTime = channel.sourceUptime, let previousTime = old.sourceUptime,
+               currentTime > previousTime {
+                elapsed = currentTime - previousTime
+            } else if channel.joules == old.joules,
+                      let currentTime = channel.sourceUptime, currentTime == old.sourceUptime {
+                // A repeated native sample has no new interval. The tracker
+                // can retain the last measurement while the provider catches up.
+                return nil
+            } else {
+                // Source timestamps are optional private metadata. Preserve the
+                // established elapsed-time path when valid energy advances.
+                elapsed = collectionElapsed
+            }
+            guard elapsed.isFinite, elapsed > 0 else { return nil }
+            watts += (channel.joules - old.joules) / elapsed
         }
-
-        let watts = (current.joules - previous.joules) / elapsedSeconds
         guard watts >= 0, watts < 1_000 else {
             return nil
         }
 
         return watts
+    }
+}
+
+struct SystemStatusPowerTracker {
+    // IOReport providers can update less frequently than the UI sampler.
+    // Bound reuse so a suspended or stalled provider cannot look live forever.
+    private static let maximumReadingAge: TimeInterval = 60
+    private var previous: SystemStatusPowerEnergySample?
+    private var lastReading: (watts: Double, collectedAt: TimeInterval)?
+
+    mutating func watts(sample: SystemStatusPowerEnergySample?) -> Double? {
+        guard let sample else {
+            // A transient read failure does not invalidate a cumulative-counter
+            // baseline. Preserve it so recovery need not wait another interval.
+            lastReading = nil
+            return nil
+        }
+        defer { previous = sample }
+        guard let previous else { return nil }
+        if let watts = SystemStatusPowerCalculator.watts(current: sample, previous: previous) {
+            lastReading = (watts, sample.uptime)
+            return watts
+        }
+        if !sample.channels.isEmpty, sample.channels == previous.channels,
+           sample.channels.values.allSatisfy({ $0.sourceUptime != nil }),
+           let lastReading, sample.uptime >= lastReading.collectedAt,
+           sample.uptime - lastReading.collectedAt <= Self.maximumReadingAge {
+            return lastReading.watts
+        }
+        lastReading = nil
+        return nil
     }
 }
 
@@ -727,21 +864,6 @@ struct SystemStatusNetworkCounter: Equatable, Sendable {
     let sentBytes: UInt64
     let ipAddress: String?
     let isUp: Bool
-
-    func replacingCounters(from counter: SystemStatusNetworkCounter?) -> SystemStatusNetworkCounter {
-        guard let counter else {
-            return self
-        }
-
-        return SystemStatusNetworkCounter(
-            key: counter.key,
-            displayName: displayName,
-            receivedBytes: counter.receivedBytes,
-            sentBytes: counter.sentBytes,
-            ipAddress: ipAddress,
-            isUp: isUp
-        )
-    }
 }
 
 struct SystemStatusNetworkRate: Equatable, Sendable {
@@ -750,43 +872,47 @@ struct SystemStatusNetworkRate: Equatable, Sendable {
 }
 
 enum SystemStatusNetworkRateCalculator {
-    private static let maximumBytesPerSecond: UInt64 = 2_000_000_000
+    static func rate(
+        current: [String: SystemStatusNetworkCounter],
+        previous: [String: SystemStatusNetworkCounter],
+        elapsedSeconds: TimeInterval
+    ) -> SystemStatusNetworkRate? {
+        guard !current.isEmpty, current.keys == previous.keys else { return nil }
+        var download: UInt64 = 0
+        var upload: UInt64 = 0
+        for (name, counter) in current {
+            guard let old = previous[name], counter.key == old.key,
+                  SystemStatusRateCalculator.addDelta(current: counter.receivedBytes, previous: old.receivedBytes, to: &download),
+                  SystemStatusRateCalculator.addDelta(current: counter.sentBytes, previous: old.sentBytes, to: &upload) else { return nil }
+        }
+        guard let downloadRate = SystemStatusRateCalculator.bytesPerSecond(current: download, previous: 0, elapsedSeconds: elapsedSeconds),
+              let uploadRate = SystemStatusRateCalculator.bytesPerSecond(current: upload, previous: 0, elapsedSeconds: elapsedSeconds) else { return nil }
+        return SystemStatusNetworkRate(downloadBytesPerSecond: downloadRate, uploadBytesPerSecond: uploadRate)
+    }
 
     static func rate(
         current: SystemStatusNetworkCounter,
         previous: SystemStatusNetworkCounter,
         elapsedSeconds: TimeInterval
     ) -> SystemStatusNetworkRate? {
-        guard elapsedSeconds > 0 else {
-            return nil
-        }
-
-        let receivedDelta = positiveDelta(current.receivedBytes, previous.receivedBytes)
-        let sentDelta = positiveDelta(current.sentBytes, previous.sentBytes)
-
-        return SystemStatusNetworkRate(
-            downloadBytesPerSecond: clampedBytesPerSecond(receivedDelta, elapsedSeconds: elapsedSeconds),
-            uploadBytesPerSecond: clampedBytesPerSecond(sentDelta, elapsedSeconds: elapsedSeconds)
-        )
-    }
-
-    private static func positiveDelta(_ current: UInt64, _ previous: UInt64) -> UInt64 {
-        current >= previous ? current - previous : 0
-    }
-
-    private static func clampedBytesPerSecond(_ delta: UInt64, elapsedSeconds: TimeInterval) -> UInt64 {
-        let bytesPerSecond = UInt64(Double(delta) / elapsedSeconds)
-        guard bytesPerSecond <= maximumBytesPerSecond else {
-            return 0
-        }
-
-        return bytesPerSecond
+        guard current.key == previous.key,
+              let download = SystemStatusRateCalculator.bytesPerSecond(
+                current: current.receivedBytes, previous: previous.receivedBytes, elapsedSeconds: elapsedSeconds
+              ),
+              let upload = SystemStatusRateCalculator.bytesPerSecond(
+                current: current.sentBytes, previous: previous.sentBytes, elapsedSeconds: elapsedSeconds
+              ) else { return nil }
+        return SystemStatusNetworkRate(downloadBytesPerSecond: download, uploadBytesPerSecond: upload)
     }
 }
 
 struct SystemStatusDiskIOCounter: Equatable, Sendable {
-    let readBytes: UInt64
-    let writeBytes: UInt64
+    struct Device: Equatable, Sendable {
+        let readBytes: UInt64
+        let writeBytes: UInt64
+    }
+
+    let devices: [UInt64: Device]
 }
 
 struct SystemStatusDiskIORate: Equatable, Sendable {
@@ -795,37 +921,40 @@ struct SystemStatusDiskIORate: Equatable, Sendable {
 }
 
 enum SystemStatusDiskIORateCalculator {
-    private static let maximumBytesPerSecond: UInt64 = 10_000_000_000
-
     static func rate(
         current: SystemStatusDiskIOCounter,
         previous: SystemStatusDiskIOCounter,
         elapsedSeconds: TimeInterval
     ) -> SystemStatusDiskIORate? {
-        guard elapsedSeconds > 0 else {
-            return nil
+        guard !current.devices.isEmpty, current.devices.keys == previous.devices.keys else { return nil }
+        var read: UInt64 = 0
+        var write: UInt64 = 0
+        for (id, device) in current.devices {
+            guard let old = previous.devices[id],
+                  SystemStatusRateCalculator.addDelta(current: device.readBytes, previous: old.readBytes, to: &read),
+                  SystemStatusRateCalculator.addDelta(current: device.writeBytes, previous: old.writeBytes, to: &write) else { return nil }
         }
+        guard let readRate = SystemStatusRateCalculator.bytesPerSecond(current: read, previous: 0, elapsedSeconds: elapsedSeconds),
+              let writeRate = SystemStatusRateCalculator.bytesPerSecond(current: write, previous: 0, elapsedSeconds: elapsedSeconds) else { return nil }
+        return SystemStatusDiskIORate(readBytesPerSecond: readRate, writeBytesPerSecond: writeRate)
+    }
+}
 
-        let readDelta = positiveDelta(current.readBytes, previous.readBytes)
-        let writeDelta = positiveDelta(current.writeBytes, previous.writeBytes)
-
-        return SystemStatusDiskIORate(
-            readBytesPerSecond: clampedBytesPerSecond(readDelta, elapsedSeconds: elapsedSeconds),
-            writeBytesPerSecond: clampedBytesPerSecond(writeDelta, elapsedSeconds: elapsedSeconds)
-        )
+private enum SystemStatusRateCalculator {
+    static func addDelta(current: UInt64, previous: UInt64, to total: inout UInt64) -> Bool {
+        guard current >= previous else { return false }
+        let sum = total.addingReportingOverflow(current - previous)
+        guard !sum.overflow else { return false }
+        total = sum.partialValue
+        return true
     }
 
-    private static func positiveDelta(_ current: UInt64, _ previous: UInt64) -> UInt64 {
-        current >= previous ? current - previous : 0
-    }
-
-    private static func clampedBytesPerSecond(_ delta: UInt64, elapsedSeconds: TimeInterval) -> UInt64 {
-        let bytesPerSecond = UInt64(Double(delta) / elapsedSeconds)
-        guard bytesPerSecond <= maximumBytesPerSecond else {
-            return 0
-        }
-
-        return bytesPerSecond
+    static func bytesPerSecond(current: UInt64, previous: UInt64, elapsedSeconds: TimeInterval) -> UInt64? {
+        guard elapsedSeconds.isFinite, elapsedSeconds > 0, current >= previous else { return nil }
+        let rate = Double(current - previous) / elapsedSeconds
+        guard rate.isFinite, rate < Double(UInt64.max) else { return nil }
+        // Do not impose a link/device speed limit: fast valid transfers are not zero.
+        return UInt64(rate)
     }
 }
 

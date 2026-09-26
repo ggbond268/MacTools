@@ -274,7 +274,7 @@ struct ActivityBarComponentView: View {
     private var headerBar: some View {
         HStack {
                 Text(localization.string("component.title", defaultValue: "Activity Bar"))
-                .font(.title3.bold())
+                .font(PluginTypography.sectionTitle.font)
                 .lineLimit(1)
 
             Spacer(minLength: 8)
@@ -388,15 +388,14 @@ struct ActivityBarComponentView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundStyle(theme.text.secondary)
+                    .font(PluginTypography.metric.font)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+
+                Text(label)
+                    .font(PluginTypography.detail.font)
+                    .foregroundStyle(theme.text.secondary)
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
@@ -436,7 +435,7 @@ struct ActivityBarComponentView: View {
     private var aiSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(localization.string("component.ai.title", defaultValue: "Time AI Worked for You"))
-                .font(.headline)
+                .font(PluginTypography.sectionTitle.font)
                 .padding(.horizontal, 22)
                 .padding(.bottom, 2)
 
@@ -488,7 +487,7 @@ struct ActivityBarComponentView: View {
                         .font(.caption)
                         .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .help(detail)
                 }
             }
 
@@ -498,7 +497,7 @@ struct ActivityBarComponentView: View {
                 .font(.body.weight(.semibold).monospacedDigit())
                 .foregroundStyle(theme.text.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -523,7 +522,7 @@ struct ActivityBarComponentView: View {
 
             HStack(spacing: 6) {
                 Image(systemName: aboveAvg ? "arrow.up.right" : "arrow.down.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(PluginTypography.caption.font.weight(.semibold))
                     .foregroundStyle(aboveAvg ? theme.status.success : theme.text.tertiary)
 
                 if pct == 0 {
@@ -578,7 +577,7 @@ struct ActivityBarComponentView: View {
     private var topAppsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(localization.string("component.topApps.title", defaultValue: "Top Apps by Screen Time"))
-                .font(.headline)
+                .font(PluginTypography.sectionTitle.font)
                 .padding(.horizontal, 6)
                 .padding(.bottom, 2)
 
@@ -632,7 +631,7 @@ struct ActivityBarComponentView: View {
                         .font(.body.monospacedDigit())
                         .foregroundStyle(theme.text.secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.8)
                 }
                 .contentShape(Rectangle())
             }
@@ -664,7 +663,7 @@ struct ActivityBarComponentView: View {
     private func appDetailItem(icon: String, value: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 9))
+                .font(PluginTypography.caption.font)
                 .foregroundStyle(theme.text.secondary)
 
             Text(value)
@@ -681,7 +680,7 @@ struct ActivityBarComponentView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(localization.string("component.trends.title", defaultValue: "Trends"))
-                        .font(.headline)
+                        .font(PluginTypography.sectionTitle.font)
 
                     Image(systemName: "chevron.right")
                         .font(.subheadline.weight(.semibold))
@@ -768,7 +767,7 @@ struct ActivityBarComponentView: View {
                                 if isHovered {
                                     VStack(spacing: 2) {
                                         Text(shortDate(day.date))
-                                            .font(.system(size: 9))
+                                            .font(PluginTypography.caption.font)
                                             .foregroundStyle(theme.text.secondary)
                                         HStack(spacing: 6) {
                                             ForEach(Self.visibleCodingTools, id: \.rawValue) { tool in
@@ -777,7 +776,7 @@ struct ActivityBarComponentView: View {
                                                     .foregroundStyle(codingToolColor(tool))
                                             }
                                         }
-                                        .font(.system(size: 10).bold().monospacedDigit())
+                                        .font(PluginTypography.caption.font.weight(.semibold).monospacedDigit())
                                     }
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -806,14 +805,14 @@ struct ActivityBarComponentView: View {
                 .chartYScale(domain: 0...yUpperBound)
                 .chartYAxis {
                     if hasData {
-                        AxisMarks(position: .leading) { value in
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                             AxisGridLine()
                                 .foregroundStyle(theme.surfaces.track)
                             AxisValueLabel {
                                 if let minutes = value.as(Double.self) {
                                     Text(talkAxisLabel(minutes))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(theme.text.tertiary)
+                                        .font(PluginTypography.caption.font)
+                                        .foregroundStyle(theme.text.secondary)
                                 }
                             }
                         }
@@ -824,8 +823,8 @@ struct ActivityBarComponentView: View {
                         AxisValueLabel {
                             if let label = value.as(String.self), !compactMode || shouldShowXLabel(label, in: dateLabels) {
                                 Text(label)
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(theme.text.tertiary)
+                                    .font(PluginTypography.caption.font)
+                                    .foregroundStyle(theme.text.secondary)
                             }
                         }
                     }
@@ -892,14 +891,14 @@ struct ActivityBarComponentView: View {
                                 if isHovered {
                                     VStack(spacing: 2) {
                                         Text(shortDate(day.date))
-                                            .font(.system(size: 9))
+                                            .font(PluginTypography.caption.font)
                                             .foregroundStyle(theme.text.secondary)
                                         HStack(spacing: 6) {
                                             Text("\(day.keystrokes)").foregroundStyle(theme.dataSeries.primary)
                                             Text("\(day.pointerClicks)").foregroundStyle(theme.dataSeries.secondary)
                                             Text("\(day.scrollEvents)").foregroundStyle(theme.dataSeries.tertiary)
                                         }
-                                        .font(.system(size: 10).bold().monospacedDigit())
+                                        .font(PluginTypography.caption.font.weight(.semibold).monospacedDigit())
                                     }
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3)
@@ -922,14 +921,14 @@ struct ActivityBarComponentView: View {
                 .chartYScale(domain: 0...yUpperBound)
                 .chartYAxis {
                     if hasData {
-                        AxisMarks(position: .leading) { value in
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                             AxisGridLine()
                                 .foregroundStyle(theme.surfaces.track)
                             AxisValueLabel {
                                 if let count = value.as(Double.self) {
                                     Text(ActivityBarFormatting.count(Int(count)))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(theme.text.tertiary)
+                                        .font(PluginTypography.caption.font)
+                                        .foregroundStyle(theme.text.secondary)
                                 }
                             }
                         }
@@ -940,8 +939,8 @@ struct ActivityBarComponentView: View {
                         AxisValueLabel {
                             if let label = value.as(String.self), !compactMode || shouldShowXLabel(label, in: dateLabels) {
                                 Text(label)
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(theme.text.tertiary)
+                                    .font(PluginTypography.caption.font)
+                                    .foregroundStyle(theme.text.secondary)
                             }
                         }
                     }
@@ -969,7 +968,7 @@ struct ActivityBarComponentView: View {
 
         return VStack(alignment: .leading, spacing: 6) {
             Text(localization.string("component.screenTime.title", defaultValue: "Screen Time"))
-                .font(.headline)
+                .font(PluginTypography.sectionTitle.font)
 
             Chart {
                 ForEach(days) { day in
@@ -984,7 +983,7 @@ struct ActivityBarComponentView: View {
                     .annotation(position: .top, spacing: 2) {
                         if isHovered, day.screenTimeSeconds > 0 {
                             Text(shortDuration(day.screenTimeSeconds))
-                                .font(.system(size: 9).bold().monospacedDigit())
+                                .font(PluginTypography.caption.font.weight(.semibold).monospacedDigit())
                                 .foregroundStyle(theme.text.primary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -994,14 +993,14 @@ struct ActivityBarComponentView: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading) { value in
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine()
                         .foregroundStyle(theme.surfaces.track)
                     AxisValueLabel {
                         if let minutes = value.as(Double.self) {
                             Text(talkAxisLabel(minutes))
-                                .font(.system(size: 9))
-                                .foregroundStyle(theme.text.tertiary)
+                                .font(PluginTypography.caption.font)
+                                .foregroundStyle(theme.text.secondary)
                         }
                     }
                 }
@@ -1013,8 +1012,8 @@ struct ActivityBarComponentView: View {
                     AxisValueLabel {
                         if let label = value.as(String.self), !compactMode || shouldShowXLabel(label, in: labels) {
                             Text(label)
-                                .font(.system(size: 9))
-                                .foregroundStyle(theme.text.tertiary)
+                                .font(PluginTypography.caption.font)
+                                .foregroundStyle(theme.text.secondary)
                         }
                     }
                 }

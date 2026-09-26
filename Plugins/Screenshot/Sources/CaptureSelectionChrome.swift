@@ -1,4 +1,5 @@
 import AppKit
+import MacToolsPluginKit
 import QuartzCore
 
 /// Selection chrome is composited independently of the CPU-drawn annotation canvas.
@@ -115,7 +116,7 @@ final class CaptureSizeBadge: NSView {
             let suffix = (radius > 0 ? String(format: radiusFormat, Int(radius)) : "")
                 + (shadowSize > 0 ? String(format: shadowFormat, Int(shadowSize)) : "")
             label = NSAttributedString(string: String(format: sizeFormat, Int(rect.width), Int(rect.height), suffix),
-                                       attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                                       attributes: [.font: PluginTypography.value.nsFont,
                                                     .foregroundColor: NSColor.white])
             let size = label.size()
             setFrameSize(NSSize(width: size.width + 20, height: size.height + 8))

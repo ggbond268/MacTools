@@ -4,47 +4,47 @@ import SwiftUI
 public enum PluginSettingsTheme {
     public enum Typography {
         public static var pageTitle: Font {
-            .title2.weight(.semibold)
+            PluginTypography.pageTitle.font
         }
 
         public static var pageDescription: Font {
-            .subheadline
+            PluginTypography.detail.font
         }
 
         public static var sectionTitle: Font {
-            .body.weight(.semibold)
+            PluginTypography.sectionTitle.font
         }
 
         public static var rowTitle: Font {
-            .body.weight(.medium)
+            PluginTypography.body.font.weight(.medium)
         }
 
         public static var emphasizedRowTitle: Font {
-            .body.weight(.semibold)
+            PluginTypography.sectionTitle.font
         }
 
         public static var rowDescription: Font {
-            .subheadline
+            PluginTypography.detail.font
         }
 
         public static var secondaryLabel: Font {
-            .subheadline.weight(.medium)
+            PluginTypography.detail.font.weight(.medium)
         }
 
         public static var statusBadge: Font {
-            .caption2.weight(.medium)
+            PluginTypography.caption.font.weight(.medium)
         }
 
         public static var rowIcon: Font {
-            .caption.weight(.semibold)
+            PluginTypography.caption.font.weight(.semibold)
         }
 
         public static var controlLabel: Font {
-            .callout
+            PluginTypography.control.font
         }
 
         public static var monospacedValue: Font {
-            .system(size: 12, design: .monospaced)
+            PluginTypography.code.font
         }
     }
 

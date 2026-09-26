@@ -3,6 +3,15 @@ import Foundation
 protocol SystemStatusHistoryStoring: Sendable {
     func load(referenceDate: Date) async -> [SystemStatusHistoryPoint]
     func append(_ point: SystemStatusHistoryPoint, referenceDate: Date) async -> [SystemStatusHistoryPoint]
+    func appendBatch(_ points: [SystemStatusHistoryPoint], referenceDate: Date) async -> [SystemStatusHistoryPoint]
+}
+
+extension SystemStatusHistoryStoring {
+    func appendBatch(_ points: [SystemStatusHistoryPoint], referenceDate: Date) async -> [SystemStatusHistoryPoint] {
+        var result: [SystemStatusHistoryPoint] = []
+        for point in points { result = await append(point, referenceDate: referenceDate) }
+        return result
+    }
 }
 
 actor SystemStatusHistoryStore: SystemStatusHistoryStoring {
@@ -41,13 +50,17 @@ actor SystemStatusHistoryStore: SystemStatusHistoryStoring {
     }
 
     func append(_ point: SystemStatusHistoryPoint, referenceDate: Date = Date()) async -> [SystemStatusHistoryPoint] {
+        await appendBatch([point], referenceDate: referenceDate)
+    }
+
+    func appendBatch(_ points: [SystemStatusHistoryPoint], referenceDate: Date) async -> [SystemStatusHistoryPoint] {
         if !didLoad {
             samples = loadFromDisk()
             didLoad = true
         }
 
-        samples.append(point)
-        samples = Self.pruned(samples, referenceDate: referenceDate)
+        samples.append(contentsOf: points)
+        samples = SystemStatusHistoryProcessing.pruned(samples, referenceDate: referenceDate, highResolutionInterval: 0)
         persist(samples)
         return samples
     }

@@ -117,7 +117,7 @@ struct TranslatorPanelView: View {
     private func languageSegment(title: String) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(PluginTypography.sectionTitle.font)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
                 .font(.system(size: 10, weight: .bold))
@@ -133,17 +133,16 @@ struct TranslatorPanelView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .symbolRenderingMode(.multicolor)
                 Text(tip.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(PluginTypography.sectionTitle.font)
             }
             Text(tip.message)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+                .font(PluginTypography.body.font)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
                 onAction(.openSettings)
             } label: {
                 Label(tip.actionTitle, systemImage: "questionmark.bubble")
-                    .font(.system(size: 14, weight: .semibold))
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -173,7 +172,7 @@ struct TranslatorPanelView: View {
             HStack(spacing: 10) {
                 providerSymbol(row)
                 Text(row.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(PluginTypography.body.font.weight(.medium))
                     .lineLimit(1)
                 Spacer()
                 if row.isLoading {

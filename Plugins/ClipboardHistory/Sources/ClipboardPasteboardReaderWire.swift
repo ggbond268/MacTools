@@ -287,7 +287,18 @@ enum ClipboardPasteboardReaderWire {
         guard sourceTypes.isDisjoint(with: ignoredProducerTypes) else {
             return .status(.unsafe)
         }
-        guard let text = pasteboard.string(forType: .string) else {
+        let text: String?
+        if let plainText = pasteboard.string(forType: .string) {
+            text = plainText
+        } else if !sourceTypes.contains("public.file-url"),
+                  let urlText = pasteboard.string(forType: .init("public.url")),
+                  let url = URL(string: urlText),
+                  !url.isFileURL {
+            text = urlText
+        } else {
+            text = nil
+        }
+        guard let text else {
             return pasteboard.changeCount == request.expectedChangeCount
                 ? .status(.empty)
                 : .status(.changed)
@@ -363,7 +374,9 @@ enum ClipboardPasteboardReaderWire {
         guard pasteboard.changeCount == request.expectedChangeCount else {
             return .status(.changed)
         }
-        guard !storedItems.isEmpty else { return .status(.empty) }
+        guard !storedItems.isEmpty else {
+            return readPlainText(from: pasteboard, request: request)
+        }
         return ClipboardPasteboardReaderResponse(status: .payload, items: storedItems)
     }
 

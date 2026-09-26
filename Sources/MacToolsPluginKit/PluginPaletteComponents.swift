@@ -67,7 +67,7 @@ public struct PluginPaletteSearchField: NSViewRepresentable {
         field.isBezeled = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: NSFont.systemFontSize)
+        field.font = PluginTypography.body.nsFont
         field.lineBreakMode = .byTruncatingTail
         configure(field)
         context.coordinator.focus(field, for: focusRequestID)
@@ -725,7 +725,7 @@ public struct PluginPaletteKeyboardHint: View {
     public var body: some View {
         HStack(spacing: 4) {
             Text(key)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(PluginTypography.caption.font.weight(.semibold))
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

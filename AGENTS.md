@@ -59,6 +59,13 @@
 - Control IDs, plugin IDs, and shortcut IDs must be stable, readable, and preferably centralized in private constants within the feature.
 - Ordinary new plugins do not need root `project.yml` changes. Keep `plugin.json.build.scheme` pointing to the bundle scheme; the generator creates the core target, bundle target, test dependencies, and plugin scheme. If a plugin needs extra frameworks, include paths, bundle resources, or target overrides, declare only the minimal delta in `Plugins/<PluginName>/project.yml`.
 
+## Native macOS UI Guidelines
+- Prefer native macOS appearance and behavior across settings, menu-bar panels, widgets, and floating windows. Use standard SwiftUI/AppKit controls, semantic system styling, and SF Symbols before custom drawing.
+- Keep equivalent controls consistent in typography, icon usage, spacing roles, and interaction states across surfaces. Allow appropriate density and grouping for settings forms, compact menu-bar panels, and task-oriented windows.
+- Use `PluginTypography` for shared text roles and its `nsFont` adapter for AppKit drawing and measurement. Existing `PluginSettingsTheme.Typography` accessors remain the settings entry point. Use `PluginMetricValue` for numeric readouts with units. Follow the [typography contract](docs/plugins/typography.md); reduce content density before shrinking ordinary text below 10pt, and preserve content-specific fonts and user preferences.
+- Before UI changes, read the [visual and interaction design rules](docs/plugins/development-guidelines.md#visual-and-interaction-design) and inspect a comparable existing surface. Reuse host renderers and shared themes; extend the appropriate shared layer for reusable gaps instead of copying styles into individual plugins.
+- Preserve native keyboard navigation, focus, text editing, accessibility, and system appearance preferences. Use newer visual APIs only with availability checks and suitable fallbacks for the supported macOS versions.
+
 ## Plugin Settings UI Guidelines
 - Plugin settings pages use `PluginSettingsPage`. Page title, icon, description, permission cards, shortcut cards, search, validation, and other common regions are derived and rendered by `PluginHost`/`SettingsView`; custom content must not duplicate a full-page title.
 - Prefer `PluginSettingsPage.form` with declarative sections and typed controls. Use a custom form section only for a complex region, and `PluginSettingsPage.workspace` for task-oriented lists, drag and drop, charts, editors, or dedicated managers that need the full content area.
@@ -99,7 +106,7 @@
 - If tests cannot be run, explicitly state the reason and suggest the local verification command in the final response.
 
 ## Documentation And Resources
-- User-visible feature changes should update `README.md`.
+- Keep the root `README.md` and `README.zh-CN.md` as concise product overviews. Update them for changes to installation, requirements, or major capabilities, and keep shared overview content aligned across languages. Update a feature guide only for durable user instructions, important limitations, or recovery steps; do not create a guide or add a README paragraph for every minor change. Record user-visible changes in concise `changes/unreleased/` fragments as required below.
 - User-visible app or plugin changes should add or update one concise English changelog fragment under `changes/unreleased/*.md`. Use `release: app` for app releases and `release: plugin` for plugin batch releases, plus `type: added`, `changed`, `fixed`, `security`, `removed`, `deprecated`, `maintenance`, or `summary`. If one change needs both release channels, write one app fragment for the host/app impact and one plugin fragment for the plugin-package impact; do not duplicate the same sentence. Keep entries user-facing, avoid duplicate wording, and do not describe implementation details. Pure refactors, tests, and local-only release mechanics do not need a fragment unless users or maintainers need to know about them.
 - Plugin directories, manifests, catalogs, or release-flow changes should update `docs/plugins/` and `CONTRIBUTING.md`.
 - Large product/interaction changes may add date-prefixed documents under `docs/superpowers/specs/` or `docs/superpowers/plans/`.
