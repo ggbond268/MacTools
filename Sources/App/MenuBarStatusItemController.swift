@@ -299,8 +299,9 @@ final class MenuBarStatusItemController: NSObject {
             }
             .store(in: &cancellables)
 
+        // Observe the version itself so the tooltip follows version changes;
+        // the icon image is only redrawn when availability flips.
         appUpdater.$availableUpdateVersion
-            .map { $0 != nil }
             .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in
