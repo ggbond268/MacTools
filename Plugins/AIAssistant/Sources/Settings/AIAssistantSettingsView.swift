@@ -414,34 +414,12 @@ struct AIAssistantServiceSettingsView: View {
 // MARK: - Prompt Modules Settings View
 
 struct AIAssistantPromptSettingsView: View {
-    @State private var prompts: [AIAssistantPrompt]
-    @State private var message: String?
-    @State private var messageIsError = false
-    @State private var editingPromptIDs: Set<String> = []
+    @StateObject private var editor: AIAssistantPromptEditor
     @State private var promptPendingDeletion: AIAssistantPrompt?
-    @State private var promptEditDrafts: [String: PromptEditDraft] = [:]
-
-    /// Snapshot of the editable fields taken when a row enters edit mode,
-    /// so Cancel can revert unsaved changes without persisting.
-    private struct PromptEditDraft {
-        var name: String
-        var template: String
-        var systemPrompt: String?
-        var temperature: Double
-
-        init(_ prompt: AIAssistantPrompt) {
-            name = prompt.name
-            template = prompt.template
-            systemPrompt = prompt.systemPrompt
-            temperature = prompt.temperature
-        }
-    }
 
     let localization: PluginLocalization
     let settingsContext: PluginSettingsContext
     let shortcutItemProvider: (AIAssistantPrompt) -> ShortcutSettingsItem?
-    let onPromptsChanged: ([AIAssistantPrompt]) -> String?
-    let onMakeNewPrompt: ([AIAssistantPrompt]) -> AIAssistantPrompt
 
     init(
         prompts: [AIAssistantPrompt],
@@ -451,31 +429,32 @@ struct AIAssistantPromptSettingsView: View {
         onPromptsChanged: @escaping ([AIAssistantPrompt]) -> String?,
         onMakeNewPrompt: @escaping ([AIAssistantPrompt]) -> AIAssistantPrompt
     ) {
-        self._prompts = State(initialValue: prompts)
+        self._editor = StateObject(wrappedValue: AIAssistantPromptEditor(
+            prompts: prompts, localization: localization,
+            persist: onPromptsChanged, makePrompt: onMakeNewPrompt
+        ))
         self.localization = localization
         self.settingsContext = settingsContext
         self.shortcutItemProvider = shortcutItemProvider
-        self.onPromptsChanged = onPromptsChanged
-        self.onMakeNewPrompt = onMakeNewPrompt
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: PluginSettingsTheme.Spacing.sectionHeaderContent) {
             VStack(spacing: 0) {
-                ForEach(Array(prompts.enumerated()), id: \.element.id) { index, prompt in
+                ForEach(Array(editor.prompts.enumerated()), id: \.element.id) { index, prompt in
                     promptRow(index: index)
-                    if prompt.id != prompts.last?.id {
+                    if prompt.id != editor.prompts.last?.id {
                         PluginSettingsListDivider()
                     }
                 }
             }
             .pluginSettingsCardBackground(.standard)
 
-            // 靠右对齐、高亮样式的添加按钮
+            // Align the add button to the trailing edge.
             HStack {
                 Spacer()
                 Button {
-                    addPrompt()
+                    editor.addPrompt()
                 } label: {
                     Label(localization.string("settings.promptList.add", defaultValue: "添加处理模板"), systemImage: "plus")
                 }
@@ -484,10 +463,10 @@ struct AIAssistantPromptSettingsView: View {
             }
             .padding(.top, 4)
 
-            if let message {
+            if let message = editor.message {
                 Text(message)
                     .font(PluginSettingsTheme.Typography.rowDescription)
-                    .foregroundStyle(messageIsError ? Color.red : Color.secondary)
+                    .foregroundStyle(editor.messageIsError ? Color.red : Color.secondary)
                     .padding(.horizontal, PluginSettingsTheme.Spacing.rowHorizontal)
             }
         }
@@ -500,7 +479,7 @@ struct AIAssistantPromptSettingsView: View {
             presenting: promptPendingDeletion
         ) { prompt in
             Button(localization.string("common.delete", defaultValue: "删除"), role: .destructive) {
-                deletePrompt(prompt)
+                editor.deletePrompt(prompt.id)
                 promptPendingDeletion = nil
             }
             Button(localization.string("common.cancel", defaultValue: "取消"), role: .cancel) {
@@ -516,8 +495,8 @@ struct AIAssistantPromptSettingsView: View {
     }
 
     private func promptRow(index: Int) -> some View {
-        let prompt = prompts[index]
-        let isEditing = editingPromptIDs.contains(prompt.id)
+        let prompt = editor.promptEditDrafts[editor.prompts[index].id] ?? editor.prompts[index]
+        let isEditing = editor.isEditing(prompt.id)
         let isDisabled = !prompt.isEnabled
 
         return Group {
@@ -535,7 +514,7 @@ struct AIAssistantPromptSettingsView: View {
     private func collapsedPromptCard(index: Int, prompt: AIAssistantPrompt, isDisabled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                Toggle("", isOn: promptEnabledBinding(for: index))
+                Toggle("", isOn: promptEnabledBinding(for: prompt))
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.small)
@@ -545,7 +524,7 @@ struct AIAssistantPromptSettingsView: View {
                     .foregroundStyle(isDisabled ? .secondary : .primary)
                     .lineLimit(1)
 
-                // 温度 Badge
+                // Temperature badge.
                 Text(String(format: "%.1f", prompt.temperature))
                     .font(PluginSettingsTheme.Typography.monospacedValue)
                     .foregroundStyle(.secondary)
@@ -554,7 +533,7 @@ struct AIAssistantPromptSettingsView: View {
                     .background(Color.secondary.opacity(0.12))
                     .clipShape(Capsule())
 
-                // 快捷键展示
+                // Shortcut summary.
                 if let item = shortcutItemProvider(prompt),
                    !item.bindingText.isEmpty {
                     Text(item.bindingText)
@@ -569,7 +548,7 @@ struct AIAssistantPromptSettingsView: View {
                 Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
                 Button {
-                    toggleEditing(for: prompt.id)
+                    editor.beginEditing(prompt.id)
                 } label: {
                     Text(localization.string("settings.promptRow.edit", defaultValue: "编辑"))
                 }
@@ -577,21 +556,21 @@ struct AIAssistantPromptSettingsView: View {
                 .controlSize(.small)
 
                 iconButton("chevron.up", help: localization.string("settings.promptRow.moveUpHelp", defaultValue: "上移")) {
-                    movePrompt(from: index, offset: -1)
+                    editor.movePrompt(prompt.id, offset: -1)
                 }
                 .disabled(index == 0)
 
                 iconButton("chevron.down", help: localization.string("settings.promptRow.moveDownHelp", defaultValue: "下移")) {
-                    movePrompt(from: index, offset: 1)
+                    editor.movePrompt(prompt.id, offset: 1)
                 }
-                .disabled(index == prompts.count - 1)
+                .disabled(index == editor.prompts.count - 1)
 
                 iconButton("trash", help: localization.string("settings.promptRow.deleteHelp", defaultValue: "删除")) {
                     promptPendingDeletion = prompt
                 }
             }
 
-            // 预览摘要
+            // Prompt preview.
             VStack(alignment: .leading, spacing: 3) {
                 if let sys = prompt.systemPrompt, !sys.isEmpty {
                     Text("系统: \(sys)")
@@ -605,6 +584,52 @@ struct AIAssistantPromptSettingsView: View {
                     .lineLimit(1)
             }
             .padding(.leading, 32)
+
+            shortcutControls(for: prompt)
+        }
+    }
+
+    @ViewBuilder
+    private func shortcutControls(for prompt: AIAssistantPrompt) -> some View {
+        if let item = shortcutItemProvider(prompt) {
+            HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localization.string("settings.prompt.shortcutLabel", defaultValue: "全局快捷键"))
+                        .font(PluginSettingsTheme.Typography.rowTitle)
+                    Text(localization.string("settings.prompt.shortcutImmediateDescription", defaultValue: "快捷键更改立即生效。"))
+                        .font(PluginSettingsTheme.Typography.rowDescription)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    PluginShortcutRecorder(
+                        title: item.title,
+                        displayText: item.bindingText,
+                        minWidth: 120,
+                        onRecord: { binding in
+                            settingsContext.recordShortcut(binding, for: item.id)
+                        },
+                        onBeginRecording: {
+                            settingsContext.beginShortcutRecording(for: item.id)
+                        }
+                    )
+                    .controlSize(.small)
+
+                    if item.canClear {
+                        Button {
+                            settingsContext.clearShortcut(for: item.id)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .controlSize(.small)
+                        .help(localization.string("settings.prompt.shortcutClear", defaultValue: "清除快捷键"))
+                    }
+                }
+            }
         }
     }
 
@@ -613,35 +638,33 @@ struct AIAssistantPromptSettingsView: View {
     private func editingPromptCard(index: Int, prompt: AIAssistantPrompt, isDisabled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                Toggle("", isOn: promptEnabledBinding(for: index))
+                Toggle("", isOn: promptEnabledBinding(for: prompt, isEditing: true))
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.small)
 
                 TextField(
                     "",
-                    text: promptBinding(for: index, keyPath: \.name),
+                    text: promptBinding(for: prompt, keyPath: \.name),
                     prompt: Text(localization.string("settings.prompt.namePlaceholder", defaultValue: "模板名称"))
                 )
                 .labelsHidden()
                 .textFieldStyle(.roundedBorder)
                 .frame(minWidth: 140, idealWidth: 180, maxWidth: 240)
-                .disabled(isDisabled)
 
                 Spacer(minLength: PluginSettingsTheme.Spacing.rowContentControl)
 
                 Button {
-                    saveEditing(for: prompt.id)
+                    editor.save(prompt.id)
                 } label: {
                     Text(localization.string("settings.prompt.save", defaultValue: "保存"))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(isDisabled)
 
                 // Cancel always stays enabled so editing is never a trap.
                 Button {
-                    cancelEditing(for: prompt.id)
+                    editor.cancel(prompt.id)
                 } label: {
                     Text(localization.string("settings.prompt.cancel", defaultValue: "取消"))
                 }
@@ -649,14 +672,14 @@ struct AIAssistantPromptSettingsView: View {
                 .controlSize(.small)
 
                 iconButton("chevron.up", help: localization.string("settings.promptRow.moveUpHelp", defaultValue: "上移")) {
-                    movePrompt(from: index, offset: -1)
+                    editor.movePrompt(prompt.id, offset: -1)
                 }
                 .disabled(isDisabled || index == 0)
 
                 iconButton("chevron.down", help: localization.string("settings.promptRow.moveDownHelp", defaultValue: "下移")) {
-                    movePrompt(from: index, offset: 1)
+                    editor.movePrompt(prompt.id, offset: 1)
                 }
-                .disabled(isDisabled || index == prompts.count - 1)
+                .disabled(isDisabled || index == editor.prompts.count - 1)
 
                 iconButton("trash", help: localization.string("settings.promptRow.deleteHelp", defaultValue: "删除")) {
                     promptPendingDeletion = prompt
@@ -665,14 +688,14 @@ struct AIAssistantPromptSettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                // 1. 温度调节
+                // Temperature control.
                 HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(localization.string("settings.prompt.temperature.title", defaultValue: "温度"))
                                 .font(PluginSettingsTheme.Typography.rowTitle)
 
-                            Text(String(format: "%.1f", promptBinding(for: index, keyPath: \.temperature).wrappedValue))
+                            Text(String(format: "%.1f", promptBinding(for: prompt, keyPath: \.temperature).wrappedValue))
                                 .font(PluginSettingsTheme.Typography.monospacedValue)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 6)
@@ -689,15 +712,14 @@ struct AIAssistantPromptSettingsView: View {
                     Spacer()
 
                     Slider(
-                        value: promptBinding(for: index, keyPath: \.temperature),
+                        value: promptBinding(for: prompt, keyPath: \.temperature),
                         in: 0.0 ... 2.0,
                         step: 0.1
                     )
                     .frame(width: 160)
 
                     Button {
-                        promptBinding(for: index, keyPath: \.temperature).wrappedValue = 0.7
-                        persistPrompts()
+                        promptBinding(for: prompt, keyPath: \.temperature).wrappedValue = 0.7
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 11))
@@ -705,59 +727,17 @@ struct AIAssistantPromptSettingsView: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                     .help(localization.string("settings.prompt.temperature.resetHelp", defaultValue: "重置温度为 0.7"))
-                    .disabled(promptBinding(for: index, keyPath: \.temperature).wrappedValue == 0.7)
-                    .opacity(promptBinding(for: index, keyPath: \.temperature).wrappedValue == 0.7 ? 0.3 : 1.0)
+                    .disabled(promptBinding(for: prompt, keyPath: \.temperature).wrappedValue == 0.7)
+                    .opacity(promptBinding(for: prompt, keyPath: \.temperature).wrappedValue == 0.7 ? 0.3 : 1.0)
                 }
 
-                // 2. 全局快捷键录入与编辑
-                if let item = shortcutItemProvider(prompt) {
-                    HStack(spacing: PluginSettingsTheme.Spacing.rowContentControl) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(localization.string("settings.prompt.shortcutLabel", defaultValue: "全局快捷键"))
-                                .font(PluginSettingsTheme.Typography.rowTitle)
-                            Text(localization.string("settings.prompt.shortcutDescription", defaultValue: "按下快捷键直接使用此模板处理划词。"))
-                                .font(PluginSettingsTheme.Typography.rowDescription)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 6) {
-                            PluginShortcutRecorder(
-                                title: item.title,
-                                displayText: item.bindingText,
-                                minWidth: 120,
-                                onRecord: { binding in
-                                    settingsContext.recordShortcut(binding, for: item.id)
-                                },
-                                onBeginRecording: {
-                                    settingsContext.beginShortcutRecording(for: item.id)
-                                }
-                            )
-                            .controlSize(.small)
-
-                            if item.canClear {
-                                Button {
-                                    settingsContext.clearShortcut(for: item.id)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .controlSize(.small)
-                                .help(localization.string("settings.prompt.shortcutClear", defaultValue: "清除快捷键"))
-                            }
-                        }
-                    }
-                }
-
-                // 3. 系统提示词
+                // System prompt.
                 VStack(alignment: .leading, spacing: 6) {
                     Text(localization.string("settings.prompt.systemPrompt.title", defaultValue: "系统提示词 (System Prompt)"))
                         .font(PluginSettingsTheme.Typography.rowTitle)
 
                     ZStack(alignment: .topLeading) {
-                        if (prompts[index].systemPrompt ?? "").isEmpty {
+                        if (editor.promptEditDrafts[prompt.id]?.systemPrompt ?? "").isEmpty {
                             Text(localization.string("settings.prompt.systemPrompt.placeholder", defaultValue: "设定 AI 角色的背景人设、语气或格式规则（可选）..."))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Color.secondary.opacity(0.6))
@@ -765,7 +745,7 @@ struct AIAssistantPromptSettingsView: View {
                                 .padding(.vertical, 8)
                         }
 
-                        TextEditor(text: promptSystemPromptBinding(for: index))
+                        TextEditor(text: promptSystemPromptBinding(for: prompt))
                             .font(.system(size: 12))
                             .scrollContentBackground(.hidden)
                             .padding(4)
@@ -779,7 +759,7 @@ struct AIAssistantPromptSettingsView: View {
                     )
                 }
 
-                // 4. 提示词模板
+                // Prompt template.
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(localization.string("settings.prompt.template.title", defaultValue: "提示词模板 (Prompt Template)"))
@@ -791,7 +771,7 @@ struct AIAssistantPromptSettingsView: View {
                     }
 
                     ZStack(alignment: .topLeading) {
-                        if prompts[index].template.isEmpty {
+                        if editor.promptEditDrafts[prompt.id]?.template.isEmpty == true {
                             Text(localization.string("settings.prompt.template.placeholder", defaultValue: "请将以下内容翻译为英文：\n\n{{text}}"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(Color.secondary.opacity(0.6))
@@ -799,7 +779,7 @@ struct AIAssistantPromptSettingsView: View {
                                 .padding(.vertical, 8)
                         }
 
-                        TextEditor(text: promptBinding(for: index, keyPath: \.template))
+                        TextEditor(text: promptBinding(for: prompt, keyPath: \.template))
                             .font(.system(size: 12, design: .monospaced))
                             .scrollContentBackground(.hidden)
                             .padding(4)
@@ -830,139 +810,35 @@ struct AIAssistantPromptSettingsView: View {
     }
 
     private func promptBinding<Value>(
-        for index: Int,
+        for prompt: AIAssistantPrompt,
         keyPath: WritableKeyPath<AIAssistantPrompt, Value>
     ) -> Binding<Value> {
         Binding(
-            get: { prompts[index][keyPath: keyPath] },
-            set: {
-                prompts[index][keyPath: keyPath] = $0
-                message = nil
-                messageIsError = false
-            }
+            get: { editor.promptEditDrafts[prompt.id]?[keyPath: keyPath] ?? prompt[keyPath: keyPath] },
+            set: { editor.updateDraft(prompt.id, keyPath: keyPath, value: $0) }
         )
     }
 
-    private func promptSystemPromptBinding(for index: Int) -> Binding<String> {
+    private func promptSystemPromptBinding(for prompt: AIAssistantPrompt) -> Binding<String> {
         Binding(
-            get: { prompts[index].systemPrompt ?? "" },
-            set: {
-                prompts[index].systemPrompt = $0.isEmpty ? nil : $0
-                message = nil
-                messageIsError = false
-            }
+            get: { editor.promptEditDrafts[prompt.id]?.systemPrompt ?? "" },
+            set: { editor.updateDraft(prompt.id, keyPath: \.systemPrompt, value: $0.isEmpty ? nil : $0) }
         )
     }
 
-    private func promptEnabledBinding(for index: Int) -> Binding<Bool> {
+    private func promptEnabledBinding(for prompt: AIAssistantPrompt, isEditing: Bool = false) -> Binding<Bool> {
         Binding(
             get: {
-                guard prompts.indices.contains(index) else { return false }
-                return prompts[index].isEnabled
+                if isEditing { return editor.promptEditDrafts[prompt.id]?.isEnabled ?? prompt.isEnabled }
+                return editor.prompts.first { $0.id == prompt.id }?.isEnabled ?? prompt.isEnabled
             },
-            set: { newValue in
-                guard prompts.indices.contains(index) else { return }
-                prompts[index].isEnabled = newValue
-                message = nil
-                messageIsError = false
-                persistPrompts()
+            set: {
+                if isEditing {
+                    editor.updateDraft(prompt.id, keyPath: \.isEnabled, value: $0)
+                } else {
+                    editor.setEnabled(prompt.id, $0)
+                }
             }
         )
-    }
-
-    // MARK: - Actions
-
-    private func toggleEditing(for promptID: String) {
-        guard !editingPromptIDs.contains(promptID) else { return }
-
-        // Snapshot the editable fields so Cancel can revert unsaved changes.
-        if let index = prompts.firstIndex(where: { $0.id == promptID }) {
-            promptEditDrafts[promptID] = PromptEditDraft(prompts[index])
-        }
-        editingPromptIDs.insert(promptID)
-    }
-
-    /// Persists the edited values through the same path as the other controls,
-    /// then exits editing. An empty or duplicate name keeps the editor open.
-    private func saveEditing(for promptID: String) {
-        guard let index = prompts.firstIndex(where: { $0.id == promptID }) else {
-            promptEditDrafts.removeValue(forKey: promptID)
-            editingPromptIDs.remove(promptID)
-            return
-        }
-
-        let name = prompts[index].normalizedName
-        if name.isEmpty {
-            message = localization.string("settings.prompt.error.emptyName", defaultValue: "模板名称不能为空")
-            messageIsError = true
-            return
-        }
-        let isDuplicate = prompts.contains { $0.id != promptID && $0.normalizedName == name }
-        if isDuplicate {
-            message = localization.string("settings.prompt.error.duplicateName", defaultValue: "模板名称与现有模板重复")
-            messageIsError = true
-            return
-        }
-
-        persistPrompts()
-        promptEditDrafts.removeValue(forKey: promptID)
-        editingPromptIDs.remove(promptID)
-    }
-
-    /// Reverts the row's fields to their pre-edit snapshot and exits editing
-    /// without persisting.
-    private func cancelEditing(for promptID: String) {
-        if let index = prompts.firstIndex(where: { $0.id == promptID }),
-           let draft = promptEditDrafts[promptID] {
-            prompts[index].name = draft.name
-            prompts[index].template = draft.template
-            prompts[index].systemPrompt = draft.systemPrompt
-            prompts[index].temperature = draft.temperature
-        }
-        promptEditDrafts.removeValue(forKey: promptID)
-        editingPromptIDs.remove(promptID)
-        message = nil
-        messageIsError = false
-    }
-
-    private func addPrompt() {
-        let prompt = onMakeNewPrompt(prompts)
-        prompts.append(prompt)
-        promptEditDrafts[prompt.id] = PromptEditDraft(prompt)
-        editingPromptIDs.insert(prompt.id)
-        message = nil
-        messageIsError = false
-        persistPrompts()
-    }
-
-    private func movePrompt(from index: Int, offset: Int) {
-        let target = index + offset
-        guard prompts.indices.contains(index), prompts.indices.contains(target) else {
-            return
-        }
-
-        prompts.swapAt(index, target)
-        message = nil
-        messageIsError = false
-        persistPrompts()
-    }
-
-    private func persistPrompts() {
-        if let error = onPromptsChanged(prompts) {
-            message = error
-            messageIsError = true
-        } else {
-            message = nil
-            messageIsError = false
-        }
-    }
-
-    private func deletePrompt(_ prompt: AIAssistantPrompt) {
-        if let index = prompts.firstIndex(where: { $0.id == prompt.id }) {
-            prompts.remove(at: index)
-            promptEditDrafts.removeValue(forKey: prompt.id)
-            editingPromptIDs.remove(prompt.id)
-            persistPrompts()
-        }
     }
 }

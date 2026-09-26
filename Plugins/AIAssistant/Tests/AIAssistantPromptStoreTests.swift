@@ -41,6 +41,12 @@ final class AIAssistantPromptStoreTests: XCTestCase {
         XCTAssertTrue(reloaded[0].isEnabled)
     }
 
+    func testSavedEmptyPromptListDoesNotRestoreDefaults() throws {
+        let store = AIAssistantPromptStore(storage: AIAssistantInMemoryPluginStorage())
+        try store.savePrompts([])
+        XCTAssertTrue(store.loadPrompts().isEmpty)
+    }
+
     func testDecodePromptWithoutTemperatureDefaultsToSeven() throws {
         let legacyJSON = """
         [

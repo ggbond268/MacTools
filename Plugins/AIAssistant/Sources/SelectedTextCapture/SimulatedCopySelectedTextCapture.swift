@@ -27,17 +27,20 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
     private let copyEventSender: CopyEventSender
     private let pasteboardProvider: PasteboardProvider
     private let pasteboardChangeTimeout: TimeInterval
+    private let allowsSimulatedCopy: @MainActor @Sendable () -> Bool
 
     init(
         localization: PluginLocalization = PluginLocalization(bundle: .main),
         copyEventSender: @escaping CopyEventSender = SimulatedCopySelectedTextCapture.postCommandC,
         pasteboardProvider: @escaping PasteboardProvider = { NSPasteboard.general },
-        pasteboardChangeTimeout: TimeInterval = 0.35
+        pasteboardChangeTimeout: TimeInterval = 0.35,
+        allowsSimulatedCopy: @escaping @MainActor @Sendable () -> Bool = { false }
     ) {
         self.localization = localization
         self.copyEventSender = copyEventSender
         self.pasteboardProvider = pasteboardProvider
         self.pasteboardChangeTimeout = pasteboardChangeTimeout
+        self.allowsSimulatedCopy = allowsSimulatedCopy
     }
 
     func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
@@ -64,7 +67,7 @@ struct SimulatedCopySelectedTextCapture: SelectedTextCapturing {
 
         await Self.waitForModifierKeysToClear()
 
-        if Task.isCancelled {
+        if Task.isCancelled || !allowsSimulatedCopy() {
             return failure(
                 context: context,
                 reason: localization.string("capture.error.missingSelection", defaultValue: "未找到选中文本")

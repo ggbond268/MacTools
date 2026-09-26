@@ -96,7 +96,10 @@ final class AIAssistantPlugin:
         self.accessibilityTrustRequester = accessibilityTrustRequester
         self.secretStore = secretStore
         self.panelController = panelController ?? AIAssistantPanelController(localization: localization)
-        self.selectedTextCapturePipeline = selectedTextCapturePipeline ?? .live(localization: localization)
+        self.selectedTextCapturePipeline = selectedTextCapturePipeline ?? .live(
+            localization: localization,
+            allowsSimulatedCopy: { context.storage.bool(forKey: AIAssistantConstants.StorageKey.allowsSimulatedCopy) }
+        )
         self.providerFactoryOverride = providerFactoryOverride
         self.clipboardTextProvider = clipboardTextProvider
         let providerProfileStore = AIAssistantProviderProfileStore(storage: context.storage, localization: localization)
@@ -158,9 +161,8 @@ final class AIAssistantPlugin:
     }
 
     var shortcutDefinitions: [PluginShortcutDefinition] {
-        // Keep definitions for disabled prompts too: shortcut settings remain
-        // editable while a prompt is being edited, and the handler below checks
-        // `isEnabled` before processing.
+        // Retain editable definitions while making inactive shortcuts ineligible
+        // for global registration.
         prompts
             .map { prompt in
                 PluginShortcutDefinition(
@@ -168,7 +170,7 @@ final class AIAssistantPlugin:
                     title: prompt.normalizedName,
                     description: shortcutDescription(for: prompt),
                     actionID: prompt.id,
-                    scope: .global,
+                    scope: isShortcutEnabled && prompt.isEnabled ? .global : .whilePluginActive,
                     defaultBinding: defaultBinding(for: prompt),
                     isRequired: false
                 )
@@ -367,6 +369,23 @@ final class AIAssistantPlugin:
                 ]
             ),
             PluginSettingsSection(
+                id: "selection-capture",
+                title: localization.string("settings.capture.title", defaultValue: "划词捕获"),
+                systemImage: "text.cursor",
+                rows: [
+                    PluginSettingsRow(
+                        id: AIAssistantConstants.StorageKey.allowsSimulatedCopy,
+                        title: localization.string("settings.capture.simulatedCopy.title", defaultValue: "允许模拟复制"),
+                        description: localization.string(
+                            "settings.capture.simulatedCopy.description",
+                            defaultValue: "直接读取失败时模拟 ⌘C；复制内容可能进入剪贴板历史。"
+                        ),
+                        systemImage: "doc.on.doc",
+                        control: .toggle(isOn: allowsSimulatedCopy)
+                    ),
+                ]
+            ),
+            PluginSettingsSection(
                 id: "ai-prompts",
                 title: localization.string("settings.prompts.title", defaultValue: "处理模块"),
                 systemImage: "square.stack.3d.up",
@@ -454,7 +473,8 @@ final class AIAssistantPlugin:
 
     func handleSettingsAction(_ action: PluginSettingsAction) {
         guard case let .setBoolean(controlID, value) = action,
-              controlID == AIAssistantConstants.StorageKey.shortcutUsesClipboard else { return }
+              controlID == AIAssistantConstants.StorageKey.shortcutUsesClipboard
+                || controlID == AIAssistantConstants.StorageKey.allowsSimulatedCopy else { return }
         storage.set(value, forKey: controlID)
         onStateChange?()
     }
@@ -525,6 +545,10 @@ final class AIAssistantPlugin:
 
     private var shortcutUsesClipboard: Bool {
         storage.bool(forKey: AIAssistantConstants.StorageKey.shortcutUsesClipboard)
+    }
+
+    private var allowsSimulatedCopy: Bool {
+        storage.bool(forKey: AIAssistantConstants.StorageKey.allowsSimulatedCopy)
     }
 
     private var panelSubtitle: String {

@@ -5,23 +5,27 @@ import MacToolsPluginKit
 struct SelectedTextCapturePipeline: SelectedTextCaptureProviding {
     let strategies: [any SelectedTextCapturing]
     private let localization: PluginLocalization
+    private let allowsSimulatedCopy: () -> Bool
 
     init(
         strategies: [any SelectedTextCapturing],
-        localization: PluginLocalization = PluginLocalization(bundle: .main)
+        localization: PluginLocalization = PluginLocalization(bundle: .main),
+        allowsSimulatedCopy: @escaping @MainActor @Sendable () -> Bool = { false }
     ) {
         self.strategies = strategies
         self.localization = localization
+        self.allowsSimulatedCopy = allowsSimulatedCopy
     }
 
     static func live(
-        localization: PluginLocalization = PluginLocalization(bundle: .main)
+        localization: PluginLocalization = PluginLocalization(bundle: .main),
+        allowsSimulatedCopy: @escaping @MainActor @Sendable () -> Bool = { false }
     ) -> SelectedTextCapturePipeline {
         SelectedTextCapturePipeline(strategies: [
             AccessibilitySelectedTextCapture(localization: localization),
             BrowserAppleScriptSelectedTextCapture(localization: localization),
-            SimulatedCopySelectedTextCapture(localization: localization),
-        ], localization: localization)
+            SimulatedCopySelectedTextCapture(localization: localization, allowsSimulatedCopy: allowsSimulatedCopy),
+        ], localization: localization, allowsSimulatedCopy: allowsSimulatedCopy)
     }
 
     func capture(context: SelectedTextCaptureContext) async -> SelectedTextCaptureResult {
@@ -54,6 +58,8 @@ struct SelectedTextCapturePipeline: SelectedTextCaptureProviding {
         let permissionRequiredMessage = AIAssistantPanelError.permissionRequired.message(localization: localization)
 
         for strategy in strategies {
+            guard !Task.isCancelled else { return .missing(localization: localization) }
+            if strategy.strategyID == .simulatedCopy && !allowsSimulatedCopy() { continue }
             let result = await strategy.capture(context: context)
             guard let success = successfulResult(from: result) else {
                 if permissionRequiredResult == nil,

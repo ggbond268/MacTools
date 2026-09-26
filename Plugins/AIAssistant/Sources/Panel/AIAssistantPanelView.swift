@@ -280,7 +280,7 @@ struct AIAssistantPanelView: View {
 
                     Spacer()
 
-                    // 复制按钮（带成功反馈图标）
+                    // Copy button with success feedback.
                     Button {
                         onAction(.copyResult)
                         copiedRecently = true

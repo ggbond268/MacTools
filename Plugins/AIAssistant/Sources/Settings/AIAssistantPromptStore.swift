@@ -16,8 +16,7 @@ struct AIAssistantPromptStore {
 
     func loadPrompts() -> [AIAssistantPrompt] {
         if let data = storage.data(forKey: AIAssistantConstants.StorageKey.prompts),
-           let prompts = try? JSONDecoder().decode([AIAssistantPrompt].self, from: data),
-           !prompts.isEmpty {
+           let prompts = try? JSONDecoder().decode([AIAssistantPrompt].self, from: data) {
             return prompts
         }
 
@@ -33,7 +32,7 @@ struct AIAssistantPromptStore {
         let existingNames = Set(existing.map(\.normalizedName))
         var index = existing.count + 1
 
-        // The localized pattern contains a numeric placeholder ("新模板 %d");
+        // The localized pattern contains a numeric placeholder (%d);
         // format it, otherwise every candidate would share one constant name
         // and the dedup loop below could never terminate.
         var name = localization.format("prompt.newDefaultName", defaultValue: "新模板 %d", index)

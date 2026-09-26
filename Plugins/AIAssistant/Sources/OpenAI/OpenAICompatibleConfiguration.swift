@@ -74,10 +74,10 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
         if Array(lowercasedPathComponents.suffix(2)) == ["chat", "completions"] {
             completionPathComponents = pathComponents
         } else if pathComponents.isEmpty {
-            // 纯域名无路径时（如 https://api.openai.com），补充官方标准路径 /v1/chat/completions
+            // Use the standard /v1/chat/completions path for an origin without a path.
             completionPathComponents = ["v1", "chat", "completions"]
         } else {
-            // 业界标准：对于用户指定的 Base URL（如带 /v1 或自定义代理路径），直接在末尾拼接 /chat/completions
+            // Append /chat/completions to a user-supplied base path.
             completionPathComponents = pathComponents + ["chat", "completions"]
         }
 
@@ -91,7 +91,7 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
     }
 
     /// Builds the `GET /models` endpoint from the same base URL.
-    /// 按照业界规范，在 Base URL 后面直接拼接 `/models`；若原地址末尾为 `chat/completions` 则替换为 `models`。
+    /// Appends `/models` to the base URL, replacing a trailing `chat/completions` if present.
     func modelsEndpointURL() throws -> URL {
         if let validationError {
             throw validationError
@@ -115,10 +115,10 @@ struct OpenAICompatibleConfiguration: Equatable, Sendable {
         } else if lowercasedPathComponents.last == "models" {
             modelsPathComponents = pathComponents
         } else if pathComponents.isEmpty {
-            // 纯域名无路径时，补充官方标准路径 /v1/models
+            // Use the standard /v1/models path for an origin without a path.
             modelsPathComponents = ["v1", "models"]
         } else {
-            // 业界标准：对于用户指定的 Base URL，直接在末尾拼接 /models
+            // Append /models to a user-supplied base path.
             modelsPathComponents = pathComponents + ["models"]
         }
 

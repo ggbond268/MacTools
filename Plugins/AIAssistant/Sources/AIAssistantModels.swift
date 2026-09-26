@@ -129,11 +129,11 @@ enum AIAssistantPanelAction: Equatable, Sendable {
     case retry
     case reprocess(sourceText: String)
     case confirmSource
-    /// 取消正在运行的捕获或请求，但保持会话可见
+    /// Cancels the active capture or request while keeping the session visible.
     case stop
-    /// 隐藏面板，但不取消任务或废弃会话
+    /// Hides the panel without cancelling the task or discarding the session.
     case hide
-    /// 取消任务并丢弃会话，关闭面板
+    /// Cancels the task, discards the session, and closes the panel.
     case discard
     case close
     case copyResult

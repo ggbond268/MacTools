@@ -69,11 +69,29 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
         return SimulatedCopySelectedTextCapture(
             copyEventSender: sender,
             pasteboardProvider: { box.pasteboard },
-            pasteboardChangeTimeout: pasteboardChangeTimeout
+            pasteboardChangeTimeout: pasteboardChangeTimeout,
+            allowsSimulatedCopy: { true }
         )
     }
 
     // MARK: - Success path
+
+    func testConsentIsRecheckedBeforePostingCopy() async {
+        let pasteboard = makePrivatePasteboard(content: "original")
+        let box = PasteboardBox(pasteboard)
+        let recorder = CallRecorder()
+        var checks = 0
+        let capture = SimulatedCopySelectedTextCapture(
+            copyEventSender: { recorder.record($0) },
+            pasteboardProvider: { box.pasteboard },
+            allowsSimulatedCopy: { checks += 1; return false }
+        )
+        let result = await capture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 4242))
+        XCTAssertNil(result.text)
+        XCTAssertEqual(checks, 1)
+        XCTAssertTrue(recorder.recordedCalls.isEmpty)
+        XCTAssertEqual(pasteboard.string(forType: .string), "original")
+    }
 
     func testCaptureReturnsTextWithoutOverwritingChangedClipboard() async {
         let pasteboard = makePrivatePasteboard(content: "original")
@@ -197,7 +215,8 @@ final class AIAssistantSimulatedCopyCaptureTests: XCTestCase {
                 withUnsafeCurrentTask { task in task?.cancel() }
                 return box.pasteboard
             },
-            pasteboardChangeTimeout: 0.3
+            pasteboardChangeTimeout: 0.3,
+            allowsSimulatedCopy: { true }
         )
 
         let result = await cancellingCapture.capture(context: SelectedTextCaptureContext(frontmostApplicationProcessIdentifier: 4242))

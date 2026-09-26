@@ -1,6 +1,38 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "settings.prompt.shortcutImmediateDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Shortcut changes take effect immediately." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "快捷键更改立即生效。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "快速鍵更改立即生效。" } }
+      }
+    },
+    "settings.capture.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Selection Capture" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "划词捕获" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "選取文字擷取" } }
+      }
+    },
+    "settings.capture.simulatedCopy.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Allow Simulated Copy" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "允许模拟复制" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "允許模擬拷貝" } }
+      }
+    },
+    "settings.capture.simulatedCopy.description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Simulate ⌘C when direct capture fails. Copied content may enter Clipboard History." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "直接读取失败时模拟 ⌘C；复制内容可能进入剪贴板历史。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "直接讀取失敗時模擬 ⌘C；拷貝內容可能進入剪貼簿歷史。" } }
+      }
+    },
     "action.unavailable.paused": {
       "extractionState": "manual",
       "localizations": {

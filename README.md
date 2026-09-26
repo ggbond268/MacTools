@@ -104,9 +104,10 @@ Editing a direct shortcut highlights its key and shows a concise prompt beside D
 | Cleanup & maintenance | Explore disk usage visually, review large files and folders before moving them to Trash, clean disk and Xcode files, manage Homebrew and login items, eject disks, empty Trash, quit apps, repair quarantined apps, soft-restart macOS, and use physical Clean Mode. |
 | Utilities & configuration | Translate selected text, run editable AI prompt templates on selected text, upload to Cloudflare R2, edit zsh files, open Siri, and save reusable Mac Settings profiles. |
 
-AI Assistant asks you to confirm simulated-copy text before sending it to a provider. This fallback leaves the clipboard's latest content in place because the writer cannot be verified.
+AI Assistant only simulates ⌘C when you explicitly enable **Allow Simulated Copy** in its settings. Copied content may appear in Clipboard History; the app asks for confirmation before sending simulated-copy text to a provider and leaves the latest clipboard content in place because the writer cannot be verified.
 Selection shortcuts retain the original target app even if a MacTools panel takes focus during capture.
-Enable **Use Clipboard** in AI Assistant settings to use the same prompt shortcut for either input: it prefers directly readable selected text, asks before sending simulated-copy results, and uses the text already on the clipboard when no selection was captured and the clipboard did not change. Leave this setting off to use only selected text.
+Paused AI Assistant shortcuts are released for other apps. Prompt edits take effect only after Save; Cancel discards unsaved changes, and deleting every prompt keeps the list empty.
+Enable **Use Clipboard** in AI Assistant settings to use the same prompt shortcut for either input: it prefers directly readable selected text and uses the text already on the clipboard when no selection was captured and the clipboard did not change. Leave this setting off to use only selected text.
 
 Clipboard History moves reused items to the front when you copy or paste them from the plugin, including item shortcuts and snippets. Browsing leaves the order unchanged, and sequential paste queues keep their established order. History expires after the configured period of inactivity, measured from its latest use or capture. Count and storage limits apply separately; Saved items and snippets remain available.
 

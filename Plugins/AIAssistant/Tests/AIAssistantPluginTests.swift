@@ -49,8 +49,7 @@ final class AIAssistantPluginTests: XCTestCase {
             AIAssistantConstants.Defaults.polishShortcut,
         ])
 
-        // A disabled prompt keeps its shortcut definition so its binding stays
-        // editable in settings; execution is gated on `isEnabled` instead.
+        // Disabled prompts retain editable definitions without global registration.
         let prompts = AIAssistantPromptStore(storage: storage).loadPrompts()
         let updated = prompts.map { prompt -> AIAssistantPrompt in
             var copy = prompt
@@ -70,6 +69,13 @@ final class AIAssistantPluginTests: XCTestCase {
             plugin.shortcutDefinitions.map(\.actionID),
             ["translate", "summarize", "polish"]
         )
+        XCTAssertEqual(plugin.shortcutDefinitions.map(\.scope),
+                       [.global, .whilePluginActive, .global])
+        plugin.handleAction(.setSwitch(false))
+        XCTAssertTrue(plugin.shortcutDefinitions.allSatisfy { $0.scope == .whilePluginActive })
+        plugin.handleAction(.setSwitch(true))
+        XCTAssertEqual(plugin.shortcutDefinitions.map(\.scope),
+                       [.global, .whilePluginActive, .global])
     }
 
     func testHandleShortcutEventIgnoresDisabledPrompt() {
