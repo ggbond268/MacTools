@@ -14,6 +14,7 @@ final class MenuBarStatusIconPresentation {
         let source: Source
         let context: PluginMenuBarIconRenderContext
         let runningAutomationCount: Int
+        var hasAvailableUpdate = false
     }
 
     private var lastKey: Key?

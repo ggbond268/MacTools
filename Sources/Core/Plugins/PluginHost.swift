@@ -440,7 +440,7 @@ final class PluginHost: ObservableObject {
     private var settingsViewCache: [SettingsViewCacheKey: PluginSettingsContentViewItem] = [:]
     private var isolatedPluginFailures: [String: String] = [:]
     private var isHandlingPluginAction = false
-    private var didLoadDynamicPlugins = false
+    @Published private var didLoadDynamicPlugins = false
     private var areCloudPreferencesReady = false
     private var displayTopologyRefreshTask: Task<Void, Never>?
     private var pluginStateChangeRebuildTask: Task<Void, Never>?
@@ -2394,6 +2394,12 @@ final class PluginHost: ObservableObject {
         syncPluginManagementState()
         refreshAll()
         startCloudPreferencesSyncIfReady()
+    }
+
+    /// True while installed dynamic plugins are still being updated or loaded,
+    /// so empty panels can show progress instead of an install prompt.
+    var isPreparingPlugins: Bool {
+        automaticPluginUpdateStatus.isActive || (dynamicPluginManager != nil && !didLoadDynamicPlugins)
     }
 
     var hasInstalledDynamicPlugins: Bool {

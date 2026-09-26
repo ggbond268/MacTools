@@ -77,6 +77,7 @@ final class MenuBarStatusItemController: NSObject {
     private let pluginHost: PluginHost
     private let windowRouter: AppWindowRouter
     private let iconSettings: MenuBarIconSettings
+    private let appUpdater: AppUpdater
     private var statusItem: NSStatusItem
     private var panelPresenter: MenuBarPanelPresenter!
     private var cancellables: Set<AnyCancellable> = []
@@ -106,6 +107,7 @@ final class MenuBarStatusItemController: NSObject {
         self.pluginHost = pluginHost
         self.windowRouter = windowRouter
         self.iconSettings = iconSettings
+        self.appUpdater = appUpdater
         MenuBarControlItemDefaults.prepareVisibleControlItem()
         PluginPresentationSafety.prepareForWindowOrdering()
         self.statusItem = NSStatusBar.system.statusItem(withLength: 0)
@@ -297,6 +299,14 @@ final class MenuBarStatusItemController: NSObject {
             }
             .store(in: &cancellables)
 
+        appUpdater.$availableUpdateVersion
+            .map { $0 != nil }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.scheduleStatusIconUpdate()
+            }
+            .store(in: &cancellables)
     }
 
     private func observeIconSettings() {
@@ -340,18 +350,19 @@ final class MenuBarStatusItemController: NSObject {
                     revision: snapshot.revision
                 ),
                 context: context,
-                runningAutomationCount: pluginHost.automationController.activeRunIDs.count
+                runningAutomationCount: pluginHost.automationController.activeRunIDs.count,
+                hasAvailableUpdate: hasAvailableUpdate
             )
             if iconPresentation.present(
                 on: button, key: key,
-                tooltip: "\(automationActivityTooltip)\n\(snapshot.tooltip)",
-                accessibilityDescription: "\(automationActivityTooltip)\n\(snapshot.accessibilityDescription)",
+                tooltip: "\(statusTooltip)\n\(snapshot.tooltip)",
+                accessibilityDescription: "\(statusTooltip)\n\(snapshot.accessibilityDescription)",
                 makeImage: {
                     guard let image = snapshot.image.copy() as? NSImage else { return nil }
                     // Never mutate a provider's shared image.
                     image.size = context.pointSize
                     image.isTemplate = snapshot.isTemplate
-                    return statusImage(image, isTemplate: snapshot.isTemplate)
+                    return statusImage(image, isTemplate: snapshot.isTemplate, appearance: context.appearance)
                 }
             ) {
                 currentFallbackPayload = nil
@@ -369,13 +380,14 @@ final class MenuBarStatusItemController: NSObject {
         iconPresentation.present(
             on: button,
             key: .init(source: .fallback(payload: payload, frameIndex: animationFrameIndex),
-                       context: context, runningAutomationCount: pluginHost.automationController.activeRunIDs.count),
-            tooltip: automationActivityTooltip,
-            accessibilityDescription: automationActivityTooltip
+                       context: context, runningAutomationCount: pluginHost.automationController.activeRunIDs.count,
+                       hasAvailableUpdate: hasAvailableUpdate),
+            tooltip: statusTooltip,
+            accessibilityDescription: statusTooltip
         ) {
             let frame = animationFrames.indices.contains(animationFrameIndex) ? animationFrames[animationFrameIndex] : payload.image
             frame.isTemplate = payload.isTemplate
-            return statusImage(frame, isTemplate: payload.isTemplate)
+            return statusImage(frame, isTemplate: payload.isTemplate, appearance: context.appearance)
         }
     }
 
@@ -386,26 +398,73 @@ final class MenuBarStatusItemController: NSObject {
         return "\(AppMetadata.appName) · \(FeatureL10n.string("运行中"))"
     }
 
-    private func statusImage(_ source: NSImage, isTemplate: Bool? = nil) -> NSImage {
-        guard !pluginHost.automationController.activeRunIDs.isEmpty else {
+    private var hasAvailableUpdate: Bool {
+        appUpdater.availableUpdateVersion != nil
+    }
+
+    private var statusTooltip: String {
+        guard let version = appUpdater.availableUpdateVersion else {
+            return automationActivityTooltip
+        }
+        let availability = AppL10n.settingsFormat(
+            "about.update.headline.availableFormat",
+            defaultValue: "检测到新版本 %@",
+            version
+        )
+        return "\(automationActivityTooltip)\n\(availability)"
+    }
+
+    private func statusImage(
+        _ source: NSImage,
+        isTemplate: Bool? = nil,
+        appearance: PluginMenuBarIconRenderContext.Appearance
+    ) -> NSImage {
+        let showsAutomationBadge = !pluginHost.automationController.activeRunIDs.isEmpty
+        let showsUpdateBadge = hasAvailableUpdate
+        guard showsAutomationBadge || showsUpdateBadge else {
             return source
         }
 
+        let sourceIsTemplate = isTemplate ?? source.isTemplate
+        // A colored update badge requires a non-template image, so template glyphs are
+        // tinted manually to match the menu bar appearance.
+        let tintsGlyph = showsUpdateBadge && sourceIsTemplate
+        let glyphTint: NSColor = appearance == .dark ? .white : NSColor.black.withAlphaComponent(0.85)
         let size = source.size
         let image = NSImage(size: size, flipped: false) { bounds in
-            source.draw(in: bounds)
+            if tintsGlyph {
+                let glyph = NSImage(size: bounds.size, flipped: false) { glyphBounds in
+                    source.draw(in: glyphBounds)
+                    glyphTint.setFill()
+                    glyphBounds.fill(using: .sourceAtop)
+                    return true
+                }
+                glyph.draw(in: bounds)
+            } else {
+                source.draw(in: bounds)
+            }
             let diameter = max(4, min(7, min(bounds.width, bounds.height) * 0.34))
-            let badgeRect = NSRect(
-                x: bounds.maxX - diameter,
-                y: bounds.minY,
-                width: diameter,
-                height: diameter
-            )
-            NSColor.controlAccentColor.setFill()
-            NSBezierPath(ovalIn: badgeRect).fill()
+            if showsAutomationBadge {
+                NSColor.controlAccentColor.setFill()
+                NSBezierPath(ovalIn: NSRect(
+                    x: bounds.maxX - diameter,
+                    y: bounds.minY,
+                    width: diameter,
+                    height: diameter
+                )).fill()
+            }
+            if showsUpdateBadge {
+                NSColor.systemRed.setFill()
+                NSBezierPath(ovalIn: NSRect(
+                    x: bounds.maxX - diameter,
+                    y: bounds.maxY - diameter,
+                    width: diameter,
+                    height: diameter
+                )).fill()
+            }
             return true
         }
-        image.isTemplate = isTemplate ?? source.isTemplate
+        image.isTemplate = showsUpdateBadge ? false : sourceIsTemplate
         return image
     }
 
