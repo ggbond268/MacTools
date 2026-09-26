@@ -346,6 +346,7 @@ struct ComponentPanelContent: View {
     private var emptyState: some View {
         PanelPluginEmptyState(
             tab: .components,
+            pluginHost: pluginHost,
             onInstall: {
                 pluginHost.presentPluginMarketplace()
             }

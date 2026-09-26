@@ -1056,7 +1056,7 @@ struct MenuBarContent: View {
                               height: MenuBarPanelLayout.rowHeight(for: item)))
         }
         if items.isEmpty {
-            PanelPluginEmptyState(tab: .features, onInstall: { pluginHost.presentPluginMarketplace() })
+            PanelPluginEmptyState(tab: .features, pluginHost: pluginHost, onInstall: { pluginHost.presentPluginMarketplace() })
                 .frame(height: contentBodyHeight)
         } else {
             PanelViewportStack(frames: frames, width: MenuBarPanelLayout.surfaceWidth,
