@@ -198,6 +198,79 @@ final class DuoStatusPluginTests: XCTestCase {
         XCTAssertEqual(fixture.menuBar.options?.batteryCriticalThreshold, 50)
     }
 
+    func testBatteryColorPolicyDefaultsToLegacyAndPersistsSelection() throws {
+        let fixture = Fixture()
+        let rows = settingsRows(fixture.plugin)
+        let policyRow = try XCTUnwrap(rows.first { $0.id == "battery-color-policy" })
+        let thresholdRow = try XCTUnwrap(rows.first { $0.id == "battery-critical-threshold" })
+        guard case let .picker(selectionID, options, style) = policyRow.control else {
+            return XCTFail("Battery color policy should use a picker")
+        }
+        XCTAssertEqual(selectionID, "legacy")
+        XCTAssertEqual(options.map(\.id), ["legacy", "enhanced", "monochrome"])
+        XCTAssertEqual(style, .segmented)
+        XCTAssertEqual(thresholdRow.isEnabled, false)
+        XCTAssertEqual(fixture.menuBar.options?.batteryColorPolicy, .legacy)
+        XCTAssertNil(fixture.storage.object(forKey: "battery-color-policy"))
+
+        fixture.plugin.handleSettingsAction(.setSelection(
+            controlID: "battery-color-policy", optionID: "enhanced"
+        ))
+        XCTAssertEqual(fixture.menuBar.options?.batteryColorPolicy, .enhanced)
+        XCTAssertEqual(fixture.storage.string(forKey: "battery-color-policy"), "enhanced")
+        XCTAssertTrue(try XCTUnwrap(settingsRows(fixture.plugin)
+            .first { $0.id == "battery-critical-threshold" }?.isEnabled))
+
+        let menuBar = MenuBarFake()
+        let relaunched = DuoStatusPlugin(context: fixture.context, monitor: MonitorFake(), menuBar: menuBar)
+        relaunched.activate(context: fixture.context)
+        XCTAssertEqual(menuBar.options?.batteryColorPolicy, .enhanced)
+    }
+
+    func testLegacyPRSettingMigratesToTheEquivalentPolicy() throws {
+        for (legacyValue, expectedPolicy) in [
+            (true, DuoStatusBatteryColorPolicy.enhanced),
+            (false, DuoStatusBatteryColorPolicy.monochrome)
+        ] {
+            let storage = StorageFake()
+            storage.set(legacyValue, forKey: "uses-battery-status-colors")
+            let context = PluginRuntimeContext(
+                pluginID: DuoStatusPlugin.pluginID, storage: storage
+            )
+            let menuBar = MenuBarFake()
+            let plugin = DuoStatusPlugin(context: context, monitor: MonitorFake(), menuBar: menuBar)
+            plugin.activate(context: context)
+            XCTAssertEqual(menuBar.options?.batteryColorPolicy, expectedPolicy)
+        }
+    }
+
+    func testThresholdClampHandlesExtremeStoredValues() {
+        XCTAssertEqual(DuoStatusIconOptionsStore.clampedThreshold(Int.max), 50)
+        XCTAssertEqual(DuoStatusIconOptionsStore.clampedThreshold(Int.min), 5)
+        XCTAssertEqual(DuoStatusIconOptionsStore.clampedThreshold(5), 5)
+        XCTAssertEqual(DuoStatusIconOptionsStore.clampedThreshold(50), 50)
+        XCTAssertEqual(DuoStatusIconOptionsStore.clampedThreshold(37), 35)
+    }
+
+    func testThresholdDescriptionFollowsPolicy() throws {
+        let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
+
+        for (policy, isEnabled, expectedDescription) in [
+            (DuoStatusBatteryColorPolicy.legacy, false, "增强模式下，电量低于此值时以警示颜色显示。"),
+            (DuoStatusBatteryColorPolicy.enhanced, true, "增强模式下，电量低于此值时以警示颜色显示。"),
+            (DuoStatusBatteryColorPolicy.monochrome, false, "增强模式下，电量低于此值时以警示颜色显示。")
+        ] {
+            fixture.plugin.handleSettingsAction(.setSelection(
+                controlID: "battery-color-policy", optionID: policy.rawValue
+            ))
+            let row = try XCTUnwrap(settingsRows(fixture.plugin)
+                .first { $0.id == "battery-critical-threshold" })
+            XCTAssertEqual(row.isEnabled, isEnabled)
+            XCTAssertEqual(row.description, expectedDescription, "\(policy)")
+        }
+    }
+
     func testTooltipNamesPreciseWiFiStateAndDotSource() throws {
         let fixture = Fixture()
         fixture.plugin.activate(context: fixture.context)
@@ -239,6 +312,17 @@ final class DuoStatusPluginTests: XCTestCase {
         return sections.flatMap { section -> [String] in
             guard case let .rows(rows) = section.content else { return [] }
             return rows.map(\.id)
+        }
+    }
+
+    private func settingsRows(_ plugin: DuoStatusPlugin) -> [PluginSettingsRow] {
+        guard case let .form(sections) = plugin.settingsPage?.body else {
+            XCTFail("Missing form")
+            return []
+        }
+        return sections.flatMap { section -> [PluginSettingsRow] in
+            guard case let .rows(rows) = section.content else { return [] }
+            return rows
         }
     }
 

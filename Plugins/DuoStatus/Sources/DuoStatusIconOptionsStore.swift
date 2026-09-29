@@ -14,7 +14,8 @@ struct DuoStatusIconOptionsStore {
         static let showsBatteryPercentage = "shows-battery-percentage"
         static let showsPercentageWhenConnected = "shows-percentage-when-connected"
         static let showsChargingIndicator = "shows-charging-indicator"
-        static let usesBatteryStatusColors = "uses-battery-status-colors"
+        static let batteryColorPolicy = "battery-color-policy"
+        static let legacyUsesBatteryStatusColors = "uses-battery-status-colors"
         static let batteryCriticalThreshold = "battery-critical-threshold"
         static let distinguishesNoInternet = "distinguishes-no-internet"
         static let distinguishesHotspot = "distinguishes-hotspot"
@@ -58,9 +59,7 @@ struct DuoStatusIconOptionsStore {
         options.showsChargingIndicator = bool(
             Key.showsChargingIndicator, default: options.showsChargingIndicator
         )
-        options.usesBatteryStatusColors = bool(
-            Key.usesBatteryStatusColors, default: options.usesBatteryStatusColors
-        )
+        options.batteryColorPolicy = batteryColorPolicy(default: options.batteryColorPolicy)
         if let threshold = storage.object(forKey: Key.batteryCriticalThreshold) as? Int {
             options.batteryCriticalThreshold = Self.clampedThreshold(threshold)
         }
@@ -93,7 +92,7 @@ struct DuoStatusIconOptionsStore {
         storage.set(options.showsBatteryPercentage, forKey: Key.showsBatteryPercentage)
         storage.set(options.showsPercentageWhenConnected, forKey: Key.showsPercentageWhenConnected)
         storage.set(options.showsChargingIndicator, forKey: Key.showsChargingIndicator)
-        storage.set(options.usesBatteryStatusColors, forKey: Key.usesBatteryStatusColors)
+        storage.set(options.batteryColorPolicy.rawValue, forKey: Key.batteryColorPolicy)
         storage.set(
             Self.clampedThreshold(options.batteryCriticalThreshold),
             forKey: Key.batteryCriticalThreshold
@@ -113,8 +112,28 @@ struct DuoStatusIconOptionsStore {
     /// another build can never drive the warning colour outside the shown range.
     static func clampedThreshold(_ value: Int) -> Int {
         let step = criticalThresholdStep
-        let snapped = Int((Double(value) / Double(step)).rounded()) * step
-        return min(criticalThresholdRange.upperBound, max(criticalThresholdRange.lowerBound, snapped))
+        let bounded = min(criticalThresholdRange.upperBound,
+                          max(criticalThresholdRange.lowerBound, value))
+        let snapped = Int((Double(bounded) / Double(step)).rounded()) * step
+        return min(criticalThresholdRange.upperBound,
+                   max(criticalThresholdRange.lowerBound, snapped))
+    }
+
+    /// Keep values written by PR builds meaningful while the final default
+    /// remains the policy shipped by the current Duo Status release.
+    private func batteryColorPolicy(
+        default defaultValue: DuoStatusBatteryColorPolicy
+    ) -> DuoStatusBatteryColorPolicy {
+        if let raw = storage.string(forKey: Key.batteryColorPolicy),
+           let policy = DuoStatusBatteryColorPolicy(rawValue: raw) {
+            return policy
+        }
+        guard let legacyEnabled = storage.object(
+            forKey: Key.legacyUsesBatteryStatusColors
+        ) as? Bool else {
+            return defaultValue
+        }
+        return legacyEnabled ? .enhanced : .monochrome
     }
 
     private func bool(_ key: String, default defaultValue: Bool) -> Bool {

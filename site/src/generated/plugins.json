@@ -8784,47 +8784,47 @@
       "localizedMetadata": {
         "ar": {
           "displayName": "حالة Duo",
-          "summary": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم."
+          "summary": "حالة البطارية والشبكة ومستوى الصوت في أيقونة مستقلة أو رئيسية في شريط القوائم."
         },
         "de": {
           "displayName": "Duo-Status",
-          "summary": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol."
+          "summary": "Batterie, Netzwerk und Ausgabelautstärke als separates oder primäres Menüleistensymbol."
         },
         "en": {
           "displayName": "Duo Status",
-          "summary": "Battery and network status in a standalone or primary menu bar icon."
+          "summary": "Battery, network, and output volume status in a standalone or primary menu bar icon."
         },
         "es": {
           "displayName": "Estado Duo",
-          "summary": "Batería y red en un icono independiente o principal de la barra de menús."
+          "summary": "Batería, red y volumen de salida en un icono independiente o principal de la barra de menús."
         },
         "fr": {
           "displayName": "État Duo",
-          "summary": "Batterie et réseau dans une icône distincte ou principale de la barre des menus."
+          "summary": "Batterie, réseau et volume de sortie dans une icône distincte ou principale de la barre des menus."
         },
         "ja": {
           "displayName": "Duo ステータス",
-          "summary": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認"
+          "summary": "独立アイコンまたはアプリのメニューバーアイコンでバッテリー、ネットワーク、出力音量を確認"
         },
         "ko": {
           "displayName": "Duo 상태",
-          "summary": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인"
+          "summary": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리, 네트워크, 출력 음량 상태 확인"
         },
         "pt": {
           "displayName": "Estado Duo",
-          "summary": "Bateria e rede num ícone separado ou principal da barra de menus."
+          "summary": "Bateria, rede e volume de saída num ícone separado ou principal da barra de menus."
         },
         "ru": {
           "displayName": "Статус Duo",
-          "summary": "Батарея и сеть в отдельном или основном значке строки меню."
+          "summary": "Батарея, сеть и выходная громкость в отдельном или основном значке строки меню."
         },
         "zh-Hans": {
           "displayName": "Duo 状态",
-          "summary": "通过独立图标或应用主图标查看电量与网络状态"
+          "summary": "通过独立图标或应用主图标查看电量、网络与输出音量状态"
         },
         "zh-Hant": {
           "displayName": "Duo 狀態",
-          "summary": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+          "summary": "透過獨立圖示或應用程式主圖示查看電量、網路與輸出音量狀態"
         }
       },
       "openInMacToolsURL": "mactools://app/settings/plugins/marketplace/duo-status",
@@ -8908,33 +8908,33 @@
             {
               "id": "primary-use",
               "text": {
-                "ar": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم.",
-                "de": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol.",
-                "en": "Battery and network status in a standalone or primary menu bar icon.",
-                "es": "Batería y red en un icono independiente o principal de la barra de menús.",
-                "fr": "Batterie et réseau dans une icône distincte ou principale de la barre des menus.",
-                "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認",
-                "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인",
-                "pt": "Bateria e rede num ícone separado ou principal da barra de menus.",
-                "ru": "Батарея и сеть в отдельном или основном значке строки меню.",
-                "zh-Hans": "通过独立图标或应用主图标查看电量与网络状态",
-                "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+                "ar": "حالة البطارية والشبكة ومستوى الصوت في أيقونة مستقلة أو رئيسية في شريط القوائم.",
+                "de": "Batterie, Netzwerk und Ausgabelautstärke als separates oder primäres Menüleistensymbol.",
+                "en": "Battery, network, and output volume status in a standalone or primary menu bar icon.",
+                "es": "Batería, red y volumen de salida en un icono independiente o principal de la barra de menús.",
+                "fr": "Batterie, réseau et volume de sortie dans une icône distincte ou principale de la barre des menus.",
+                "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリー、ネットワーク、出力音量を確認",
+                "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리, 네트워크, 출력 음량 상태 확인",
+                "pt": "Bateria, rede e volume de saída num ícone separado ou principal da barra de menus.",
+                "ru": "Батарея, сеть и выходная громкость в отдельном или основном значке строки меню.",
+                "zh-Hans": "通过独立图标或应用主图标查看电量、网络与输出音量状态",
+                "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量、網路與輸出音量狀態"
               }
             }
           ],
           "license": "GPL-3.0-only",
           "longDescription": {
-            "ar": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم.",
-            "de": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol.",
-            "en": "Battery and network status in a standalone or primary menu bar icon.",
-            "es": "Batería y red en un icono independiente o principal de la barra de menús.",
-            "fr": "Batterie et réseau dans une icône distincte ou principale de la barre des menus.",
-            "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認",
-            "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인",
-            "pt": "Bateria e rede num ícone separado ou principal da barra de menus.",
-            "ru": "Батарея и сеть в отдельном или основном значке строки меню.",
-            "zh-Hans": "通过独立图标或应用主图标查看电量与网络状态",
-            "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+            "ar": "حالة البطارية والشبكة ومستوى الصوت في أيقونة مستقلة أو رئيسية في شريط القوائم.",
+            "de": "Batterie, Netzwerk und Ausgabelautstärke als separates oder primäres Menüleistensymbol.",
+            "en": "Battery, network, and output volume status in a standalone or primary menu bar icon.",
+            "es": "Batería, red y volumen de salida en un icono independiente o principal de la barra de menús.",
+            "fr": "Batterie, réseau et volume de sortie dans une icône distincte ou principale de la barre des menus.",
+            "ja": "独立アイコンまたはアプリのメニューバーアイコンでバッテリー、ネットワーク、出力音量を確認",
+            "ko": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리, 네트워크, 출력 음량 상태 확인",
+            "pt": "Bateria, rede e volume de saída num ícone separado ou principal da barra de menus.",
+            "ru": "Батарея, сеть и выходная громкость в отдельном или основном значке строки меню.",
+            "zh-Hans": "通过独立图标或应用主图标查看电量、网络与输出音量状态",
+            "zh-Hant": "透過獨立圖示或應用程式主圖示查看電量、網路與輸出音量狀態"
           },
           "publisher": "MacTools",
           "screenshots": [],
@@ -8990,7 +8990,7 @@
       "releaseChannel": null,
       "releaseNotesURL": null,
       "route": "/plugins/duo-status/",
-      "summary": "通过独立图标或应用主图标查看电量与网络状态",
+      "summary": "通过独立图标或应用主图标查看电量、网络与输出音量状态",
       "version": "1.0.0"
     },
     {

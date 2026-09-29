@@ -35,10 +35,18 @@ enum DuoStatusVolumeStyle: String, CaseIterable, Sendable {
     case bar
 }
 
+/// How the battery ring maps hardware state to color. The default keeps the
+/// colors Duo Status shipped with before these options existed.
+enum DuoStatusBatteryColorPolicy: String, CaseIterable, Sendable {
+    /// Active charging is green; discharging below 20% is red.
+    case legacy
+    /// Adds Low Power Mode yellow and a configurable critical threshold.
+    case enhanced
+    /// Always follows the menu bar's foreground color.
+    case monochrome
+}
+
 /// Everything the renderer needs besides the live snapshot. Persisted by the plugin.
-///
-/// Every option that changes the shipping artwork defaults to off, so an existing
-/// menu bar looks unchanged after an update.
 struct DuoStatusIconOptions: Equatable, Sendable {
     static let defaultCriticalThreshold = 20
 
@@ -48,7 +56,7 @@ struct DuoStatusIconOptions: Equatable, Sendable {
     var showsBatteryPercentage = false
     var showsPercentageWhenConnected = false
     var showsChargingIndicator = true
-    var usesBatteryStatusColors = false
+    var batteryColorPolicy = DuoStatusBatteryColorPolicy.legacy
     var batteryCriticalThreshold = defaultCriticalThreshold
     var distinguishesNoInternet = false
     var distinguishesHotspot = false
@@ -58,6 +66,4 @@ struct DuoStatusIconOptions: Equatable, Sendable {
     var bluetoothGlyphPrioritizesNetworkErrors = true
 
     static let `default` = DuoStatusIconOptions()
-
-    var artworkScale: CGFloat { iconSize.artworkScale }
 }

@@ -15,16 +15,16 @@ struct DuoSystemStatusDescription {
     }
 
     private func batteryText(_ snapshot: DuoSystemStatusSnapshot) -> String {
-        guard let fraction = snapshot.batteryFraction, fraction.isFinite else {
+        guard let fraction = snapshot.battery.fraction, fraction.isFinite else {
             return snapshot.battery == .notPresent
                 ? localization.string("status.noBattery", defaultValue: "无内置电池")
                 : localization.string("status.batteryUnavailable", defaultValue: "电量暂不可用")
         }
         let percentage = Int((min(1, max(0, fraction)) * 100).rounded())
-        if snapshot.isCharging {
+        if snapshot.battery.isCharging {
             return localization.format("status.chargingFormat", defaultValue: "电量 %d%%，正在充电", percentage)
         }
-        if snapshot.isExternalPowerConnected {
+        if snapshot.battery.isConnectedToPower {
             return localization.format("status.externalPowerFormat", defaultValue: "电量 %d%%，已接通电源", percentage)
         }
         return localization.format("status.batteryFormat", defaultValue: "电量 %d%%", percentage)

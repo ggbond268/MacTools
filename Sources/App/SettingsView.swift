@@ -4851,6 +4851,7 @@ private struct PluginSettingsSliderControl: View {
     let valueFormat: PluginSettingsSliderValueFormat?
     let onAction: (PluginSettingsAction) -> Void
     @State private var currentValue: Double
+    @State private var isEditing = false
 
     init(
         controlID: String,
@@ -4888,6 +4889,11 @@ private struct PluginSettingsSliderControl: View {
         .frame(minWidth: 180, idealWidth: 240, maxWidth: 320)
         .onChange(of: currentValue) { _, value in
             onAction(.setNumber(controlID: controlID, value: value, phase: .changed))
+            // Keyboard and assistive-technology edits do not produce an
+            // editing-ended event, so commit them immediately.
+            if !isEditing {
+                onAction(.setNumber(controlID: controlID, value: value, phase: .committed))
+            }
         }
         .onChange(of: value) { _, value in
             if currentValue != value {
@@ -4897,6 +4903,7 @@ private struct PluginSettingsSliderControl: View {
     }
 
     private func editingChanged(_ isEditing: Bool) {
+        self.isEditing = isEditing
         if !isEditing {
             onAction(.setNumber(controlID: controlID, value: currentValue, phase: .committed))
         }

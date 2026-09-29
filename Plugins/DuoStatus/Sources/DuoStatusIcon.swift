@@ -7,6 +7,7 @@ enum DuoIconAppearance {
 }
 
 /// Vector artwork preserves battery colors while matching the menu bar's foreground appearance.
+@MainActor
 enum DuoStatusIcon {
     static let size = NSSize(width: 24, height: 24)
     private static let drawingPointSize: CGFloat = 18
@@ -16,6 +17,11 @@ enum DuoStatusIcon {
     private static let percentageReferenceText = "100"
     /// The numerals are laid out at this size and scaled into the notch.
     private static let percentageFontSize: CGFloat = 36
+    private static let percentageFont = Self.makePercentageFont(size: percentageFontSize)
+    private static let percentageReferenceLine: CTLine = percentageLine(
+        percentageReferenceText,
+        color: .black
+    )
 
     /// A dedicated glyph for a precise Wi-Fi state. The renderer resolves this to
     /// `nil` when the matching option is off, which collapses the state back to
@@ -38,6 +44,7 @@ enum DuoStatusIcon {
             volume: snapshot.volume,
             wifi: snapshot.wifi,
             network: snapshot.network,
+            connectionKind: snapshot.connectionKind,
             options: options
         ) ? bluetoothGlyphColor(for: appearance) : nil
         // Status colors and the Bluetooth glyph opt out of template rendering, so
@@ -92,7 +99,7 @@ enum DuoStatusIcon {
         let lineWidth: CGFloat = 1.35
         strokeArc(center: center, radius: radius, start: 210, end: -30, width: lineWidth, opacity: 0.22, color: color)
 
-        if let fraction = snapshot.batteryFraction, fraction.isFinite, fraction > 0 {
+        if let fraction = snapshot.battery.fraction, fraction.isFinite, fraction > 0 {
             strokeArc(
                 center: center, radius: radius,
                 start: 210, end: 210 - CGFloat(min(1, fraction)) * 240,
@@ -160,7 +167,9 @@ enum DuoStatusIcon {
             }
             strokeLine(from: NSPoint(x: 9, y: 14.3), to: NSPoint(x: 9, y: 14.8), width: 0.7, opacity: 1, color: color)
         case .percentage:
-            drawBatteryPercentage(snapshot.battery.percentage, in: gap, color: color)
+            if let percentage = snapshot.battery.percentage {
+                drawBatteryPercentage(percentage, in: gap, color: color)
+            }
         case .empty:
             break
         }
@@ -193,7 +202,7 @@ enum DuoStatusIcon {
     /// reading keeps the same type size.
     private static func percentageFit(in gap: NSRect) -> CGFloat? {
         let bounds = CTLineGetBoundsWithOptions(
-            percentageLine(percentageReferenceText, color: .black),
+            percentageReferenceLine,
             [.useGlyphPathBounds]
         )
         guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0 else {
@@ -205,16 +214,15 @@ enum DuoStatusIcon {
     }
 
     private static func percentageLine(_ text: String, color: NSColor) -> CTLine {
-        let size = percentageFontSize
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: percentageFont(size: size),
-            .kern: -size * 0.04,
+            .font: percentageFont,
+            .kern: -percentageFontSize * 0.04,
             .foregroundColor: color
         ]
         return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
     }
 
-    private static func percentageFont(size: CGFloat) -> NSFont {
+    private static func makePercentageFont(size: CGFloat) -> NSFont {
         let fallback = NSFont.systemFont(ofSize: size, weight: .bold)
         guard let descriptor = fallback.fontDescriptor.withDesign(.rounded) else { return fallback }
         return NSFont(descriptor: descriptor, size: size) ?? fallback

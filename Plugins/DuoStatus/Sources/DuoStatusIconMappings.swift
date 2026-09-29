@@ -49,23 +49,36 @@ enum DuoStatusIconMappings {
         options.bottomIndicator == .volume && options.volumeStyle == .bar
     }
 
-    /// First match wins: a critically low level outranks charging, so a Mac
-    /// charging at a very low level still shows the warning colour.
-    ///
-    /// Two details deliberately keep the shipping icon unchanged: the threshold
-    /// compares the unrounded level (19.6% is still below 20%), and only active
-    /// charging turns green — a Mac held on power without charging, such as at
-    /// an Optimized Battery Charging limit, keeps a monochrome ring.
+    /// First match wins within the selected policy. The legacy policy keeps the
+    /// Duo Status colors that predate these options; enhanced adds Low Power
+    /// Mode and gives a critically low level priority over charging.
     static func batteryColorRole(
         _ battery: DuoSystemStatusSnapshot.Battery,
         options: DuoStatusIconOptions
     ) -> DuoStatusBatteryColorRole {
-        guard options.usesBatteryStatusColors else { return .foreground }
-        let threshold = Double(min(100, max(0, options.batteryCriticalThreshold)))
-        if let fraction = battery.fraction, min(1, max(0, fraction)) * 100 < threshold { return .critical }
-        if battery.isLowPowerMode { return .lowPower }
-        if battery.isCharging { return .charging }
-        return .foreground
+        switch options.batteryColorPolicy {
+        case .monochrome:
+            return .foreground
+        case .legacy:
+            if battery.isCharging { return .charging }
+            let legacyThreshold = Double(DuoStatusIconOptions.defaultCriticalThreshold) / 100
+            if let fraction = battery.fraction,
+               fraction.isFinite,
+               min(1, max(0, fraction)) < legacyThreshold {
+                return .critical
+            }
+            return .foreground
+        case .enhanced:
+            let threshold = Double(min(100, max(0, options.batteryCriticalThreshold)))
+            if let fraction = battery.fraction,
+               fraction.isFinite,
+               min(1, max(0, fraction)) * 100 < threshold {
+                return .critical
+            }
+            if battery.isLowPowerMode { return .lowPower }
+            if battery.isCharging { return .charging }
+            return .foreground
+        }
     }
 
     /// A charging battery keeps the bolt. A connected power source that is not
@@ -84,6 +97,7 @@ enum DuoStatusIconMappings {
             }
         }
 
+        guard battery.isPresent else { return .empty }
         return options.showsBatteryPercentage ? .percentage : .empty
     }
 
@@ -92,14 +106,16 @@ enum DuoStatusIconMappings {
         volume: DuoSystemStatusSnapshot.Volume,
         wifi: DuoSystemStatusSnapshot.WiFi,
         network: DuoSystemStatusSnapshot.Network,
+        connectionKind: DuoSystemStatusSnapshot.ConnectionKind?,
         options: DuoStatusIconOptions
     ) -> Bool {
         guard options.showsBluetoothAudioGlyph, volume.isBluetoothOutput else { return false }
         guard options.bluetoothGlyphPrioritizesNetworkErrors else { return true }
 
-        // A wired connection is not a Wi-Fi error and can still coexist with
-        // Bluetooth audio, but being offline is always worth showing.
+        // Wi-Fi errors are irrelevant while Ethernet carries the connection,
+        // but being offline is always worth showing.
         if network.isOffline { return false }
+        if network == .connected, connectionKind == .ethernet { return true }
         return !wifi.isNetworkErrorState
     }
 
@@ -122,9 +138,9 @@ extension DuoSystemStatusSnapshot.WiFi {
     /// States where showing the network problem matters more than the Bluetooth glyph.
     var isNetworkErrorState: Bool {
         switch self {
-        case .disconnected, .noInternet, .off, .unavailable:
+        case .disconnected, .noInternet, .off:
             true
-        case .connected, .hotspot, .temporary, .shared:
+        case .connected, .hotspot, .temporary, .shared, .unavailable:
             false
         }
     }

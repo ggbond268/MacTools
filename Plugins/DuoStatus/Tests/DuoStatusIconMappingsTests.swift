@@ -57,20 +57,40 @@ final class DuoStatusIconMappingsTests: XCTestCase {
         XCTAssertTrue(DuoStatusIconMappings.usesVolumeBar(options: options))
     }
 
-    // MARK: - Battery colour ladder
+    // MARK: - Battery colour policies
 
-    func testStatusColorsCanBeTurnedOffEntirely() {
+    func testLegacyPolicyPreservesTheShippingColors() {
         var options = DuoStatusIconOptions.default
-        options.usesBatteryStatusColors = false
-        let critical = DuoSystemStatusSnapshot.Battery.level(
-            fraction: 0.05, isCharging: true, isExternalPowerConnected: true, isLowPowerMode: true
+        XCTAssertEqual(options.batteryColorPolicy, .legacy)
+        XCTAssertEqual(
+            DuoStatusIconMappings.batteryColorRole(
+                .level(fraction: 0.05, isCharging: true, isLowPowerMode: true), options: options
+            ),
+            .charging,
+            "the shipping behavior lets charging outrank a critically low level"
         )
-        XCTAssertEqual(DuoStatusIconMappings.batteryColorRole(critical, options: options), .foreground)
+        XCTAssertEqual(
+            DuoStatusIconMappings.batteryColorRole(.level(fraction: 0.19, isCharging: false), options: options),
+            .critical
+        )
+        XCTAssertEqual(
+            DuoStatusIconMappings.batteryColorRole(
+                .level(fraction: 0.5, isCharging: false, isLowPowerMode: true), options: options
+            ),
+            .foreground,
+            "the shipping behavior does not color Low Power Mode"
+        )
+        options.batteryCriticalThreshold = 50
+        XCTAssertEqual(
+            DuoStatusIconMappings.batteryColorRole(.level(fraction: 0.45, isCharging: false), options: options),
+            .foreground,
+            "the shipping behavior keeps its fixed 20% threshold"
+        )
     }
 
-    func testCriticalOutranksChargingAndLowPowerMode() {
+    func testEnhancedPolicyCriticalOutranksChargingAndLowPowerMode() {
         var options = DuoStatusIconOptions.default
-        options.usesBatteryStatusColors = true
+        options.batteryColorPolicy = .enhanced
         let battery = DuoSystemStatusSnapshot.Battery.level(
             fraction: 0.08, isCharging: true, isExternalPowerConnected: true, isLowPowerMode: true
         )
@@ -79,7 +99,7 @@ final class DuoStatusIconMappingsTests: XCTestCase {
 
     func testLowPowerModeOutranksCharging() {
         var options = DuoStatusIconOptions.default
-        options.usesBatteryStatusColors = true
+        options.batteryColorPolicy = .enhanced
         let battery = DuoSystemStatusSnapshot.Battery.level(
             fraction: 0.5, isCharging: true, isExternalPowerConnected: true, isLowPowerMode: true
         )
@@ -88,7 +108,7 @@ final class DuoStatusIconMappingsTests: XCTestCase {
 
     func testOnlyActiveChargingUsesTheChargingRole() {
         var options = DuoStatusIconOptions.default
-        options.usesBatteryStatusColors = true
+        options.batteryColorPolicy = .enhanced
         XCTAssertEqual(
             DuoStatusIconMappings.batteryColorRole(.level(fraction: 0.5, isCharging: true), options: options),
             .charging
@@ -115,7 +135,7 @@ final class DuoStatusIconMappingsTests: XCTestCase {
 
     func testCriticalThresholdIsExclusiveAndFollowsTheOption() {
         var options = DuoStatusIconOptions.default
-        options.usesBatteryStatusColors = true
+        options.batteryColorPolicy = .enhanced
         options.batteryCriticalThreshold = 20
         XCTAssertEqual(
             DuoStatusIconMappings.batteryColorRole(.level(fraction: 0.20, isCharging: false), options: options),
@@ -138,6 +158,15 @@ final class DuoStatusIconMappingsTests: XCTestCase {
         )
     }
 
+    func testMonochromePolicyAlwaysUsesTheForegroundRole() {
+        var options = DuoStatusIconOptions.default
+        options.batteryColorPolicy = .monochrome
+        let battery = DuoSystemStatusSnapshot.Battery.level(
+            fraction: 0.05, isCharging: true, isExternalPowerConnected: true, isLowPowerMode: true
+        )
+        XCTAssertEqual(DuoStatusIconMappings.batteryColorRole(battery, options: options), .foreground)
+    }
+
     // MARK: - Top-gap content
 
     func testGapContentTruthTable() {
@@ -155,13 +184,15 @@ final class DuoStatusIconMappingsTests: XCTestCase {
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(plugged, options: options), .plug)
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(onBattery, options: options), .empty)
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(.notPresent, options: options), .empty)
+        XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(.unavailable, options: options), .empty)
 
         // Percentage on, but the charging mark still wins while connected.
         options.showsBatteryPercentage = true
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(charging, options: options), .bolt)
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(plugged, options: options), .plug)
         XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(onBattery, options: options), .percentage)
-        XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(.notPresent, options: options), .percentage)
+        XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(.notPresent, options: options), .empty)
+        XCTAssertEqual(DuoStatusIconMappings.batteryGapContent(.unavailable, options: options), .empty)
 
         // Asking for the number while connected replaces the plug, never the bolt.
         options.showsPercentageWhenConnected = true
@@ -190,23 +221,26 @@ final class DuoStatusIconMappingsTests: XCTestCase {
     func testBluetoothGlyphNeedsBothTheOptionAndABluetoothOutput() {
         XCTAssertFalse(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: bluetoothVolume, wifi: .connected(level: 4), network: .connected,
+            connectionKind: .wifi,
             options: .default
         ))
         XCTAssertFalse(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: DuoSystemStatusSnapshot.Volume(scalar: 0.5), wifi: .connected(level: 4),
-            network: .connected, options: bluetoothOptions()
+            network: .connected, connectionKind: .wifi, options: bluetoothOptions()
         ))
         XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: bluetoothVolume, wifi: .connected(level: 4), network: .connected,
+            connectionKind: .wifi,
             options: bluetoothOptions()
         ))
     }
 
     func testNetworkErrorsWinWhenPrioritized() {
-        for wifi: DuoSystemStatusSnapshot.WiFi in [.disconnected, .noInternet, .off, .unavailable] {
+        for wifi: DuoSystemStatusSnapshot.WiFi in [.disconnected, .noInternet, .off] {
             XCTAssertFalse(
                 DuoStatusIconMappings.shouldUseBluetoothGlyph(
                     volume: bluetoothVolume, wifi: wifi, network: .connected,
+                    connectionKind: .wifi,
                     options: bluetoothOptions()
                 ),
                 "\(wifi)"
@@ -214,8 +248,15 @@ final class DuoStatusIconMappingsTests: XCTestCase {
         }
         XCTAssertFalse(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: bluetoothVolume, wifi: .connected(level: 4), network: .disconnected,
+            connectionKind: .wifi,
             options: bluetoothOptions()
         ))
+        XCTAssertFalse(DuoStatusIconMappings.shouldUseBluetoothGlyph(
+            volume: bluetoothVolume, wifi: .off, network: .disconnected,
+            connectionKind: .ethernet,
+            options: bluetoothOptions()
+        ), "being offline wins even when the last connection was Ethernet"
+        )
     }
 
     func testPreciseButHealthyStatesStillYieldToBluetooth() {
@@ -223,6 +264,7 @@ final class DuoStatusIconMappingsTests: XCTestCase {
             XCTAssertTrue(
                 DuoStatusIconMappings.shouldUseBluetoothGlyph(
                     volume: bluetoothVolume, wifi: wifi, network: .connected,
+                    connectionKind: .wifi,
                     options: bluetoothOptions()
                 ),
                 "\(wifi)"
@@ -231,14 +273,49 @@ final class DuoStatusIconMappingsTests: XCTestCase {
         // No path update has arrived yet; that is not a failure.
         XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: bluetoothVolume, wifi: .connected(level: 2), network: .unknown,
+            connectionKind: .wifi,
             options: bluetoothOptions()
         ))
+    }
+
+    func testUnavailableWiFiDoesNotHideBluetoothGlyph() {
+        XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
+            volume: bluetoothVolume, wifi: .unavailable, network: .connected,
+            connectionKind: .wifi,
+            options: bluetoothOptions()
+        ))
+    }
+
+    func testHealthyEthernetAllowsBluetoothGlyphDespiteWiFiErrors() {
+        XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
+            volume: bluetoothVolume, wifi: .off, network: .connected,
+            connectionKind: .ethernet,
+            options: bluetoothOptions()
+        ))
+        XCTAssertFalse(DuoStatusIconMappings.shouldUseBluetoothGlyph(
+            volume: bluetoothVolume, wifi: .off, network: .connected,
+            connectionKind: .other,
+            options: bluetoothOptions()
+        ), "only a known Ethernet connection safely bypasses Wi-Fi errors"
+        )
     }
 
     func testBluetoothCanOutrankNetworkErrorsWhenPriorityIsOff() {
         XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
             volume: bluetoothVolume, wifi: .off, network: .disconnected,
+            connectionKind: .wifi,
             options: bluetoothOptions(prioritizesNetworkErrors: false)
+        ))
+    }
+
+    func testMutedBluetoothAudioStillShowsTheGlyph() {
+        let volume = DuoSystemStatusSnapshot.Volume(
+            scalar: 0.8, isMuted: true, isBluetoothOutput: true
+        )
+        XCTAssertTrue(DuoStatusIconMappings.shouldUseBluetoothGlyph(
+            volume: volume, wifi: .connected(level: 4), network: .connected,
+            connectionKind: .wifi,
+            options: bluetoothOptions()
         ))
     }
 }

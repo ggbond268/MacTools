@@ -203,7 +203,17 @@ struct DuoSystemStatusReader: DuoSystemStatusReading {
                 element: element
             )
         }
-        let mutes = DuoStatusCoreAudio.outputElements.compactMap { element in
+        var outputElements = DuoStatusCoreAudio.outputElements.makeIterator()
+        let mainElement = outputElements.next()
+        let channelMutes = outputElements.compactMap { element in
+            DuoStatusCoreAudio.readUInt32(
+                objectID: deviceID,
+                selector: kAudioDevicePropertyMute,
+                scope: kAudioObjectPropertyScopeOutput,
+                element: element
+            )
+        }
+        let mainMute = mainElement.flatMap { element in
             DuoStatusCoreAudio.readUInt32(
                 objectID: deviceID,
                 selector: kAudioDevicePropertyMute,
@@ -219,7 +229,7 @@ struct DuoSystemStatusReader: DuoSystemStatusReading {
         )
         return DuoSystemStatusSnapshot.Volume(
             scalar: Self.averageScalar(scalars),
-            isMuted: mutes.first == 1,
+            isMuted: Self.isMuted(mainMute: mainMute, channelMutes: channelMutes),
             isBluetoothOutput: Self.isBluetoothTransport(transport)
         )
     }
@@ -230,6 +240,12 @@ struct DuoSystemStatusReader: DuoSystemStatusReading {
         let finite = scalars.filter(\.isFinite).map { min(1, max(0, Double($0))) }
         guard !finite.isEmpty else { return nil }
         return finite.reduce(0, +) / Double(finite.count)
+    }
+
+    /// Prefers the master control; devices without one fall back to channel mutes.
+    static func isMuted(mainMute: UInt32?, channelMutes: [UInt32]) -> Bool {
+        if let mainMute { return mainMute == 1 }
+        return channelMutes.contains(1)
     }
 
     static func isBluetoothTransport(_ transport: UInt32?) -> Bool {

@@ -35,7 +35,7 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
         static let showsBatteryPercentage = "shows-battery-percentage"
         static let showsPercentageWhenConnected = "shows-percentage-when-connected"
         static let showsChargingIndicator = "shows-charging-indicator"
-        static let usesBatteryStatusColors = "uses-battery-status-colors"
+        static let batteryColorPolicy = "battery-color-policy"
         static let batteryCriticalThreshold = "battery-critical-threshold"
 
         static let network = "network"
@@ -113,7 +113,7 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
             iconTint: .green,
             order: 24,
             defaultDescription: localization.string(
-                "metadata.description", defaultValue: "通过独立图标或应用主图标查看电量与网络状态"
+                "metadata.description", defaultValue: "通过独立图标或应用主图标查看电量、网络与输出音量状态"
             )
         )
     }
@@ -218,21 +218,34 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
                     control: .toggle(isOn: options.showsChargingIndicator)
                 ),
                 PluginSettingsRow(
-                    id: SettingsID.usesBatteryStatusColors,
-                    title: localization.string("settings.statusColors", defaultValue: "使用状态颜色"),
+                    id: SettingsID.batteryColorPolicy,
+                    title: localization.string("settings.batteryColorPolicy", defaultValue: "电量颜色"),
                     description: localization.string(
-                        "settings.statusColorsDescription",
-                        defaultValue: "低电量、低电量模式与充电使用不同颜色。"
+                        "settings.batteryColorPolicyDescription",
+                        defaultValue: "标准保留现有颜色；增强加入低电量模式黄色，阈值仅增强模式可用。"
                     ),
-                    control: .toggle(isOn: options.usesBatteryStatusColors)
+                    control: .picker(
+                        selectionID: options.batteryColorPolicy.rawValue,
+                        options: DuoStatusBatteryColorPolicy.allCases.map { policy in
+                            PluginSettingsOption(
+                                id: policy.rawValue,
+                                title: localization.string(
+                                    "settings.batteryColorPolicy.\(policy.rawValue)",
+                                    defaultValue: policyTitle(for: policy)
+                                )
+                            )
+                        },
+                        style: .segmented
+                    ),
                 ),
                 PluginSettingsRow(
                     id: SettingsID.batteryCriticalThreshold,
                     title: localization.string("settings.criticalThreshold", defaultValue: "低电量阈值"),
                     description: localization.string(
-                        "settings.criticalThresholdDescription", defaultValue: "电量低于此值时以警示颜色显示。"
+                        "settings.criticalThresholdDescription",
+                        defaultValue: "增强模式下，电量低于此值时以警示颜色显示。"
                     ),
-                    isEnabled: options.usesBatteryStatusColors,
+                    isEnabled: options.batteryColorPolicy == .enhanced,
                     control: .slider(
                         value: Double(options.batteryCriticalThreshold),
                         range: Double(DuoStatusIconOptionsStore.criticalThresholdRange.lowerBound)
@@ -243,6 +256,14 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
                 )
             ]
         )
+    }
+
+    private func policyTitle(for policy: DuoStatusBatteryColorPolicy) -> String {
+        switch policy {
+        case .legacy: "标准"
+        case .enhanced: "增强"
+        case .monochrome: "单色"
+        }
     }
 
     private var networkSection: PluginSettingsSection {
@@ -421,6 +442,9 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
             case SettingsID.volumeStyle:
                 guard let style = DuoStatusVolumeStyle(rawValue: optionID) else { return }
                 updated.volumeStyle = style
+            case SettingsID.batteryColorPolicy:
+                guard let policy = DuoStatusBatteryColorPolicy(rawValue: optionID) else { return }
+                updated.batteryColorPolicy = policy
             default:
                 return
             }
@@ -429,7 +453,6 @@ final class DuoStatusPlugin: MacToolsPlugin, PluginSettingsPresenting,
             case SettingsID.showsBatteryPercentage: updated.showsBatteryPercentage = isOn
             case SettingsID.showsPercentageWhenConnected: updated.showsPercentageWhenConnected = isOn
             case SettingsID.showsChargingIndicator: updated.showsChargingIndicator = isOn
-            case SettingsID.usesBatteryStatusColors: updated.usesBatteryStatusColors = isOn
             case SettingsID.distinguishesNoInternet: updated.distinguishesNoInternet = isOn
             case SettingsID.distinguishesHotspot: updated.distinguishesHotspot = isOn
             case SettingsID.distinguishesTemporaryNetwork: updated.distinguishesTemporaryNetwork = isOn

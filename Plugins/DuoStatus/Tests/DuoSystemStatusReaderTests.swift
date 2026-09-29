@@ -68,8 +68,8 @@ final class DuoSystemStatusReaderTests: XCTestCase {
                 .level(fraction: Double(capacity) / 100, isCharging: false, isExternalPowerConnected: true)
             )
             let snapshot = DuoSystemStatusSnapshot(battery: battery)
-            XCTAssertTrue(snapshot.isExternalPowerConnected)
-            XCTAssertFalse(snapshot.isCharging)
+            XCTAssertTrue(snapshot.battery.isConnectedToPower)
+            XCTAssertFalse(snapshot.battery.isCharging)
         }
     }
 
@@ -89,11 +89,11 @@ final class DuoSystemStatusReaderTests: XCTestCase {
     func testSnapshotInfersExternalPowerFromActiveCharging() {
         let snapshot = DuoSystemStatusSnapshot(battery: .level(fraction: 0.5, isCharging: true))
 
-        XCTAssertTrue(snapshot.isExternalPowerConnected)
-        XCTAssertTrue(snapshot.isCharging)
-        XCTAssertEqual(snapshot.batteryFraction, 0.5)
-        XCTAssertFalse(DuoSystemStatusSnapshot.unknown.isExternalPowerConnected)
-        XCTAssertFalse(DuoSystemStatusSnapshot(battery: .notPresent).isExternalPowerConnected)
+        XCTAssertTrue(snapshot.battery.isConnectedToPower)
+        XCTAssertTrue(snapshot.battery.isCharging)
+        XCTAssertEqual(snapshot.battery.fraction, 0.5)
+        XCTAssertFalse(DuoSystemStatusSnapshot.unknown.battery.isConnectedToPower)
+        XCTAssertFalse(DuoSystemStatusSnapshot(battery: .notPresent).battery.isConnectedToPower)
     }
 
     func testWiFiMapsSignalStrengthToFourDots() {
@@ -105,6 +105,14 @@ final class DuoSystemStatusReaderTests: XCTestCase {
                 "RSSI: \(rssi)"
             )
         }
+    }
+
+    func testVolumeMutePrefersMasterControlAndFallsBackToChannels() {
+        XCTAssertFalse(DuoSystemStatusReader.isMuted(mainMute: nil, channelMutes: []))
+        XCTAssertFalse(DuoSystemStatusReader.isMuted(mainMute: 0, channelMutes: [1]))
+        XCTAssertTrue(DuoSystemStatusReader.isMuted(mainMute: nil, channelMutes: [0, 1]))
+        XCTAssertTrue(DuoSystemStatusReader.isMuted(mainMute: nil, channelMutes: [1, 0]))
+        XCTAssertTrue(DuoSystemStatusReader.isMuted(mainMute: 1, channelMutes: [0, 0]))
     }
 
     func testWiFiDoesNotTreatMissingRSSIAsFullSignal() {

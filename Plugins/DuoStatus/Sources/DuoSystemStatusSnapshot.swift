@@ -26,9 +26,10 @@ struct DuoSystemStatusSnapshot: Equatable, Sendable {
             return fraction
         }
 
-        /// A missing battery reports a full charge so desktop Macs keep a stable icon.
-        var percentage: Int {
-            guard let fraction else { return 100 }
+        /// Only a present battery has a meaningful percentage; an unavailable
+        /// reading must not masquerade as a full charge.
+        var percentage: Int? {
+            guard isPresent, let fraction else { return nil }
             return Int((min(1, max(0, fraction)) * 100).rounded())
         }
 
@@ -104,12 +105,6 @@ struct DuoSystemStatusSnapshot: Equatable, Sendable {
     var volume: Volume = .unknown
 
     static let unknown = DuoSystemStatusSnapshot()
-
-    var batteryFraction: Double? { battery.fraction }
-
-    var isCharging: Bool { battery.isCharging }
-
-    var isExternalPowerConnected: Bool { battery.isConnectedToPower }
 
     /// Lit Wi-Fi dots, 0...4, for every associated state.
     var wifiLevel: Int {

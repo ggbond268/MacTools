@@ -10,11 +10,6 @@ import OSLog
 // snapshot are adapted from Status Trio
 // (https://github.com/lingyired/status-trio, Apache-2.0).
 
-private let duoStatusMonitorLogger = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "cc.ggbond.mactools",
-    category: "DuoSystemStatusMonitor"
-)
-
 // MARK: - Network path monitoring
 
 @MainActor
@@ -78,6 +73,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
     private var defaultDeviceRegistration: Registration?
     private var deviceRegistrations: [Registration] = []
     private var registeredDeviceID: AudioDeviceID?
+    private var expectedDeviceRegistrationCount = 0
     private var onChange: (@MainActor @Sendable () -> Void)?
     private var isRunning = false
 
@@ -98,11 +94,13 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
     func reconcile() {
         guard isRunning else { return }
         let currentDeviceID = DuoStatusCoreAudio.validDefaultOutputDevice()
-        guard currentDeviceID != registeredDeviceID || deviceRegistrations.isEmpty else { return }
+        guard currentDeviceID != registeredDeviceID
+                || deviceRegistrations.count != expectedDeviceRegistrationCount else { return }
         removeDeviceListeners()
         registeredDeviceID = currentDeviceID
+        expectedDeviceRegistrationCount = 0
         if let currentDeviceID {
-            registerDeviceListeners(for: currentDeviceID)
+            expectedDeviceRegistrationCount = registerDeviceListeners(for: currentDeviceID)
         }
     }
 
@@ -115,6 +113,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
         }
         removeDeviceListeners()
         registeredDeviceID = nil
+        expectedDeviceRegistrationCount = 0
         onChange = nil
     }
 
@@ -137,7 +136,8 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
         )
     }
 
-    private func registerDeviceListeners(for deviceID: AudioDeviceID) {
+    private func registerDeviceListeners(for deviceID: AudioDeviceID) -> Int {
+        var expectedCount = 0
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 self?.volumeDidChange()
@@ -151,6 +151,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
                     scope: kAudioObjectPropertyScopeOutput,
                     element: element
                 ) else { continue }
+                expectedCount += 1
                 let address = AudioObjectPropertyAddress(
                     mSelector: selector,
                     mScope: kAudioObjectPropertyScopeOutput,
@@ -161,6 +162,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
                 }
             }
         }
+        return expectedCount
     }
 
     private func defaultDeviceDidChange() {
@@ -182,7 +184,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
         var mutableAddress = address
         let status = AudioObjectAddPropertyListenerBlock(objectID, &mutableAddress, .main, block)
         guard status == noErr else {
-            duoStatusMonitorLogger.error(
+            DuoStatusLog.audioEvent.error(
                 "Failed to add CoreAudio listener selector=\(address.mSelector, privacy: .public) element=\(address.mElement, privacy: .public) status=\(status, privacy: .public)"
             )
             return nil
@@ -206,7 +208,7 @@ final class DuoStatusCoreAudioEventMonitor: DuoStatusAudioEventMonitoring {
             registration.block
         )
         if status != noErr {
-            duoStatusMonitorLogger.error(
+            DuoStatusLog.audioEvent.error(
                 "Failed to remove CoreAudio listener selector=\(address.mSelector, privacy: .public) element=\(address.mElement, privacy: .public) status=\(status, privacy: .public)"
             )
         }
@@ -361,7 +363,7 @@ final class DuoSystemStatusMonitor: ObservableObject, DuoSystemStatusMonitoring 
             powerSource = source
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         } else {
-            duoStatusMonitorLogger.error("IOPS notification source unavailable; timer refresh remains active")
+            DuoStatusLog.monitor.error("IOPS notification source unavailable; timer refresh remains active")
         }
         powerStateObserver = processInfoNotificationCenter.addObserver(
             forName: .NSProcessInfoPowerStateDidChange,
@@ -458,7 +460,11 @@ final class DuoSystemStatusMonitor: ObservableObject, DuoSystemStatusMonitoring 
                     updated.wifi = wifi.state
                     updated.wifiSignalLevel = wifi.signalLevel
                 }
-                if let volume = reading.volume { updated.volume = volume }
+                // The scope may have dropped volume while this read was in flight.
+                // Do not let its late result resurrect stale audio state.
+                if let volume = reading.volume, self.refreshScope.contains(.volume) {
+                    updated.volume = volume
+                }
                 self.publish(updated)
                 if !self.pendingScope.isEmpty {
                     let pending = self.pendingScope

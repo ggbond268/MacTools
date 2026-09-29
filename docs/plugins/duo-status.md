@@ -12,23 +12,23 @@ Install the plugin from the Marketplace. **Duo Status > Menu Bar > Display Mode*
 
 Replacement uses the [host's exclusive icon interface](menu-bar-icons.md), not direct access to its button. If another plugin already owns the primary icon, the mode remains unchanged and an inline error names that plugin; pending updates instead explain that a restart is needed to access its settings. Switching back or uninstalling restores the original MacTools artwork, including custom or animated icons. A failed uninstall preserves the previous mode. General icon settings explain when edits apply while replacement is active. The host keeps its click behavior, saved position, and automation badge. Separate mode has its own status item and saved position.
 
-- Status colors are optional. When enabled, the battery ring uses red below the low-battery threshold, yellow in Low Power Mode, green while charging, and monochrome otherwise, including on power without charging. A critically low level takes precedence, so a Mac charging at a very low level still shows the warning color.
+- Battery colors use a three-way policy. **Standard** keeps the existing Duo Status behavior: green while charging, red below 20% while discharging, and monochrome otherwise. **Enhanced** adds yellow for Low Power Mode and a configurable low-battery threshold; a critically low level also takes precedence over charging. **Monochrome** always follows the menu bar's foreground color. Standard is the default, and only Enhanced uses the threshold control.
 - A lightning bolt means active charging; a plug means external power with charging paused or complete. The charging indicator can be hidden.
 - The battery percentage can be shown in the ring's top gap, so it sits beside the network glyph instead of replacing it. You can also keep the charging mark instead of the number while connected to power.
 - The center represents the active network connection, including Wi-Fi and Ethernet. Connection state does not establish that internet access works.
-- Connected without internet access, personal hotspot, temporary networks, and Internet Sharing each have a dedicated glyph. Each one is off by default and falls back to the plain Wi-Fi fan, while the tooltip always names the precise state.
+- Connected without internet access, metered Wi-Fi (the best available personal-hotspot heuristic), temporary networks, and Internet Sharing each have a dedicated glyph. Each one is off by default and falls back to the plain Wi-Fi fan, while the tooltip always names the precise state. Metered Wi-Fi may also include public, campus, or enterprise networks.
 - Four dots at the bottom represent Wi-Fi signal strength, or output volume if you switch them. Volume can instead use a continuous bar along the ring's bottom gap. Missing readings remain unavailable, rather than appearing as a full signal; muted or silent output shows no lit dots and an empty bar. The tooltip says which quantity the bottom indicator represents.
 - When the default output device uses Bluetooth, a Bluetooth glyph can replace the network glyph. Network problems can still take priority over it.
-- Macs without an internal battery show a neutral full ring.
+- Macs without an internal battery show a neutral dashed ring.
 
 Both display modes use the same inset vector artwork inside the 24-point canvas, in a small, medium, or large size. A fixed optical center keeps the icon stable across power states, and AppKit renders at the display's native scale on macOS 14 or later. The icon follows the menu bar's effective appearance, including wallpaper and display changes. Tooltip and accessibility copy follow the host's selected language.
 
 ## Settings
 
-All settings apply immediately to both display modes. Every option beyond the icon size ships off by default, so an existing menu bar looks unchanged after an update.
+All settings apply immediately to both display modes. New options are opt-in except the battery color policy, which keeps the colors already used by released Duo Status versions.
 
 - **Appearance**: pick a small, medium, or large icon size.
-- **Battery**: show the percentage in the ring's top gap, optionally only while on battery; show the charging indicator; use status colors; set the low-battery threshold used for the warning color.
+- **Battery**: show the percentage in the ring's top gap, optionally only while on battery; show the charging indicator; choose Standard, Enhanced, or Monochrome colors; set the low-battery threshold used by Enhanced mode.
 - **Network**: separately distinguish connected-without-internet, personal hotspot, temporary networks, and Internet Sharing with their own glyphs.
 - **Volume and audio**: choose whether the bottom indicator shows Wi-Fi signal or output volume, and draw volume as dots or a bar; let a Bluetooth output device replace the network glyph, and choose whether network errors still win.
 

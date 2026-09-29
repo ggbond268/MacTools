@@ -6,67 +6,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Battery and network status in a standalone or primary menu bar icon."
+            "value": "Battery, network, and output volume status in a standalone or primary menu bar icon."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "通过独立图标或应用主图标查看电量与网络状态"
+            "value": "通过独立图标或应用主图标查看电量、网络与输出音量状态"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "透過獨立圖示或應用程式主圖示查看電量與網路狀態"
+            "value": "透過獨立圖示或應用程式主圖示查看電量、網路與輸出音量狀態"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "独立アイコンまたはアプリのメニューバーアイコンでバッテリーとネットワークを確認"
+            "value": "独立アイコンまたはアプリのメニューバーアイコンでバッテリー、ネットワーク、出力音量を確認"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리와 네트워크 상태 확인"
+            "value": "별도 아이콘 또는 앱 메뉴 막대 아이콘으로 배터리, 네트워크, 출력 음량 상태 확인"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Batterie und Netzwerk als separates oder primäres Menüleistensymbol."
+            "value": "Batterie, Netzwerk und Ausgabelautstärke als separates oder primäres Menüleistensymbol."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Batterie et réseau dans une icône distincte ou principale de la barre des menus."
+            "value": "Batterie, réseau et volume de sortie dans une icône distincte ou principale de la barre des menus."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Batería y red en un icono independiente o principal de la barra de menús."
+            "value": "Batería, red y volumen de salida en un icono independiente o principal de la barra de menús."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bateria e rede num ícone separado ou principal da barra de menus."
+            "value": "Bateria, rede e volume de saída num ícone separado ou principal da barra de menus."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Батарея и сеть в отдельном или основном значке строки меню."
+            "value": "Батарея, сеть и выходная громкость в отдельном или основном значке строки меню."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حالة البطارية والشبكة في أيقونة مستقلة أو رئيسية في شريط القوائم."
+            "value": "حالة البطارية والشبكة ومستوى الصوت في أيقونة مستقلة أو رئيسية في شريط القوائم."
           }
         }
       }
@@ -3397,144 +3397,357 @@
         }
       }
     },
-    "settings.statusColors": {
+    "settings.batteryColorPolicy": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Status Colors"
+            "value": "Battery Colors"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用状态颜色"
+            "value": "电量颜色"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用狀態顏色"
+            "value": "電池顏色"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "状態に応じた色を使用"
+            "value": "バッテリーの色"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "상태 색상 사용"
+            "value": "배터리 색상"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Statusfarben verwenden"
+            "value": "Batteriefarben"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Utiliser les couleurs d’état"
+            "value": "Couleurs de batterie"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usar colores de estado"
+            "value": "Colores de batería"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usar cores de estado"
+            "value": "Cores da bateria"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Использовать цвета состояния"
+            "value": "Цвета батареи"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "استخدام ألوان الحالة"
+            "value": "ألوان البطارية"
           }
         }
       }
     },
-    "settings.statusColorsDescription": {
+    "settings.batteryColorPolicyDescription": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Low battery, Low Power Mode, and charging use distinct colors."
+            "value": "Standard keeps the existing colors; Enhanced adds Low Power Mode yellow, and the threshold applies only to Enhanced."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "低电量、低电量模式与充电使用不同颜色。"
+            "value": "标准保留现有颜色；增强加入低电量模式黄色，阈值仅增强模式可用。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "低電量、低耗電模式與充電使用不同顏色。"
+            "value": "標準保留現有顏色；增強加入低電量模式黃色，閾值僅增強模式可用。"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "低残量、低電力モード、充電中を異なる色で表示します。"
+            "value": "標準は既存の色を維持し、拡張では低電力モードに黄色を追加します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "배터리 부족, 저전력 모드, 충전을 서로 다른 색으로 표시합니다."
+            "value": "표준은 기존 색상을 유지하고, 향상은 저전력 모드에 노란색을 추가합니다."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niedriger Ladestand, Stromsparmodus und Laden verwenden eigene Farben."
+            "value": "Standard behält die vorhandenen Farben; Erweitert ergibt Gelb für den Stromsparmodus."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Batterie faible, mode Économie d’énergie et charge utilisent des couleurs distinctes."
+            "value": "Standard conserve les couleurs existantes ; le mode avancé ajoute le jaune en mode Économie d’énergie."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Batería baja, modo de bajo consumo y carga usan colores distintos."
+            "value": "Estándar mantiene los colores actuales; Mejorado añade amarillo en modo de bajo consumo."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bateria fraca, modo de baixo consumo e carregamento usam cores distintas."
+            "value": "Padrão mantém as cores atuais; Avançado adiciona amarelo no modo de baixo consumo."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Низкий заряд, режим энергосбережения и зарядка выделяются разными цветами."
+            "value": "Стандарт сохраняет текущие цвета; расширенный режим добавляет желтый цвет в режиме энергосбережения."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُستخدم ألوان مختلفة للبطارية المنخفضة ونمط الطاقة المنخفضة والشحن."
+            "value": "يحتفظ الوضع القياسي بالألوان الحالية، ويضيف الوضع المحسّن اللون الأصفر في نمط الطاقة المنخفضة."
+          }
+        }
+      }
+    },
+    "settings.batteryColorPolicy.legacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標準"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標準"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표준"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estándar"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Padrão"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Стандарт"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قياسي"
+          }
+        }
+      }
+    },
+    "settings.batteryColorPolicy.enhanced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enhanced"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增强"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增強"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "향상"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erweitert"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avancé"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mejorado"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avançado"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширенный"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محسّن"
+          }
+        }
+      }
+    },
+    "settings.batteryColorPolicy.monochrome": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monochrome"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "單色"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モノクロ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "단색"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monochrom"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monochrome"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monocromo"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monocromático"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Монохромный"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أحادي اللون"
           }
         }
       }
@@ -3616,67 +3829,67 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Below this level the icon uses the warning color."
+            "value": "In Enhanced mode, the icon uses the warning color below this level."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "电量低于此值时以警示颜色显示。"
+            "value": "增强模式下，电量低于此值时以警示颜色显示。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "電量低於此值時以警示顏色顯示。"
+            "value": "增強模式下，電量低於此值時以警示顏色顯示。"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "残量がこの値を下回ると警告色で表示します。"
+            "value": "拡張モードでは、残量がこの値を下回ると警告色で表示します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "잔량이 이 값보다 낮으면 경고 색상으로 표시합니다."
+            "value": "향상 모드에서 잔량이 이 값보다 낮으면 경고 색상으로 표시합니다."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unter diesem Wert verwendet das Symbol die Warnfarbe."
+            "value": "Im erweiterten Modus verwendet das Symbol unter diesem Wert die Warnfarbe."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sous ce niveau, l’icône utilise la couleur d’alerte."
+            "value": "En mode avancé, l’icône utilise la couleur d’alerte sous ce niveau."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por debajo de este nivel, el icono usa el color de aviso."
+            "value": "En modo mejorado, el icono usa el color de aviso por debajo de este nivel."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abaixo deste nível, o ícone usa a cor de aviso."
+            "value": "No modo avançado, o ícone usa a cor de aviso abaixo deste nível."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ниже этого уровня значок использует цвет предупреждения."
+            "value": "В расширенном режиме значок ниже этого уровня использует цвет предупреждения."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحت هذا المستوى تستخدم الأيقونة لون التحذير."
+            "value": "في الوضع المحسّن، تستخدم الأيقونة لون التحذير تحت هذا المستوى."
           }
         }
       }

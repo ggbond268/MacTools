@@ -20,7 +20,7 @@ final class DuoSystemStatusMonitorTests: XCTestCase {
         fixture.monitor.start()
         XCTAssertEqual(fixture.network.startCount, 1)
 
-        await waitUntil { fixture.monitor.snapshot.batteryFraction == 0.64 }
+        await waitUntil { fixture.monitor.snapshot.battery.fraction == 0.64 }
         XCTAssertEqual(published.count, 1)
         XCTAssertEqual(fixture.monitor.snapshot.wifi, .connected(level: 3))
         XCTAssertEqual(fixture.monitor.snapshot.wifiLevel, 3)
@@ -161,7 +161,7 @@ final class DuoSystemStatusMonitorTests: XCTestCase {
         let fixture = Fixture(reader: reader)
         var publishedFractions: [Double] = []
         let subscription = fixture.monitor.$snapshot.sink { snapshot in
-            if let fraction = snapshot.batteryFraction {
+            if let fraction = snapshot.battery.fraction {
                 publishedFractions.append(fraction)
             }
         }
@@ -173,9 +173,27 @@ final class DuoSystemStatusMonitorTests: XCTestCase {
         fixture.monitor.start()
         reader.release()
 
-        await waitUntil { fixture.monitor.snapshot.batteryFraction == 0.9 }
+        await waitUntil { fixture.monitor.snapshot.battery.fraction == 0.9 }
         XCTAssertEqual(publishedFractions, [0.9])
         withExtendedLifetime(subscription) {}
+        fixture.monitor.stop()
+    }
+
+    @MainActor
+    func testScopeDropDiscardsInFlightVolumeReading() async {
+        let reader = DuoStatusBlockingVolumeReader()
+        let fixture = Fixture(reader: reader)
+        var didPublishReading = false
+        fixture.monitor.onChange = { _ in didPublishReading = true }
+
+        fixture.monitor.setRefreshScope(.all)
+        fixture.monitor.start()
+        await waitUntil { reader.hasStarted }
+        fixture.monitor.setRefreshScope([.battery, .wifi])
+        reader.release()
+
+        await waitUntil { didPublishReading }
+        XCTAssertEqual(fixture.monitor.snapshot.volume, .unknown)
         fixture.monitor.stop()
     }
 
@@ -399,6 +417,34 @@ private final class DuoStatusBlockingReader: DuoSystemStatusReading, @unchecked 
 
     func readVolume() -> DuoSystemStatusSnapshot.Volume {
         DuoSystemStatusSnapshot.Volume(scalar: 0.5)
+    }
+
+    func release() {
+        semaphore.signal()
+    }
+}
+
+private final class DuoStatusBlockingVolumeReader: DuoSystemStatusReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private let semaphore = DispatchSemaphore(value: 0)
+    private var readCount = 0
+
+    var hasStarted: Bool { lock.withLock { readCount > 0 } }
+
+    func readBattery() -> DuoSystemStatusSnapshot.Battery { .notPresent }
+    func readWiFi(path: DuoNetworkPathSnapshot?) -> DuoWiFiReading {
+        DuoWiFiReading(state: .off)
+    }
+
+    func readVolume() -> DuoSystemStatusSnapshot.Volume {
+        let count = lock.withLock {
+            readCount += 1
+            return readCount
+        }
+        if count == 1 {
+            semaphore.wait()
+        }
+        return .init(scalar: 0.7, isMuted: true)
     }
 
     func release() {

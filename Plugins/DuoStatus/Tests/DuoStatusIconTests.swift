@@ -29,22 +29,24 @@ final class DuoStatusIconTests: XCTestCase {
     /// `DuoStatusIconMappingsTests` owns the ladder itself; this covers how the
     /// renderer turns a role into a ring color and into the template flag.
     func testBatteryRoleDecidesTheRingColorAndTemplateRendering() throws {
-        let statusColors = options(\.usesBatteryStatusColors, true)
         let discharging = snapshot(battery: .level(fraction: 0.6, isCharging: false))
         XCTAssertTrue(icon(discharging).isTemplate, "A plain battery keeps a tintable template image")
 
-        let charging = icon(snapshot(battery: .level(fraction: 0.6, isCharging: true)), statusColors)
+        let charging = icon(snapshot(battery: .level(fraction: 0.6, isCharging: true)))
         XCTAssertFalse(charging.isTemplate)
         let green = try strongestChroma(charging)
         XCTAssertGreaterThan(green.greenComponent, green.redComponent)
 
+        let statusColors = options(\.batteryColorPolicy, .enhanced)
         let critical = icon(snapshot(battery: .level(fraction: 0.08, isCharging: true)), statusColors)
         let red = try strongestChroma(critical)
         XCTAssertGreaterThan(red.redComponent, red.greenComponent, "Critical outranks charging")
 
-        var uncolored = DuoStatusIconOptions.default
-        XCTAssertTrue(icon(snapshot(battery: .level(fraction: 0.08, isCharging: true)), uncolored).isTemplate,
-                      "Status colors stay off by default")
+        let monochrome = icon(
+            snapshot(battery: .level(fraction: 0.08, isCharging: true)),
+            options(\.batteryColorPolicy, .monochrome)
+        )
+        XCTAssertTrue(monochrome.isTemplate, "Monochrome mode keeps the image tintable")
     }
 
     // MARK: Top gap
@@ -173,7 +175,7 @@ final class DuoStatusIconTests: XCTestCase {
         // defaults here; every other new option must be invisible on a machine
         // whose state does not trigger it.
         var everything = DuoStatusIconOptions.default
-        everything.usesBatteryStatusColors = true
+        everything.batteryColorPolicy = .legacy
         everything.distinguishesNoInternet = true
         everything.distinguishesHotspot = true
         everything.distinguishesTemporaryNetwork = true
