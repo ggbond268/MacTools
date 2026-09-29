@@ -83,7 +83,7 @@ final class DuoSystemStatusReaderTests: XCTestCase {
         ]])
 
         XCTAssertEqual(battery, .level(fraction: 0.8, isCharging: false))
-        XCTAssertFalse(DuoSystemStatusSnapshot(battery: battery).isExternalPowerConnected)
+        XCTAssertFalse(DuoSystemStatusSnapshot(battery: battery).battery.isConnectedToPower)
     }
 
     func testSnapshotInfersExternalPowerFromActiveCharging() {
