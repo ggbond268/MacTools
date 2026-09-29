@@ -200,6 +200,7 @@ final class DuoStatusPluginTests: XCTestCase {
 
     func testBatteryColorPolicyDefaultsToLegacyAndPersistsSelection() throws {
         let fixture = Fixture()
+        fixture.plugin.activate(context: fixture.context)
         let rows = settingsRows(fixture.plugin)
         let policyRow = try XCTUnwrap(rows.first { $0.id == "battery-color-policy" })
         let thresholdRow = try XCTUnwrap(rows.first { $0.id == "battery-critical-threshold" })
@@ -223,6 +224,8 @@ final class DuoStatusPluginTests: XCTestCase {
 
         let menuBar = MenuBarFake()
         let relaunched = DuoStatusPlugin(context: fixture.context, monitor: MonitorFake(), menuBar: menuBar)
+        let coordinator = PluginMenuBarIconCoordinator(userDefaults: fixture.defaults)
+        coordinator.synchronize(with: [relaunched], pendingPluginIDs: [])
         relaunched.activate(context: fixture.context)
         XCTAssertEqual(menuBar.options?.batteryColorPolicy, .enhanced)
     }
@@ -232,6 +235,8 @@ final class DuoStatusPluginTests: XCTestCase {
             (true, DuoStatusBatteryColorPolicy.enhanced),
             (false, DuoStatusBatteryColorPolicy.monochrome)
         ] {
+            let suiteName = "DuoStatusPluginTests-LegacyMigration-\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
             let storage = StorageFake()
             storage.set(legacyValue, forKey: "uses-battery-status-colors")
             let context = PluginRuntimeContext(
@@ -239,8 +244,11 @@ final class DuoStatusPluginTests: XCTestCase {
             )
             let menuBar = MenuBarFake()
             let plugin = DuoStatusPlugin(context: context, monitor: MonitorFake(), menuBar: menuBar)
+            let coordinator = PluginMenuBarIconCoordinator(userDefaults: defaults)
+            coordinator.synchronize(with: [plugin], pendingPluginIDs: [])
             plugin.activate(context: context)
             XCTAssertEqual(menuBar.options?.batteryColorPolicy, expectedPolicy)
+            defaults.removePersistentDomain(forName: suiteName)
         }
     }
 
