@@ -4843,6 +4843,60 @@ private struct PluginSettingsChoiceGroupControl: View {
 }
 
 
+struct PluginSettingsSliderInteractionState: Sendable {
+    private(set) var currentValue: Double
+    private(set) var isEditing = false
+
+    init(value: Double) {
+        currentValue = value
+    }
+
+    mutating func userValueChanged(
+        _ rawValue: Double,
+        controlID: String,
+        range: ClosedRange<Double>,
+        step: Double?
+    ) -> [PluginSettingsAction] {
+        let newValue = PluginSettingsSlider.snappedValue(rawValue, in: range, step: step)
+        guard currentValue != newValue else { return [] }
+
+        currentValue = newValue
+        var actions: [PluginSettingsAction] = [
+            .setNumber(controlID: controlID, value: newValue, phase: .changed)
+        ]
+        if !isEditing {
+            actions.append(.setNumber(
+                controlID: controlID,
+                value: newValue,
+                phase: .committed
+            ))
+        }
+        return actions
+    }
+
+    mutating func editingChanged(
+        _ editing: Bool,
+        controlID: String
+    ) -> [PluginSettingsAction] {
+        let wasEditing = isEditing
+        isEditing = editing
+        guard wasEditing, !editing else { return [] }
+
+        return [
+            .setNumber(
+                controlID: controlID,
+                value: currentValue,
+                phase: .committed
+            )
+        ]
+    }
+
+    mutating func modelValueChanged(_ newValue: Double) {
+        guard currentValue != newValue else { return }
+        currentValue = newValue
+    }
+}
+
 private struct PluginSettingsSliderControl: View {
     let controlID: String
     let value: Double
@@ -4850,8 +4904,7 @@ private struct PluginSettingsSliderControl: View {
     let step: Double?
     let valueFormat: PluginSettingsSliderValueFormat?
     let onAction: (PluginSettingsAction) -> Void
-    @State private var currentValue: Double
-    @State private var isEditing = false
+    @State private var interactionState: PluginSettingsSliderInteractionState
 
     init(
         controlID: String,
@@ -4867,45 +4920,42 @@ private struct PluginSettingsSliderControl: View {
         self.step = step
         self.valueFormat = valueFormat
         self.onAction = onAction
-        _currentValue = State(initialValue: value)
+        _interactionState = State(initialValue: PluginSettingsSliderInteractionState(value: value))
     }
 
     var body: some View {
         HStack(spacing: PluginSettingsTheme.Spacing.controlCluster) {
             PluginSettingsSlider(
-                value: $currentValue,
+                value: Binding(
+                    get: { interactionState.currentValue },
+                    set: { rawValue in
+                        let actions = interactionState.userValueChanged(
+                            rawValue,
+                            controlID: controlID,
+                            range: range,
+                            step: step
+                        )
+                        actions.forEach(onAction)
+                    }
+                ),
                 in: range,
                 step: step,
-                onEditingChanged: editingChanged
+                onEditingChanged: { editing in
+                    let actions = interactionState.editingChanged(editing, controlID: controlID)
+                    actions.forEach(onAction)
+                }
             )
 
             if let valueFormat {
-                Text(valueFormat.text(for: currentValue))
+                Text(valueFormat.text(for: interactionState.currentValue))
                     .font(PluginSettingsTheme.Typography.monospacedValue)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 44, alignment: .trailing)
             }
         }
         .frame(minWidth: 180, idealWidth: 240, maxWidth: 320)
-        .onChange(of: currentValue) { _, value in
-            onAction(.setNumber(controlID: controlID, value: value, phase: .changed))
-            // Keyboard and assistive-technology edits do not produce an
-            // editing-ended event, so commit them immediately.
-            if !isEditing {
-                onAction(.setNumber(controlID: controlID, value: value, phase: .committed))
-            }
-        }
-        .onChange(of: value) { _, value in
-            if currentValue != value {
-                currentValue = value
-            }
-        }
-    }
-
-    private func editingChanged(_ isEditing: Bool) {
-        self.isEditing = isEditing
-        if !isEditing {
-            onAction(.setNumber(controlID: controlID, value: currentValue, phase: .committed))
+        .onChange(of: value) { _, newValue in
+            interactionState.modelValueChanged(newValue)
         }
     }
 }
