@@ -35,7 +35,7 @@ function environment(storage, languages = ['en-US'], elements = []) {
   const exports = {};
   const context = {
     document, exports,
-    window: { matchMedia: () => ({ matches: false }) },
+    window: { matchMedia: () => ({ matches: false }), addEventListener: (event, callback) => listeners.set(event, callback) },
     navigator: { languages, language: languages[0] ?? '' },
     localStorage: storage,
     MutationObserver: class { observe() {} },
@@ -74,6 +74,27 @@ test('theme and language toggle once and persist across page loads', () => {
   assert.equal(next.localized.getAttribute('aria-label'), '在 MacTools 中打开');
 });
 
+test('cached history restoration reapplies the preference selected on another page', () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value) };
+  const { root, listeners, title, description, localized } = runControls(storage);
+  assert.equal(root.lang, 'en');
+  values.set('mactools-lang', 'zh');
+  values.set('mactools-theme', 'dark');
+  listeners.get('pageshow')({ persisted: false });
+  assert.equal(root.lang, 'en');
+  listeners.get('pageshow')({ persisted: true });
+  assert.equal(root.lang, 'zh-CN');
+  assert.equal(root.dataset.theme, 'dark');
+  assert.equal(title.textContent, '中文标题');
+  assert.equal(description.getAttribute('content'), '中文简介');
+  assert.equal(localized.getAttribute('aria-label'), '在 MacTools 中打开');
+  values.set('mactools-lang', 'en');
+  listeners.get('pageshow')({ persisted: true });
+  assert.equal(root.lang, 'en');
+  assert.equal(title.textContent, 'English title');
+});
+
 test('unavailable storage does not prevent controls from working', () => {
   const blocked = () => { throw new Error('Storage blocked'); };
   const { root, listeners, title } = runControls({ getItem: blocked, setItem: blocked });
@@ -83,6 +104,8 @@ test('unavailable storage does not prevent controls from working', () => {
   listeners.get('[data-language-toggle]')();
   assert.equal(root.dataset.theme, 'dark');
   assert.equal(root.lang, 'zh-CN');
+  assert.doesNotThrow(() => listeners.get('pageshow')({ persisted: true }));
+  assert.equal(root.lang, 'en');
 });
 
 function htmlFiles(dir) {

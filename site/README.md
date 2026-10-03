@@ -42,6 +42,8 @@ translate their visible labels in `src/lib/plugin-presentation.ts`.
 Storage failures leave automatic detection and the current page's controls
 working. A selection cannot persist across documents when browser storage is
 unavailable. Normal links load new documents; no client router is installed.
+When Back or Forward restores a cached document, `pageshow` reapplies the saved
+preferences so its content and metadata follow the latest language choice.
 The site keeps one URL per page. Without JavaScript, including social crawlers
 that do not execute scripts, the static document and metadata default to Chinese.
 Language-specific social previews would require separately addressable locale
@@ -53,8 +55,9 @@ Run `npm run build && npm test` after changing shared language behavior or page
 metadata. The focused tests execute the actual built head initialization on every
 HTML route before body controls, check title/social metadata consistency and
 structured data, and cover language ordering, unsupported locales, saved choices,
-reload initialization, and blocked storage. `npm run check:generated-plugins`
-checks that catalog authoring inputs still match the committed output.
+reload initialization, cached history restoration, and blocked storage.
+`npm run check:generated-plugins` checks that catalog authoring inputs still match
+the committed output.
 
 The October 2, 2026 audit reproduced the production title mismatch in Chromium
 and WebKit: the home, catalog, about, and privacy pages showed English body copy
@@ -65,6 +68,12 @@ languages, with no page errors. Browser checks also covered navigation, reload,
 history, all 47 settings preview panels, language switching during action feedback,
 regional and unsupported language preferences,
 and unavailable storage. The native Safari application chrome was not automated.
+
+The October 3 follow-up verified Chromium history restoration with the
+back/forward cache explicitly enabled and `pageshow.persisted` confirmed, plus
+fresh history navigation in WebKit. Cached pages now reapply the saved language
+and theme. The Apple Shortcuts privacy table uses automation terminology for
+shortcut names and folders.
 
 Chinese feature-chip UI evidence: [production before](evidence/feature-localization-before.png)
 and [local fixed build](evidence/feature-localization-after.png). The screenshot

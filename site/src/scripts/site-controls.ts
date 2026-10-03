@@ -9,6 +9,10 @@ const writePreference = (key: string, value: string) => {
   }
 };
 initializePreferences(resolveLanguage, applyLanguage);
+// A cached document does not rerun its scripts when Back or Forward restores it.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) initializePreferences(resolveLanguage, applyLanguage);
+});
 new MutationObserver(() => applyLanguage(root.dataset.lang === "en" ? "en" : "zh")).observe(root, {
   attributes: true,
   attributeFilter: ["data-lang"],
