@@ -1,3 +1,5 @@
+import { clearLocalizedText, setLocalizedText } from "./site-language";
+
 const settingsWindow = document.querySelector<HTMLElement>("[data-settings-window]");
 
 if (settingsWindow) {
@@ -179,9 +181,10 @@ if (settingsWindow) {
   settingsWindow.querySelectorAll<HTMLButtonElement>("[data-demo-action]").forEach((button) => {
     const initialMarkup = button.innerHTML;
     button.addEventListener("click", () => {
-      button.textContent = root.dataset.lang === "en" ? "Done" : "完成";
+      setLocalizedText(button, "完成", "Done");
       button.classList.add("is-complete");
       window.setTimeout(() => {
+        clearLocalizedText(button);
         button.innerHTML = initialMarkup;
         button.classList.remove("is-complete");
       }, 1200);
@@ -197,9 +200,7 @@ if (settingsWindow) {
       const isInstalled = row.dataset.installed === "true";
       button.disabled = true;
       button.classList.add("is-busy");
-      button.textContent = root.dataset.lang === "en"
-        ? isInstalled ? "Uninstalling" : "Installing"
-        : isInstalled ? "卸载中" : "安装中";
+      setLocalizedText(button, isInstalled ? "卸载中" : "安装中", isInstalled ? "Uninstalling" : "Installing");
 
       window.setTimeout(() => {
         const nextInstalled = !isInstalled;
@@ -214,6 +215,7 @@ if (settingsWindow) {
           nextInstalled ? "Installed" : "Not installed",
         );
         syncLocalizedFields();
+        clearLocalizedText(button);
         button.innerHTML = initialMarkup;
         button.disabled = false;
         button.classList.remove("is-busy");
